@@ -83,6 +83,7 @@ impl AppState {
 
     /// Adds a tree at the end, or replaces the tree of the same root in place, and returns its
     /// new generation.
+    #[cfg(test)]
     pub fn install_tree(&self, tree: Tree) -> u64 {
         let (generation, _replaced) = self
             .install_scan(Arc::new(tree), &AtomicBool::new(false))

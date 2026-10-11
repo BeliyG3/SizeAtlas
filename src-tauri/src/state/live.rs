@@ -25,7 +25,7 @@ impl AppState {
     /// Replaces a root opened between the worker's first-scan decision and its initial listing.
     /// The job's discard flag is checked under the installation lock.
     pub fn start_live(&self, job: &ScanJob, tree: Tree) -> Option<u64> {
-        let _scans = self.scans();
+        let scans = self.scans();
         job.first_scan.store(true, Ordering::Relaxed);
         let mut data = self.write_data();
         if job.cancelled() || job.discard.load(Ordering::Relaxed) || self.closing() {
@@ -45,7 +45,10 @@ impl AppState {
             None
         };
         drop(data);
-        drop(old);
+        drop(scans);
+        if let Some(old) = old {
+            std::thread::spawn(move || drop(old));
+        }
         Some(generation)
     }
 
@@ -57,7 +60,14 @@ impl AppState {
         {
             return Err(CmdError::Busy);
         }
-        Ok(self.install_tree(tree))
+        let (generation, old) = self
+            .install_scan(Arc::new(tree), &std::sync::atomic::AtomicBool::new(false))
+            .expect("not discarded");
+        drop(scans);
+        if let Some(old) = old {
+            std::thread::spawn(move || drop(old));
+        }
+        Ok(generation)
     }
 
     pub fn refuse_cached(&self, root: &str) -> Result<(), CmdError> {

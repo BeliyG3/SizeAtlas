@@ -15,7 +15,7 @@ import { useStored } from "../settings/storage";
 import { formatCount } from "../format";
 import { useT } from "../i18n/react";
 import { Browser } from "./Browser";
-import { firstScanRoots, fullScanRoots, rootEntries } from "./roots";
+import { fullScanRoots, rootEntries, runningFullScanRoots } from "./roots";
 import { useChangeKeys } from "./useChangeKeys";
 import { useTrash } from "./useTrash";
 import { useRoots } from "./useRoots";
@@ -56,7 +56,7 @@ export function App() {
   const summary = entries.find((e) => e.root === selection?.root)?.summary ?? null;
   const inTree = useMemo(() => new Set(entries.map((e) => e.root)), [entries]);
   const waiting = useMemo(() => fullScanRoots(roots.roots), [roots.roots]);
-  const firstScans = useMemo(() => firstScanRoots(roots.roots), [roots.roots]);
+  const fullScans = useMemo(() => runningFullScanRoots(roots.roots), [roots.roots]);
   const selectedRoot = selection?.root ?? null;
   // The source picked on the toolbar holds while the same root stays selected.
   const [picked, setPicked] = useState<{ path: string; base: string | null } | null>(null);
@@ -107,7 +107,7 @@ export function App() {
   const refreshCurrent =
     shownGeneration === null ||
     shownFolder === null ||
-    (selectedRoot !== null && firstScans.has(selectedRoot))
+    (selectedRoot !== null && fullScans.has(selectedRoot))
       ? null
       : () => refreshFolder(shownGeneration, shownFolder);
   const trash = useTrash({
@@ -188,7 +188,7 @@ export function App() {
             onTrash={trash.onTrash}
             onMarks={trash.onMarks}
             busyRoots={trash.busyRoots}
-            firstScans={firstScans}
+            fullScans={fullScans}
             trashing={trash.busy}
             onCloseRoot={roots.closeRoot}
             onForget={roots.forget}

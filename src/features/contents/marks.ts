@@ -17,6 +17,8 @@ export interface Marks {
   readonly ids: ReadonlySet<number>;
   /** Row Shift ranges start from; null before any click. */
   readonly anchor: number | null;
+  /** Item under the anchor, retained across live reordering. */
+  readonly anchorId?: number;
 }
 
 /** How a click or a key changes the marks. */
@@ -60,7 +62,7 @@ export function mark(
       const id = idAt(i);
       if (id !== undefined) ids.add(id);
     }
-    return { key: marks.key, ids, anchor: start };
+    return { key: marks.key, ids, anchor: start, anchorId: marks.anchorId ?? idAt(start) };
   }
   const ids = new Set(how === "toggle" ? marks.ids : NONE);
   const id = idAt(index);
@@ -68,7 +70,7 @@ export function mark(
     if (how === "toggle" && ids.has(id)) ids.delete(id);
     else ids.add(id);
   }
-  return { key: marks.key, ids, anchor: index };
+  return { key: marks.key, ids, anchor: index, anchorId: id };
 }
 
 /**
@@ -82,7 +84,7 @@ export function markAll(marks: Marks, count: number, idAt: IdAt): Marks {
     const id = idAt(i);
     if (id !== undefined) ids.add(id);
   }
-  return { key: marks.key, ids, anchor: marks.anchor };
+  return { ...marks, ids };
 }
 
 /** What an action acts on: the marked items, else the item under the cursor. */

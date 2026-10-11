@@ -58,19 +58,12 @@ export function fullScanRoots(roots: Roots): ReadonlySet<string> {
 export const busyRoots = (roots: Roots): ReadonlySet<string> =>
   new Set([
     ...roots.queue.filter((q) => q.state === "scanning").map((q) => q.root),
-    ...fullScanRoots({ ...roots, queue: roots.queue.filter((q) => q.state === "scanning") }),
+    ...runningFullScanRoots(roots),
   ]);
 
-/** Running first scans also block actions in roots contained by the scanned path. */
-export function firstScanRoots(roots: Roots): ReadonlySet<string> {
-  const queue = roots.queue.filter(
-    (q) =>
-      q.state === "scanning" &&
-      q.folder === null &&
-      !roots.roots.some((s) => s.root === q.root && !s.scanning),
-  );
-  return fullScanRoots({ ...roots, queue });
-}
+/** Running full scans block refresh and child scans; queued rescans and folder jobs do not. */
+export const runningFullScanRoots = (roots: Roots): ReadonlySet<string> =>
+  fullScanRoots({ ...roots, queue: roots.queue.filter((q) => q.state === "scanning") });
 
 /** The open roots to remember; queued scans are not reopened. */
 export const storedRoots = (roots: Roots): string =>

@@ -5,6 +5,7 @@ import {
   fullScanRoots,
   parseStoredRoots,
   rootEntries,
+  runningFullScanRoots,
   rootsToReopen,
   storedRoots,
 } from "./roots";
@@ -107,5 +108,29 @@ describe("busyRoots", () => {
       ],
     };
     expect([...busyRoots(roots)]).toEqual(["C:\\"]);
+  });
+});
+
+describe("runningFullScanRoots", () => {
+  it("blocks running full scans and their descendants, regardless of first-scan status", () => {
+    const roots: Roots = {
+      roots: [summary("C:\\data", 1), summary("C:\\data\\sub", 2), summary("D:\\", 3)],
+      queue: [
+        { root: "C:\\data", state: "scanning", folder: null },
+        { root: "D:\\", state: "queued", folder: null },
+      ],
+    };
+    expect([...runningFullScanRoots(roots)]).toEqual(["C:\\data", "C:\\data\\sub"]);
+    roots.roots[0].scanning = true;
+    expect([...runningFullScanRoots(roots)]).toEqual(["C:\\data", "C:\\data\\sub"]);
+  });
+
+  it("keeps refresh and child scans enabled during a folder refresh", () => {
+    expect(
+      runningFullScanRoots({
+        roots: [summary("C:\\", 1)],
+        queue: [{ root: "C:\\", state: "scanning", folder: "C:\\Users" }],
+      }).size,
+    ).toBe(0);
   });
 });

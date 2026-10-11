@@ -1,0 +1,205 @@
+import { describe, expect, it, vi } from "vitest";
+import { api } from "../../api/client";
+import type { List } from "../../api/types";
+import { LIVE_LIMIT, PAGE, TreeChanged, gather } from "./gather";
+import {
+  getChildren,
+  getList,
+  getSummary,
+  item,
+  page,
+  row,
+  source,
+  summary,
+} from "./gather.testSupport";
+
+vi.mock("../../api/client", () => ({
+  api: {
+    getCrumbs: vi.fn(),
+    getChildren: vi.fn(),
+    getDetails: vi.fn(),
+    getSummary: vi.fn(),
+    getList: vi.fn(),
+  },
+}));
+
+describe("gather during a live first scan", () => {
+  it("accepts live revisions and reads current sizes in one sorted backend snapshot", async () => {
+    getSummary
+      .mockResolvedValueOnce(summary(4, true, 4))
+      .mockResolvedValueOnce(summary(6, true, 13));
+    getChildren.mockResolvedValueOnce(page(5, [row(3, 9), row(1, 3), row(2, 1)]));
+
+    const got = await gather(source);
+
+    expect(getChildren).toHaveBeenCalledExactlyOnceWith(1, 0, 0, LIVE_LIMIT, source.order);
+    expect(got.items.map((item) => [item.id, item.size])).toEqual([
+      [3, 9],
+      [1, 3],
+      [2, 1],
+    ]);
+    expect(got.folderSize).toBe(13);
+  });
+
+  it("preserves backend name and tie ordering instead of applying a locale comparator", async () => {
+    getSummary.mockResolvedValue(summary(8, true, 20));
+    const names = ["FILE10", "file10", "file2", "file20"];
+    getChildren.mockResolvedValueOnce(
+      page(
+        7,
+        names.map((name, id) => ({ ...item(id), name })),
+      ),
+    );
+
+    const order = { ...source.order, key: "name" as const, descending: false };
+    const got = await gather({ ...source, order });
+
+    expect(got.items.map((item) => item.name)).toEqual(names);
+    expect(getChildren).toHaveBeenCalledExactlyOnceWith(1, 0, 0, LIVE_LIMIT, order);
+  });
+
+  it("accepts a first scan finishing during export and uses the final folder size", async () => {
+    getSummary
+      .mockResolvedValueOnce(summary(4, true, 1))
+      .mockResolvedValueOnce(summary(6, false, 10));
+    getChildren.mockResolvedValue(page(6, [row(1, 8)]));
+    vi.mocked(api.getCrumbs).mockResolvedValue([
+      { id: 0, name: "C:\\", size: 1, rank: 0 },
+      { id: 7, name: "folder", size: 1, rank: 0 },
+    ]);
+
+    const got = await gather({ ...source, folder: 7 });
+
+    expect(got.folderSize).toBe(8);
+    expect(got.pathOf(got.items[0])).toBe("C:\\folder\\f1");
+    expect(getChildren).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries when completion or a later edit invalidates the live snapshot", async () => {
+    getSummary.mockResolvedValueOnce(summary(4, true)).mockResolvedValue(summary(6));
+    getChildren
+      .mockResolvedValueOnce(page(5, [row(1, 1)]))
+      .mockResolvedValueOnce(page(6, [row(2, 8)]));
+
+    const got = await gather(source);
+
+    expect(got.items.map((item) => item.id)).toEqual([2]);
+    expect(getChildren.mock.calls.map((call) => call[3])).toEqual([LIVE_LIMIT, PAGE]);
+  });
+
+  it("refreshes live list sizes while preserving the displayed row order", async () => {
+    getSummary
+      .mockResolvedValueOnce(summary(4, true, 3))
+      .mockResolvedValueOnce(summary(6, true, 30));
+    getList.mockResolvedValue({
+      rev: 5,
+      size: 20,
+      items: [row(1, 12), row(2, 8)],
+    } as List);
+    const got = await gather({
+      kind: "list",
+      generation: 1,
+      base: 0,
+      list: "largest",
+      rows: [row(2, 1), row(1, 2)],
+      rev: 3,
+      size: 3,
+      columns: ["name"],
+    });
+
+    expect(got.items.map((item) => [item.id, item.size])).toEqual([
+      [2, 8],
+      [1, 12],
+    ]);
+    expect(got.folderSize).toBe(30);
+    expect(getList).toHaveBeenCalledWith(1, 0, "largest", 2);
+  });
+
+  it("refreshes all counts for live rows displaced from a capped list", async () => {
+    getSummary.mockResolvedValue(summary(4, true, 30));
+    getList.mockResolvedValue({ rev: 4, size: 30, items: [row(3, 20)] } as List);
+    getChildren.mockResolvedValue(
+      page(4, [{ ...row(1, 8), isDir: true, len: 50, files: 3, dirs: 2 }]),
+    );
+
+    const got = await gather({
+      kind: "list",
+      generation: 1,
+      base: 0,
+      list: "largest",
+      rows: [row(1, 2)],
+      rev: 3,
+      size: 3,
+      columns: ["name"],
+    });
+
+    expect(got.items.map((item) => [item.id, item.size])).toEqual([[1, 8]]);
+    expect(got.items[0]).toMatchObject({ len: 50, files: 3, dirs: 2 });
+    expect(getChildren).toHaveBeenCalledExactlyOnceWith(1, 0, 0, LIVE_LIMIT, {
+      key: "name",
+      descending: false,
+      dirsOnly: false,
+    });
+  });
+
+  it("rejects a completed list assembled from different revisions", async () => {
+    getSummary.mockResolvedValueOnce(summary(4, true)).mockResolvedValueOnce(summary(6));
+    getList.mockResolvedValue({ rev: 5, size: 8, items: [row(2, 8)] } as List);
+    getChildren.mockResolvedValue(page(6, [{ ...row(1, 3), files: 3 }]));
+
+    await expect(
+      gather({
+        kind: "list",
+        generation: 1,
+        base: 0,
+        list: "largest",
+        rows: [row(1, 2)],
+        rev: 3,
+        size: 3,
+        columns: ["name"],
+      }),
+    ).rejects.toBeInstanceOf(TreeChanged);
+  });
+
+  it("validates after reading the current live subfolder total", async () => {
+    getSummary.mockResolvedValueOnce(summary(4, true)).mockResolvedValue(summary(6));
+    getChildren
+      .mockResolvedValueOnce(page(5, [row(1, 3)]))
+      .mockResolvedValueOnce(page(6, [row(2, 8)]));
+    vi.mocked(api.getCrumbs)
+      .mockResolvedValueOnce([{ id: 7, name: "folder", size: 3, rank: 0 }])
+      .mockImplementationOnce(async () => {
+        expect(getSummary).toHaveBeenCalledTimes(1);
+        return [{ id: 7, name: "folder", size: 8, rank: 0 }];
+      });
+
+    const got = await gather({ ...source, folder: 7 });
+
+    expect(got.items.map((item) => item.id)).toEqual([2]);
+    expect(got.folderSize).toBe(8);
+    expect(getChildren).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([false, true])(
+    "checks the refreshed list revision after completion (changed: %s)",
+    async (changed) => {
+      getSummary
+        .mockResolvedValueOnce(summary(4, true))
+        .mockResolvedValueOnce(summary(changed ? 6 : 5));
+      getList.mockResolvedValue({ rev: 5, size: 8, items: [row(1, 8)] } as List);
+      const result = gather({
+        kind: "list",
+        generation: 1,
+        base: 0,
+        list: "largest",
+        rows: [row(1, 2)],
+        rev: 3,
+        size: 3,
+        columns: ["name"],
+      });
+
+      if (changed) await expect(result).rejects.toBeInstanceOf(TreeChanged);
+      else expect((await result).items[0].size).toBe(8);
+    },
+  );
+});

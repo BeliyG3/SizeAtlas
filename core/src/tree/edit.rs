@@ -212,9 +212,8 @@ fn renumber(capacity: usize, mut take: impl FnMut(u32) -> Option<Node>) -> Vec<N
     nodes
 }
 
-/// `a - b` for totals that must cover `b`; a debug build stops if they do not.
-fn less<T: Copy + Default + PartialOrd + Sub<Output = T>>(a: T, b: T) -> T {
-    debug_assert!(a >= b, "totals out of step");
+/// Saturating subtraction: older saved scans can have inconsistent counters.
+pub(super) fn less<T: Copy + Default + PartialOrd + Sub<Output = T>>(a: T, b: T) -> T {
     if a >= b { a - b } else { T::default() }
 }
 

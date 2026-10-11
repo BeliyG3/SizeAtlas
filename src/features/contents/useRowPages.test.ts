@@ -83,6 +83,38 @@ describe("useRowPages", () => {
     expect(onFail).not.toHaveBeenCalled();
   });
 
+  it.each(["name", "size"] as const)(
+    "fills a newly scrolled %s page while the live backend revision runs ahead",
+    async (key) => {
+      vi.mocked(api.getChildren).mockResolvedValue(answer(7, [second]));
+      const onFail = vi.fn();
+      const liveOrder = { ...order, key };
+      state.listing!.key = `0:3:${key}:true:false`;
+      const { request } = useRowPages(1, 3, 0, liveOrder, onFail, true);
+
+      request([1]);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+      expect(state.listing?.pages.get(0)).toEqual([first]);
+      expect(state.listing?.pages.get(1)).toEqual([second]);
+      expect(onFail).not.toHaveBeenCalled();
+    },
+  );
+
+  it("accepts a newer name-ordered page outside a live scan", async () => {
+    vi.mocked(api.getChildren).mockResolvedValue(answer(4, [second]));
+    const onFail = vi.fn();
+    state.listing!.key = "0:3:name:true:false";
+    const { request } = useRowPages(1, 3, 0, { ...order, key: "name" }, onFail);
+
+    request([1]);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(state.listing?.pages.get(0)).toEqual([first]);
+    expect(state.listing?.pages.get(1)).toEqual([second]);
+    expect(onFail).not.toHaveBeenCalled();
+  });
+
   it("ignores a newer page after its listing scope was disposed", async () => {
     vi.mocked(api.getChildren).mockResolvedValue(answer(4, [first]));
     const onFail = vi.fn();

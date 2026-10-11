@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "re
 import { api } from "../../api/client";
 import type { ListOrder } from "../../api/types";
 import { HEADER_HEIGHT, scrollToShow } from "./pages";
+import { itemAt, type Listing } from "./useRowPages";
+import { useRowPosition } from "./useRowPosition";
 
 /** Scrolls the table just enough to show row `index`. */
 export function scrollToRow(el: HTMLElement, index: number) {
@@ -18,6 +20,8 @@ interface Args {
   listKey: string;
   /** Rows the listing has so far. */
   count: number;
+  listing: Listing | null;
+  live: boolean;
   /** The scrolling table. */
   body: RefObject<HTMLDivElement | null>;
   onFail: (e: unknown) => void;
@@ -34,11 +38,26 @@ export function useCursor({
   order,
   listKey,
   count,
+  listing,
+  live,
   body,
   onFail,
 }: Args) {
-  const [cursorAt, setCursorAt] = useState<{ key: string; index: number } | null>(null);
-  const cursor = cursorAt?.key === listKey ? cursorAt.index : null;
+  const [cursorAt, setCursorAt] = useState<{
+    key: string;
+    index: number;
+    id?: number;
+  } | null>(null);
+  const cursor = useRowPosition({
+    generation,
+    listKey,
+    order,
+    listing,
+    live,
+    index: cursorAt?.key === listKey ? cursorAt.index : null,
+    id: cursorAt?.id,
+    onFail,
+  });
   // A row to scroll to once the listing has that many rows.
   const pendingReveal = useRef<{ key: string; index: number } | null>(null);
   // A file the table itself selected: its row is known, so no position lookup is needed.
@@ -59,7 +78,7 @@ export function useCursor({
       (position) => {
         if (!live || position === null) return;
         pendingReveal.current = { key: listKey, index: position };
-        setCursorAt({ key: listKey, index: position });
+        setCursorAt({ key: listKey, index: position, id: selectedId });
       },
       (e: unknown) => live && onFail(e),
     );
@@ -76,7 +95,8 @@ export function useCursor({
     scrollToRow(el, want.index);
   }, [listKey, count, cursorAt, body]);
 
-  const setCursor = (index: number) => setCursorAt({ key: listKey, index });
+  const setCursor = (index: number) =>
+    setCursorAt({ key: listKey, index, id: itemAt(listing, index)?.id });
   /** Event handlers only: the table selected file `id` at the cursor. */
   const pickedFile = (id: number) => {
     pickedHere.current = { id, key: listKey };

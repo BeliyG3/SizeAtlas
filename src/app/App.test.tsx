@@ -127,6 +127,13 @@ describe("App live scan action wiring", () => {
     expect(api.trashPreview).not.toHaveBeenCalled();
   });
 
+  it.each([0, 7])("disables menu refresh and F5 for folder %i during a rescan", (folder) => {
+    const { menu, keys } = render(false, "scanning", folder);
+    expect(menu.onRefresh).toBeNull();
+    keys.onRefresh();
+    expect(api.refreshFolder).not.toHaveBeenCalled();
+  });
+
   it.each([0, 7])("allows menu refresh and F5 for folder %i while a rescan waits", (folder) => {
     const { menu, keys } = render(false, "queued", folder);
     expect(menu.onRefresh).toBeTypeOf("function");

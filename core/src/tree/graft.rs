@@ -1,6 +1,6 @@
 //! Moving a prebuilt batch into an existing folder without sorting or recounting records.
 
-use super::edit::Totals;
+use super::edit::{Totals, less};
 use super::{Node, Tree, flags};
 
 impl Tree {
@@ -36,10 +36,10 @@ impl Tree {
         let own_error = u32::from(node.has(flags::ACCESS_ERROR));
         let lossy = node.flags & flags::LOSSY_NAME;
         let killed = self.kill_below(id);
-        self.live = self.live - killed.count + sub.live - 1;
+        self.live = less(self.live, killed.count) + less(sub.live, 1);
         self.dead += killed.count;
         self.access_errors =
-            self.access_errors - killed.access_errors - own_error + sub.access_errors;
+            less(self.access_errors, killed.access_errors + own_error) + sub.access_errors;
         let base = self.nodes.len() as u32;
         self.nodes.reserve(sub.nodes.len() - 1);
         let mut incoming = sub.nodes.into_iter();

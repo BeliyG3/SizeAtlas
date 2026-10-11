@@ -38,7 +38,8 @@ interface Props {
   onMarks: (ids: readonly number[]) => void;
   /** Roots with a running job: nothing of them goes to the trash. */
   busyRoots: ReadonlySet<string>;
-  firstScans: ReadonlySet<string>;
+  /** Roots inside a running full scan: refresh and child scans are unavailable. */
+  fullScans: ReadonlySet<string>;
   /** A trash request runs. */
   trashing: boolean;
   /** Removes the root from the tree and stops its scan; its saved scan stays. */
@@ -72,7 +73,7 @@ export function Browser({
   onTrash,
   onMarks,
   busyRoots,
-  firstScans,
+  fullScans,
   trashing,
   onCloseRoot,
   onForget,
@@ -134,7 +135,7 @@ export function Browser({
       : null;
 
   const itemActions = scanActions(
-    itemRoot === undefined || firstScans.has(itemRoot),
+    itemRoot === undefined || fullScans.has(itemRoot),
     itemRoot === undefined || busyRoots.has(itemRoot),
     trashing,
   );

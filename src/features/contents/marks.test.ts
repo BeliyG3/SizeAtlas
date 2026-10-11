@@ -11,6 +11,7 @@ describe("marks", () => {
     const m = mark(mark(start, "one", 2, idAt), "one", 7, idAt);
     expect(ids(m)).toEqual([107]);
     expect(m.anchor).toBe(7);
+    expect(m.anchorId).toBe(107);
   });
 
   it("Ctrl+click adds and removes rows", () => {
@@ -20,6 +21,7 @@ describe("marks", () => {
     m = mark(m, "toggle", 3, idAt);
     expect(ids(m)).toEqual([101, 108]);
     expect(m.anchor).toBe(3);
+    expect(m.anchorId).toBe(103);
   });
 
   it("Shift marks the loaded rows from the anchor, either way", () => {
@@ -29,6 +31,8 @@ describe("marks", () => {
     const up = mark(down, "range", 1, idAt);
     expect(ids(up)).toEqual([101, 102, 103]);
     expect(up.anchor).toBe(3);
+    expect(up.anchorId).toBe(103);
+    expect(markAll(up, 10, idAt).anchorId).toBe(103);
   });
 
   it("Shift without an anchor starts at the cursor row", () => {

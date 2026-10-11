@@ -87,3 +87,31 @@ fn graft_preserves_ids_structure_totals_and_access_errors() {
         (500, 1, 500, 1)
     );
 }
+
+#[test]
+fn graft_saturates_inconsistent_saved_counters() {
+    for old_errors in [0, 1] {
+        let mut tree = sample_tree();
+        let docs = tree
+            .children(0)
+            .find(|&id| tree.name(id) == "docs")
+            .unwrap();
+        let child = tree.children(docs).next().unwrap();
+        tree.nodes[docs as usize].flags |= flags::ACCESS_ERROR;
+        tree.nodes[child as usize].flags |= flags::ACCESS_ERROR;
+        // A legacy cache may undercount both the removed descendants and their errors.
+        tree.live = 0;
+        tree.access_errors = old_errors;
+        let mut sub = sample_tree();
+        let added = sub.live - 1;
+        let size = sub.node(0).size;
+        sub.access_errors = 3;
+
+        tree.graft(docs, sub);
+
+        assert_eq!(tree.live, added);
+        assert_eq!(tree.access_errors, 3);
+        assert!(!tree.node(child).is_alive());
+        assert_eq!(tree.node(docs).size, size);
+    }
+}

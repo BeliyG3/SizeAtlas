@@ -29,6 +29,7 @@ export function useRowPages(
   folder: number,
   order: ListOrder,
   onFail: (e: unknown) => void,
+  liveScan = false,
 ) {
   // A change of the tree (a refresh, a trash) makes a new listing too.
   const key = `${folder}:${rev}:${order.key}:${order.descending}:${order.dirsOnly}`;
@@ -64,8 +65,12 @@ export function useRowPages(
         ),
       ).then((answers) => {
         if (!scope.live) return;
-        // A newer size-ordered page can duplicate or omit rows from the held revision.
-        if (answers.some(({ answer }) => answer && answer.rev > rev)) {
+        // Live scans keep filling scrolled pages; the next gated refresh reconciles their order.
+        if (
+          order.key !== "name" &&
+          !liveScan &&
+          answers.some(({ answer }) => answer && answer.rev > rev)
+        ) {
           onFail({ code: "StaleId" });
           return;
         }
@@ -86,7 +91,7 @@ export function useRowPages(
         }
       });
     },
-    [generation, rev, folder, order, key, orderKey, onFail, measure],
+    [generation, rev, folder, order, key, orderKey, onFail, measure, liveScan],
   );
 
   const shown = listing?.key === key ? listing : null;

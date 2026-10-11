@@ -1,4 +1,4 @@
-/** First scans block refresh/child scans; running jobs and a trash block trash. */
-export function scanActions(firstScan: boolean, busy: boolean, trashing: boolean) {
-  return { refresh: !firstScan, scanFolder: !firstScan, trash: !busy && !trashing };
+/** Running full scans block refresh/child scans; running jobs and a trash block trash. */
+export function scanActions(fullScan: boolean, busy: boolean, trashing: boolean) {
+  return { refresh: !fullScan, scanFolder: !fullScan, trash: !busy && !trashing };
 }

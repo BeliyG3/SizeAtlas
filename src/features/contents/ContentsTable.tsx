@@ -21,6 +21,7 @@ import { useColumnLayout } from "./useColumnLayout";
 import { scrollToRow, useCursor } from "./useCursor";
 import { useMarks } from "./useMarks";
 import { itemAt, useRowPages } from "./useRowPages";
+import { useRowPosition } from "./useRowPosition";
 import "./contents.css";
 
 interface Props {
@@ -78,8 +79,15 @@ export function ContentsTable({
   );
   useExportSource(exportSource);
   const { scrollTop, viewport, onScroll } = useViewport(body);
-  const { listing, previous, request } = useRowPages(generation, rev, folder, order, onFail);
-  // The cursor belongs to one listing of one revision: after a change it finds the selection again.
+  const { listing, previous, request } = useRowPages(
+    generation,
+    rev,
+    folder,
+    order,
+    onFail,
+    summary.scanning,
+  );
+  // Live ticks keep the cursor and range anchor attached to their item ids.
   const listKey = `${folder}:${summary.scanning ? "live" : rev}:${sort.key}:${sort.descending}:${dirsOnly}`;
 
   const unaccounted = folder === rootId ? (summary.volume?.unaccounted ?? 0) : 0;
@@ -98,11 +106,24 @@ export function ContentsTable({
     order,
     listKey,
     count,
+    listing,
+    live: summary.scanning === true,
     body,
     onFail,
   });
   // Marks of this listing and selection: anything else starts without any.
-  const [marks, setMarks] = useMarks(listKey, selectedId);
+  const [storedMarks, setMarks] = useMarks(listKey, selectedId);
+  const anchor = useRowPosition({
+    generation,
+    listKey,
+    order,
+    listing,
+    live: summary.scanning === true,
+    index: storedMarks.anchor,
+    id: storedMarks.anchorId,
+    onFail,
+  });
+  const marks = { ...storedMarks, anchor };
   const idAt = (index: number) => itemAt(listing, index)?.id;
   useEffect(() => onMarks([...marks.ids]), [marks.ids, onMarks]);
   useEffect(() => () => onMarks([]), [onMarks]);
@@ -149,6 +170,7 @@ export function ContentsTable({
    */
   const point = (index: number, how: MarkHow) => {
     if (count === 0) return;
+    if (how === "range" && storedMarks.anchorId !== undefined && anchor === null) return;
     const next = Math.max(0, Math.min(count - 1, index));
     setCursor(next);
     if (body.current) scrollToRow(body.current, next);
