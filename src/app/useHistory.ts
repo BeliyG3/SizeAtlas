@@ -1,0 +1,94 @@
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { BACK_BUTTON, FORWARD_BUTTON, historyKey } from "../features/shell/historyKey";
+import { emptyHistory, restore, step, toVisit, visit } from "./history";
+import type { RootEntry } from "./roots";
+import type { Selection } from "./selection";
+
+/** Typing in these must keep Alt+arrows to itself. */
+export const typing = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName));
+
+/** An open dialog or menu keeps the view where it is. */
+export const busy = (target: EventTarget | null) =>
+  document.querySelector("dialog[open]") !== null ||
+  (target instanceof Element && target.closest('[role="menu"]') !== null);
+
+/**
+ * Back and forward through the folders the view showed, from the mouse side buttons, Alt+← and
+ * Alt+→. `record` adds a folder the user chose; `jump` shows one without recording it.
+ */
+export function useHistory(
+  selection: Selection | null,
+  entries: readonly RootEntry[],
+  jump: (next: Selection) => void,
+) {
+  const [history, setHistory] = useState(emptyHistory);
+  // Read by `record`, which must stay stable for the selection callbacks.
+  const shown = useRef(selection);
+  useLayoutEffect(() => {
+    shown.current = selection;
+  }, [selection]);
+
+  /** Records the folder shown now too: it may have come from a start, a rescan or a close. */
+  const record = useCallback((next: Selection) => {
+    const from = shown.current;
+    setHistory((h) => visit(from ? visit(h, toVisit(from)) : h, toVisit(next)));
+  }, []);
+
+  const target = (dir: -1 | 1) => step(history, dir, (v) => restore(v, entries, selection));
+  const canBack = target(-1) !== null;
+  const canForward = target(1) !== null;
+
+  const go = useCallback(
+    (dir: -1 | 1) => {
+      const found = step(history, dir, (v) => restore(v, entries, selection));
+      if (!found) return;
+      setHistory(found.history);
+      const { root, generation, folder } = found.visit;
+      jump({ root, generation, id: folder, folder });
+    },
+    [history, entries, selection, jump],
+  );
+
+  // The listeners subscribe once and call the latest `go`.
+  const latestGo = useRef(go);
+  useLayoutEffect(() => {
+    latestGo.current = go;
+  }, [go]);
+
+  useEffect(() => {
+    const side = (e: MouseEvent) => e.button === BACK_BUTTON || e.button === FORWARD_BUTTON;
+    // The webview would go through its own page history on these buttons.
+    const press = (e: MouseEvent) => {
+      if (side(e)) e.preventDefault();
+    };
+    const release = (e: MouseEvent) => {
+      if (!side(e)) return;
+      e.preventDefault();
+      if (!busy(e.target)) latestGo.current(e.button === BACK_BUTTON ? -1 : 1);
+    };
+    const key = (e: KeyboardEvent) => {
+      const dir = historyKey(e);
+      if (dir === null || typing(e.target)) return;
+      e.preventDefault();
+      if (!e.repeat && !busy(e.target)) latestGo.current(dir);
+    };
+    window.addEventListener("mousedown", press);
+    window.addEventListener("mouseup", release);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("mousedown", press);
+      window.removeEventListener("mouseup", release);
+      window.removeEventListener("keydown", key);
+    };
+  }, []);
+
+  return {
+    record,
+    back: () => go(-1),
+    forward: () => go(1),
+    canBack,
+    canForward,
+  };
+}

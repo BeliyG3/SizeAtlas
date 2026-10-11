@@ -1,0 +1,12 @@
+# Local notes, not published
+docs/
+
+# Build output
+target/
+dist/
+node_modules/
+src-tauri/gen/schemas/
+
+# OS files
+.DS_Store
+Thumbs.db

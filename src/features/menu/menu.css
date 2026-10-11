@@ -1,0 +1,87 @@
+.menu {
+  position: fixed;
+  display: grid;
+  min-width: 200px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  z-index: 10;
+  box-shadow: var(--shadow);
+}
+
+/* The menu takes the focus when opened by pointer; the hovered or focused item shows it. */
+.menu:focus-visible,
+.menu button:focus-visible {
+  outline: none;
+}
+
+/* Every item keeps a column on its left for an icon or a check mark, so all texts line up. */
+.menu button {
+  position: relative;
+  padding-left: 30px;
+  border: none;
+  text-align: left;
+  background: none;
+}
+
+.menu button > .icon:first-child,
+.menu .check {
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  translate: 0 -50%;
+}
+
+.menu button:hover:not(:disabled),
+.menu button:focus-visible {
+  background: var(--selection);
+  color: var(--selection-text);
+}
+
+.menu [role="separator"] {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+}
+
+/* The check mark of a choice, empty when unchecked: centred in the icon column. */
+.menu .check {
+  width: 16px;
+  text-align: center;
+}
+
+/* An item that opens a submenu: the arrow sits at the right edge. */
+.menu [aria-haspopup="menu"] {
+  display: flex;
+  align-items: center;
+}
+
+.menu [aria-expanded="true"] {
+  background: var(--panel-hover);
+}
+
+.menu .arrow {
+  margin-left: auto;
+  padding-left: 16px;
+}
+
+.submenu {
+  display: grid;
+}
+
+/* An item with its key on the right. */
+.menu .keyed {
+  display: flex;
+  gap: 24px;
+}
+
+.menu .key {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+.menu button:hover:not(:disabled) .key,
+.menu button:focus-visible .key {
+  color: inherit;
+}

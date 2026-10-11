@@ -1,0 +1,113 @@
+.drives {
+  flex: 1;
+  overflow: auto;
+  scroll-padding-top: 24px; /* sticky header height: it must not cover a row scrolled into view */
+  background: var(--row);
+}
+
+/* Fixed layout: the number columns keep their stored widths, the name takes the rest. */
+.drives table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  outline: none; /* the selected row shows the focus */
+}
+
+.drives th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0;
+  font-weight: normal;
+  text-align: left;
+  color: var(--text-dim);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+/* The whole header cell is the sort button. */
+.drives th .col-sort {
+  width: 100%;
+  padding: 3px 8px;
+}
+
+.drives th.num .col-sort {
+  justify-content: flex-end;
+}
+
+/* Each sticky header cell paints over its neighbours: a border on the right edge of a cell
+   (a number column left of the name) stays inside it, its line on the cell's edge. */
+.drives th .col-divider.right {
+  right: 0;
+}
+
+.drives th .col-divider.right::after {
+  left: 6px;
+}
+
+.drives th .col-divider.right:hover::after,
+.drives th .col-divider.right:focus-visible::after {
+  left: 4px;
+}
+
+/* Header cells must not clip: their borders reach into the next cell. */
+.drives td {
+  padding: 3px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drives td.num {
+  text-align: right;
+}
+
+.drives .drive-icon {
+  margin-right: 2px;
+  color: var(--text-dim);
+}
+
+.drives tbody tr.selected .drive-icon {
+  color: inherit;
+}
+
+.drives .mark {
+  margin-left: 6px;
+  color: var(--accent);
+}
+
+/* A double click opens the drive: it must not select the text. */
+.drives tbody tr {
+  cursor: default;
+  user-select: none;
+}
+
+/* Every drive is rendered, in order: the stripes follow the row index. */
+.drives tbody tr:nth-child(even) {
+  background: var(--row-alt);
+}
+
+.drives tbody tr:hover td {
+  background: var(--row-hover);
+}
+
+.drives tbody tr.disconnected td {
+  color: var(--text-dim);
+}
+
+.drives tbody tr.selected td {
+  color: var(--selection-text);
+  background: var(--selection);
+}
+
+.drives tbody tr.selected .mark {
+  color: inherit;
+}
+
+.drives table:focus-visible tr.selected {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}

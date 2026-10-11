@@ -1,0 +1,122 @@
+//! Changes to an open tree in place: a refreshed folder, items moved to the trash.
+
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
+
+use sizeatlas_core::tree::Tree;
+
+use super::{AppState, OpenRoot};
+use crate::error::CmdError;
+use crate::queue::FolderTarget;
+
+/// How long a change waits between checks for reads that still hold the tree.
+const READ_WAIT: Duration = Duration::from_millis(1);
+/// A change that waits this long for reads says so: a read that never ends is a bug.
+const READ_WARN: Duration = Duration::from_secs(5);
+
+impl AppState {
+    /// Runs `change` on the tree of the root with `generation`, as `change_scan` does for a scan.
+    /// A trash asks for the very tree it checked its items in.
+    pub fn change_tree(
+        &self,
+        generation: u64,
+        change: impl FnOnce(&mut Tree) -> Option<()>,
+    ) -> Option<Arc<Tree>> {
+        self.change_where(|r| r.generation == generation, |tree, _| change(tree))
+    }
+
+    /// Runs `change` on the tree of the scan `scan` (see `OpenRoot::scan`), in place, under the
+    /// write lock; `change` also gets the generation the tree has now and returns `None` when it
+    /// changed nothing. After a change, a tree with more dead nodes than live ones is compacted
+    /// and gets a new generation. Returns the changed tree, to save; `None` when nothing changed
+    /// or the root was rescanned or closed.
+    pub fn change_scan(
+        &self,
+        scan: u64,
+        change: impl FnOnce(&mut Tree, u64) -> Option<()>,
+    ) -> Option<Arc<Tree>> {
+        self.change_where(|r| r.scan == scan, change)
+    }
+
+    fn change_where(
+        &self,
+        find: impl Fn(&OpenRoot) -> bool,
+        change: impl FnOnce(&mut Tree, u64) -> Option<()>,
+    ) -> Option<Arc<Tree>> {
+        let (changed, old) = {
+            let mut data = self.write_data();
+            let at = data.roots.iter().position(find)?;
+            let generation = data.roots[at].generation;
+            let tree = tree_mut(&mut data.roots[at].tree);
+            change(tree, generation)?;
+            let old = (tree.dead > tree.live).then(|| tree.compact());
+            if old.is_some() {
+                data.generation += 1;
+                data.roots[at].generation = data.generation;
+            }
+            (data.roots[at].tree.clone(), old)
+        };
+        // Dropping millions of nodes takes a while: neither under the lock nor before closing.
+        if let Some(old) = old {
+            thread::spawn(move || drop(old));
+        }
+        Some(changed)
+    }
+
+    /// The root of `id` and what to queue to refresh it: its folder (a file's own folder), or
+    /// `None` — a full scan — for the root.
+    pub fn refresh_target(
+        &self,
+        generation: u64,
+        id: u32,
+    ) -> Result<(String, Option<FolderTarget>), CmdError> {
+        let scan = self
+            .read_data()
+            .roots
+            .iter()
+            .find(|r| r.generation == generation)
+            .map(|r| r.scan)
+            .ok_or(CmdError::StaleId)?;
+        let tree = self.tree(generation)?;
+        let node = tree.get(id).ok_or(CmdError::StaleId)?;
+        let folder = if node.is_dir() { id } else { node.parent };
+        if tree.has_lossy_path(folder) {
+            return Err(CmdError::LossyName);
+        }
+        let target = (folder != 0).then(|| FolderTarget {
+            scan,
+            generation,
+            id: folder,
+            path: tree.path(folder),
+        });
+        Ok((tree.name(0).to_owned(), target))
+    }
+
+    /// `id` if it is alive, else its nearest live ancestor: where a view of a removed node goes.
+    pub fn live_ancestor(&self, generation: u64, id: u32) -> Result<u32, CmdError> {
+        let tree = self.tree(generation)?;
+        if id as usize >= tree.len() {
+            return Err(CmdError::StaleId);
+        }
+        Ok(tree.live_ancestor(id))
+    }
+}
+
+/// `&mut` to a shared tree without copying it: waits until no read holds it. The caller holds
+/// the write lock, so no new read can take the tree meanwhile.
+// ponytail: a read that took the data lock again while holding the tree would make this wait
+// forever; none does: reads take the lock only to clone the `Arc`. Keep it that way. After
+// READ_WARN the wait is reported on stderr.
+fn tree_mut(tree: &mut Arc<Tree>) -> &mut Tree {
+    let start = Instant::now();
+    let mut warned = false;
+    while Arc::get_mut(tree).is_none() {
+        if !warned && start.elapsed() >= READ_WARN {
+            eprintln!("SizeAtlas: a change has waited {READ_WARN:?} for reads of the tree");
+            warned = true;
+        }
+        thread::sleep(READ_WAIT);
+    }
+    Arc::get_mut(tree).expect("no read holds the tree")
+}

@@ -1,0 +1,283 @@
+:root {
+  color-scheme: dark;
+  /* Blender-like neutral greys: window, panels and headers, fields and buttons. */
+  --bg: #181818;
+  --panel: #232323;
+  --panel-hover: #2e2e2e;
+  --field: #333333;
+  --field-hover: #3d3d3d;
+  --field-active: #2a2a2a;
+  --border: #121212;
+  --divider: #2c2c2c;
+  --text: #e0e0e0;
+  --text-dim: #9a9a9a;
+  --accent: #6f9bd9;
+  --selection: #4772b3;
+  --selection-hover: #5480c2;
+  --selection-active: #3b629e;
+  --selection-text: #ffffff;
+  --danger: #ff6b6b;
+  --bar: #3d6fb8;
+  --warn-bg: #3a2f1a;
+  --warn-text: #f3d9a4;
+  /* Folder icons: a muted ochre that does not outshine the names. */
+  --icon-folder: #a8915f;
+  --shadow: 0 4px 14px rgb(0 0 0 / 55%);
+  /* Rows of the tree and the tables: striped, as in Blender's outliner. */
+  --row: #1d1d1d;
+  --row-alt: #232323;
+  --row-hover: #2b2b2b;
+  --tree-guide: #363636;
+  --scroll-thumb: #3d3d3d;
+  --scroll-thumb-hover: #4f4f4f;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --panel-hover: #eceef2;
+  --field: #ffffff;
+  --field-hover: #eceef2;
+  --field-active: #dde1e7;
+  --border: #d4d8df;
+  --divider: #c2c7d0;
+  --text: #1c1f26;
+  --text-dim: #5d6472;
+  --accent: #2f6fd6;
+  --selection: #d3e2fa;
+  --selection-hover: #c4d8f8;
+  --selection-active: #b2cbf2;
+  --selection-text: #1c1f26;
+  --danger: #c93c3c;
+  --bar: #6f9fe6;
+  --warn-bg: #fff2d1;
+  --warn-text: #6a4c0c;
+  --icon-folder: #a3803d;
+  --shadow: 0 4px 14px rgb(0 0 0 / 18%);
+  --row: #ffffff;
+  --row-alt: #f3f4f7;
+  --row-hover: #e7eaf0;
+  --tree-guide: #d5d9e0;
+  --scroll-thumb: #c4c9d1;
+  --scroll-thumb-hover: #a9afba;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Engines without ::-webkit-scrollbar. Chromium ignores those rules once these are set. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) var(--panel);
+  }
+}
+
+/* Thin scroll bars in the theme's colors, without arrow buttons (WebView2, WebKit). */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: var(--panel);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border: 2px solid var(--panel);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover);
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--field-hover);
+}
+
+button:active:not(:disabled) {
+  background: var(--field-active);
+}
+
+/* The main action of a toolbar or a dialog, and the chosen segment of a joined group. */
+button.primary,
+.joined > [aria-selected="true"] {
+  color: var(--selection-text);
+  background: var(--selection);
+}
+
+button.primary:hover:not(:disabled),
+.joined > [aria-selected="true"]:hover {
+  background: var(--selection-hover);
+}
+
+button.primary:active:not(:disabled),
+.joined > [aria-selected="true"]:active {
+  background: var(--selection-active);
+}
+
+/* Text and icon dim together: icons draw in the text color. */
+button:disabled {
+  color: var(--text-dim);
+  cursor: default;
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+}
+
+/* A button with an icon before (or after) its text. */
+button.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Buttons side by side as one block: shared outer corners, a border between them. */
+.joined {
+  display: flex;
+}
+
+.joined > button {
+  border-radius: 0;
+}
+
+.joined > button + button {
+  margin-left: -1px;
+}
+
+.joined > button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.joined > button:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+/* Above its neighbours, so the whole ring shows. */
+.joined > button:focus-visible {
+  position: relative;
+}
+
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.dim {
+  color: var(--text-dim);
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 60%);
+  color: #fff;
+  font-size: 18px;
+}
+
+.meter {
+  display: block;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.meter > span {
+  display: block;
+  height: 100%;
+  background: var(--bar);
+}
+
+.pad {
+  margin: 0;
+  padding: 8px 12px;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+}
+
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.toast {
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--danger);
+  border-radius: 4px;
+}

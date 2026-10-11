@@ -1,0 +1,98 @@
+/* A column border in a header: a thin line in a wider strip that catches the pointer. The
+   header cell it sits in must be positioned. */
+.col-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.col-divider.right {
+  right: -4px;
+}
+
+.col-divider.left {
+  left: -4px;
+}
+
+.col-divider::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 1px;
+  background: var(--divider);
+}
+
+.col-divider:focus-visible {
+  outline: none;
+}
+
+.col-divider:hover::after,
+.col-divider:focus-visible::after {
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 3px;
+  background: var(--accent);
+}
+
+/* A header cell that sorts: the whole cell is the button, lit while hovered and pressed.
+   Each header sets the padding and the alignment. */
+.col-sort {
+  display: flex;
+  flex: 1;
+  align-self: stretch;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+.col-sort:focus-visible {
+  outline-offset: -2px;
+}
+
+.col-sort:active {
+  background: var(--selection);
+}
+
+/* A dragged header stays dimmed in place; a see-through copy follows the pointer. */
+.col-dragging {
+  opacity: 0.4;
+}
+
+.col-ghost {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--panel-hover);
+  /* An outline, not a border: the label stays where it is in the header. */
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  opacity: 0.75;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+  pointer-events: none;
+}
+
+/* Where a dragged header will drop. */
+.col-drop {
+  position: fixed;
+  z-index: 21;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  pointer-events: none;
+}

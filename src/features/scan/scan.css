@@ -1,0 +1,29 @@
+.scan-view {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: 12px;
+  padding: 24px 32px;
+  overflow: auto;
+}
+
+.scan-view h2 {
+  margin: 0;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.scan-view p {
+  margin: 0;
+}
+
+.scan-view progress {
+  width: min(480px, 100%);
+}
+
+.current {
+  font-family: ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

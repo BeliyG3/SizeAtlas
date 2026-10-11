@@ -1,0 +1,200 @@
+.tree {
+  scroll-padding-top: 24px; /* sticky header height */
+  flex: 1;
+  overflow: auto;
+  background: var(--row);
+}
+
+.tree-body {
+  outline: none;
+}
+
+.tree-head,
+.tree-row {
+  display: grid;
+  /* The size column's width is set on .tree (--tree-size) and stored. The name keeps some
+     room however wide the size gets: the tree scrolls sideways instead. */
+  grid-template-columns: minmax(80px, 1fr) var(--tree-size, 84px);
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+}
+
+/* The user dragged the size column before the name. */
+.tree.size-first .tree-head,
+.tree.size-first .tree-row {
+  grid-template-columns: var(--tree-size, 84px) minmax(80px, 1fr);
+}
+
+/* Compact rows, as in Folder Size. */
+.tree-row {
+  height: 18px;
+  padding-block: 0;
+  box-sizing: content-box;
+  line-height: 18px;
+}
+
+.tree-head {
+  position: sticky;
+  top: 0;
+  /* Rows contain positioned size bars that would otherwise paint over the header. */
+  z-index: 1;
+  padding-block: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.tree-head > span {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+/* Header text with an arrow, like the contents table; the whole cell is the button. */
+.tree-head .col-sort {
+  padding: 3px 0;
+}
+
+.tree-head [data-col="size"] .col-sort {
+  justify-content: flex-end;
+}
+
+/* The border between the name and the size sits in the middle of the column gap. */
+.tree-head .col-divider.left {
+  left: -8px;
+}
+
+.tree-head .col-divider.right {
+  right: -8px;
+}
+
+.tree-row {
+  cursor: default;
+}
+
+/* Every row is rendered, in order: the stripes follow the row index. */
+.tree-row:nth-child(even) {
+  background: var(--row-alt);
+}
+
+.tree-row:hover {
+  background: var(--row-hover);
+}
+
+.tree-row.focused {
+  color: var(--selection-text);
+  background: var(--selection);
+}
+
+.tree-row.focused .tag,
+.tree-row.focused .expander,
+.tree-row.focused .drive-icon {
+  color: inherit;
+}
+
+/* Full row height, so the guide lines of consecutive rows join. A guide line runs under the
+   chevron of each ancestor, as in Blender's outliner: one 18 px step (INDENT in TreeRow.tsx) per
+   level across the indent (--indent), under the middle of the 14 px expander. */
+.tree-row .name {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding-left: var(--indent);
+  white-space: nowrap;
+  background: repeating-linear-gradient(
+      to right,
+      transparent 0 6.5px,
+      var(--tree-guide) 6.5px 7.5px,
+      transparent 7.5px 18px
+    )
+    left / var(--indent) 100% no-repeat;
+}
+
+.tree-row .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* As wide as one indent level, so a child's box sits under its parent's icon. */
+.expander {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  width: 14px;
+  color: var(--text-dim);
+}
+
+.expander .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.expander:hover {
+  color: var(--text);
+}
+
+.tag {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.tree-row .size {
+  position: relative;
+  text-align: right;
+}
+
+.tree-row .bar {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  background: var(--bar);
+  opacity: 0.35;
+  border-radius: 2px;
+}
+
+.tree-row.more {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+.tree-body:focus-visible .tree-row.focused {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.tree-row .drive-icon {
+  color: var(--text-dim);
+}
+
+/* The root being scanned. */
+.spinner {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  margin-left: 4px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
