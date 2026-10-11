@@ -66,11 +66,7 @@ export function useRowPages(
       ).then((answers) => {
         if (!scope.live) return;
         // Live scans keep filling scrolled pages; the next gated refresh reconciles their order.
-        if (
-          order.key !== "name" &&
-          !liveScan &&
-          answers.some(({ answer }) => answer && answer.rev > rev)
-        ) {
+        if (!liveScan && answers.some(({ answer }) => answer && answer.rev > rev)) {
           onFail({ code: "StaleId" });
           return;
         }

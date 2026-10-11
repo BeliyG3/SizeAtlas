@@ -5,7 +5,6 @@ import { DrivesPanel } from "../features/drives/DrivesPanel";
 import { ItemMenu, type MenuTarget } from "../features/menu/ItemMenu";
 import { RootMenu, type RootMenuTarget } from "../features/menu/RootMenu";
 import { ScanView } from "../features/scan/ScanView";
-import { scanActions } from "../features/scan/actions";
 import { Workspace } from "../features/shell/Workspace";
 import { expectedBytes, isDrive, rootLabel } from "../features/shell/source";
 import type { Mode } from "../features/lists/modes";
@@ -14,6 +13,7 @@ import type { RootInfo } from "../features/tree/model";
 import type { TreeTarget } from "../features/tree/TreeBody";
 import { Viewer } from "../features/viewer/Viewer";
 import { useT } from "../i18n/react";
+import { itemMenuActions } from "./itemActions";
 import type { RootEntry } from "./roots";
 import type { Selection } from "./selection";
 
@@ -119,10 +119,6 @@ export function Browser({
   const itemOpen =
     menu?.kind === "item" && entries.some((e) => e.summary?.generation === menu.generation);
   if ((menu?.kind === "root" && !menuRoot) || (menu?.kind === "item" && !itemOpen)) setMenu(null);
-  const itemRoot =
-    menu?.kind === "item"
-      ? entries.find((e) => e.summary?.generation === menu.generation)?.root
-      : undefined;
   const rootMenu: RootMenuTarget | null =
     menu?.kind === "root" && menuRoot
       ? {
@@ -134,9 +130,11 @@ export function Browser({
         }
       : null;
 
-  const itemActions = scanActions(
-    itemRoot === undefined || fullScans.has(itemRoot),
-    itemRoot === undefined || busyRoots.has(itemRoot),
+  const itemActions = itemMenuActions(
+    entries,
+    menu?.kind === "item" ? menu.generation : undefined,
+    fullScans,
+    busyRoots,
     trashing,
   );
   let content: ReactNode;

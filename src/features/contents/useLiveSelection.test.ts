@@ -62,14 +62,14 @@ function commit() {
   hooks.queued.splice(0).forEach((run) => run());
 }
 
-function useRenderSelection(rows: Listing, listKey = "live", selectedId = 0) {
+function useRenderSelection(rows: Listing | null, listKey = "live", selectedId = 0) {
   beginRender();
   const shared = { generation: 1, listKey, order, listing: rows, live: true, onFail };
   const cursor = useCursor({
     ...shared,
     folder: 0,
     selectedId,
-    count: rows.total,
+    count: rows?.total ?? 0,
     body,
   });
   const anchor = useRowPosition({ ...shared, index: marks.anchor, id: marks.anchorId });
@@ -117,6 +117,64 @@ describe("live table cursor and range anchor", () => {
       anchor: PAGE_SIZE + 7,
     });
     expect(api.getPosition).toHaveBeenCalledWith(1, 10, order);
+    expect(api.getPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the last position across page gaps and live ticks, sharing pending lookups", async () => {
+    const finishes: ((position: number | null) => void)[] = [];
+    vi.mocked(api.getPosition).mockImplementation(
+      () => new Promise((resolve) => finishes.push(resolve)),
+    );
+    const initial = listing(1, [11, 12, 13, 14, 15, 16, 17, 10], 1);
+    useRenderSelection(initial).setCursor(PAGE_SIZE + 7);
+    marks = mark(marks, "one", PAGE_SIZE + 7, () => 10);
+    expect(useRenderSelection(initial)).toMatchObject({
+      cursor: PAGE_SIZE + 7,
+      anchor: PAGE_SIZE + 7,
+    });
+
+    expect(useRenderSelection(null)).toMatchObject({
+      cursor: PAGE_SIZE + 7,
+      anchor: PAGE_SIZE + 7,
+    });
+    expect(api.getPosition).not.toHaveBeenCalled();
+    expect(useRenderSelection(listing(2, [20]))).toMatchObject({
+      cursor: PAGE_SIZE + 7,
+      anchor: PAGE_SIZE + 7,
+    });
+    const rows = listing(3, [30]);
+    expect(useRenderSelection(rows)).toMatchObject({
+      cursor: PAGE_SIZE + 7,
+      anchor: PAGE_SIZE + 7,
+    });
+    expect(api.getPosition).toHaveBeenCalledExactlyOnceWith(1, 10, order);
+
+    finishes[0](PAGE_SIZE * 2 + 9);
+    await Promise.resolve();
+    expect(useRenderSelection(rows)).toMatchObject({
+      cursor: PAGE_SIZE * 2 + 9,
+      anchor: PAGE_SIZE * 2 + 9,
+    });
+
+    const next = listing(4, [40]);
+    expect(useRenderSelection(next)).toMatchObject({
+      cursor: PAGE_SIZE * 2 + 9,
+      anchor: PAGE_SIZE * 2 + 9,
+    });
+    expect(api.getPosition).toHaveBeenCalledTimes(2);
+    finishes[1](PAGE_SIZE * 2 + 12);
+    await Promise.resolve();
+    expect(useRenderSelection(next)).toMatchObject({
+      cursor: PAGE_SIZE * 2 + 12,
+      anchor: PAGE_SIZE * 2 + 12,
+    });
+
+    // A real null answer replaces the held position; waiting for an answer never does.
+    const last = listing(5, [50]);
+    expect(useRenderSelection(last).anchor).toBe(PAGE_SIZE * 2 + 12);
+    finishes[2](null);
+    await Promise.resolve();
+    expect(useRenderSelection(last)).toMatchObject({ cursor: null, anchor: null });
   });
 
   it("ignores a delayed position after the cursor and anchor move to another item", async () => {
@@ -137,6 +195,25 @@ describe("live table cursor and range anchor", () => {
     await Promise.resolve();
     expect(useRenderSelection(rows)).toMatchObject({ cursor: 1, anchor: 1 });
     expect(onFail).not.toHaveBeenCalled();
+  });
+
+  it("keeps a picked position when its page disappears before the next render", async () => {
+    let finish!: (position: number) => void;
+    vi.mocked(api.getPosition).mockImplementation(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    useRenderSelection(listing(1, [10], 1)).setCursor(PAGE_SIZE);
+    marks = mark(marks, "one", PAGE_SIZE, () => 10);
+    const rows = listing(2, [20]);
+    expect(useRenderSelection(rows)).toMatchObject({ cursor: PAGE_SIZE, anchor: PAGE_SIZE });
+    expect(api.getPosition).toHaveBeenCalledTimes(1);
+
+    finish(PAGE_SIZE + 1);
+    await Promise.resolve();
+    expect(useRenderSelection(rows)).toMatchObject({
+      cursor: PAGE_SIZE + 1,
+      anchor: PAGE_SIZE + 1,
+    });
   });
 
   it("does not move the cursor onto another loaded item when a position answer runs ahead", async () => {

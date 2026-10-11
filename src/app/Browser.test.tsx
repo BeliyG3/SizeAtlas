@@ -1,65 +1,17 @@
-import type { ComponentProps, ReactElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { Roots, Summary } from "../api/types";
-import { ItemMenu } from "../features/menu/ItemMenu";
-import { Browser } from "./Browser";
+import { itemMenuActions } from "./itemActions";
 import { busyRoots, rootEntries, runningFullScanRoots } from "./roots";
 
-const state = vi.hoisted(() => ({ stateAt: 0 }));
-vi.mock("react", async (original) => ({
-  ...(await original<typeof import("react")>()),
-  useState: (initial: unknown) => [
-    state.stateAt++ === 0
-      ? { kind: "item", generation: 2, target: { id: 7, isDir: true, lossy: false, x: 0, y: 0 } }
-      : initial,
-    vi.fn(),
-  ],
-  useMemo: (calculate: () => unknown) => calculate(),
-  useCallback: (callback: unknown) => callback,
-}));
-vi.mock("../i18n/react", () => ({ useT: () => ({ t: (key: string) => key }) }));
-vi.mock("../features/menu/ItemMenu", () => ({ ItemMenu: () => null }));
-vi.mock("../features/menu/RootMenu", () => ({ RootMenu: () => null }));
-vi.mock("../features/shell/Workspace", () => ({ Workspace: () => null }));
-vi.mock("../features/drives/DrivesPanel", () => ({ DrivesPanel: () => null }));
-vi.mock("../features/tree/FolderTree", () => ({ FolderTree: () => null }));
-vi.mock("../features/viewer/Viewer", () => ({ Viewer: () => null }));
-vi.mock("../features/scan/ScanView", () => ({ ScanView: () => null }));
-
-function menu(roots: Roots) {
-  state.stateAt = 0;
-  const children = Browser({
-    entries: rootEntries(roots),
-    // The menu belongs to another root, so using only the selected root would be wrong.
-    selection: { root: "/other", generation: 1, folder: 0, id: 0 },
-    mode: "all",
-    sources: null,
-    progress: null,
-    busyRoots: busyRoots(roots),
-    fullScans: runningFullScanRoots(roots),
-    trashing: false,
-    onSelectNode: vi.fn(),
-    onSelectRoot: vi.fn(),
-    onRescan: vi.fn(),
-    onRefresh: vi.fn(),
-    onScanFolder: vi.fn(),
-    onTrash: vi.fn(),
-    onMarks: vi.fn(),
-    onCloseRoot: vi.fn(),
-    onForget: vi.fn(),
-    onCancelScan: vi.fn(),
-    onOpenDrive: vi.fn(),
-    onScanDrive: vi.fn(),
-    onFail: vi.fn(),
-  }).props.children as ReactElement[];
-  const item = children.find((child) => child?.type === ItemMenu) as ReactElement<
-    ComponentProps<typeof ItemMenu>
-  >;
-  expect(item).toBeDefined();
-  return item.props;
+function menu(roots: Roots, generation = 2, trashing = false) {
+  return itemMenuActions(
+    rootEntries(roots),
+    generation,
+    runningFullScanRoots(roots),
+    busyRoots(roots),
+    trashing,
+  );
 }
-
-beforeEach(() => vi.clearAllMocks());
 
 describe("Browser item scan actions", () => {
   it.each([true, false])(
@@ -72,8 +24,7 @@ describe("Browser item scan actions", () => {
         ],
         queue: [{ root: "/scan", state: "scanning", folder: null }],
       });
-      expect(actions.canRefresh).toBe(false);
-      expect(actions.canScan).toBe(false);
+      expect(actions).toEqual({ refresh: false, scanFolder: false, trash: false });
     },
   );
 
@@ -93,9 +44,7 @@ describe("Browser item scan actions", () => {
           },
         ],
       });
-      expect(actions.canRefresh).toBe(true);
-      expect(actions.canScan).toBe(true);
-      expect(actions.canTrash).toBe(job === "queued");
+      expect(actions).toEqual({ refresh: true, scanFolder: true, trash: job === "queued" });
     },
   );
 
@@ -107,7 +56,34 @@ describe("Browser item scan actions", () => {
       ],
       queue: [{ root: "/scan", state: "scanning", folder: null }],
     });
-    expect(actions.canRefresh).toBe(false);
-    expect(actions.canScan).toBe(false);
+    expect(actions).toEqual({ refresh: false, scanFolder: false, trash: false });
+  });
+
+  it("uses the menu item's generation even when another root is busy", () => {
+    const actions = menu({
+      roots: [
+        { root: "/other", generation: 1 } as Summary,
+        { root: "/scan", generation: 2 } as Summary,
+      ],
+      queue: [{ root: "/other", state: "scanning", folder: null }],
+    });
+    expect(actions).toEqual({ refresh: true, scanFolder: true, trash: true });
+  });
+
+  it("disables actions when the menu's tree was replaced or removed", () => {
+    const actions = menu({
+      roots: [{ root: "/scan", generation: 3 } as Summary],
+      queue: [],
+    });
+    expect(actions).toEqual({ refresh: false, scanFolder: false, trash: false });
+  });
+
+  it("disables only trash while a trash request runs", () => {
+    const actions = menu(
+      { roots: [{ root: "/scan", generation: 2 } as Summary], queue: [] },
+      2,
+      true,
+    );
+    expect(actions).toEqual({ refresh: true, scanFolder: true, trash: false });
   });
 });

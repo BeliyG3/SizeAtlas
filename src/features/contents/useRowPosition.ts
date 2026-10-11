@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../../api/client";
 import type { ListOrder } from "../../api/types";
 import { PAGE_SIZE } from "./pages";
+import { getRowPosition } from "./rowPosition";
 import { itemAt, type Listing } from "./useRowPages";
 
 interface Args {
@@ -34,14 +34,15 @@ export function useRowPosition({
     }
     return null;
   }, [live, id, listing]);
-  const key = `${generation}:${listKey}:${listing?.key}:${id}`;
+  const key = `${generation}:${listKey}:${id}`;
+  const revision = listing?.key;
   const [found, setFound] = useState<{ key: string; index: number | null } | null>(null);
-  const needsPosition = live && index !== null && id !== undefined && listing !== null;
+  const needsPosition = live && index !== null && id !== undefined;
 
   useEffect(() => {
-    if (!needsPosition || loaded !== null || id === undefined) return;
+    if (!needsPosition || loaded !== null || id === undefined || revision === undefined) return;
     let current = true;
-    api.getPosition(generation, id, order).then(
+    getRowPosition(generation, id, order).then(
       (position) => {
         if (current) setFound({ key, index: position });
       },
@@ -50,11 +51,16 @@ export function useRowPosition({
     return () => {
       current = false;
     };
-  }, [needsPosition, loaded, id, generation, order, key, onFail]);
+  }, [needsPosition, loaded, id, generation, order, key, revision, onFail]);
+
+  // Remember loaded positions too, before the item moves outside the fetched pages.
+  if (loaded !== null && (found?.key !== key || found.index !== loaded)) {
+    setFound({ key, index: loaded });
+  }
 
   if (!needsPosition) return index;
-  // Never let a held row index point at a different item while the lookup is pending.
-  const position = loaded ?? (found?.key === key ? found.index : null);
+  // Keep the last answer during a live tick, but never point at a different loaded item.
+  const position = loaded ?? (found?.key === key ? found.index : index);
   const row = position === null ? undefined : itemAt(listing, position);
   return row && row.id !== id ? null : position;
 }

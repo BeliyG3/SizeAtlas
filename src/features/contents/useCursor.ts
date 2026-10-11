@@ -73,17 +73,17 @@ export function useCursor({
     // Chosen elsewhere, or the folder itself: choosing the file again later must reveal it.
     pickedHere.current = null;
     if (selectedId === folder) return;
-    let live = true;
+    let current = true;
     api.getPosition(generation, selectedId, order).then(
       (position) => {
-        if (!live || position === null) return;
+        if (!current || position === null) return;
         pendingReveal.current = { key: listKey, index: position };
         setCursorAt({ key: listKey, index: position, id: selectedId });
       },
-      (e: unknown) => live && onFail(e),
+      (e: unknown) => current && onFail(e),
     );
     return () => {
-      live = false;
+      current = false;
     };
   }, [generation, folder, selectedId, order, listKey, onFail]);
 

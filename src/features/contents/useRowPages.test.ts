@@ -101,18 +101,19 @@ describe("useRowPages", () => {
     },
   );
 
-  it("accepts a newer name-ordered page outside a live scan", async () => {
+  it("refreshes instead of merging a newer name-ordered page outside a live scan", async () => {
     vi.mocked(api.getChildren).mockResolvedValue(answer(4, [second]));
     const onFail = vi.fn();
     state.listing!.key = "0:3:name:true:false";
     const { request } = useRowPages(1, 3, 0, { ...order, key: "name" }, onFail);
+    const held = state.listing;
 
     request([1]);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-    expect(state.listing?.pages.get(0)).toEqual([first]);
-    expect(state.listing?.pages.get(1)).toEqual([second]);
-    expect(onFail).not.toHaveBeenCalled();
+    expect(state.listing).toBe(held);
+    expect(state.listing?.pages.has(1)).toBe(false);
+    expect(onFail).toHaveBeenCalledExactlyOnceWith({ code: "StaleId" });
   });
 
   it("ignores a newer page after its listing scope was disposed", async () => {
