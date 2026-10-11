@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { measured, newCadence, waitForRefresh } from "./cadence";
+import { describe, expect, it, vi } from "vitest";
+import { beginRefresh, measured, newCadence, refreshInterval, waitForRefresh } from "./cadence";
 
 describe("live refresh cadence", () => {
   it.each([2000, 5000])("never updates faster than the %i ms minimum", (minimum) => {
@@ -13,5 +13,16 @@ describe("live refresh cadence", () => {
     const cheap = measured(costly, 10);
     expect(cheap.interval).toBe(5600);
     expect(waitForRefresh({ ...cheap, last: 100 }, 4000)).toBe(1700);
+  });
+  it("records one wall-time cost for a completed batch", () => {
+    const clock = vi.spyOn(performance, "now").mockReturnValue(100);
+    const finish = beginRefresh("tree");
+    clock.mockReturnValue(900);
+    finish();
+    expect(refreshInterval("tree")).toBe(8000);
+    clock.mockReturnValue(1000);
+    finish();
+    expect(refreshInterval("tree")).toBe(8000);
+    clock.mockRestore();
   });
 });

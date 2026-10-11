@@ -1,5 +1,4 @@
-//! Root folders are visited in name order; each descendant walk uses rayon tasks that send
-//! one [`DirRec`] per directory. Live batches are installed with [`Tree::replace_subtree`].
+//! Full scans walk in parallel; first scans publish root folders in name order.
 
 use std::ffi::OsString;
 use std::fs::{self, Metadata};
@@ -32,7 +31,7 @@ struct Ctx<'a> {
     next_id: AtomicU32,
     cancel: &'a AtomicBool,
     progress: &'a Progress,
-    volume: Volume,
+    volume: &'a Volume,
 }
 
 struct DirTask {
@@ -46,23 +45,20 @@ struct DirTask {
 
 /// Scans `root` (made canonical first) using all CPU cores.
 pub fn scan(root: &Path, cancel: &AtomicBool, progress: &Progress) -> io::Result<ScanOutcome> {
-    let mut tree = None;
-    let result = scan_live(root, cancel, progress, |event| match event {
-        LiveEvent::Started(initial) => tree = Some(initial),
-        LiveEvent::FolderStarted { .. } => {}
-        LiveEvent::FolderDone { id, records } => tree
-            .as_mut()
-            .expect("root published")
-            .replace_subtree(id, records),
-    })?;
-    if result == LiveOutcome::Cancelled {
+    let root = dunce::canonicalize(root)?;
+    let meta = fs::symlink_metadata(&root)?;
+    if !meta.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "scan root is not a directory",
+        ));
+    }
+    let volume = Volume::of(&root, &meta);
+    let (records, meta) = walk_all(root, &meta, volume, cancel, progress);
+    if cancel.load(Ordering::Relaxed) {
         return Ok(ScanOutcome::Cancelled);
     }
-    let mut tree = tree.expect("root published");
-    tree.set_scanning(0, false);
-    tree.approximate = false;
-    tree.rev = 0;
-    Ok(ScanOutcome::Done(tree))
+    Ok(ScanOutcome::Done(Tree::from_records(records, meta)))
 }
 
 /// What a scan of one folder found (see [`scan_folder`]).
@@ -122,7 +118,7 @@ fn walk_all(
         next_id: AtomicU32::new(1),
         cancel,
         progress,
-        volume,
+        volume: &volume,
     };
     let root_task = DirTask {
         name: path.clone().into_os_string(),

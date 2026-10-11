@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn a_listed_folder_that_disappears_keeps_the_existing_access_error_handling() {
+fn a_listed_folder_that_disappears_is_removed_without_an_access_error() {
     let dir = tempfile::tempdir().unwrap();
     let sub = dir.path().join("sub");
     fs::create_dir(&sub).unwrap();
@@ -13,13 +13,15 @@ fn a_listed_folder_that_disappears_keeps_the_existing_access_error_handling() {
         |event| match event {
             LiveEvent::Started(t) => tree = Some(t),
             LiveEvent::FolderStarted { .. } => fs::remove_dir(&sub).unwrap(),
-            LiveEvent::FolderDone { id, records } => {
+            LiveEvent::FolderGone { id } => {
                 let t = tree.as_mut().unwrap();
-                t.replace_subtree(id, records);
+                t.remove(id);
                 t.assert_invariants();
-                assert!(t.node(id).has(flags::ACCESS_ERROR));
-                assert_eq!(t.access_errors, 1);
+                assert!(!t.node(id).is_alive());
+                assert_eq!(t.access_errors, 0);
+                assert_eq!(t.node(0).dirs, 0);
             }
+            LiveEvent::FolderDone { .. } => panic!("gone folder was published"),
         },
     )
     .unwrap();
@@ -61,16 +63,17 @@ fn folders_finish_in_name_order_with_stable_ids_and_correct_ancestor_totals() {
                 );
                 tree = Some(t);
             }
+            LiveEvent::FolderGone { .. } => panic!("folder unexpectedly disappeared"),
             LiveEvent::FolderStarted { id, .. } => {
                 let t = tree.as_mut().unwrap();
                 assert_eq!(t.children(id).count(), 0);
                 t.set_scanning(id, true);
                 t.set_scan_progress(id, 100, 1);
             }
-            LiveEvent::FolderDone { id, records } => {
+            LiveEvent::FolderDone { id, tree: sub } => {
                 let t = tree.as_mut().unwrap();
                 finished.push(t.name(id).to_owned());
-                t.replace_subtree(id, records);
+                t.graft(id, sub);
                 t.assert_invariants();
                 assert_eq!(t.node(0).files as usize, finished.len() + 1);
                 assert!(!t.node(id).has(flags::PENDING | flags::SCANNING));
@@ -133,57 +136,85 @@ fn cancellation_inside_a_folder_drops_its_contents() {
 #[test]
 fn cloud_only_directory_is_listed_without_walking_it() {
     let dir = tempfile::tempdir().unwrap();
-    fs::write(dir.path().join("hidden"), b"cloud").unwrap();
-    let (tx, rx) = mpsc::channel();
-    let cancel = AtomicBool::new(false);
+    let cloud = dunce::canonicalize(dir.path()).unwrap().join("cloud");
+    fs::create_dir(&cloud).unwrap();
+    fs::write(cloud.join("hidden"), b"cloud").unwrap();
+    listing::CLOUD_FOLDER.with(|folder| *folder.borrow_mut() = Some(cloud));
     let progress = Progress::default();
-    let meta = fs::metadata(dir.path()).unwrap();
-    let ctx = Ctx {
-        tx,
-        next_id: AtomicU32::new(1),
-        cancel: &cancel,
-        progress: &progress,
-        volume: Volume::of(dir.path(), &meta),
-    };
-    let task = DirTask {
-        path: dir.path().into(),
-        id: 0,
-        parent: NO_PARENT,
-        name: "cloud".into(),
-        mtime: 0,
-        flags: flags::IS_DIR | flags::CLOUD,
-    };
-    rayon::scope(|s| walk(s, &ctx, task));
-    drop(ctx);
-    let records: Vec<_> = rx.into_iter().collect();
-    assert_eq!(records.len(), 1);
-    assert!(records[0].files.is_empty());
+    let mut published = 0;
+    scan_live(
+        dir.path(),
+        &AtomicBool::new(false),
+        &progress,
+        |event| match event {
+            LiveEvent::Started(tree) => {
+                let id = tree.children(0).next().unwrap();
+                assert!(tree.node(id).has(flags::CLOUD | flags::PENDING));
+                assert_eq!(tree.node(0).dirs, 1);
+            }
+            LiveEvent::FolderDone { tree, .. } => {
+                published += 1;
+                assert!(tree.node(0).has(flags::CLOUD));
+                assert_eq!(tree.len(), 1);
+                assert_eq!(
+                    (tree.node(0).files, tree.node(0).len, tree.node(0).dirs),
+                    (0, 0, 0)
+                );
+            }
+            _ => {}
+        },
+    )
+    .unwrap();
+    listing::CLOUD_FOLDER.with(|folder| *folder.borrow_mut() = None);
+    assert_eq!(published, 1);
     assert_eq!(progress.files.load(Ordering::Relaxed), 0);
 }
 
 #[test]
-fn hardlinks_are_deduplicated_across_batches_and_keep_their_flags() {
-    let mut seen = HashSet::new();
-    for expected in [10, 0] {
-        let mut batch = vec![DirRec {
-            id: 0,
-            parent: NO_PARENT,
-            name: "root".into(),
-            mtime: 0,
-            flags: flags::IS_DIR,
-            files: vec![FileRec {
-                name: "link".into(),
-                size: 10,
-                len: 10,
-                mtime: 0,
-                flags: 0,
-                ino: Some((1, 2)),
-            }],
-        }];
-        deduplicate(&mut batch, &mut seen);
-        let file = &batch[0].files[0];
-        assert_eq!(file.size, expected);
-        assert_eq!(file.ino, None);
-        assert_ne!(file.flags & flags::HARDLINK, 0);
+fn hardlinks_choose_name_sorted_bfs_order_across_shuffled_records_and_batches() {
+    let meta = ScanMeta {
+        cluster: 1,
+        size_mode: crate::tree::SizeMode::Allocated,
+        scanned_at: 0,
+    };
+    let file = |name: &str| FileRec {
+        name: name.into(),
+        size: 10,
+        len: 10,
+        mtime: 0,
+        flags: 0,
+        ino: Some((1, 2)),
+    };
+    let record = |id, parent, name: &str, files| DirRec {
+        id,
+        parent,
+        name: name.into(),
+        mtime: 0,
+        flags: flags::IS_DIR,
+        files,
+    };
+    for reverse in [false, true] {
+        let mut seen = HashSet::new();
+        let mut records = vec![
+            record(2, 0, "z", vec![file("link")]),
+            record(0, NO_PARENT, "root", vec![]),
+            record(1, 0, "a", vec![file("z"), file("a")]),
+        ];
+        if reverse {
+            records.reverse();
+        }
+        let tree = Tree::from_records_with_links(records, meta, &mut seen);
+        tree.assert_invariants();
+        let a = tree.find_path(&PathBuf::from("root/a/a")).unwrap();
+        assert_eq!(tree.node(a).size, 10);
+        assert!(tree.node(a).has(flags::HARDLINK));
+        assert_eq!(tree.node(0).size, 10);
+        let second = Tree::from_records_with_links(
+            vec![record(0, NO_PARENT, "later", vec![file("link")])],
+            meta,
+            &mut seen,
+        );
+        assert_eq!(second.node(0).size, 0);
+        assert_eq!(second.node(0).len, 10);
     }
 }

@@ -17,6 +17,15 @@ impl Tree {
     /// # Panics
     /// If `records` has no root record (id 0) — scanners always produce it.
     pub fn from_records(records: Vec<DirRec>, meta: ScanMeta) -> Tree {
+        Self::from_records_with_links(records, meta, &mut HashSet::new())
+    }
+
+    /// Uses a scan-wide set; name-sorted breadth-first traversal chooses the counted link.
+    pub fn from_records_with_links(
+        records: Vec<DirRec>,
+        meta: ScanMeta,
+        seen_links: &mut HashSet<(u64, u64)>,
+    ) -> Tree {
         let root = records
             .iter()
             .find(|r| r.id == 0)
@@ -47,14 +56,19 @@ impl Tree {
             scanned_at: meta.scanned_at,
             volume: None,
         };
-        tree.flatten(records, 0);
+        tree.flatten(records, 0, seen_links);
         tree
     }
 
     /// Lays out every record below scan-root record 0 as descendants of the existing
     /// node `root_id`, breadth-first so that each directory's children form one block,
     /// then recomputes totals of the new nodes and of `root_id` from scratch.
-    pub(super) fn flatten(&mut self, records: Vec<DirRec>, root_id: u32) {
+    fn flatten(
+        &mut self,
+        records: Vec<DirRec>,
+        root_id: u32,
+        seen_links: &mut HashSet<(u64, u64)>,
+    ) {
         let slots_len = records.iter().map(|r| r.id as usize + 1).max().unwrap_or(0);
         let mut slots: Vec<Option<DirRec>> = (0..slots_len).map(|_| None).collect();
         let mut subdirs: Vec<Vec<u32>> = vec![Vec::new(); slots_len];
@@ -70,7 +84,6 @@ impl Tree {
         }
 
         let base = self.nodes.len();
-        let mut seen_links = HashSet::new();
         let mut queue = VecDeque::from([(0u32, root_id)]);
         while let Some((scan_id, node_id)) = queue.pop_front() {
             let rec = slots[scan_id as usize]

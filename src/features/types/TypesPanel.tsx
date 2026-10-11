@@ -1,3 +1,4 @@
+import { useBatchCost } from "../scan/useBatchCost";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import type { TypeStats } from "../../api/types";
@@ -22,16 +23,22 @@ export function TypesPanel({ generation, rev, viewId, highlight, onHighlight, on
   const size = useSize();
   const palette = usePalette();
   const [stats, setStats] = useState<TypeStats | null>(null);
+  const measure = useBatchCost("charts", stats);
   useEffect(() => {
     let live = true;
+    const applied = measure();
     api.getTypeStats(generation, viewId).then(
-      (s) => live && setStats(s),
+      (s) => {
+        if (!live) return;
+        applied();
+        setStats(s);
+      },
       (e: unknown) => live && onFail(e),
     );
     return () => {
       live = false;
     };
-  }, [generation, rev, viewId, onFail]);
+  }, [generation, rev, viewId, onFail, measure]);
 
   if (!stats) return null;
   if (stats.items.length === 0) return <p className="dim pad">{t("types.empty")}</p>;

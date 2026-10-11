@@ -103,7 +103,7 @@ export const TreeRow = memo(function TreeRow({
   const sizeCell = (
     <span
       key="size"
-      className={`size${item?.pending || root?.status === "scanning" ? " dim" : ""}`}
+      className={`size${item?.pending || root?.scanning ? " dim" : ""}`}
       data-col="size"
     >
       {row.kind === "item" && (

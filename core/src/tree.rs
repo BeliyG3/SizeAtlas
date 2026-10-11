@@ -236,6 +236,7 @@ pub(crate) fn sample_tree() -> Tree {
 
 mod build;
 mod edit;
+mod graft;
 mod lists;
 mod live;
 mod order;

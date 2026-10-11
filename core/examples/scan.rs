@@ -1,6 +1,6 @@
 //! Benchmark: scans a directory, then saves and reloads the scan cache.
 //!
-//! Usage: cargo run -p sizeatlas-core --release --example scan -- <path> [--twice] [--edit]
+//! Usage: cargo run -p sizeatlas-core --release --example scan -- <path> [--live] [--twice] [--edit]
 //! `--twice` keeps the first tree alive while scanning again (peak memory of a rescan).
 //! `--edit` removes the largest folders until most nodes are dead, then compacts the tree.
 
@@ -14,33 +14,42 @@ use sizeatlas_core::cache;
 use sizeatlas_core::scanner::{self, Progress, ScanOutcome};
 use sizeatlas_core::tree::Tree;
 
+#[path = "scan/live.rs"]
+mod live;
+
 const GIB: f64 = (1u64 << 30) as f64;
 const MIB: u64 = 1 << 20;
 
 fn main() {
     let mut args = env::args().skip(1);
     let Some(root) = args.next().map(PathBuf::from) else {
-        eprintln!("usage: scan <path> [--twice] [--edit]");
+        eprintln!("usage: scan <path> [--live] [--twice] [--edit]");
         exit(2);
     };
     let flags: Vec<String> = args.collect();
     let twice = flags.iter().any(|a| a == "--twice");
     let edit = flags.iter().any(|a| a == "--edit");
+    let live = flags.iter().any(|a| a == "--live");
 
-    let mut first = timed_scan(&root);
+    let mut first = timed_scan(&root, live);
     if edit {
         timed_edit(&mut first);
     }
-    let second = twice.then(|| timed_scan(&root));
+    let second = twice.then(|| timed_scan(&root, false));
     println!("peak memory after scan: {} MiB", peak_memory_bytes() / MIB);
     report_cache(&first);
     drop(second);
     println!("peak memory incl. cache: {} MiB", peak_memory_bytes() / MIB);
 }
 
-fn timed_scan(root: &Path) -> Tree {
+fn timed_scan(root: &Path, first_scan: bool) -> Tree {
     let start = Instant::now();
-    let tree = match scanner::scan(root, &AtomicBool::new(false), &Progress::default()) {
+    let result = if first_scan {
+        live::scan(root)
+    } else {
+        scanner::scan(root, &AtomicBool::new(false), &Progress::default())
+    };
+    let tree = match result {
         Ok(ScanOutcome::Done(tree)) => tree,
         Ok(ScanOutcome::Cancelled) => unreachable!("nothing cancels this scan"),
         Err(e) => {
@@ -49,7 +58,7 @@ fn timed_scan(root: &Path) -> Tree {
         }
     };
     let root_node = tree.node(0);
-    println!("scan time: {:.2} s", start.elapsed().as_secs_f64());
+    println!("scan time: {:.3} s", start.elapsed().as_secs_f64());
     println!(
         "nodes: {} (files {}, dirs {})",
         tree.len(),

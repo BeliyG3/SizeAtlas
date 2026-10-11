@@ -2,6 +2,21 @@
 
 use super::*;
 
+#[cfg(test)]
+thread_local! {
+    pub(super) static CLOUD_FOLDER: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+pub(super) fn directory_flags(path: &Path, meta: &Metadata) -> u8 {
+    #[cfg(test)]
+    if CLOUD_FOLDER.with(|folder| folder.borrow().as_deref() == Some(path)) {
+        return flags::CLOUD;
+    }
+    #[cfg(not(test))]
+    let _ = path;
+    platform::dir_flags(meta)
+}
+
 pub(super) fn list(ctx: &Ctx<'_>, task: DirTask) -> (DirRec, Vec<DirTask>) {
     let mut dir_flags = task.flags;
     let mut files = Vec::new();
@@ -38,12 +53,12 @@ pub(super) fn list(ctx: &Ctx<'_>, task: DirTask) -> (DirRec, Vec<DirTask>) {
                             continue;
                         }
                         dirs.push(DirTask {
+                            flags: flags::IS_DIR | directory_flags(&path, &meta),
                             path,
                             id: ctx.next_id.fetch_add(1, Ordering::Relaxed),
                             parent: task.id,
                             name: entry.file_name(),
                             mtime: mtime_of(&meta),
-                            flags: flags::IS_DIR | platform::dir_flags(&meta),
                         });
                     } else {
                         let size = ctx.volume.disk_size(&meta, || entry.path());

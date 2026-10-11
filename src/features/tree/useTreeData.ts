@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, isCmdError } from "../../api/client";
 import { ROOT_ID, type ChildrenPage, type Crumb, type ListOrder } from "../../api/types";
+import { useBatchCost } from "../scan/useBatchCost";
 import {
   PAGE_SIZE,
   nodeKey,
@@ -32,6 +33,7 @@ export function useTreeData(
   // ponytail: pages of closed and replaced roots stay until the tree is remounted (another
   // sort); a few pages each. Drop the generations that left `roots` if that ever matters.
   const [loaded, setLoaded] = useState<LoadedRoots>(new Map());
+  const measure = useBatchCost("tree", loaded);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
@@ -41,6 +43,10 @@ export function useTreeData(
   );
   const seen = useRef(new Map<number, number>());
   const active = useRef(new Set<number>());
+  const expandedNow = useRef(expanded);
+  useLayoutEffect(() => {
+    expandedNow.current = expanded;
+  }, [expanded]);
   useLayoutEffect(() => {
     active.current = new Set(roots.flatMap((r) => (r.generation === null ? [] : [r.generation])));
   }, [roots]);
@@ -71,8 +77,8 @@ export function useTreeData(
     [order, onFail],
   );
 
-  // One request per root revision; newer revisions invalidate older batches. The lifetime
-  // flag permits StrictMode to restart a request its first effect cleanup invalidated.
+  // Let each root's active batch land before planning its next revision from fresh pages.
+  // The lifetime flag lets StrictMode restart a batch invalidated by its effect cleanup.
   useEffect(() => {
     const life = lifecycle.current;
     for (const [generation, request] of pending.current) {
@@ -82,13 +88,25 @@ export function useTreeData(
       }
     }
     for (const { generation, rev } of roots) {
-      if (generation === null || (seen.current.get(generation) ?? -1) >= rev) continue;
+      if (generation === null) continue;
+      const pages = pagesOf(loaded, generation);
+      // A folder reopened during the last batch kept its rows, but still needs this
+      // revision even when the root's batch has already been marked as seen.
+      if (
+        (seen.current.get(generation) ?? -1) >= rev &&
+        ![...pages].some(
+          ([id, page]) =>
+            page.rev < rev && (id === ROOT_ID || expanded.has(nodeKey(generation, id))),
+        )
+      ) {
+        continue;
+      }
       const old = pending.current.get(generation);
-      if (old?.live && old.life.live && old.rev >= rev) continue;
+      if (old?.live && old.life.live) continue;
       if (old) old.live = false;
       const signal = { live: true, rev, life };
+      const applied = measure();
       pending.current.set(generation, signal);
-      const pages = pagesOf(loaded, generation);
       const { requests, drop } = reloadPlan(pages, rev, (id) =>
         expanded.has(nodeKey(generation, id)),
       );
@@ -106,19 +124,25 @@ export function useTreeData(
         }
         seen.current.set(generation, rev);
         pending.current.delete(generation);
-        setLoaded((map) =>
-          done.reduce(
+        applied();
+        setLoaded((map) => {
+          const stillClosed = drop.filter(
+            (id) => !expandedNow.current.has(nodeKey(generation, id)),
+          );
+          const next = done.reduce(
             (m, { r, page }) =>
               page ? withPage(m, generation, r.id, page, 0) : withoutFolders(m, generation, [r.id]),
-            withoutFolders(map, generation, drop),
-          ),
-        );
+            withoutFolders(map, generation, stillClosed),
+          );
+          // Even an empty or failed batch must schedule a revision received while it ran.
+          return next === map ? new Map(map) : next;
+        });
         for (const { error } of done) {
           if (error !== null && !(isCmdError(error) && error.code === "StaleId")) onFail(error);
         }
       });
     }
-  }, [roots, loaded, expanded, order, onFail]);
+  }, [roots, loaded, expanded, order, onFail, measure]);
 
   const toggleRoot = (root: string) => setCollapsed((set) => toggled(set, root, !set.has(root)));
 

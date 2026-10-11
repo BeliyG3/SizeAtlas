@@ -15,7 +15,9 @@ export function ScanMark({
     <>
       <span className="spinner" aria-hidden="true" />
       <span className="tag">
-        {t("tree.scanning", { count: files ?? 0, files: formatCount(files ?? 0, lang) })}
+        {files === undefined
+          ? t("tree.activeScan")
+          : t("tree.scanning", { count: files, files: formatCount(files, lang) })}
       </span>
     </>
   );

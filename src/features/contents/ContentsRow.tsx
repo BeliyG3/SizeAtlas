@@ -7,6 +7,7 @@ import type { ColumnId } from "./columns";
 import { ItemIcon } from "./ItemIcon";
 import { markHow, type MarkHow } from "./marks";
 import { ROW_HEIGHT } from "./pages";
+import { ScanMark } from "../tree/RootMarks";
 
 interface Props {
   index: number;
@@ -97,7 +98,7 @@ export const ContentsRow = memo(function ContentsRow({
       <>
         <ItemIcon isDir={dir} category={item.category} />
         <span className="ellipsis">{item.name}</span>
-        {item.scanning && <span className="tag">{t("tree.activeScan")}</span>}
+        {item.scanning && <ScanMark status="scanning" files={undefined} />}
         {waiting && <span className="tag">{t("tree.pending")}</span>}
         {item.accessError && <span className="tag">{t("tree.noAccess")}</span>}
         {item.cloud && <span className="tag">{t("tree.cloud")}</span>}

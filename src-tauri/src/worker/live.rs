@@ -22,6 +22,7 @@ struct Session {
     current: Option<Current>,
     last: Instant,
     interval: Duration,
+    dirty: bool,
 }
 
 impl Session {
@@ -31,6 +32,7 @@ impl Session {
             current: None,
             last: Instant::now(),
             interval: LIVE_INTERVAL,
+            dirty: false,
         }
     }
 
@@ -38,39 +40,65 @@ impl Session {
         match event {
             LiveEvent::Started(tree) => {
                 self.scan = state.start_live(job, tree);
-                notify(Notice::RootsChanged);
+                if self.scan.is_some() {
+                    notify(Notice::RootsChanged);
+                }
             }
             LiveEvent::FolderStarted { id, bytes, files } => {
                 self.current = Some(Current { id, bytes, files });
                 if let Some(scan) = self.scan {
-                    drop(state.change_scan(scan, |tree, _| {
-                        if job.discard.load(Ordering::Relaxed) {
-                            return None;
-                        }
-                        tree.set_scanning(id, true);
-                        Some(())
-                    }));
+                    self.dirty |= state
+                        .change_scan(scan, |tree, _| {
+                            if job.discard.load(Ordering::Relaxed) {
+                                return None;
+                            }
+                            tree.set_scanning(id, true);
+                            Some(())
+                        })
+                        .is_some();
                 }
             }
-            LiveEvent::FolderDone { id, records } => {
+            LiveEvent::FolderDone { id, tree: sub } => {
                 self.current = None;
                 if let Some(scan) = self.scan {
-                    drop(state.change_scan(scan, |tree, _| {
-                        if job.discard.load(Ordering::Relaxed) {
-                            return None;
-                        }
-                        tree.replace_subtree(id, records);
-                        // Hard links are deduplicated across batches by the live scanner.
-                        tree.approximate = false;
-                        Some(())
-                    }));
+                    // Allocate before the global write lock; flattening already happened in the walker.
+                    let buffer = match state.tree(scan) {
+                        Ok(tree) => tree.graft_buffer(sub.len() - 1),
+                        Err(_) => return,
+                    };
+                    self.dirty |= state
+                        .change_scan(scan, |tree, _| {
+                            if job.discard.load(Ordering::Relaxed) {
+                                return None;
+                            }
+                            tree.reserve_graft(buffer);
+                            tree.graft(id, sub);
+                            // Hard links are deduplicated across batches by the live scanner.
+                            tree.approximate = false;
+                            Some(())
+                        })
+                        .is_some();
+                }
+            }
+            LiveEvent::FolderGone { id } => {
+                self.current = None;
+                if let Some(scan) = self.scan {
+                    self.dirty |= state
+                        .change_scan(scan, |tree, _| {
+                            if job.discard.load(Ordering::Relaxed) {
+                                return None;
+                            }
+                            tree.remove(id);
+                            Some(())
+                        })
+                        .is_some();
                 }
             }
         }
     }
 
     fn tick(&mut self, state: &AppState, job: &ScanJob, notify: &Notify) {
-        if self.last.elapsed() < self.interval || job.cancelled() {
+        if self.scan.is_none() || self.last.elapsed() < self.interval || job.cancelled() {
             return;
         }
         let start = Instant::now();
@@ -86,15 +114,24 @@ impl Session {
                 .load(Ordering::Relaxed)
                 .saturating_sub(current.files)
                 .min(u64::from(u32::MAX)) as u32;
-            drop(state.change_scan(scan, |tree, _| {
-                if job.discard.load(Ordering::Relaxed) {
-                    return None;
-                }
-                tree.set_scan_progress(current.id, size, files);
-                Some(())
-            }));
+            self.dirty |= state
+                .change_scan(scan, |tree, _| {
+                    if job.discard.load(Ordering::Relaxed) {
+                        return None;
+                    }
+                    let node = tree.node(current.id);
+                    if (node.size, node.files) == (size, files) {
+                        return None;
+                    }
+                    tree.set_scan_progress(current.id, size, files);
+                    Some(())
+                })
+                .is_some();
         }
-        notify(Notice::LiveChanged);
+        if self.dirty {
+            notify(Notice::LiveChanged);
+            self.dirty = false;
+        }
         // At most 10% of the interval spent updating, including waits for readers. Recover
         // gradually when reads get cheaper; never go below the two-second minimum.
         self.interval = LIVE_INTERVAL
@@ -199,5 +236,9 @@ fn finish(
     saved
 }
 
+#[cfg(test)]
+mod lifecycle_tests;
+#[cfg(test)]
+mod regressions;
 #[cfg(test)]
 mod tests;

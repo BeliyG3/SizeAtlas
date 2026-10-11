@@ -20,7 +20,7 @@ use crate::{jobs, sources};
 /// of its size on disk and its length. The caller holds `begin_write`, so no refresh changes the
 /// tree meanwhile and closing the app waits for the saved scan.
 ///
-/// Nothing moves when the root is scanned or waits for it (`Busy`) or when an item changed on
+/// Nothing moves when the root has a running job (`Busy`) or when an item changed on
 /// disk since the scan (`Changed`). After that every item is checked again right before it
 /// goes; one that changed (`Changed`), cannot be read (`NoAccess`, `Io`), would be deleted for
 /// good (`NoTrash`) or that the OS refuses (`Io`) is reported and stays, the others go. Once the
@@ -35,7 +35,7 @@ pub fn run(
     trash_one: impl Fn(&Path) -> Result<(), String>,
 ) -> Result<TrashDto, CmdError> {
     let plan = state.trash_plan(generation, rev, ids)?;
-    if state.is_queued(&plan.root) {
+    if state.is_scanning(&plan.root) {
         return Err(CmdError::Busy);
     }
     for item in &plan.items {

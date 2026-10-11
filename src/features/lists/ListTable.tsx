@@ -1,3 +1,4 @@
+import { useBatchCost } from "../scan/useBatchCost";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "../../api/client";
 import type { Detail, List, ListItem, ListKind, Summary } from "../../api/types";
@@ -71,12 +72,13 @@ export function ListTable({
   const body = useRef<HTMLDivElement>(null);
   const layout = useColumnLayout(body, true);
   const [list, setList] = useState<List | null>(null);
+  const measure = useBatchCost("tree", list);
   // Null: the order of the list itself.
   const [chosenSort, setSort] = useState<ListSort | null>(null);
   // Hiding the sorted column brings back the list's own order.
   const sort = chosenSort && layout.view.hidden.includes(chosenSort.column) ? null : chosenSort;
   // The cursor and the marks belong to this order and revision of the list.
-  const listKey = `${rev}:${sort?.column ?? "list"}:${sort?.descending ?? false}`;
+  const listKey = `${summary.scanning ? "live" : rev}:${sort?.column ?? "list"}:${sort?.descending ?? false}`;
   const [cursorAt, setCursorAt] = useState<{ key: string; index: number } | null>(null);
   const cursor = cursorAt?.key === listKey ? cursorAt.index : null;
   const setCursor = (index: number) => setCursorAt({ key: listKey, index });
@@ -106,14 +108,19 @@ export function ListTable({
   // A change of the tree (`rev`) lists again; the old rows stay, dimmed, until the answer.
   useEffect(() => {
     let live = true;
+    const applied = measure();
     api.getList(generation, base, kind, LIST_LIMIT).then(
-      (answer) => live && setList(answer),
+      (answer) => {
+        if (!live) return;
+        applied();
+        setList(answer);
+      },
       (e: unknown) => live && onFail(e),
     );
     return () => {
       live = false;
     };
-  }, [generation, rev, base, kind, onFail]);
+  }, [generation, rev, base, kind, onFail, measure]);
 
   const visibleIds = useMemo(() => rows.slice(first, last).map((r) => r.id), [rows, first, last]);
   useDetailsOnPause(
@@ -216,10 +223,7 @@ export function ListTable({
         sizeHint={t(`sizeMode.${summary.sizeMode}`)}
         onSort={(column) => setSort(nextListSort(sort, column.id))}
       />
-      <div
-        className={list !== null && list.rev < rev ? "crows stale" : "crows"}
-        style={{ height: rows.length * ROW_HEIGHT, width: layout.width }}
-      >
+      <div className="crows" style={{ height: rows.length * ROW_HEIGHT, width: layout.width }}>
         {shown}
       </div>
       {list && rows.length === 0 && <p className="dim pad">{t("lists.empty")}</p>}

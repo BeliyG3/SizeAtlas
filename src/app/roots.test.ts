@@ -98,7 +98,7 @@ describe("busyRoots", () => {
     expect([...fullScanRoots(roots)]).toEqual(["C:\\data", "C:\\data\\sub"]);
     expect(busyRoots(roots).has("C:\\database")).toBe(false);
   });
-  it("are the roots with any job, a folder refresh included", () => {
+  it("blocks running jobs, including refreshes, while queued rescans allow edits", () => {
     const roots: Roots = {
       roots: [summary("C:\\", 1), summary("D:\\", 2)],
       queue: [
@@ -106,6 +106,6 @@ describe("busyRoots", () => {
         { root: "E:\\", state: "queued", folder: null },
       ],
     };
-    expect([...busyRoots(roots)]).toEqual(["C:\\", "E:\\"]);
+    expect([...busyRoots(roots)]).toEqual(["C:\\"]);
   });
 });

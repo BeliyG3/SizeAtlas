@@ -54,9 +54,9 @@ impl AppState {
         self.scans().advance()
     }
 
-    /// Whether a job of `root` runs or waits.
-    pub fn is_queued(&self, root: &str) -> bool {
-        self.scans().has(root)
+    /// A running job prevents trash; a waiting rescan still has an editable complete tree.
+    pub fn is_scanning(&self, root: &str) -> bool {
+        self.scans().running(root)
     }
 }
 
@@ -106,6 +106,7 @@ pub fn save(tree: &Tree, cache_dir: &Path) -> Result<(), CmdError> {
 // ponytail: not synchronized with `forget` of the same root, so a load that ends just after the
 // forget opens the root again (its file is gone); hold `begin_write` here if that matters.
 pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Summary, CmdError> {
+    state.refuse_cached(root)?;
     let file = cache_path(cache_dir, Path::new(root));
     let (_, tree) = cache::load(&file).map_err(|e| match e {
         CacheError::Invalid(_) => CmdError::CacheInvalid,
@@ -114,7 +115,7 @@ pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Sum
     })?;
     // Described before installing: a rescan may replace the tree right after.
     let mut summary = Summary::of(0, &tree);
-    summary.generation = state.install_tree(tree);
+    summary.generation = state.install_cached(tree)?;
     Ok(summary)
 }
 

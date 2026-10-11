@@ -35,6 +35,8 @@ pub struct ScanJob {
     /// "Saving…" shows.
     pub discard: Arc<AtomicBool>,
     pub progress: Arc<Progress>,
+    /// Set when the worker chooses first-scan publication; stays set through the cache write.
+    pub first_scan: Arc<AtomicBool>,
 }
 
 impl ScanJob {
@@ -45,6 +47,7 @@ impl ScanJob {
             cancel: Arc::default(),
             discard: Arc::default(),
             progress: Arc::default(),
+            first_scan: Arc::default(),
         }
     }
 
@@ -147,22 +150,33 @@ impl ScanQueue {
         current.chain(pending).collect()
     }
 
-    /// Whether a job of `root` runs (a cancelled one, until its walk stops) or waits.
-    pub fn has(&self, root: &str) -> bool {
-        self.current
-            .iter()
-            .chain(&self.pending)
-            .any(|j| j.root == root)
-    }
-
-    /// Component-based containment: a full scan also blocks scans of its descendants.
+    /// Only a non-cancelled running full scan blocks mutations and descendant scans.
     pub fn full_scan_contains(&self, path: &str, include_equal: bool) -> bool {
         let path = std::path::Path::new(path);
-        self.current.iter().chain(&self.pending).any(|job| {
-            job.folder.is_none()
+        self.current.iter().any(|job| {
+            !job.cancelled()
+                && job.folder.is_none()
                 && path.starts_with(&job.root)
                 && (include_equal || path != std::path::Path::new(&job.root))
         })
+    }
+
+    pub fn running_full_scan(&self, root: &str) -> bool {
+        self.current
+            .as_ref()
+            .is_some_and(|job| !job.cancelled() && job.folder.is_none() && job.root == root)
+    }
+
+    pub fn running_first_scan(&self, root: &str) -> bool {
+        self.current.as_ref().is_some_and(|job| {
+            !job.cancelled() && job.root == root && job.first_scan.load(Ordering::Relaxed)
+        })
+    }
+
+    pub fn running(&self, root: &str) -> bool {
+        self.current
+            .as_ref()
+            .is_some_and(|job| !job.cancelled() && job.root == root)
     }
 }
 

@@ -246,7 +246,7 @@ fn an_item_inside_another_one_goes_with_it() {
 }
 
 #[test]
-fn a_root_that_is_scanned_or_waits_is_busy() {
+fn a_root_with_a_running_scan_is_busy() {
     let state = AppState::default();
     let (_dir, generation) = open(&state);
     let (cache, log) = (tempfile::tempdir().unwrap(), Mutex::new(Vec::new()));

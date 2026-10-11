@@ -80,7 +80,7 @@ export function ContentsTable({
   const { scrollTop, viewport, onScroll } = useViewport(body);
   const { listing, previous, request } = useRowPages(generation, rev, folder, order, onFail);
   // The cursor belongs to one listing of one revision: after a change it finds the selection again.
-  const listKey = `${folder}:${rev}:${sort.key}:${sort.descending}:${dirsOnly}`;
+  const listKey = `${folder}:${summary.scanning ? "live" : rev}:${sort.key}:${sort.descending}:${dirsOnly}`;
 
   const unaccounted = folder === rootId ? (summary.volume?.unaccounted ?? 0) : 0;
   const extra = unaccounted > 0 ? 1 : 0;
@@ -246,7 +246,12 @@ export function ContentsTable({
         onSort={(column) => onSort(nextSort(sort, column))}
       />
       <div
-        className={listing ? "crows" : "crows stale"}
+        className={
+          !listing &&
+          previous?.orderKey !== `${folder}:${order.key}:${order.descending}:${order.dirsOnly}`
+            ? "crows stale"
+            : "crows"
+        }
         style={{ height: shownCount * ROW_HEIGHT, width }}
       >
         {rows}

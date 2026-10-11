@@ -96,6 +96,8 @@ export interface RootInfo {
   /** Revision of the tree: a change loads its expanded folders again. */
   rev: number;
   status: RootStatus;
+  /** True only for a provisional first scan; rescans keep their complete totals. */
+  scanning: boolean;
   /** The root of a drive rather than a folder. */
   drive: boolean;
 }

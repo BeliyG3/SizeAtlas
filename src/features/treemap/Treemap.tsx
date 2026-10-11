@@ -5,7 +5,7 @@ import { usePalette, useSize } from "../../settings/react";
 import type { MenuTarget } from "../menu/ItemMenu";
 import { hitTest, parseTreemap, type TreemapData, type TreemapRect } from "./bytes";
 import { drawTreemap } from "./draw";
-import { recordCost } from "../scan/cadence";
+import { beginRefresh } from "../scan/cadence";
 import "./treemap.css";
 
 const RESIZE_DELAY_MS = 100;
@@ -52,6 +52,7 @@ export function Treemap({
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState<Size | null>(null);
   const [data, setData] = useState<TreemapData | null>(null);
+  const batch = useRef<{ data: TreemapData; finish: () => void } | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
   const [tip, setTip] = useState<{ id: number; text: string } | null>(null);
 
@@ -78,11 +79,15 @@ export function Treemap({
   useEffect(() => {
     if (!size) return;
     let live = true;
+    const finish = beginRefresh("charts");
     api
       .getTreemap(generation, viewId, size.w, size.h)
       .then((buffer) => {
         const parsed = parseTreemap(buffer);
-        if (live && parsed.generation === generation) setData(parsed);
+        if (live && parsed.generation === generation) {
+          batch.current = { data: parsed, finish };
+          setData(parsed);
+        }
       })
       .catch((e: unknown) => {
         if (live) onFail(e);
@@ -96,7 +101,6 @@ export function Treemap({
     const el = canvas.current;
     const ctx = el?.getContext("2d");
     if (!el || !ctx || !size) return;
-    const start = performance.now();
     const ratio = window.devicePixelRatio || 1;
     el.width = Math.round(size.w * ratio);
     el.height = Math.round(size.h * ratio);
@@ -106,7 +110,10 @@ export function Treemap({
       selected: selectedId,
       palette,
     });
-    recordCost("charts", performance.now() - start);
+    if (batch.current?.data === data) {
+      batch.current.finish();
+      batch.current = null;
+    }
   }, [data, size, highlight, selectedId, palette]);
 
   // Tooltip: the path from the current folder and the size, once the pointer rests on an item.

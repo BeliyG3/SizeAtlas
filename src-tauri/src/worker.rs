@@ -66,7 +66,7 @@ async fn scan_one(
     job: &ScanJob,
     notify: &Notify,
 ) -> Result<(), CmdError> {
-    if !state.has_root(&job.root) {
+    if state.begin_first_scan(job) {
         return live::scan_first(state, cache_dir, job, notify).await;
     }
     let walked = {

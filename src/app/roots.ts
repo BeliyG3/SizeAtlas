@@ -54,9 +54,23 @@ export function fullScanRoots(roots: Roots): ReadonlySet<string> {
   ]);
 }
 
-/** Roots with a job that runs or waits, a folder refresh included: nothing of them goes to the trash. */
+/** Running jobs block trash; a queued rescan keeps an editable complete tree. */
 export const busyRoots = (roots: Roots): ReadonlySet<string> =>
-  new Set([...roots.queue.map((q) => q.root), ...fullScanRoots(roots)]);
+  new Set([
+    ...roots.queue.filter((q) => q.state === "scanning").map((q) => q.root),
+    ...fullScanRoots({ ...roots, queue: roots.queue.filter((q) => q.state === "scanning") }),
+  ]);
+
+/** Running first scans also block actions in roots contained by the scanned path. */
+export function firstScanRoots(roots: Roots): ReadonlySet<string> {
+  const queue = roots.queue.filter(
+    (q) =>
+      q.state === "scanning" &&
+      q.folder === null &&
+      !roots.roots.some((s) => s.root === q.root && !s.scanning),
+  );
+  return fullScanRoots({ ...roots, queue });
+}
 
 /** The open roots to remember; queued scans are not reopened. */
 export const storedRoots = (roots: Roots): string =>

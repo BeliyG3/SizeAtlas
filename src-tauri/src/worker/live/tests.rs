@@ -3,7 +3,6 @@ use std::fs;
 use sizeatlas_core::tree::ListOrder;
 
 use super::*;
-use crate::exit::ExitDecision;
 use crate::worker::tests::{root_of, run_queue};
 
 #[test]
@@ -32,7 +31,7 @@ fn progress_grows_only_the_current_folder_and_root_without_exposing_contents() {
             assert_eq!((tree.node(id).files, tree.node(0).files), (3, 3));
             assert!(tree.node(id).has(sizeatlas_core::tree::flags::SCANNING));
             assert_eq!(tree.children(id).count(), 0);
-            tree.check_structure().unwrap();
+            assert_totals(&tree);
         }
     })
     .unwrap();
@@ -46,25 +45,6 @@ fn progress_grows_only_the_current_folder_and_root_without_exposing_contents() {
         tree.node(0).size,
         tree.children(0).map(|id| tree.node(id).size).sum::<u64>()
     );
-}
-
-#[test]
-fn closing_a_live_root_does_not_allow_a_batch_to_reopen_it() {
-    let (dir, cache) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-    fs::create_dir(dir.path().join("sub")).unwrap();
-    let state = AppState::default();
-    let job = state.enqueue(root_of(&dir)).unwrap().unwrap();
-    let inspect = state.clone();
-    let root = job.root.clone();
-    let notify: Notify = Arc::new(move |notice| {
-        if matches!(notice, Notice::RootsChanged) && inspect.summaries().iter().any(|s| s.scanning)
-        {
-            jobs::close_root(&inspect, &root);
-        }
-    });
-    tauri::async_runtime::block_on(run(state.clone(), cache.path().into(), job, notify));
-    assert!(state.summaries().is_empty());
-    assert!(sources::cached_scans(cache.path()).is_empty());
 }
 
 #[test]
@@ -96,12 +76,14 @@ fn live_batches_are_browsable_stable_and_not_saved_until_finished() {
         assert!(sources::cached_scans(cache.path()).is_empty());
         if let Some(id) = done {
             let tree = state.tree(generation).unwrap();
-            tree.check_structure().unwrap();
+            assert_totals(&tree);
             assert_eq!(tree.node(0).files as usize, finished.len() + 2);
             assert_eq!(
                 tree.node(0).size,
                 tree.children(0).map(|c| tree.node(c).size).sum::<u64>()
             );
+            assert_eq!(tree.node(0).len as usize, 3 + 4 * (finished.len() + 1));
+            assert_eq!(tree.node(0).dirs as usize, 2 + finished.len() + 1);
             finished.push((id, tree.name(id).to_owned()));
             for (id, name) in &finished {
                 assert_eq!(tree.name(*id), name);
@@ -169,37 +151,6 @@ fn live_root_refuses_refresh_subfolder_scans_and_trash() {
 }
 
 #[test]
-fn cancel_and_exit_remove_partial_roots_without_saving() {
-    for exit in [false, true] {
-        let (dir, cache) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-        fs::create_dir(dir.path().join("sub")).unwrap();
-        let state = AppState::default();
-        let job = state.enqueue(root_of(&dir)).unwrap();
-        let inspect = state.clone();
-        let notify: Notify = Arc::new(move |notice| {
-            if matches!(notice, Notice::RootsChanged)
-                && inspect.summaries().iter().any(|s| s.scanning)
-            {
-                if exit {
-                    assert_eq!(inspect.on_exit_request(), ExitDecision::Allow);
-                } else {
-                    inspect.cancel_scan(None);
-                }
-            }
-        });
-        tauri::async_runtime::block_on(run(
-            state.clone(),
-            cache.path().into(),
-            job.unwrap(),
-            notify,
-        ));
-        assert!(state.summaries().is_empty());
-        assert!(sources::cached_scans(cache.path()).is_empty());
-        assert!(state.roots().queue.is_empty());
-    }
-}
-
-#[test]
 fn rescan_keeps_the_complete_tree_until_installation() {
     let (dir, cache) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     fs::write(dir.path().join("f"), b"old").unwrap();
@@ -208,36 +159,71 @@ fn rescan_keeps_the_complete_tree_until_installation() {
     let old = state.summaries()[0].clone();
     fs::write(dir.path().join("new"), b"new").unwrap();
     let job = state.enqueue(root_of(&dir)).unwrap().unwrap();
-    let walked = jobs::walk(&job).unwrap().unwrap();
     assert_eq!(state.summary(old.generation).unwrap(), old);
-    let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
-    let notify: Notify = Arc::new(|_| {});
-    install_and_save(&state, cache.path(), &job, walked, write, &notify).unwrap();
-    assert_eq!(state.summaries()[0].files, 2);
+    let inspected = state.clone();
+    let notices = Arc::new(Mutex::new(0));
+    let counter = notices.clone();
+    let notify: Notify = Arc::new(move |notice| {
+        assert!(
+            !matches!(notice, Notice::LiveChanged),
+            "an open root uses the non-live path"
+        );
+        let summaries = inspected.summaries();
+        assert!(
+            summaries.iter().all(|s| !s.scanning),
+            "a rescan never installs a provisional root"
+        );
+        if matches!(notice, Notice::RootsChanged) {
+            *counter.lock().unwrap() += 1;
+        }
+    });
+    tauri::async_runtime::block_on(scan_one(&state, cache.path(), &job, &notify)).unwrap();
+    assert_eq!(
+        *notices.lock().unwrap(),
+        1,
+        "only completed installation is announced"
+    );
+    let summary = state.summaries()[0].clone();
+    assert_eq!(summary.files, 2);
+    assert_ne!(summary.generation, old.generation);
+    let tree = state.tree(summary.generation).unwrap();
+    assert_totals(&tree);
+    assert_eq!((tree.node(0).len, tree.node(0).dirs), (6, 0));
 }
 
-#[test]
-fn exit_after_live_completion_waits_for_the_cache_write() {
-    let (dir, cache) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-    let state = AppState::default();
-    let job = state.enqueue(root_of(&dir)).unwrap().unwrap();
-    let mut session = Session::new();
-    let notify: Notify = Arc::new(|_| {});
-    scanner::scan_live(dir.path(), &job.cancel, &job.progress, |event| {
-        session.publish(&state, &job, event, &notify)
-    })
-    .unwrap();
-    let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
-    assert_eq!(state.on_exit_request(), ExitDecision::PreventAndWait);
-    finish(
-        &state,
-        cache.path(),
-        &job,
-        session.scan.unwrap(),
-        write,
-        &notify,
-    )
-    .unwrap();
-    assert_eq!(sources::cached_scans(cache.path()).len(), 1);
-    assert!(!state.summaries()[0].scanning);
+// Validate all published ancestor totals, leaving pending folders' provisional counters alone.
+pub(super) fn assert_totals(tree: &Tree) {
+    tree.check_structure().unwrap();
+    for id in 0..tree.len() as u32 {
+        let n = tree.node(id);
+        if !n.is_alive() || !n.is_dir() || n.has(sizeatlas_core::tree::flags::PENDING) {
+            continue;
+        }
+        let totals = tree
+            .children(id)
+            .fold((0, 0, 0, 0), |(size, files, len, dirs), child| {
+                let c = tree.node(child);
+                (
+                    size + c.size,
+                    files + c.files,
+                    len + c.len,
+                    dirs + c.dirs + u32::from(c.is_dir()),
+                )
+            });
+        assert_eq!(
+            (n.size, n.files, n.len, n.dirs),
+            totals,
+            "totals of {}",
+            tree.name(id)
+        );
+    }
+    assert_eq!(
+        tree.access_errors,
+        (0..tree.len() as u32)
+            .filter(|&id| {
+                let n = tree.node(id);
+                n.is_alive() && n.has(sizeatlas_core::tree::flags::ACCESS_ERROR)
+            })
+            .count() as u32
+    );
 }

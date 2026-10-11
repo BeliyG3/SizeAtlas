@@ -6,6 +6,8 @@ import type { ExportSource } from "./source";
 
 /** Rows per request: few enough requests for a huge folder, each one sorts the folder again. */
 export const PAGE = 20_000;
+/** A live folder is read in one backend snapshot, including its exact sort order. */
+export const LIVE_LIMIT = 0xffff_ffff;
 /** The backend reads details of at most this many ids per call (MAX_DETAILS). */
 const DETAILS_BATCH = 500;
 /** Reads of a folder that a change of the tree may restart before the export gives up. */
@@ -30,17 +32,28 @@ export interface Gathered {
   pathOf: (item: Item | ListItem) => string;
 }
 
-/** Every item of the folder in `order`, all from one revision of the tree; null if it changed. */
-async function readFolder(source: Extract<ExportSource, { kind: "folder" }>) {
-  const all: Item[] = [];
-  let total = Infinity;
-  let rev: number | null = null;
-  let size = 0;
-  while (all.length < total) {
+/** Live reads use one snapshot: changing sort positions cannot skip or duplicate rows. */
+async function readFolder(source: Extract<ExportSource, { kind: "folder" }>, scanning: boolean) {
+  if (scanning) {
     const page = await api.getChildren(
       source.generation,
       source.folder,
-      all.length,
+      0,
+      LIVE_LIMIT,
+      source.order,
+    );
+    return { items: page.items, size: page.size, rev: page.rev };
+  }
+  const all = new Map<number, Item>();
+  let offset = 0;
+  let total = Infinity;
+  let rev: number | null = null;
+  let size = 0;
+  while (offset < total) {
+    const page = await api.getChildren(
+      source.generation,
+      source.folder,
+      offset,
       PAGE,
       source.order,
     );
@@ -49,14 +62,18 @@ async function readFolder(source: Extract<ExportSource, { kind: "folder" }>) {
     total = page.total;
     size = page.size;
     if (page.items.length === 0) break;
-    all.push(...page.items);
+    offset += page.items.length;
+    for (const item of page.items) all.set(item.id, item);
   }
-  return { items: all, size, rev: rev ?? 0 };
+  return { items: [...all.values()], size, rev: rev ?? 0 };
 }
 
 /** One read of the table; null if the tree changed meanwhile. */
 async function gatherOnce(source: ExportSource): Promise<Gathered | null> {
   const { generation } = source;
+  // A first scan keeps ids stable while its revisions grow.
+  const initial = await api.getSummary(generation);
+  const scanning = initial.scanning === true;
   const folder = source.kind === "folder" ? source.folder : source.base;
   const crumbs = await api.getCrumbs(generation, folder);
   const folderPath = joinPath(crumbs.map((c) => c.name));
@@ -64,12 +81,47 @@ async function gatherOnce(source: ExportSource): Promise<Gathered | null> {
   let items: readonly (Item | ListItem)[];
   let folderSize: number;
   let rev: number;
+  let mixedRevisions = false;
   if (source.kind === "folder") {
-    const read = await readFolder(source);
+    const read = await readFolder(source, scanning);
     if (!read) return null;
     ({ items, size: folderSize, rev } = read);
   } else {
     ({ rows: items, size: folderSize, rev } = source);
+    if (scanning) {
+      const latest = await api.getList(generation, source.base, source.list, source.rows.length);
+      const byId = new Map(latest.items.map((item) => [item.id, item]));
+      const parents = new Map<number, Promise<{ rev: number; items: ReadonlyMap<number, Item> }>>();
+      // Keep the table's selected order; refresh every field of rows displaced from a capped list.
+      items = await Promise.all(
+        source.rows.map(async (item) => {
+          const current = byId.get(item.id);
+          if (current) return current;
+          if (!parents.has(item.parent)) {
+            parents.set(
+              item.parent,
+              api
+                .getChildren(generation, item.parent, 0, LIVE_LIMIT, {
+                  key: "name",
+                  descending: false,
+                  dirsOnly: false,
+                })
+                .then((page) => ({
+                  rev: page.rev,
+                  items: new Map(page.items.map((row) => [row.id, row])),
+                })),
+            );
+          }
+          const page = await parents.get(item.parent)!;
+          mixedRevisions ||= page.rev !== latest.rev;
+          const refreshed = page.items.get(item.id);
+          if (!refreshed) throw new TreeChanged();
+          return { ...item, ...refreshed };
+        }),
+      );
+      folderSize = latest.size;
+      rev = latest.rev;
+    }
   }
 
   const details = new Map<number, Detail>();
@@ -79,7 +131,17 @@ async function gatherOnce(source: ExportSource): Promise<Gathered | null> {
       for (const d of (await api.getDetails(generation, ids)).items) details.set(d.id, d);
     }
   }
-  if ((await api.getSummary(generation)).rev !== rev) return null;
+  // All reads precede validation, including the live subfolder's current denominator.
+  const liveSize =
+    scanning && folder !== initial.rootId
+      ? (await api.getCrumbs(generation, folder)).at(-1)?.size
+      : undefined;
+  const summary = await api.getSummary(generation);
+  // Completion restores strict checks: later edits may remove or replace these ids.
+  if ((!scanning || !summary.scanning) && (mixedRevisions || summary.rev !== rev)) return null;
+  if (scanning && summary.scanning) {
+    folderSize = folder === summary.rootId ? summary.total : (liveSize ?? folderSize);
+  }
 
   return {
     items,
@@ -94,7 +156,8 @@ async function gatherOnce(source: ExportSource): Promise<Gathered | null> {
  * Every row of the table, not only those loaded: all items of the folder in the table's order,
  * or the rows of the list; with details read from disk when a detail column is shown. A change
  * of the tree meanwhile reads a folder again (up to ATTEMPTS times); a list cannot be read again
- * here, its table lists anew. Throws TreeChanged when that does not settle.
+ * here, its table lists anew. First scans accept growing revisions and refresh list sizes.
+ * Throws TreeChanged when a non-live tree does not settle.
  */
 // ponytail: requests run one after another with no progress shown; a folder of 300 000 items
 // with a detail column visible reads 600 batches from disk. Add progress if that gets slow.

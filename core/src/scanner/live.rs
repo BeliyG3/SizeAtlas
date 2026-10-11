@@ -7,7 +7,8 @@ use super::*;
 pub enum LiveEvent {
     Started(Tree),
     FolderStarted { id: u32, bytes: u64, files: u64 },
-    FolderDone { id: u32, records: Vec<DirRec> },
+    FolderDone { id: u32, tree: Tree },
+    FolderGone { id: u32 },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -35,14 +36,20 @@ pub fn scan_live(
         ));
     }
     let (tx, _rx) = mpsc::channel();
+    let volume = Volume::of(&root, &meta);
+    let scan_meta = ScanMeta {
+        cluster: volume.cluster,
+        size_mode: volume.size_mode(),
+        scanned_at: now_secs(),
+    };
     let ctx = Ctx {
         tx,
         next_id: AtomicU32::new(1),
         cancel,
         progress,
-        volume: Volume::of(&root, &meta),
+        volume: &volume,
     };
-    let (mut top, mut dirs) = listing::list(
+    let (top, mut dirs) = listing::list(
         &ctx,
         DirTask {
             path: root.clone(),
@@ -50,7 +57,7 @@ pub fn scan_live(
             id: 0,
             parent: NO_PARENT,
             mtime: mtime_of(&meta),
-            flags: flags::IS_DIR | platform::dir_flags(&meta),
+            flags: flags::IS_DIR | listing::directory_flags(&root, &meta),
         },
     );
     if cancel.load(Ordering::Relaxed) {
@@ -58,7 +65,6 @@ pub fn scan_live(
     }
     dirs.sort_by(|a, b| a.name.as_encoded_bytes().cmp(b.name.as_encoded_bytes()));
     let mut links = HashSet::new();
-    deduplicate(std::slice::from_mut(&mut top), &mut links);
     let mut initial = vec![top];
     initial.extend(dirs.iter().map(|d| DirRec {
         id: d.id,
@@ -68,14 +74,7 @@ pub fn scan_live(
         flags: d.flags | flags::PENDING,
         files: Vec::new(),
     }));
-    let mut tree = Tree::from_records(
-        initial,
-        ScanMeta {
-            cluster: ctx.volume.cluster,
-            size_mode: ctx.volume.size_mode(),
-            scanned_at: now_secs(),
-        },
-    );
+    let mut tree = Tree::from_records_with_links(initial, scan_meta, &mut links);
     // Flat-tree ids also include root files, so resolve once before handing the tree away.
     let ids: Vec<u32> = tree
         .children(0)
@@ -83,6 +82,7 @@ pub fn scan_live(
         .collect();
     tree.set_scanning(0, true);
     publish(LiveEvent::Started(tree));
+    debug_assert_eq!(dirs.len(), ids.len());
     for (mut task, id) in dirs.into_iter().zip(ids) {
         if cancel.load(Ordering::Relaxed) {
             return Ok(LiveOutcome::Cancelled);
@@ -92,6 +92,13 @@ pub fn scan_live(
             bytes: progress.bytes.load(Ordering::Relaxed),
             files: progress.files.load(Ordering::Relaxed),
         });
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(LiveOutcome::Cancelled);
+        }
+        if fs::symlink_metadata(&task.path).is_err_and(|e| e.kind() == io::ErrorKind::NotFound) {
+            publish(LiveEvent::FolderGone { id });
+            continue;
+        }
         task.id = 0;
         task.parent = NO_PARENT;
         let (tx, rx) = mpsc::channel();
@@ -101,35 +108,22 @@ pub fn scan_live(
             cancel,
             progress,
             // Keep the original volume rules, including macOS firmlink exclusions.
-            volume: Volume::of(&root, &meta),
+            volume: &volume,
         };
         rayon::scope(|s| walk(s, &child_ctx, task));
         drop(child_ctx);
         if cancel.load(Ordering::Relaxed) {
             return Ok(LiveOutcome::Cancelled);
         }
-        let mut records: Vec<_> = rx.into_iter().collect();
-        deduplicate(&mut records, &mut links);
-        publish(LiveEvent::FolderDone { id, records });
+        let records: Vec<_> = rx.into_iter().collect();
+        let tree = Tree::from_records_with_links(records, scan_meta, &mut links);
+        publish(LiveEvent::FolderDone { id, tree });
     }
     Ok(if cancel.load(Ordering::Relaxed) {
         LiveOutcome::Cancelled
     } else {
         LiveOutcome::Done
     })
-}
-
-/// Keep hard-link accounting global across separately flattened folders. Retain the flag for
-/// later refresh/trash approximation, but consume keys so flatten does not deduplicate again.
-fn deduplicate(records: &mut [DirRec], seen: &mut HashSet<(u64, u64)>) {
-    for file in records.iter_mut().flat_map(|r| &mut r.files) {
-        if let Some(key) = file.ino.take() {
-            file.flags |= flags::HARDLINK;
-            if !seen.insert(key) {
-                file.size = 0;
-            }
-        }
-    }
 }
 
 #[cfg(test)]

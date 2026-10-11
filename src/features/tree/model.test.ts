@@ -54,6 +54,7 @@ const info = (root: string, generation: number | null, size = 120): RootInfo => 
   size,
   rev: 0,
   status: generation === null ? "queued" : "open",
+  scanning: false,
   drive: false,
 });
 

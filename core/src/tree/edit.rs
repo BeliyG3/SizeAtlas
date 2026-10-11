@@ -10,7 +10,7 @@ use super::{DirRec, NO_PARENT, Node, Tree, flags};
 
 /// What a node adds to the totals of every ancestor.
 #[derive(Clone, Copy, Debug, Default)]
-struct Totals {
+pub(super) struct Totals {
     size: u64,
     files: u32,
     len: u64,
@@ -19,7 +19,7 @@ struct Totals {
 }
 
 impl Totals {
-    fn of(node: &Node) -> Totals {
+    pub(super) fn of(node: &Node) -> Totals {
         Totals {
             size: node.size,
             files: node.files,
@@ -31,11 +31,11 @@ impl Totals {
 
 /// The nodes one change marked dead.
 #[derive(Default)]
-struct Killed {
-    count: u32,
+pub(super) struct Killed {
+    pub(super) count: u32,
     /// Unreadable folders among them: `Tree::access_errors` counts those that are alive.
-    access_errors: u32,
-    hardlink: bool,
+    pub(super) access_errors: u32,
+    pub(super) hardlink: bool,
 }
 
 impl Tree {
@@ -47,26 +47,12 @@ impl Tree {
     /// # Panics
     /// If `id` is the root (a full scan replaces it), or not a live folder.
     pub fn replace_subtree(&mut self, id: u32, records: Vec<DirRec>) {
-        assert_ne!(id, 0, "the root is replaced by a full scan");
-        let node = &self.nodes[id as usize];
-        assert!(
-            node.is_alive() && node.is_dir(),
-            "only a live folder is replaced"
-        );
-        let old = Totals::of(node);
-        let own_error = u32::from(node.has(flags::ACCESS_ERROR));
-        // Before the folder points at its new block: afterwards the walk would find new nodes.
-        let killed = self.kill_below(id);
-        self.live = less(self.live, killed.count);
-        self.dead += killed.count;
-        // `flatten` counts the unreadable folders of the new records, the folder itself included.
-        self.access_errors = less(self.access_errors, killed.access_errors + own_error);
-        let base = self.nodes.len();
-        self.flatten(records, id);
-        let hardlink = killed.hardlink || self.nodes[base..].iter().any(|n| n.has(flags::HARDLINK));
-        let new = Totals::of(&self.nodes[id as usize]);
-        self.update_ancestors(id, old, new);
-        self.changed(hardlink);
+        let meta = super::ScanMeta {
+            cluster: self.cluster,
+            size_mode: self.size_mode,
+            scanned_at: self.scanned_at,
+        };
+        self.graft(id, Tree::from_records(records, meta));
     }
 
     /// Takes `id` and everything below it out of its ancestors' totals and marks them dead.
@@ -147,7 +133,7 @@ impl Tree {
     }
 
     /// Marks every live node below `id` dead, without recursion; `id` itself stays.
-    fn kill_below(&mut self, id: u32) -> Killed {
+    pub(super) fn kill_below(&mut self, id: u32) -> Killed {
         let mut killed = Killed::default();
         let mut stack: Vec<u32> = self.children(id).collect();
         while let Some(at) = stack.pop() {
@@ -164,7 +150,7 @@ impl Tree {
     }
 
     /// Moves the totals of every ancestor of `id` from `old` to `new`.
-    fn update_ancestors(&mut self, id: u32, old: Totals, new: Totals) {
+    pub(super) fn update_ancestors(&mut self, id: u32, old: Totals, new: Totals) {
         let mut at = self.nodes[id as usize].parent;
         while at != NO_PARENT {
             let n = &mut self.nodes[at as usize];
@@ -177,7 +163,7 @@ impl Tree {
     }
 
     /// One change happened: a new revision; hard links make sizes approximate until a full scan.
-    fn changed(&mut self, hardlink: bool) {
+    pub(super) fn changed(&mut self, hardlink: bool) {
         self.rev += 1;
         self.approximate |= hardlink;
     }

@@ -1,3 +1,4 @@
+import { useBatchCost } from "../scan/useBatchCost";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import type { List, ListItem } from "../../api/types";
@@ -6,7 +7,6 @@ import { useSize } from "../../settings/react";
 import { ItemIcon } from "../contents/ItemIcon";
 import type { MenuTarget } from "../menu/ItemMenu";
 import { isMenuKey } from "../menu/Menu";
-import { measuredRead } from "../scan/cadence";
 
 const LIMIT = 100;
 
@@ -25,16 +25,22 @@ export function LargestPanel({ generation, rev, viewId, onSelect, onMenu, onFail
   const { t } = useT();
   const size = useSize();
   const [files, setFiles] = useState<List | null>(null);
+  const measure = useBatchCost("charts", files);
   useEffect(() => {
     let live = true;
-    measuredRead("charts", () => api.getList(generation, viewId, "largestFiles", LIMIT)).then(
-      (f) => live && setFiles(f),
+    const applied = measure();
+    api.getList(generation, viewId, "largestFiles", LIMIT).then(
+      (f) => {
+        if (!live) return;
+        applied();
+        setFiles(f);
+      },
       (e: unknown) => live && onFail(e),
     );
     return () => {
       live = false;
     };
-  }, [generation, rev, viewId, onFail]);
+  }, [generation, rev, viewId, onFail, measure]);
 
   const menuAt = (f: ListItem, x: number, y: number) =>
     onMenu({ id: f.id, isDir: false, lossy: f.lossy, x, y });

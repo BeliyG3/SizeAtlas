@@ -11,7 +11,7 @@
   "tree.noAccess": "Нет доступа",
   "tree.cloud": "Только в облаке",
   "tree.pending": "ожидает",
-  "tree.activeScan": "идёт сканирование",
+  "tree.activeScan": "сканируется",
   "tree.queued": "в очереди",
   "tree.scanning_one": "{files} файл",
   "tree.scanning_few": "{files} файла",

@@ -50,8 +50,8 @@ impl AppState {
             let generation = data.roots[at].generation;
             let tree = tree_mut(&mut data.roots[at].tree);
             change(tree, generation)?;
-            // A live scan never renumbers already visible nodes, even when a listed folder
-            // disappears before its turn. Compaction remains available after it finishes.
+            // FolderGone removes a listed folder during a first scan. Keep the remaining ids
+            // stable until the scan finishes; only then may compaction renumber them.
             let old = (tree.dead > tree.live
                 && !tree.node(0).has(sizeatlas_core::tree::flags::SCANNING))
             .then(|| tree.compact());

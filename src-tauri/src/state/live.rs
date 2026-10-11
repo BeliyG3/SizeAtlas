@@ -14,25 +14,59 @@ impl AppState {
         self.read_data().find(root).is_some()
     }
 
-    /// Installs only if still absent, so opening a saved scan meanwhile wins. The job's discard
-    /// flag is checked under the same lock as installation, as it is for a completed scan.
+    /// Serialize the worker's first-scan decision with cache installation.
+    pub fn begin_first_scan(&self, job: &ScanJob) -> bool {
+        let _scans = self.scans();
+        let first = !self.has_root(&job.root);
+        job.first_scan.store(first, Ordering::Relaxed);
+        first
+    }
+
+    /// Replaces a root opened between the worker's first-scan decision and its initial listing.
+    /// The job's discard flag is checked under the installation lock.
     pub fn start_live(&self, job: &ScanJob, tree: Tree) -> Option<u64> {
+        let _scans = self.scans();
+        job.first_scan.store(true, Ordering::Relaxed);
         let mut data = self.write_data();
-        if job.cancelled()
-            || job.discard.load(Ordering::Relaxed)
-            || self.closing()
-            || data.find(tree.name(0)).is_some()
-        {
+        if job.cancelled() || job.discard.load(Ordering::Relaxed) || self.closing() {
             return None;
         }
         data.generation += 1;
         let generation = data.generation;
-        data.roots.push(OpenRoot {
+        let installed = OpenRoot {
             generation,
             scan: generation,
             tree: Arc::new(tree),
-        });
+        };
+        let old = if let Some(at) = data.find(installed.tree.name(0)) {
+            Some(std::mem::replace(&mut data.roots[at], installed))
+        } else {
+            data.roots.push(installed);
+            None
+        };
+        drop(data);
+        drop(old);
         Some(generation)
+    }
+
+    /// Cache reads must not replace an active first scan. Hold the queue guard through install.
+    pub fn install_cached(&self, tree: Tree) -> Result<u64, CmdError> {
+        let scans = self.scans();
+        let root = tree.name(0);
+        if scans.running_first_scan(root) || (scans.running_full_scan(root) && !self.has_root(root))
+        {
+            return Err(CmdError::Busy);
+        }
+        Ok(self.install_tree(tree))
+    }
+
+    pub fn refuse_cached(&self, root: &str) -> Result<(), CmdError> {
+        let scans = self.scans();
+        if scans.running_first_scan(root) || (scans.running_full_scan(root) && !self.has_root(root))
+        {
+            return Err(CmdError::Busy);
+        }
+        Ok(())
     }
 
     /// Removes only this job's provisional tree. A cached tree opened meanwhile is preserved.

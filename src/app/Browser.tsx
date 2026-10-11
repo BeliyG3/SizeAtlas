@@ -1,4 +1,4 @@
-import { Profiler, useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { ScanProgress, Sources } from "../api/types";
 import { DEFAULT_SORT, type SortState } from "../features/contents/columns";
 import { DrivesPanel } from "../features/drives/DrivesPanel";
@@ -6,7 +6,6 @@ import { ItemMenu, type MenuTarget } from "../features/menu/ItemMenu";
 import { RootMenu, type RootMenuTarget } from "../features/menu/RootMenu";
 import { ScanView } from "../features/scan/ScanView";
 import { scanActions } from "../features/scan/actions";
-import { measureRender } from "../features/scan/cadence";
 import { Workspace } from "../features/shell/Workspace";
 import { expectedBytes, isDrive, rootLabel } from "../features/shell/source";
 import type { Mode } from "../features/lists/modes";
@@ -37,8 +36,9 @@ interface Props {
   onTrash: (generation: number, ids: readonly number[]) => void;
   /** The marked rows of the table, whenever they change (stable). */
   onMarks: (ids: readonly number[]) => void;
-  /** Roots with a job that runs or waits: nothing of them goes to the trash. */
+  /** Roots with a running job: nothing of them goes to the trash. */
   busyRoots: ReadonlySet<string>;
+  firstScans: ReadonlySet<string>;
   /** A trash request runs. */
   trashing: boolean;
   /** Removes the root from the tree and stops its scan; its saved scan stays. */
@@ -72,6 +72,7 @@ export function Browser({
   onTrash,
   onMarks,
   busyRoots,
+  firstScans,
   trashing,
   onCloseRoot,
   onForget,
@@ -99,6 +100,7 @@ export function Browser({
         generation: e.summary?.generation ?? null,
         size: e.summary?.total ?? 0,
         rev: e.summary?.rev ?? 0,
+        scanning: e.summary?.scanning ?? false,
         status: e.status,
         drive: isDrive(sources, e.root),
       })),
@@ -131,7 +133,11 @@ export function Browser({
         }
       : null;
 
-  const itemActions = scanActions(itemRoot === undefined || busyRoots.has(itemRoot), trashing);
+  const itemActions = scanActions(
+    itemRoot === undefined || firstScans.has(itemRoot),
+    itemRoot === undefined || busyRoots.has(itemRoot),
+    trashing,
+  );
   let content: ReactNode;
   if (!selection) {
     content = <p className="empty-hint dim">{t("empty.hint")}</p>;
@@ -166,20 +172,18 @@ export function Browser({
   }
 
   const tree = (
-    <Profiler id="tree" onRender={measureRender}>
-      <FolderTree
-        roots={roots}
-        target={treeTarget}
-        scanned={progress && { root: progress.root, files: progress.files }}
-        sizeHint={summary ? t(`sizeMode.${summary.sizeMode}`) : ""}
-        onSelectRoot={onSelectRoot}
-        onSelectNode={(generation, id) => onSelectNode(generation, id, true)}
-        onItemMenu={openMenu}
-        onRootMenu={(root, x, y) => setMenu({ kind: "root", root, x, y })}
-        onTrash={onTrash}
-        onFail={onFail}
-      />
-    </Profiler>
+    <FolderTree
+      roots={roots}
+      target={treeTarget}
+      scanned={progress && { root: progress.root, files: progress.files }}
+      sizeHint={summary ? t(`sizeMode.${summary.sizeMode}`) : ""}
+      onSelectRoot={onSelectRoot}
+      onSelectNode={(generation, id) => onSelectNode(generation, id, true)}
+      onItemMenu={openMenu}
+      onRootMenu={(root, x, y) => setMenu({ kind: "root", root, x, y })}
+      onTrash={onTrash}
+      onFail={onFail}
+    />
   );
 
   return (
@@ -203,6 +207,7 @@ export function Browser({
           generation={menu.generation}
           canTrash={itemActions.trash}
           canScan={itemActions.scanFolder}
+          canRefresh={itemActions.refresh}
           onRefresh={onRefresh}
           onScanFolder={onScanFolder}
           onTrash={onTrash}
