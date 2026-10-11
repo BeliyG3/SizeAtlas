@@ -39,6 +39,16 @@ describe("csvField", () => {
 });
 
 describe("values", () => {
+  it("exports provisional sizes only for the active folder, with pending totals blank", () => {
+    const pending = item({ isDir: true, pending: true, size: 10, files: 2 });
+    for (const column of ["size", "len", "percent", "files", "folders", "dirs"] as const) {
+      expect(cellValue(column, pending, undefined, 100)).toBe("");
+    }
+    const active = { ...pending, scanning: true };
+    expect(cellValue("size", active, undefined, 100)).toBe("10");
+    expect(cellValue("files", active, undefined, 100)).toBe("2");
+    expect(cellValue("len", active, undefined, 100)).toBe("");
+  });
   it("writes a share as a percentage with up to two decimals and a dot", () => {
     expect(csvPercent(0.369425)).toBe("36.94");
     expect(csvPercent(1)).toBe("100");

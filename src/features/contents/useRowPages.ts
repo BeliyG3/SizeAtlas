@@ -32,22 +32,27 @@ export function useRowPages(
   const key = `${folder}:${rev}:${order.key}:${order.descending}:${order.dirsOnly}`;
   const [listing, setListing] = useState<Listing | null>(null);
   const requested = useRef(new Set<number>());
-  const current = useRef(key);
+  const current = useRef({ key, live: false });
   useLayoutEffect(() => {
-    current.current = key;
+    const scope = { key, live: true };
+    current.current = scope;
     requested.current.clear();
+    return () => {
+      scope.live = false;
+    };
   }, [key]);
 
   const request = useCallback(
     (pages: readonly number[]) => {
       // A timer set for the previous folder or order fires late: ignore it.
-      if (current.current !== key) return;
+      const scope = current.current;
+      if (!scope.live || scope.key !== key) return;
       for (const page of pages) {
         if (requested.current.has(page)) continue;
         requested.current.add(page);
         api.getChildren(generation, folder, page * PAGE_SIZE, PAGE_SIZE, order).then(
           (p) => {
-            if (current.current !== key) return;
+            if (!scope.live) return;
             setListing((prev) => ({
               key,
               total: p.total,
@@ -56,7 +61,7 @@ export function useRowPages(
             }));
           },
           (e: unknown) => {
-            if (current.current !== key) return;
+            if (!scope.live) return;
             requested.current.delete(page);
             onFail(e);
           },

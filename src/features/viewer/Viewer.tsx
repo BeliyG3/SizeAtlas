@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { Profiler, memo, useCallback, useEffect, useState } from "react";
 import { api } from "../../api/client";
 import type { ListItem, Summary } from "../../api/types";
 import { useT } from "../../i18n/react";
@@ -15,6 +15,8 @@ import { SplitPane } from "../shell/SplitPane";
 import { MIN_PANE } from "../shell/split";
 import { useCrumbs } from "./useCrumbs";
 import { useDebounced } from "./useDebounced";
+import { useLiveRevision } from "../scan/useLiveRevision";
+import { measureRender } from "../scan/cadence";
 
 /** Charts follow the current folder once the selection has settled for this long. */
 const VIEW_DELAY_MS = 150;
@@ -56,6 +58,7 @@ export const Viewer = memo(function Viewer({
   const { t } = useT();
   const { showChart } = useSettings();
   const { generation } = summary;
+  const chartRev = useLiveRevision(summary.rev, summary.scanning ?? false, "charts");
   const select = useCallback(
     (id: number, isDir: boolean, parent?: number) => onSelect(generation, id, isDir, parent),
     [generation, onSelect],
@@ -116,7 +119,7 @@ export const Viewer = memo(function Viewer({
       label={t("split.charts")}
       collapse={showChart ? undefined : "second"}
       first={
-        <>
+        <Profiler id="table" onRender={measureRender}>
           {isListMode(mode) ? (
             <ListTable
               key={`${mode}:${base}`}
@@ -152,19 +155,21 @@ export const Viewer = memo(function Viewer({
               onFail={onFail}
             />
           )}
-        </>
+        </Profiler>
       }
       second={
-        <ChartArea
-          generation={generation}
-          rev={summary.rev}
-          folder={shownFolder}
-          crumbs={crumbs}
-          selectedId={selection.id}
-          onSelect={select}
-          onMenu={menu}
-          onFail={onFail}
-        />
+        <Profiler id="charts" onRender={measureRender}>
+          <ChartArea
+            generation={generation}
+            rev={chartRev}
+            folder={shownFolder}
+            crumbs={crumbs}
+            selectedId={selection.id}
+            onSelect={select}
+            onMenu={menu}
+            onFail={onFail}
+          />
+        </Profiler>
       }
     />
   );

@@ -85,6 +85,7 @@ export const ContentsRow = memo(function ContentsRow({
   }
   const share = folderSize > 0 ? item.size / folderSize : 0;
   const dir = item.isDir;
+  const waiting = item.pending && !item.scanning;
   // Empty while the details are on their way; a dash when they could not be read.
   const text = (value: string | null | undefined) => (detail ? (value ?? "—") : "");
   const time = (value: number | null | undefined) =>
@@ -96,23 +97,25 @@ export const ContentsRow = memo(function ContentsRow({
       <>
         <ItemIcon isDir={dir} category={item.category} />
         <span className="ellipsis">{item.name}</span>
+        {item.scanning && <span className="tag">{t("tree.activeScan")}</span>}
+        {waiting && <span className="tag">{t("tree.pending")}</span>}
         {item.accessError && <span className="tag">{t("tree.noAccess")}</span>}
         {item.cloud && <span className="tag">{t("tree.cloud")}</span>}
       </>,
     ],
     path: [undefined, "folder" in item ? item.folder : ""],
-    len: ["num", size(item.len)],
-    size: ["num", size(item.size)],
+    len: ["num", item.pending ? "" : size(item.len)],
+    size: [item.pending ? "num dim" : "num", waiting ? "" : size(item.size)],
     percent: [
       "percent",
       <>
         <span className="share-bar" style={{ width: `${Math.min(100, 100 * share)}%` }} />
-        <span className="num">{formatPercent(share, lang)}</span>
+        <span className="num">{waiting ? "" : formatPercent(share, lang)}</span>
       </>,
     ],
-    files: ["num", count(item.files)],
-    folders: ["num", count(item.folders)],
-    dirs: ["num", count(item.dirs)],
+    files: ["num", waiting ? "" : count(item.files)],
+    folders: ["num", item.pending ? "" : count(item.folders)],
+    dirs: ["num", item.pending ? "" : count(item.dirs)],
     created: [undefined, time(detail?.created)],
     modified: [undefined, formatDate(item.modified, lang)],
     accessed: [undefined, time(detail?.accessed)],

@@ -6,6 +6,7 @@ import { useSize } from "../../settings/react";
 import { ItemIcon } from "../contents/ItemIcon";
 import type { MenuTarget } from "../menu/ItemMenu";
 import { isMenuKey } from "../menu/Menu";
+import { measuredRead } from "../scan/cadence";
 
 const LIMIT = 100;
 
@@ -26,7 +27,7 @@ export function LargestPanel({ generation, rev, viewId, onSelect, onMenu, onFail
   const [files, setFiles] = useState<List | null>(null);
   useEffect(() => {
     let live = true;
-    api.getList(generation, viewId, "largestFiles", LIMIT).then(
+    measuredRead("charts", () => api.getList(generation, viewId, "largestFiles", LIMIT)).then(
       (f) => live && setFiles(f),
       (e: unknown) => live && onFail(e),
     );

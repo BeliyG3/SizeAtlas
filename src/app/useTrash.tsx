@@ -81,7 +81,13 @@ export function useTrash({ roots, entries, selection, push, onError, errorText }
   const selected = selection && selection.id !== ROOT_ID ? [selection.id] : [];
   const targets = marked.length > 0 ? marked : selected;
   const menuTrash =
-    generation !== null && targets.length > 0 && !busy ? () => ask(generation, targets) : null;
+    generation !== null &&
+    targets.length > 0 &&
+    !busy &&
+    selection !== null &&
+    !busyAt.has(selection.root)
+      ? () => ask(generation, targets)
+      : null;
   const dialog: ReactNode = asking && (
     <TrashDialog preview={asking.preview} onConfirm={confirm} onClose={() => setAsking(null)} />
   );

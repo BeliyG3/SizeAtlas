@@ -46,6 +46,8 @@ export interface Summary {
   sizeMode: SizeMode;
   accessErrors: number;
   approximate: boolean;
+  /** A first scan's provisional tree. Absent in older snapshots. */
+  scanning?: boolean;
   volume: Volume | null;
 }
 
@@ -71,6 +73,8 @@ export interface Item {
   accessError: boolean;
   cloud: boolean;
   lossy: boolean;
+  pending?: boolean;
+  scanning?: boolean;
 }
 
 export interface ChildrenPage {

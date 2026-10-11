@@ -1,5 +1,15 @@
 use super::*;
 
+#[test]
+fn full_scans_cover_descendant_paths_but_not_sibling_prefixes() {
+    let mut queue = ScanQueue::default();
+    queue.push("/data".into()).unwrap();
+    assert!(queue.full_scan_contains("/data/sub", false));
+    assert!(!queue.full_scan_contains("/database/sub", true));
+    assert!(!queue.full_scan_contains("/data", false));
+    assert!(queue.full_scan_contains("/data", true));
+}
+
 fn states(queue: &ScanQueue) -> Vec<(String, QueueState)> {
     queue
         .entries()

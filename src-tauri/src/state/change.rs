@@ -50,7 +50,11 @@ impl AppState {
             let generation = data.roots[at].generation;
             let tree = tree_mut(&mut data.roots[at].tree);
             change(tree, generation)?;
-            let old = (tree.dead > tree.live).then(|| tree.compact());
+            // A live scan never renumbers already visible nodes, even when a listed folder
+            // disappears before its turn. Compaction remains available after it finishes.
+            let old = (tree.dead > tree.live
+                && !tree.node(0).has(sizeatlas_core::tree::flags::SCANNING))
+            .then(|| tree.compact());
             if old.is_some() {
                 data.generation += 1;
                 data.roots[at].generation = data.generation;
@@ -71,6 +75,7 @@ impl AppState {
         generation: u64,
         id: u32,
     ) -> Result<(String, Option<FolderTarget>), CmdError> {
+        self.refuse_full_scan(generation)?;
         let scan = self
             .read_data()
             .roots

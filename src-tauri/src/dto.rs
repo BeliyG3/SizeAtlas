@@ -34,6 +34,7 @@ pub struct Summary {
     pub size_mode: SizeMode,
     pub access_errors: u32,
     pub approximate: bool,
+    pub scanning: bool,
     pub volume: Option<VolumeDto>,
 }
 
@@ -63,6 +64,7 @@ impl Summary {
             size_mode: tree.size_mode,
             access_errors: tree.access_errors,
             approximate: tree.approximate,
+            scanning: root.has(flags::SCANNING),
             volume: tree.volume.map(|v| VolumeDto {
                 total: v.total,
                 free: v.total.saturating_sub(v.used),
@@ -93,6 +95,8 @@ pub struct ItemDto {
     pub access_error: bool,
     pub cloud: bool,
     pub lossy: bool,
+    pub pending: bool,
+    pub scanning: bool,
 }
 
 impl ItemDto {
@@ -113,6 +117,8 @@ impl ItemDto {
             access_error: n.has(flags::ACCESS_ERROR),
             cloud: n.has(flags::CLOUD),
             lossy: n.has(flags::LOSSY_NAME),
+            pending: n.has(flags::PENDING),
+            scanning: n.has(flags::SCANNING),
         }
     }
 }

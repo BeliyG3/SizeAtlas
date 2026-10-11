@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, onClosing, onRootsChanged, onScanError, onScanProgress } from "../api/client";
-import type { Roots, ScanError, ScanProgress, Sources } from "../api/types";
+import {
+  api,
+  onClosing,
+  onLiveTreeChanged,
+  onRootsChanged,
+  onScanError,
+  onScanProgress,
+} from "../api/client";
+import type { ScanError, ScanProgress, Sources } from "../api/types";
 import { readStored, writeStored } from "../settings/storage";
 import { LAST_ROOT_KEY, ROOTS_KEY, rootsToReopen, storedRoots } from "./roots";
-
-const NO_ROOTS: Roots = { roots: [], queue: [] };
+import { useRootRefresh } from "./useRootRefresh";
 
 /** Opens saved scans one by one, in their order; resolves to how many could not be opened. */
 async function reopen(roots: readonly string[]): Promise<number> {
@@ -29,7 +35,6 @@ export function useRoots(
   onScanFailed: (e: ScanError) => void,
 ) {
   const [sources, setSources] = useState<Sources | null>(null);
-  const [roots, setRoots] = useState<Roots>(NO_ROOTS);
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const [closing, setClosing] = useState(false);
   // The handlers change with the language; the subscriptions below must not.
@@ -38,59 +43,81 @@ export function useRoots(
     handlers.current = { onError, onSkipped, onScanFailed };
   }, [onError, onSkipped, onScanFailed]);
   const fail = useCallback((e: unknown) => handlers.current.onError(e), []);
+  const { roots, refresh: refreshRoots } = useRootRefresh(fail);
 
   // Lists can overtake each other: only the latest one lands.
   const askedSources = useRef(0);
+  const lifecycle = useRef({ live: false });
   const refreshSources = useCallback(() => {
     const request = ++askedSources.current;
-    return api.listSources().then((next) => {
-      if (request === askedSources.current) setSources(next);
-    }, fail);
+    const life = lifecycle.current;
+    return api.listSources().then(
+      (next) => {
+        if (life.live && request === askedSources.current) setSources(next);
+      },
+      (e: unknown) => {
+        if (life.live) fail(e);
+      },
+    );
   }, [fail]);
 
   // Only the latest list lands here too. While the roots of the last run reopen, the remembered
   // list stays as it was, so quitting early loses none of them.
-  const asked = useRef(0);
-  const reopening = useRef(true);
   const [restoring, setRestoring] = useState(true);
-  const refreshRoots = useCallback(() => {
-    const request = ++asked.current;
-    return api.listRoots().then((next) => {
-      if (request !== asked.current) return;
-      setRoots(next);
-      if (!reopening.current) writeStored(ROOTS_KEY, storedRoots(next));
-    }, fail);
-  }, [fail]);
-
-  // StrictMode runs effects twice in dev; the ref keeps the reopening to once per app instance.
-  const started = useRef(false);
   useEffect(() => {
+    if (!restoring) writeStored(ROOTS_KEY, storedRoots(roots));
+  }, [roots, restoring]);
+
+  // StrictMode reuses the same reopen promise, but only the active effect receives its answer.
+  const opening = useRef<Promise<number> | null>(null);
+  useEffect(() => {
+    const life = { live: true };
+    lifecycle.current = life;
     void refreshSources();
     void refreshRoots();
-    if (!started.current) {
-      started.current = true;
+    if (!opening.current) {
       const remembered = rootsToReopen(readStored(ROOTS_KEY), readStored(LAST_ROOT_KEY));
-      void reopen(remembered).then((skipped) => {
-        reopening.current = false;
-        setRestoring(false);
-        void refreshRoots();
-        if (skipped > 0) handlers.current.onSkipped(skipped);
-        // Roots named by a restart as administrator: scanned again, like the toolbar Rescan.
-        void api.takeStartupRescans().then((paths) => {
-          for (const path of paths) void api.scan(path).catch(fail);
-        }, fail);
-      });
+      opening.current = reopen(remembered);
     }
+    void opening.current.then((skipped) => {
+      if (!life.live) return;
+      setRestoring(false);
+      void refreshRoots();
+      if (skipped > 0) handlers.current.onSkipped(skipped);
+      // Roots named by a restart as administrator: scanned again, like the toolbar Rescan.
+      void api.takeStartupRescans().then(
+        (paths) => {
+          if (!life.live) return;
+          for (const path of paths) void api.scan(path).catch(fail);
+        },
+        (e: unknown) => {
+          if (life.live) fail(e);
+        },
+      );
+    });
     const unlisten = [
       onRootsChanged(() => {
+        if (!life.live) return;
         void refreshRoots();
         void refreshSources();
       }),
-      onScanProgress(setProgress),
-      onScanError((e) => handlers.current.onScanFailed(e)),
-      onClosing(() => setClosing(true)),
+      onScanProgress((progress) => {
+        if (life.live) setProgress(progress);
+      }),
+      onLiveTreeChanged(() => {
+        if (life.live) void refreshRoots();
+      }),
+      onScanError((e) => {
+        if (life.live) handlers.current.onScanFailed(e);
+      }),
+      onClosing(() => {
+        if (life.live) setClosing(true);
+      }),
     ];
-    return () => unlisten.forEach((u) => void u.then((f) => f()));
+    return () => {
+      life.live = false;
+      unlisten.forEach((u) => void u.then((f) => f()));
+    };
   }, [refreshRoots, refreshSources, fail]);
 
   /** Queues a scan; resolves to its canonical root, or to null if it was refused. */

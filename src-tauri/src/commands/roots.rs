@@ -34,6 +34,7 @@ fn notifier(app: &AppHandle) -> Notify {
     Arc::new(move |notice| {
         let _ = match notice {
             Notice::RootsChanged => app.emit(ROOTS_CHANGED, ()),
+            Notice::LiveChanged => app.emit("live-tree-changed", ()),
             Notice::Progress(progress) => app.emit("scan-progress", progress),
             Notice::Failed { root, error } => app.emit("scan-error", ScanErrorDto { root, error }),
         };

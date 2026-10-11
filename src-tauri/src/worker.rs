@@ -22,6 +22,8 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 pub enum Notice {
     /// The open roots or the queue changed.
     RootsChanged,
+    /// A provisional tree revision changed; saved scans and sources did not.
+    LiveChanged,
     Progress(ProgressDto),
     /// A scan failed, or its result could not be saved (`CacheNotSaved`).
     Failed {
@@ -64,6 +66,9 @@ async fn scan_one(
     job: &ScanJob,
     notify: &Notify,
 ) -> Result<(), CmdError> {
+    if !state.has_root(&job.root) {
+        return live::scan_first(state, cache_dir, job, notify).await;
+    }
     let walked = {
         let _ticker = Ticker::start(job, notify.clone());
         let job = job.clone();
@@ -238,3 +243,5 @@ mod tests;
 
 #[cfg(test)]
 mod refresh_tests;
+
+mod live;

@@ -27,6 +27,7 @@ interface Props {
   generation: number;
   /** The root is not being scanned and no trash runs: its items can go to the trash. */
   canTrash: boolean;
+  canScan: boolean;
   /** Queues a refresh of folder `id`. */
   onRefresh: (generation: number, id: number) => void;
   /** Queues a scan of folder `id` as a root of its own. */
@@ -42,6 +43,7 @@ export function ItemMenu({
   target,
   generation,
   canTrash,
+  canScan,
   onRefresh,
   onScanFolder,
   onTrash,
@@ -81,9 +83,14 @@ export function ItemMenu({
     ],
     one &&
       target.isDir && [
-        item("refresh", t("menu.refresh"), () => onRefresh(generation, target.id)),
+        item("refresh", t("menu.refresh"), () => onRefresh(generation, target.id), canScan),
         target.id !== ROOT_ID &&
-          item("scan-folder", t("menu.scanFolder"), () => onScanFolder(generation, target.id)),
+          item(
+            "scan-folder",
+            t("menu.scanFolder"),
+            () => onScanFolder(generation, target.id),
+            canScan,
+          ),
       ],
     [
       item("copy", t(many ? "menu.copyPaths" : "menu.copyPath"), () => {

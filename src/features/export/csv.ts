@@ -32,6 +32,10 @@ export function cellValue(
   detail: Detail | undefined,
   folderSize: number,
 ): string {
+  if (item.pending) {
+    if (["len", "folders", "dirs"].includes(column)) return "";
+    if (!item.scanning && ["size", "percent", "files"].includes(column)) return "";
+  }
   const count = (n: number) => (item.isDir ? String(n) : "");
   switch (column) {
     case "name":

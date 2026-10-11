@@ -20,6 +20,9 @@ pub mod flags {
     pub const LOSSY_NAME: u8 = 1 << 3;
     pub const CLOUD: u8 = 1 << 4;
     pub const HARDLINK: u8 = 1 << 5;
+    /// Live scan only; never saved to the cache.
+    pub const PENDING: u8 = 1 << 6;
+    pub const SCANNING: u8 = 1 << 7;
 }
 
 /// A file found by a scanner, before it is placed in the tree.
@@ -234,6 +237,7 @@ pub(crate) fn sample_tree() -> Tree {
 mod build;
 mod edit;
 mod lists;
+mod live;
 mod order;
 mod query;
 mod stats;

@@ -16,6 +16,7 @@ export interface RootMenuTarget {
 
 interface Props {
   target: RootMenuTarget;
+  canRescan: boolean;
   onRescan: (root: string) => void;
   /** Removes the root from the tree and stops its scan; its saved scan stays. */
   onCloseRoot: (root: string) => void;
@@ -29,6 +30,7 @@ interface Props {
 /** Context menu of a root row. */
 export function RootMenu({
   target,
+  canRescan,
   onRescan,
   onCloseRoot,
   onForget,
@@ -50,7 +52,7 @@ export function RootMenu({
     <Menu x={target.x} y={target.y} onClose={onClose}>
       <button
         role="menuitem"
-        disabled={status !== "open"}
+        disabled={status !== "open" || !canRescan}
         onClick={() => run(() => onRescan(root))}
       >
         <Icon name="refresh" />

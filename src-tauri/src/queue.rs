@@ -154,6 +154,16 @@ impl ScanQueue {
             .chain(&self.pending)
             .any(|j| j.root == root)
     }
+
+    /// Component-based containment: a full scan also blocks scans of its descendants.
+    pub fn full_scan_contains(&self, path: &str, include_equal: bool) -> bool {
+        let path = std::path::Path::new(path);
+        self.current.iter().chain(&self.pending).any(|job| {
+            job.folder.is_none()
+                && path.starts_with(&job.root)
+                && (include_equal || path != std::path::Path::new(&job.root))
+        })
+    }
 }
 
 #[cfg(test)]

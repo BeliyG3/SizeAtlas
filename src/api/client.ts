@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { measuredRead } from "../features/scan/cadence";
 import type {
   ChildrenPage,
   CmdError,
@@ -50,7 +51,9 @@ export const api = {
   forgetScan: (root: string) => invoke<void>("forget_scan", { root }),
   getSummary: (generation: number) => invoke<Summary>("get_summary", { generation }),
   getChildren: (generation: number, id: number, offset: number, limit: number, order: ListOrder) =>
-    invoke<ChildrenPage>("get_children", { generation, id, offset, limit, order }),
+    measuredRead("tree", () =>
+      invoke<ChildrenPage>("get_children", { generation, id, offset, limit, order }),
+    ),
   /** Index of `id` in its parent's listing made with `order`; null for the root. */
   getPosition: (generation: number, id: number, order: ListOrder) =>
     invoke<number | null>("get_position", { generation, id, order }),
@@ -61,13 +64,15 @@ export const api = {
   getCrumbs: (generation: number, id: number, order?: ListOrder) =>
     invoke<Crumb[]>("get_crumbs", order ? { generation, id, order } : { generation, id }),
   getTypeStats: (generation: number, id: number) =>
-    invoke<TypeStats>("get_type_stats", { generation, id }),
+    measuredRead("charts", () => invoke<TypeStats>("get_type_stats", { generation, id })),
   /** At most 1000 items below `id` in the order of `kind`; the folder itself is not listed. */
   getList: (generation: number, id: number, kind: ListKind, limit: number) =>
-    invoke<List>("get_list", { generation, id, kind, limit }),
+    measuredRead("tree", () => invoke<List>("get_list", { generation, id, kind, limit })),
   /** Raw bytes; decode with `parseTreemap`. */
   getTreemap: (generation: number, id: number, width: number, height: number) =>
-    invoke<ArrayBuffer>("get_treemap", { generation, id, width, height }),
+    measuredRead("charts", () =>
+      invoke<ArrayBuffer>("get_treemap", { generation, id, width, height }),
+    ),
   /** One path per line. */
   copyPaths: (generation: number, ids: number[]) => invoke<void>("copy_paths", { generation, ids }),
   reveal: (generation: number, id: number) => invoke<void>("reveal", { generation, id }),
@@ -103,6 +108,9 @@ export const onClosing = (cb: () => void): Promise<UnlistenFn> => listen("closin
 
 export const onRootsChanged = (cb: () => void): Promise<UnlistenFn> =>
   listen("roots-changed", () => cb());
+
+export const onLiveTreeChanged = (cb: () => void): Promise<UnlistenFn> =>
+  listen("live-tree-changed", () => cb());
 
 export const onScanError = (cb: (e: ScanError) => void): Promise<UnlistenFn> =>
   listen<ScanError>("scan-error", (e) => cb(e.payload));

@@ -40,7 +40,7 @@ pub(super) fn run_queue(state: &AppState, cache: &Path, job: Option<ScanJob>) ->
     let sink = log.clone();
     let notify: Notify = Arc::new(move |notice| {
         let line = match notice {
-            Notice::RootsChanged => "changed".to_owned(),
+            Notice::RootsChanged | Notice::LiveChanged => "changed".to_owned(),
             Notice::Progress(_) => return,
             Notice::Failed { error, .. } => format!("failed: {error:?}"),
         };

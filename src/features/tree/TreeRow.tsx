@@ -63,7 +63,11 @@ export const TreeRow = memo(function TreeRow({
   const root = row.kind === "root" ? row.info : null;
   const cell: { name: string; bytes: number | null; expandable: boolean } =
     row.kind === "item"
-      ? { name: row.item.name, bytes: row.item.size, expandable: canExpand(row.item) }
+      ? {
+          name: row.item.name,
+          bytes: row.item.pending && !row.item.scanning ? null : row.item.size,
+          expandable: canExpand(row.item),
+        }
       : {
           name: row.info.label,
           bytes: row.info.generation === null ? null : row.info.size,
@@ -90,12 +94,18 @@ export const TreeRow = memo(function TreeRow({
         {cell.name}
       </span>
       {root && root.status !== "open" && <ScanMark status={root.status} files={scanFiles} />}
+      {item?.scanning && <ScanMark status="scanning" files={item.files} />}
+      {item?.pending && !item.scanning && <span className="tag">{t("tree.pending")}</span>}
       {item?.accessError && <span className="tag">{t("tree.noAccess")}</span>}
       {item?.cloud && <span className="tag">{t("tree.cloud")}</span>}
     </span>
   );
   const sizeCell = (
-    <span key="size" className="size" data-col="size">
+    <span
+      key="size"
+      className={`size${item?.pending || root?.status === "scanning" ? " dim" : ""}`}
+      data-col="size"
+    >
       {row.kind === "item" && (
         <span className="bar" style={{ width: `${percent(row.item.size, row.parentSize)}%` }} />
       )}

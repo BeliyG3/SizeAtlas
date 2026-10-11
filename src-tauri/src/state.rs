@@ -260,6 +260,7 @@ impl AppState {
 mod change;
 mod charts;
 mod lists;
+mod live;
 mod paths;
 mod trash;
 

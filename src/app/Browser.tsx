@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { Profiler, useCallback, useMemo, useState, type ReactNode } from "react";
 import type { ScanProgress, Sources } from "../api/types";
 import { DEFAULT_SORT, type SortState } from "../features/contents/columns";
 import { DrivesPanel } from "../features/drives/DrivesPanel";
 import { ItemMenu, type MenuTarget } from "../features/menu/ItemMenu";
 import { RootMenu, type RootMenuTarget } from "../features/menu/RootMenu";
 import { ScanView } from "../features/scan/ScanView";
+import { scanActions } from "../features/scan/actions";
+import { measureRender } from "../features/scan/cadence";
 import { Workspace } from "../features/shell/Workspace";
 import { expectedBytes, isDrive, rootLabel } from "../features/shell/source";
 import type { Mode } from "../features/lists/modes";
@@ -129,6 +131,7 @@ export function Browser({
         }
       : null;
 
+  const itemActions = scanActions(itemRoot === undefined || busyRoots.has(itemRoot), trashing);
   let content: ReactNode;
   if (!selection) {
     content = <p className="empty-hint dim">{t("empty.hint")}</p>;
@@ -163,18 +166,20 @@ export function Browser({
   }
 
   const tree = (
-    <FolderTree
-      roots={roots}
-      target={treeTarget}
-      scanned={progress && { root: progress.root, files: progress.files }}
-      sizeHint={summary ? t(`sizeMode.${summary.sizeMode}`) : ""}
-      onSelectRoot={onSelectRoot}
-      onSelectNode={(generation, id) => onSelectNode(generation, id, true)}
-      onItemMenu={openMenu}
-      onRootMenu={(root, x, y) => setMenu({ kind: "root", root, x, y })}
-      onTrash={onTrash}
-      onFail={onFail}
-    />
+    <Profiler id="tree" onRender={measureRender}>
+      <FolderTree
+        roots={roots}
+        target={treeTarget}
+        scanned={progress && { root: progress.root, files: progress.files }}
+        sizeHint={summary ? t(`sizeMode.${summary.sizeMode}`) : ""}
+        onSelectRoot={onSelectRoot}
+        onSelectNode={(generation, id) => onSelectNode(generation, id, true)}
+        onItemMenu={openMenu}
+        onRootMenu={(root, x, y) => setMenu({ kind: "root", root, x, y })}
+        onTrash={onTrash}
+        onFail={onFail}
+      />
+    </Profiler>
   );
 
   return (
@@ -196,7 +201,8 @@ export function Browser({
         <ItemMenu
           target={menu.target}
           generation={menu.generation}
-          canTrash={!trashing && itemRoot !== undefined && !busyRoots.has(itemRoot)}
+          canTrash={itemActions.trash}
+          canScan={itemActions.scanFolder}
           onRefresh={onRefresh}
           onScanFolder={onScanFolder}
           onTrash={onTrash}
@@ -207,6 +213,7 @@ export function Browser({
       {rootMenu && (
         <RootMenu
           target={rootMenu}
+          canRescan={!busyRoots.has(rootMenu.root)}
           onRescan={onRescan}
           onCloseRoot={onCloseRoot}
           onForget={onForget}

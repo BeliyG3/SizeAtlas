@@ -34,6 +34,7 @@ fn summary_uses_camel_case_and_nests_the_volume() {
         size_mode: SizeMode::ClusterEstimate,
         access_errors: 1,
         approximate: false,
+        scanning: false,
         volume: Some(VolumeDto {
             total: 100,
             free: 60,
@@ -46,7 +47,7 @@ fn summary_uses_camel_case_and_nests_the_volume() {
             "generation": 3, "rev": 0, "rootId": 0, "root": "C:\\", "total": 10, "files": 2,
             "len": 12, "dirs": 1,
             "scannedAt": 5, "sizeMode": "ClusterEstimate", "accessErrors": 1,
-            "approximate": false, "volume": {"total": 100, "free": 60, "unaccounted": 30}
+            "approximate": false, "scanning": false, "volume": {"total": 100, "free": 60, "unaccounted": 30}
         })
     );
 }
@@ -92,13 +93,15 @@ fn items_details_and_orders_use_camel_case() {
         access_error: false,
         cloud: false,
         lossy: false,
+        pending: false,
+        scanning: false,
     };
     assert_eq!(
         serde_json::to_value(item).unwrap(),
         json!({
             "id": 5, "name": "a", "size": 4096, "len": 10, "files": 1, "dirs": 0,
             "folders": 0, "modified": 1_700_000_000_000i64, "isDir": false, "category": 7,
-            "accessError": false, "cloud": false, "lossy": false
+            "accessError": false, "cloud": false, "lossy": false, "pending": false, "scanning": false
         })
     );
     let detail = DetailDto {
@@ -214,6 +217,8 @@ fn list_kinds_and_list_items_use_camel_case() {
                 access_error: false,
                 cloud: false,
                 lossy: false,
+                pending: false,
+                scanning: false,
             },
             folder: "x".into(),
             parent: 3,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, isCmdError } from "../../api/client";
 import { ROOT_ID, type ChildrenPage, type Crumb, type ListOrder } from "../../api/types";
 import {
@@ -35,44 +35,64 @@ export function useTreeData(
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
+  const lifecycle = useRef({ live: false });
+  const pending = useRef(
+    new Map<number, { live: boolean; rev: number; life: { live: boolean } }>(),
+  );
+  const seen = useRef(new Map<number, number>());
+  const active = useRef(new Set<number>());
+  useLayoutEffect(() => {
+    active.current = new Set(roots.flatMap((r) => (r.generation === null ? [] : [r.generation])));
+  }, [roots]);
+  useEffect(() => {
+    const life = { live: true };
+    lifecycle.current = life;
+    return () => {
+      life.live = false;
+    };
+  }, []);
+
   /** Loads a page of a folder; resolves to the page, or to undefined after a failure. */
   const load = useCallback(
-    (generation: number, id: number, offset: number) =>
-      api.getChildren(generation, id, offset, PAGE_SIZE, order).then(
+    (generation: number, id: number, offset: number) => {
+      const life = lifecycle.current;
+      return api.getChildren(generation, id, offset, PAGE_SIZE, order).then(
         (page) => {
+          if (!life.live || !active.current.has(generation)) return undefined;
           setLoaded((map) => withPage(map, generation, id, page, offset));
           return page;
         },
         (e: unknown) => {
-          onFail(e);
+          if (life.live && active.current.has(generation)) onFail(e);
           return undefined;
         },
-      ),
+      );
+    },
     [order, onFail],
   );
 
-  // The first page of every tree, once (StrictMode's second run finds it requested).
-  const started = useRef(new Set<number>());
+  // One request per root revision; newer revisions invalidate older batches. The lifetime
+  // flag permits StrictMode to restart a request its first effect cleanup invalidated.
   useEffect(() => {
-    for (const { generation } of roots) {
-      if (generation === null || started.current.has(generation)) continue;
-      started.current.add(generation);
-      void load(generation, ROOT_ID, 0);
+    const life = lifecycle.current;
+    for (const [generation, request] of pending.current) {
+      if (!active.current.has(generation)) {
+        request.live = false;
+        pending.current.delete(generation);
+      }
     }
-  }, [roots, load]);
-
-  // A change of a tree (a refresh, a trash): its root and open folders load again and keep their
-  // rows until then; closed folders of the old revision and folders that are gone are dropped,
-  // all in one update. Once per revision (StrictMode runs this twice).
-  const revs = useRef(new Map<number, number>());
-  useEffect(() => {
     for (const { generation, rev } of roots) {
-      if (generation === null) continue;
-      const seen = revs.current.get(generation);
-      revs.current.set(generation, rev);
-      if (seen === undefined || seen >= rev) continue;
-      const open = (id: number) => expanded.has(nodeKey(generation, id));
-      const { requests, drop } = reloadPlan(pagesOf(loaded, generation), rev, open);
+      if (generation === null || (seen.current.get(generation) ?? -1) >= rev) continue;
+      const old = pending.current.get(generation);
+      if (old?.live && old.life.live && old.rev >= rev) continue;
+      if (old) old.live = false;
+      const signal = { live: true, rev, life };
+      pending.current.set(generation, signal);
+      const pages = pagesOf(loaded, generation);
+      const { requests, drop } = reloadPlan(pages, rev, (id) =>
+        expanded.has(nodeKey(generation, id)),
+      );
+      if (!pages.has(ROOT_ID)) requests.unshift({ id: ROOT_ID, offset: 0, limit: PAGE_SIZE });
       const answers = requests.map((r) =>
         api.getChildren(generation, r.id, r.offset, r.limit, order).then(
           (page) => ({ r, page, error: null }),
@@ -80,6 +100,12 @@ export function useTreeData(
         ),
       );
       void Promise.all(answers).then((done) => {
+        if (!life.live || !signal.live || !active.current.has(generation)) {
+          signal.live = false;
+          return;
+        }
+        seen.current.set(generation, rev);
+        pending.current.delete(generation);
         setLoaded((map) =>
           done.reduce(
             (m, { r, page }) =>

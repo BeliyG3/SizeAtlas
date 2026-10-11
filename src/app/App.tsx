@@ -15,7 +15,7 @@ import { useStored } from "../settings/storage";
 import { formatCount } from "../format";
 import { useT } from "../i18n/react";
 import { Browser } from "./Browser";
-import { rootEntries } from "./roots";
+import { fullScanRoots, rootEntries } from "./roots";
 import { useChangeKeys } from "./useChangeKeys";
 import { useTrash } from "./useTrash";
 import { useRoots } from "./useRoots";
@@ -55,10 +55,7 @@ export function App() {
   );
   const summary = entries.find((e) => e.root === selection?.root)?.summary ?? null;
   const inTree = useMemo(() => new Set(entries.map((e) => e.root)), [entries]);
-  const waiting = useMemo(
-    () => new Set(entries.filter((e) => e.status !== "open").map((e) => e.root)),
-    [entries],
-  );
+  const waiting = useMemo(() => fullScanRoots(roots.roots), [roots.roots]);
   const selectedRoot = selection?.root ?? null;
   // The source picked on the toolbar holds while the same root stays selected.
   const [picked, setPicked] = useState<{ path: string; base: string | null } | null>(null);
@@ -107,7 +104,9 @@ export function App() {
   // F5 on the root (or a file in it) scans the root again: the menu then says Rescan.
   const atRoot = shownFolder === ROOT_ID;
   const refreshCurrent =
-    shownGeneration === null || shownFolder === null
+    shownGeneration === null ||
+    shownFolder === null ||
+    (selectedRoot !== null && waiting.has(selectedRoot))
       ? null
       : atRoot
         ? rescan

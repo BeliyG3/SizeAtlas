@@ -64,6 +64,7 @@ impl AppState {
         rev: u64,
         ids: &[u32],
     ) -> Result<TrashPlan, CmdError> {
+        self.refuse_full_scan(generation)?;
         let tree = self.tree(generation)?;
         let wanted: BTreeSet<u32> = ids.iter().copied().collect();
         let known = |id: u32| id != 0 && tree.get(id).is_some();

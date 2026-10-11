@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { ROOT_ID, type Roots, type Summary } from "../api/types";
-import { busyRoots, parseStoredRoots, rootEntries, rootsToReopen, storedRoots } from "./roots";
+import {
+  busyRoots,
+  fullScanRoots,
+  parseStoredRoots,
+  rootEntries,
+  rootsToReopen,
+  storedRoots,
+} from "./roots";
 
 const summary = (root: string, generation: number): Summary => ({
   generation,
@@ -83,6 +90,14 @@ describe("remembered roots", () => {
 });
 
 describe("busyRoots", () => {
+  it("blocks another open root inside a full scan but keeps a sibling path available", () => {
+    const roots: Roots = {
+      roots: [summary("C:\\data\\sub", 1), summary("C:\\database", 2)],
+      queue: [{ root: "C:\\data", state: "scanning", folder: null }],
+    };
+    expect([...fullScanRoots(roots)]).toEqual(["C:\\data", "C:\\data\\sub"]);
+    expect(busyRoots(roots).has("C:\\database")).toBe(false);
+  });
   it("are the roots with any job, a folder refresh included", () => {
     const roots: Roots = {
       roots: [summary("C:\\", 1), summary("D:\\", 2)],

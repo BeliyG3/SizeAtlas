@@ -5,6 +5,7 @@ import { usePalette, useSize } from "../../settings/react";
 import type { MenuTarget } from "../menu/ItemMenu";
 import { hitTest, parseTreemap, type TreemapData, type TreemapRect } from "./bytes";
 import { drawTreemap } from "./draw";
+import { recordCost } from "../scan/cadence";
 import "./treemap.css";
 
 const RESIZE_DELAY_MS = 100;
@@ -95,6 +96,7 @@ export function Treemap({
     const el = canvas.current;
     const ctx = el?.getContext("2d");
     if (!el || !ctx || !size) return;
+    const start = performance.now();
     const ratio = window.devicePixelRatio || 1;
     el.width = Math.round(size.w * ratio);
     el.height = Math.round(size.h * ratio);
@@ -104,6 +106,7 @@ export function Treemap({
       selected: selectedId,
       palette,
     });
+    recordCost("charts", performance.now() - start);
   }, [data, size, highlight, selectedId, palette]);
 
   // Tooltip: the path from the current folder and the size, once the pointer rests on an item.

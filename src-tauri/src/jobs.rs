@@ -35,6 +35,9 @@ impl AppState {
         if self.0.exit.load(Ordering::Acquire) != RUNNING {
             return Err(CmdError::Busy);
         }
+        if scans.full_scan_contains(&root, folder.is_some()) {
+            return Err(CmdError::Busy);
+        }
         Ok(match folder {
             Some(folder) => scans.push_folder(root, folder),
             None => scans.push(root),

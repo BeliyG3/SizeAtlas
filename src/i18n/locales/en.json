@@ -10,6 +10,8 @@
   "tree.size": "Size",
   "tree.noAccess": "No access",
   "tree.cloud": "Online only",
+  "tree.pending": "waiting",
+  "tree.activeScan": "scanning",
   "tree.queued": "queued",
   "tree.scanning_one": "{files} file",
   "tree.scanning_other": "{files} files",

@@ -37,12 +37,30 @@ export function rootEntries(roots: Roots): RootEntry[] {
   return entries;
 }
 
+/** Canonical root containment by path components, including drive roots and UNC paths. */
+function inside(root: string, parent: string): boolean {
+  const normal = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
+  const path = normal(root);
+  const base = normal(parent);
+  return path === base || path.startsWith(`${base}/`);
+}
+
+/** Full scans also block another open root inside their scanned path. */
+export function fullScanRoots(roots: Roots): ReadonlySet<string> {
+  const scans = roots.queue.filter((q) => q.folder === null);
+  return new Set([
+    ...scans.map((q) => q.root),
+    ...roots.roots.filter((r) => scans.some((q) => inside(r.root, q.root))).map((r) => r.root),
+  ]);
+}
+
 /** Roots with a job that runs or waits, a folder refresh included: nothing of them goes to the trash. */
 export const busyRoots = (roots: Roots): ReadonlySet<string> =>
-  new Set(roots.queue.map((q) => q.root));
+  new Set([...roots.queue.map((q) => q.root), ...fullScanRoots(roots)]);
 
 /** The open roots to remember; queued scans are not reopened. */
-export const storedRoots = (roots: Roots): string => JSON.stringify(roots.roots.map((s) => s.root));
+export const storedRoots = (roots: Roots): string =>
+  JSON.stringify(roots.roots.filter((s) => !s.scanning).map((s) => s.root));
 
 /** Remembered roots; anything that is not a list of paths gives none. */
 export function parseStoredRoots(raw: string | null): string[] {

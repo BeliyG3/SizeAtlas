@@ -1,5 +1,5 @@
-//! Parallel directory walker. Every directory is one rayon task that sends exactly
-//! one [`DirRec`]; the records are then laid out by [`Tree::from_records`].
+//! Root folders are visited in name order; each descendant walk uses rayon tasks that send
+//! one [`DirRec`] per directory. Live batches are installed with [`Tree::replace_subtree`].
 
 use std::ffi::OsString;
 use std::fs::{self, Metadata};
@@ -46,20 +46,23 @@ struct DirTask {
 
 /// Scans `root` (made canonical first) using all CPU cores.
 pub fn scan(root: &Path, cancel: &AtomicBool, progress: &Progress) -> io::Result<ScanOutcome> {
-    let root = dunce::canonicalize(root)?;
-    let meta = fs::symlink_metadata(&root)?;
-    if !meta.is_dir() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "scan root is not a directory",
-        ));
-    }
-    let volume = Volume::of(&root, &meta);
-    let (records, scan_meta) = walk_all(root, &meta, volume, cancel, progress);
-    if cancel.load(Ordering::Relaxed) {
+    let mut tree = None;
+    let result = scan_live(root, cancel, progress, |event| match event {
+        LiveEvent::Started(initial) => tree = Some(initial),
+        LiveEvent::FolderStarted { .. } => {}
+        LiveEvent::FolderDone { id, records } => tree
+            .as_mut()
+            .expect("root published")
+            .replace_subtree(id, records),
+    })?;
+    if result == LiveOutcome::Cancelled {
         return Ok(ScanOutcome::Cancelled);
     }
-    Ok(ScanOutcome::Done(Tree::from_records(records, scan_meta)))
+    let mut tree = tree.expect("root published");
+    tree.set_scanning(0, false);
+    tree.approximate = false;
+    tree.rev = 0;
+    Ok(ScanOutcome::Done(tree))
 }
 
 /// What a scan of one folder found (see [`scan_folder`]).
@@ -140,78 +143,10 @@ fn walk_all(
 }
 
 fn walk<'s>(s: &rayon::Scope<'s>, ctx: &'s Ctx<'_>, task: DirTask) {
-    let mut dir_flags = task.flags;
-    let mut files = Vec::new();
-    if dir_flags & flags::CLOUD == 0 && !ctx.cancel.load(Ordering::Relaxed) {
-        match fs::read_dir(&task.path) {
-            Ok(entries) => {
-                for entry in entries {
-                    let Ok(entry) = entry else {
-                        dir_flags |= flags::ACCESS_ERROR;
-                        continue;
-                    };
-                    let Ok(file_type) = entry.file_type() else {
-                        dir_flags |= flags::ACCESS_ERROR;
-                        continue;
-                    };
-                    if file_type.is_symlink() {
-                        continue;
-                    }
-                    let meta = match entry.metadata() {
-                        Ok(meta) => meta,
-                        // Deleted while we were listing the folder: not an access problem.
-                        Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
-                        Err(_) => {
-                            dir_flags |= flags::ACCESS_ERROR;
-                            continue;
-                        }
-                    };
-                    if file_type.is_dir() {
-                        let path = entry.path();
-                        if !ctx.volume.allows_dir(&path, &meta) {
-                            continue;
-                        }
-                        let child = DirTask {
-                            path,
-                            id: ctx.next_id.fetch_add(1, Ordering::Relaxed),
-                            parent: task.id,
-                            name: entry.file_name(),
-                            mtime: mtime_of(&meta),
-                            flags: flags::IS_DIR | platform::dir_flags(&meta),
-                        };
-                        s.spawn(move |s| walk(s, ctx, child));
-                    } else {
-                        let size = ctx.volume.disk_size(&meta, || entry.path());
-                        ctx.progress.files.fetch_add(1, Ordering::Relaxed);
-                        ctx.progress.bytes.fetch_add(size, Ordering::Relaxed);
-                        files.push(FileRec {
-                            name: entry.file_name(),
-                            size,
-                            len: meta.len(),
-                            mtime: mtime_of(&meta),
-                            flags: 0,
-                            ino: platform::hardlink_key(&meta),
-                        });
-                    }
-                }
-            }
-            // Includes permission denied and paths too long for the OS.
-            Err(_) => dir_flags |= flags::ACCESS_ERROR,
-        }
+    let (record, children) = listing::list(ctx, task);
+    for child in children {
+        s.spawn(move |s| walk(s, ctx, child));
     }
-    ctx.progress.dirs.fetch_add(1, Ordering::Relaxed);
-    if let Ok(mut current) = ctx.progress.current.try_lock() {
-        *current = task.path.display().to_string();
-    }
-    let record = DirRec {
-        id: task.id,
-        parent: task.parent,
-        name: task.name,
-        mtime: task.mtime,
-        flags: dir_flags,
-        files,
-    };
-    // The receiver outlives the scan, so sending cannot fail.
     let _ = ctx.tx.send(record);
 }
 
@@ -236,3 +171,7 @@ fn now_secs() -> i64 {
 
 #[cfg(test)]
 mod tests;
+
+mod listing;
+mod live;
+pub use live::{LiveEvent, LiveOutcome, scan_live};

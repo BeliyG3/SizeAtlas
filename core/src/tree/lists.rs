@@ -145,7 +145,7 @@ impl Tree {
     /// A folder without live children (and not unreadable), or a file of length 0.
     fn is_empty_item(&self, id: u32, node: &Node) -> bool {
         if node.is_dir() {
-            !node.has(flags::ACCESS_ERROR) && self.children(id).next().is_none()
+            !node.has(flags::ACCESS_ERROR | flags::PENDING) && self.children(id).next().is_none()
         } else {
             node.len == 0
         }
