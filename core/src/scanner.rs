@@ -111,6 +111,8 @@ fn walk_all(
     cancel: &AtomicBool,
     progress: &Progress,
 ) -> (Vec<DirRec>, ScanMeta) {
+    #[cfg(target_os = "macos")]
+    platform::forbid_cloud_downloads();
     let (tx, rx) = mpsc::channel();
     let ctx = Ctx {
         tx,

@@ -105,8 +105,9 @@ The first run on Windows, with a colder cache, took 26 s. For reference, WizTree
 
 SizeAtlas reports the space files take on disk.
 
-- **Windows:** file length rounded up to whole clusters. Compressed and sparse files count their allocated size. Files that exist only in the cloud (OneDrive, iCloud) count as 0, and cloud-only folders are not opened.
+- **Windows:** file length rounded up to whole clusters. Compressed and sparse files count their allocated size.
 - **macOS and Linux:** allocated blocks. A file with several hard links is counted once. Other mounted file systems are not entered.
+- Files that exist only in the cloud (OneDrive on Windows, iCloud Drive on macOS) count as 0, and cloud-only folders are not opened.
 - Symbolic links and junctions are never followed.
 
 When you scan the root of a drive, SizeAtlas also shows its free space and the **unaccounted** space: space the drive reports as used that the scan did not find. It includes system files, folders you cannot read, the Windows Recycle Bin and, on macOS, other volumes of the same APFS container. Items you move to the trash keep their space until you empty the trash, so the unaccounted space grows meanwhile.
