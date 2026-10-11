@@ -1,12 +1,16 @@
 # SizeAtlas
 
+**Contents:** [What it does](#what-it-does) · [Install](#install) · [Using SizeAtlas](#using-sizeatlas) · [Benchmark](#benchmark) · [How sizes are counted](#how-sizes-are-counted) · [Moving to the trash](#moving-to-the-trash) · [Saved scans](#saved-scans) · [Building](#building) · [Releases](#releases) · [License](#license)
+
 A cross-platform disk usage analyzer: see which folders and file types take up your disk space.
 
 ![SizeAtlas: the folder tree, the largest files of a drive and a pie chart](assets/screenshot-main.png)
 
+## What it does
+
 > Work in progress.
 
-- Scan drives and folders, and keep several of them side by side in one folder tree. Scans wait in a queue and run one at a time.
+- Scan drives and folders, and keep several of them side by side in one folder tree. The tree fills in while the first scan of a drive runs, and you can browse it meanwhile. Scans wait in a queue and run one at a time.
 - See where the space goes: a sortable table of the current folder; lists of the largest, oldest, newest and empty items below it; pie and bar charts, a treemap, file types and the largest files; free and unaccounted space of a drive.
 - Refresh a single folder after a change, and move files and folders to the trash after a confirmation.
 - Open items, show their properties and export the table to CSV. On Windows, restart as administrator to read every folder.
@@ -31,26 +35,6 @@ Download the installer for your system from the [Releases](https://github.com/Be
 | Linux | Untested |
 
 **Versions** are calendar versions `YEAR.MONTH.N`. The first release of a month is shown as `2026.10`, the next ones as `2026.10.1`, `2026.10.2` and so on.
-
-## Requirements
-
-- [rustup](https://rustup.rs). The pinned Rust version (1.94) is installed automatically from `rust-toolchain.toml`.
-- Node.js 24 (see `.nvmrc`).
-- Windows: WebView2 (included in Windows 11).
-- Linux: `libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`.
-
-## Run
-
-```bash
-npm ci
-npm run tauri dev
-```
-
-Build an installer for the current OS:
-
-```bash
-npm run tauri build
-```
 
 ## Using SizeAtlas
 
@@ -155,7 +139,29 @@ A saved scan that cannot be read any more is skipped, with one message for all o
 
 Each file records the version of the cache format. The source list and the drives panel label a scan saved by an older version of SizeAtlas as **saved by another version**. Scan the drive or folder again to replace it.
 
-## Checks
+## Building
+
+### Requirements
+
+- [rustup](https://rustup.rs). The pinned Rust version (1.94) is installed automatically from `rust-toolchain.toml`.
+- Node.js 24 (see `.nvmrc`).
+- Windows: WebView2 (included in Windows 11).
+- Linux: `libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`.
+
+### Run
+
+```bash
+npm ci
+npm run tauri dev
+```
+
+Build an installer for the current OS:
+
+```bash
+npm run tauri build
+```
+
+### Checks
 
 ```bash
 npm run build
