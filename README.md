@@ -1,5 +1,7 @@
 <h1><img src="src-tauri/icons/128x128.png" width="48" height="48" alt="" align="top"> SizeAtlas</h1>
 
+![SizeAtlas, a free disk usage analyzer for Windows, macOS and Linux](assets/cover.png)
+
 **Contents:** [What it does](#what-it-does) · [Install](#install) · [Using SizeAtlas](#using-sizeatlas) · [Benchmark](#benchmark) · [How sizes are counted](#how-sizes-are-counted) · [Moving to the trash](#moving-to-the-trash) · [Saved scans](#saved-scans) · [Updates](#updates) · [Building](#building) · [Releases](#releases) · [License](#license)
 
 A cross-platform disk usage analyzer: see which folders and file types take up your disk space.
