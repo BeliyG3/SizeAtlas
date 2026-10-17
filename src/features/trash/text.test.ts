@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TrashPreview, TrashResult } from "../../api/types";
 import { translate, type Params } from "../../i18n";
-import { trashMessage, trashReport } from "./text";
+import { itemName, trashMessage, trashProgressText, trashReport } from "./text";
 
 const t = (key: string, params?: Params) => translate("en", key, params);
 const size = (bytes: number) => `${bytes} B`;
@@ -44,19 +44,32 @@ describe("trashReport", () => {
     path,
     error: { code: "Io" as const, path, osMessage: "in use" },
   });
+  const preview = (n: number): TrashPreview => ({
+    count: n,
+    size: 1200,
+    scannedAt: 1,
+    paths: Array.from({ length: Math.min(n, 10) }, (_, i) => `C:\\a\\f${i}`),
+  });
+  const done = (removed: number, more: Partial<TrashResult> = {}): TrashResult => ({
+    removed,
+    failed: [],
+    warning: null,
+    stopped: false,
+    ...more,
+  });
+  const report = (result: TrashResult, n: number, tr = t) =>
+    trashReport(result, preview(n), tr, errorText, count, size);
 
   it("names three items that stayed, with the system's words or the reason, and an unsaved scan", () => {
     const failed = [io("a"), { path: "b", error: { code: "NoTrash" as const } }, io("c"), io("d")];
-    const result: TrashResult = { removed: 2, failed, warning: { code: "CacheNotSaved" } };
-    expect(trashReport(result, t, errorText, count)).toEqual([
+    expect(report(done(2, { failed, warning: { code: "CacheNotSaved" } }), 6)).toEqual([
       'Moved 2 of 6 to the trash. Could not move: a: in use; b: error {"code":"NoTrash"}; c: in use; …',
       'error {"code":"CacheNotSaved"}',
     ]);
   });
 
   it("says that nothing moved", () => {
-    const result: TrashResult = { removed: 0, failed: [io("a")], warning: null };
-    expect(trashReport(result, t, errorText, count)).toEqual([
+    expect(report(done(0, { failed: [io("a")] }), 1)).toEqual([
       "Could not move to the trash: a: in use",
     ]);
   });
@@ -64,14 +77,46 @@ describe("trashReport", () => {
   it("names the reason of an item that could not be reached or changed", () => {
     const denied = { path: "a", error: { code: "NoAccess" as const, path: "a" } };
     const changed = { path: "b", error: { code: "Changed" as const } };
-    const result: TrashResult = { removed: 0, failed: [denied, changed], warning: null };
-    expect(trashReport(result, t, errorText, count)).toEqual([
+    expect(report(done(0, { failed: [denied, changed] }), 2)).toEqual([
       'Could not move to the trash: a: no access; b: error {"code":"Changed"}',
     ]);
   });
 
-  it("says nothing when everything went", () => {
-    const result: TrashResult = { removed: 3, failed: [], warning: null };
-    expect(trashReport(result, t, errorText, count)).toEqual([]);
+  it("says what moved and its size, or names the one item", () => {
+    expect(report(done(1200), 1200)).toEqual(["Moved 1,200 items to the trash (1200 B)."]);
+    expect(report(done(1), 1)).toEqual(["Moved f0 to the trash."]);
+  });
+
+  it("says where a stop left the request, and what could not move before it", () => {
+    expect(report(done(3, { stopped: true }), 120)).toEqual([
+      "Stopped after moving 3 of 120 items.",
+    ]);
+    expect(report(done(1, { stopped: true, failed: [io("a")] }), 120)).toEqual([
+      "Stopped after moving 1 of 120 items.",
+      "Could not move to the trash: a: in use",
+    ]);
+  });
+
+  it("speaks Russian with its plural forms", () => {
+    const ru = (key: string, params?: Params) => translate("ru", key, params);
+    expect(report(done(5), 5, ru)).toEqual(["Перемещено в корзину: 5 объектов (1200 B)."]);
+    expect(report(done(22), 22, ru)).toEqual(["Перемещено в корзину: 22 объекта (1200 B)."]);
+    expect(report(done(3, { stopped: true }), 21, ru)).toEqual([
+      "Остановлено: в корзину перемещено 3 из 21 объекта.",
+    ]);
+  });
+});
+
+describe("trashProgressText", () => {
+  it("counts the item that moves now, and all of them at the end", () => {
+    const at = (done: number, current: string | null) =>
+      trashProgressText({ done, total: 1200, current }, t, count);
+    expect(at(2, "C:\\a")).toBe("Moving to the trash: 3 of 1,200");
+    expect(at(1200, null)).toBe("Moving to the trash: 1,200 of 1,200");
+  });
+
+  it("names an item by the last part of its path", () => {
+    expect(itemName("C:\\a\\b.txt")).toBe("b.txt");
+    expect(itemName("/a/b/")).toBe("b");
   });
 });

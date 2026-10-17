@@ -7,8 +7,8 @@ export const runningJob = (roots: Roots): QueueEntry | null =>
 /** "Move to the trash" for some items: available, or not, with the reason for its tooltip. */
 export interface TrashAvailability {
   enabled: boolean;
-  /** Set when a scan still lists one of the items. */
-  reason: "scanning" | null;
+  /** Set when a scan still lists one of the items, or another trash request runs. */
+  reason: "scanning" | "trashing" | null;
 }
 
 /**
@@ -21,12 +21,22 @@ export function trashAvailability(
   jobRunning: boolean,
   refused: boolean | undefined,
 ): TrashAvailability {
-  if (trashing) return { enabled: false, reason: null };
+  if (trashing) return { enabled: false, reason: "trashing" };
   if (!jobRunning) return { enabled: true, reason: null };
   return { enabled: refused === false, reason: refused === true ? "scanning" : null };
 }
 
-/** The text that says why `count` items cannot go; `isDir` of one item when it is known. */
+/** The text that says why `count` items cannot go now, if they cannot; `isDir` of one item when it is known. */
+export function availabilityNoteKey(
+  available: TrashAvailability,
+  count: number,
+  isDir?: boolean,
+): string | null {
+  if (available.reason === "trashing") return "trash.busy";
+  return available.reason ? trashNoteKey(count, isDir) : null;
+}
+
+/** The text that says why `count` items a scan still lists cannot go; `isDir` of one item when it is known. */
 export function trashNoteKey(count: number, isDir?: boolean): string {
   if (count > 1) return "trash.scanningItems";
   if (isDir === undefined) return "trash.scanningItem";

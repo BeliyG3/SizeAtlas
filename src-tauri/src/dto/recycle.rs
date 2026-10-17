@@ -36,4 +36,16 @@ pub struct TrashDto {
     pub failed: Vec<TrashFailureDto>,
     /// `CacheNotSaved` when the change could not be saved.
     pub warning: Option<CmdError>,
+    /// Stopped by `cancel_trash` before every item was tried: the rest stayed where it was.
+    pub stopped: bool,
+}
+
+/// How far a trash request got: `done` of `total` items were tried; `current` goes next (none
+/// once it ended).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashProgressDto {
+    pub done: u32,
+    pub total: u32,
+    pub current: Option<String>,
 }

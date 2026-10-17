@@ -11,7 +11,7 @@ pub use lists::{ListDto, ListItemDto, folder_below};
 
 mod recycle;
 
-pub use recycle::{TrashDto, TrashFailureDto, TrashPreviewDto};
+pub use recycle::{TrashDto, TrashFailureDto, TrashPreviewDto, TrashProgressDto};
 
 /// Milliseconds since the Unix epoch. Core times are nanoseconds, which a JS number cannot
 /// hold exactly.

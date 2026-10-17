@@ -21,7 +21,9 @@ vi.mock("react", async (original) => ({
 vi.mock("../api/client", () => ({
   api: { refreshFolder: vi.fn(), trashPreview: vi.fn(), trash: vi.fn(), trashRefused: vi.fn() },
   isCmdError: () => false,
+  onTrashProgress: () => Promise.resolve(() => {}),
 }));
+vi.mock("../settings/react", () => ({ useSize: () => String }));
 vi.mock("./useRoots", () => ({ useRoots: vi.fn() }));
 vi.mock("./useSelection", () => ({ useSelection: vi.fn() }));
 vi.mock("./useChangeKeys", () => ({ useChangeKeys: vi.fn() }));

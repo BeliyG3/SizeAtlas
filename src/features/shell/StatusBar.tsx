@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ScanProgress, Summary } from "../../api/types";
 import { formatAgo, formatCount } from "../../format";
 import { useT } from "../../i18n/react";
@@ -18,8 +18,8 @@ interface Props {
     progress: ScanProgress | null;
     expected: number | null;
   } | null;
-  /** A trash request runs. */
-  trashing: boolean;
+  /** The running trash request, if any (`TrashStatus`). */
+  trash: ReactNode;
 }
 
 /** "Scanned 5 minutes ago", fixed when shown: render stays pure; a new scan remounts it. */
@@ -53,7 +53,7 @@ function ScanStatus({ root, folder, progress, expected }: NonNullable<Props["sca
   );
 }
 
-export function StatusBar({ summary, scan, trashing }: Props) {
+export function StatusBar({ summary, scan, trash }: Props) {
   const { t, lang } = useT();
   const size = useSize();
   return (
@@ -77,7 +77,7 @@ export function StatusBar({ summary, scan, trashing }: Props) {
         </>
       )}
       {scan && <ScanStatus {...scan} />}
-      {trashing && <span className="scan">{t("status.trashing")}</span>}
+      {trash}
     </footer>
   );
 }

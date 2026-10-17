@@ -49,6 +49,8 @@ pub struct Shared {
     pub busy: Arc<tokio::sync::Mutex<()>>,
     /// See `exit.rs`.
     pub exit: AtomicU8,
+    /// Stop asked for the running trash request (see `AppState::stop_trash`).
+    pub trash_stop: AtomicBool,
 }
 
 #[derive(Clone)]
@@ -64,6 +66,7 @@ impl Default for AppState {
             busy: Arc::new(tokio::sync::Mutex::new(())),
             scans: Mutex::default(),
             exit: AtomicU8::new(crate::exit::RUNNING),
+            trash_stop: AtomicBool::new(false),
         }))
     }
 }

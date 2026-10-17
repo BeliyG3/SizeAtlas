@@ -1,4 +1,4 @@
-import type { TrashPreview, TrashResult } from "../../api/types";
+import type { TrashPreview, TrashProgress, TrashResult } from "../../api/types";
 import type { Params } from "../../i18n";
 
 /** Failures a report names; the others are left at "…". */
@@ -27,33 +27,58 @@ export function trashMessage(
   return lines.join("\n");
 }
 
-/** Messages after a trash request: what stayed and why, and a change that was not saved. */
+/** The last part of a path: the name of the item. */
+export const itemName = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+
+/** "Moving to the trash: 3 of 120": the item that goes now among all of them. */
+export function trashProgressText(progress: TrashProgress, t: Translate, count: Count): string {
+  const at = progress.current === null ? progress.done : progress.done + 1;
+  return t("trash.progress", { done: count(at), total: count(progress.total) });
+}
+
+/**
+ * Messages after a trash request of `preview`: what moved (its size from the preview), where a
+ * stop left it, what stayed and why, and a change that was not saved.
+ */
 export function trashReport(
   result: TrashResult,
+  preview: TrashPreview,
   t: Translate,
   errorText: (e: unknown) => string,
   count: Count,
+  size: (bytes: number) => string,
 ): string[] {
   const messages: string[] = [];
-  if (result.failed.length > 0) {
-    const named = result.failed.slice(0, NAMED_FAILURES).map(({ path, error }) => {
-      // The path is named already: say only why.
-      const why =
-        error.code === "Io"
-          ? error.osMessage
-          : error.code === "NoAccess"
-            ? t("trash.noAccess")
-            : errorText(error);
-      return `${path}: ${why}`;
-    });
-    if (result.failed.length > NAMED_FAILURES) named.push("…");
-    const failures = named.join("; ");
+  const named = result.failed.slice(0, NAMED_FAILURES).map(({ path, error }) => {
+    // The path is named already: say only why.
+    const why =
+      error.code === "Io"
+        ? error.osMessage
+        : error.code === "NoAccess"
+          ? t("trash.noAccess")
+          : errorText(error);
+    return `${path}: ${why}`;
+  });
+  if (result.failed.length > NAMED_FAILURES) named.push("…");
+  const failures = named.join("; ");
+  if (result.stopped) {
+    const total = preview.count;
+    messages.push(
+      t("trash.stopped", { count: total, moved: count(result.removed), total: count(total) }),
+    );
+    if (failures) messages.push(t("trash.failed", { failures }));
+  } else if (failures) {
     const total = result.removed + result.failed.length;
     messages.push(
       result.removed === 0
         ? t("trash.failed", { failures })
         : t("trash.partial", { moved: count(result.removed), total: count(total), failures }),
     );
+  } else if (result.removed === 1 && preview.paths.length === 1) {
+    messages.push(t("trash.doneOne", { name: itemName(preview.paths[0]) }));
+  } else if (result.removed > 0) {
+    const items = count(result.removed);
+    messages.push(t("trash.done", { count: result.removed, items, size: size(preview.size) }));
   }
   if (result.warning) messages.push(errorText(result.warning));
   return messages;

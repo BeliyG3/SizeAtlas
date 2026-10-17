@@ -20,6 +20,7 @@ import { scrollToRow } from "../contents/useCursor";
 import { useMarks } from "../contents/useMarks";
 import { useExportSource, type ExportSource } from "../export/source";
 import type { MenuTarget } from "../menu/ItemMenu";
+import { useMovingIds } from "../trash/moving";
 import { LIST_LIMIT, nextListSort, sortRows, type ListSort } from "./rows";
 import "../contents/contents.css";
 
@@ -69,6 +70,7 @@ export function ListTable({
 }: Props) {
   const { t, lang } = useT();
   const { generation, rev } = summary;
+  const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
   const layout = useColumnLayout(body, true);
   const [list, setList] = useState<List | null>(null);
@@ -190,6 +192,7 @@ export function ListTable({
         width={layout.width}
         selected={marks.ids.size > 0 ? marks.ids.has(item.id) : item.id === selectedId}
         cursor={index === cursor}
+        moving={moving.has(item.id)}
         onClick={callbacks.onClick}
         onOpen={callbacks.onOpen}
         onMenu={callbacks.onMenu}

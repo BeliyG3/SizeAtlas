@@ -16,7 +16,7 @@ import { useT } from "../i18n/react";
 import { itemMenuActions } from "./itemActions";
 import type { RootEntry } from "./roots";
 import type { Selection } from "./selection";
-import { trashAvailability, trashNoteKey } from "./trashRule";
+import { availabilityNoteKey, trashAvailability } from "./trashRule";
 import { useTrashRefused } from "./useTrashRefused";
 
 interface Props {
@@ -46,6 +46,8 @@ interface Props {
   fullScans: ReadonlySet<string>;
   /** A trash request runs. */
   trashing: boolean;
+  /** The root it moves items of: its folders cannot be refreshed meanwhile. */
+  trashingRoot: string | null;
   /** Removes the root from the tree and stops its scan; its saved scan stays. */
   onCloseRoot: (root: string) => void;
   onForget: (root: string) => void;
@@ -82,6 +84,7 @@ export function Browser({
   job,
   fullScans,
   trashing,
+  trashingRoot,
   onCloseRoot,
   onForget,
   onCancelScan,
@@ -138,13 +141,15 @@ export function Browser({
       : null;
 
   const itemMenu = menu?.kind === "item" ? menu : null;
-  const itemActions = itemMenuActions(entries, itemMenu?.generation, fullScans);
+  const itemActions = itemMenuActions(entries, itemMenu?.generation, fullScans, trashingRoot);
   const itemRev =
     entries.find((e) => itemMenu && e.summary?.generation === itemMenu.generation)?.summary?.rev ??
     null;
   const menuItems = itemMenu ? menuIds(itemMenu.target) : NO_IDS;
   const refused = useTrashRefused(job, itemMenu?.generation ?? null, itemRev, menuItems);
   const itemTrash = trashAvailability(trashing, job !== null, refused);
+  const trashNote =
+    itemMenu && availabilityNoteKey(itemTrash, menuItems.length, itemMenu.target.isDir);
   let content: ReactNode;
   if (!selection) {
     content = <p className="empty-hint dim">{t("empty.hint")}</p>;
@@ -213,9 +218,10 @@ export function Browser({
           target={menu.target}
           generation={menu.generation}
           canTrash={itemTrash.enabled}
-          trashNote={itemTrash.reason && t(trashNoteKey(menuItems.length, menu.target.isDir))}
+          trashNote={trashNote && t(trashNote)}
           canScan={itemActions.scanFolder}
           canRefresh={itemActions.refresh}
+          refreshNote={itemActions.refreshNote ? t(itemActions.refreshNote) : null}
           onRefresh={onRefresh}
           onScanFolder={onScanFolder}
           onTrash={onTrash}

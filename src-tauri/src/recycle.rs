@@ -5,12 +5,13 @@ use std::fs;
 use std::io;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use sizeatlas_core::cache::cache_path;
 use sizeatlas_core::scanner::mtime_of;
 use sizeatlas_core::tree::flags;
 
-use crate::dto::{TrashDto, TrashFailureDto};
+use crate::dto::{TrashDto, TrashFailureDto, TrashProgressDto};
 use crate::error::CmdError;
 use crate::queue::TrashedPath;
 use crate::state::{AppState, TrashItem, Trashed};
@@ -28,8 +29,12 @@ use crate::{jobs, sources};
 /// (`ScanQueue::note_trashed`). After that every item is checked again right before it goes;
 /// one that changed (`Changed`), cannot be read (`NoAccess`, `Io`), would be deleted for good
 /// (`NoTrash`) or that the OS refuses (`Io`) is reported and stays, the others go. Once the app
-/// starts closing, the items left stay where they are. A first scan's tree is not saved here.
-pub fn run(
+/// starts closing, or `AppState::stop_trash` asks for it (`stopped`), the items left stay where
+/// they are. A first scan's tree is not saved here.
+///
+/// `report` gets the progress before each item (paced, see `Pacer`) and once at the end.
+#[allow(clippy::too_many_arguments)]
+pub fn run_reporting(
     state: &AppState,
     cache_dir: &Path,
     generation: u64,
@@ -37,17 +42,32 @@ pub fn run(
     ids: &[u32],
     allowed: impl Fn(&Path, u64) -> bool,
     trash_one: impl Fn(&Path) -> Result<(), String>,
+    mut report: impl FnMut(TrashProgressDto),
 ) -> Result<TrashDto, CmdError> {
     let plan = state.trash_plan(generation, rev, ids)?;
     for item in &plan.items {
         check(item)?;
     }
+    let total = plan.items.len() as u32;
+    let mut pacer = Pacer::default();
     let mut trashed = Vec::new();
     let mut gone = Vec::new();
     let mut failed = Vec::new();
-    for item in &plan.items {
+    let mut stopped = false;
+    for (done, item) in plan.items.iter().enumerate() {
         if state.closing() {
             break;
+        }
+        if state.trash_stopped() {
+            stopped = true;
+            break;
+        }
+        if pacer.due(Instant::now()) {
+            report(TrashProgressDto {
+                done: done as u32,
+                total,
+                current: Some(item.path.display().to_string()),
+            });
         }
         let path = item.path.display().to_string();
         if !allowed(&item.path, item.size.max(item.len)) {
@@ -89,6 +109,11 @@ pub fn run(
             }),
         }
     }
+    report(TrashProgressDto {
+        done: (trashed.len() + failed.len()) as u32,
+        total,
+        current: None,
+    });
     let mut warning = None;
     if !trashed.is_empty() {
         state.note_trashed(gone);
@@ -109,7 +134,43 @@ pub fn run(
         removed: trashed.len() as u32,
         failed,
         warning,
+        stopped,
     })
+}
+
+/// `run_reporting` without the progress.
+#[cfg(test)]
+pub fn run(
+    state: &AppState,
+    cache_dir: &Path,
+    generation: u64,
+    rev: u64,
+    ids: &[u32],
+    allowed: impl Fn(&Path, u64) -> bool,
+    trash_one: impl Fn(&Path) -> Result<(), String>,
+) -> Result<TrashDto, CmdError> {
+    let ignore = |_| ();
+    run_reporting(
+        state, cache_dir, generation, rev, ids, allowed, trash_one, ignore,
+    )
+}
+
+/// The progress of a trash request at most this often: thousands of small items must not flood
+/// the UI with events.
+const PACE: Duration = Duration::from_millis(100);
+
+/// Says when the next progress is due: the first one at once, then one per `PACE`.
+#[derive(Default)]
+struct Pacer(Option<Instant>);
+
+impl Pacer {
+    fn due(&mut self, now: Instant) -> bool {
+        let due = self.0.is_none_or(|last| now.duration_since(last) >= PACE);
+        if due {
+            self.0 = Some(now);
+        }
+        due
+    }
 }
 
 /// The item still is what the scan saw: the same kind, the same modification time (its own,
@@ -174,6 +235,8 @@ pub fn move_to_trash(path: &Path) -> Result<(), String> {
 mod during_tests;
 #[cfg(test)]
 pub(crate) mod fixture;
+#[cfg(test)]
+mod progress_tests;
 #[cfg(test)]
 mod scan_tests;
 #[cfg(test)]

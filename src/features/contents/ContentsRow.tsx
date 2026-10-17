@@ -25,6 +25,8 @@ interface Props {
   width: number;
   selected: boolean;
   cursor: boolean;
+  /** It is being moved to the trash: dimmed, with a tag. */
+  moving?: boolean;
   /** `how`: what Ctrl and Shift make of the click (see `markHow`). */
   onClick: (index: number, how: MarkHow) => void;
   onOpen: (index: number) => void;
@@ -43,6 +45,7 @@ export const ContentsRow = memo(function ContentsRow({
   width,
   selected,
   cursor,
+  moving = false,
   onClick,
   onOpen,
   onMenu,
@@ -58,7 +61,7 @@ export const ContentsRow = memo(function ContentsRow({
     style: { top: index * ROW_HEIGHT, width, gridTemplateColumns: template },
     onClick: (e: MouseEvent) => onClick(index, markHow(e)),
   };
-  const state = `${index % 2 ? " alt" : ""}${selected ? " selected" : ""}${cursor ? " cursor" : ""}`;
+  const state = `${index % 2 ? " alt" : ""}${selected ? " selected" : ""}${cursor ? " cursor" : ""}${moving ? " moving" : ""}`;
   if (unaccounted > 0) {
     return (
       <div {...shared} className={`crow unaccounted${state}`} title={t("tree.unaccountedHint")}>
@@ -98,6 +101,7 @@ export const ContentsRow = memo(function ContentsRow({
       <>
         <ItemIcon isDir={dir} category={item.category} />
         <span className="ellipsis">{item.name}</span>
+        {moving && <span className="tag">{t("trash.moving")}</span>}
         {item.scanning && <ScanMark status="scanning" files={undefined} />}
         {waiting && <span className="tag">{t("tree.pending")}</span>}
         {item.accessError && <span className="tag">{t("tree.noAccess")}</span>}

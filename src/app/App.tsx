@@ -10,6 +10,7 @@ import { StatusBar } from "../features/shell/StatusBar";
 import { Toolbar } from "../features/shell/Toolbar";
 import { expectedBytes, forgettable, savedScan } from "../features/shell/source";
 import { Toasts, useToasts } from "../features/toasts/Toasts";
+import { MovingContext } from "../features/trash/moving";
 import { UpdateBanner } from "../features/update/UpdateBanner";
 import { useUpdateCheck } from "../features/update/useUpdateCheck";
 import { MODE_KEY, parseMode } from "../features/lists/modes";
@@ -108,12 +109,6 @@ export function App() {
   const rescan = rescanTarget === null ? null : () => scanPath(rescanTarget);
   // F5 on the root (or a file in it) scans the root again: the menu then says Rescan.
   const atRoot = shownFolder === ROOT_ID;
-  const refreshCurrent =
-    shownGeneration === null ||
-    shownFolder === null ||
-    (selectedRoot !== null && fullScans.has(selectedRoot))
-      ? null
-      : () => refreshFolder(shownGeneration, shownFolder);
   const trash = useTrash({
     roots: roots.roots,
     entries,
@@ -123,6 +118,15 @@ export function App() {
     onError: fail,
     errorText,
   });
+  // Not in the root whose items move to the trash: the tooltip says why.
+  const trashingHere = selectedRoot !== null && selectedRoot === trash.root;
+  const refreshCurrent =
+    shownGeneration === null ||
+    shownFolder === null ||
+    trashingHere ||
+    (selectedRoot !== null && fullScans.has(selectedRoot))
+      ? null
+      : () => refreshFolder(shownGeneration, shownFolder);
   const exporter = useExport(push, fail);
   useChangeKeys({
     onRefresh: () => refreshCurrent?.(),
@@ -142,6 +146,7 @@ export function App() {
         rescanTarget={rescanTarget}
         onRefresh={refreshCurrent}
         refreshIsRescan={atRoot}
+        refreshNote={trashingHere ? t("trash.busy") : null}
         onTrash={trash.menuTrash}
         trashNote={trash.trashNote}
         scanning={scanning !== null}
@@ -188,30 +193,33 @@ export function App() {
       )}
       <main className="workspace">
         <ExportContext value={exporter.register}>
-          <Browser
-            entries={entries}
-            selection={selection}
-            mode={mode}
-            sources={sources}
-            progress={progress}
-            onSelectNode={selectNode}
-            onSelectRoot={selectRoot}
-            onRescan={(root) => void roots.scan(root)}
-            onRefresh={refreshFolder}
-            onScanFolder={scanItem}
-            onTrash={trash.onTrash}
-            onMarks={trash.onMarks}
-            busyRoots={busy}
-            job={trash.job}
-            fullScans={fullScans}
-            trashing={trash.busy}
-            onCloseRoot={roots.closeRoot}
-            onForget={roots.forget}
-            onCancelScan={(root) => roots.cancel(root)}
-            onOpenDrive={openSource}
-            onScanDrive={scanPath}
-            onFail={fail}
-          />
+          <MovingContext value={trash.moving}>
+            <Browser
+              entries={entries}
+              selection={selection}
+              mode={mode}
+              sources={sources}
+              progress={progress}
+              onSelectNode={selectNode}
+              onSelectRoot={selectRoot}
+              onRescan={(root) => void roots.scan(root)}
+              onRefresh={refreshFolder}
+              onScanFolder={scanItem}
+              onTrash={trash.onTrash}
+              onMarks={trash.onMarks}
+              busyRoots={busy}
+              job={trash.job}
+              fullScans={fullScans}
+              trashing={trash.busy}
+              trashingRoot={trash.root}
+              onCloseRoot={roots.closeRoot}
+              onForget={roots.forget}
+              onCancelScan={(root) => roots.cancel(root)}
+              onOpenDrive={openSource}
+              onScanDrive={scanPath}
+              onFail={fail}
+            />
+          </MovingContext>
         </ExportContext>
       </main>
       <StatusBar
@@ -226,8 +234,9 @@ export function App() {
                 expected: running.folder === null ? expectedBytes(sources, running.root) : null,
               }
         }
-        trashing={trash.busy}
+        trash={trash.status}
       />
+      {trash.window}
       {trash.dialog}
       <Toasts toasts={toasts} />
       {roots.closing && <div className="overlay">{t("closing")}</div>}

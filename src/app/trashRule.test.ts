@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Roots } from "../api/types";
-import { runningJob, trashAvailability, trashNoteKey } from "./trashRule";
+import { availabilityNoteKey, runningJob, trashAvailability, trashNoteKey } from "./trashRule";
 
 describe("runningJob", () => {
   it("is the running job only, not a queued one", () => {
@@ -19,9 +19,17 @@ describe("trashAvailability", () => {
   it("allows the trash without a running job", () => {
     expect(trashAvailability(false, false, undefined)).toEqual({ enabled: true, reason: null });
   });
-  it("refuses during another trash request, without a scan reason", () => {
-    expect(trashAvailability(true, false, undefined)).toEqual({ enabled: false, reason: null });
-    expect(trashAvailability(true, true, true)).toEqual({ enabled: false, reason: null });
+  it("refuses during another trash request and says so, not that a scan runs", () => {
+    expect(trashAvailability(true, false, undefined)).toEqual({
+      enabled: false,
+      reason: "trashing",
+    });
+    expect(trashAvailability(true, true, true)).toEqual({ enabled: false, reason: "trashing" });
+    expect(availabilityNoteKey(trashAvailability(true, true, true), 1, true)).toBe("trash.busy");
+    expect(availabilityNoteKey(trashAvailability(false, true, true), 1, true)).toBe(
+      "trash.scanningFolder",
+    );
+    expect(availabilityNoteKey(trashAvailability(false, false, undefined), 1)).toBeNull();
   });
   it("waits for the backend's first answer while a job runs, then follows it", () => {
     expect(trashAvailability(false, true, undefined)).toEqual({ enabled: false, reason: null });

@@ -232,4 +232,13 @@ export interface TrashResult {
   failed: { path: string; error: CmdError }[];
   /** `CacheNotSaved` when the change could not be saved. */
   warning: CmdError | null;
+  /** Stopped by `cancelTrash` before every item was tried: the rest stayed where it was. */
+  stopped: boolean;
+}
+
+/** How far a trash request got: `done` of `total` items were tried; `current` goes next (null once it ended). */
+export interface TrashProgress {
+  done: number;
+  total: number;
+  current: string | null;
 }

@@ -250,10 +250,20 @@ fn trash_results_use_camel_case() {
             error: CmdError::NoTrash,
         }],
         warning: Some(CmdError::CacheNotSaved),
+        stopped: true,
     };
     assert_eq!(
         serde_json::to_value(done).unwrap(),
         json!({"removed": 1, "failed": [{"path": "C:\\x", "error": {"code": "NoTrash"}}],
-            "warning": {"code": "CacheNotSaved"}})
+            "warning": {"code": "CacheNotSaved"}, "stopped": true})
+    );
+    let progress = TrashProgressDto {
+        done: 2,
+        total: 5,
+        current: None,
+    };
+    assert_eq!(
+        serde_json::to_value(progress).unwrap(),
+        json!({"done": 2, "total": 5, "current": null})
     );
 }

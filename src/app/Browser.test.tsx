@@ -3,8 +3,8 @@ import type { Roots, Summary } from "../api/types";
 import { itemMenuActions } from "./itemActions";
 import { rootEntries, runningFullScanRoots } from "./roots";
 
-function menu(roots: Roots, generation = 2) {
-  return itemMenuActions(rootEntries(roots), generation, runningFullScanRoots(roots));
+function menu(roots: Roots, generation = 2, trashingRoot: string | null = null) {
+  return itemMenuActions(rootEntries(roots), generation, runningFullScanRoots(roots), trashingRoot);
 }
 
 describe("Browser item scan actions", () => {
@@ -70,5 +70,21 @@ describe("Browser item scan actions", () => {
       queue: [],
     });
     expect(actions).toEqual({ refresh: false, scanFolder: false });
+  });
+
+  it("disables refresh only in the root whose items move to the trash, and says why", () => {
+    const roots: Roots = {
+      roots: [
+        { root: "/other", generation: 1 } as Summary,
+        { root: "/scan", generation: 2 } as Summary,
+      ],
+      queue: [],
+    };
+    expect(menu(roots, 2, "/scan")).toEqual({
+      refresh: false,
+      scanFolder: true,
+      refreshNote: "trash.busy",
+    });
+    expect(menu(roots, 1, "/scan")).toEqual({ refresh: true, scanFolder: true });
   });
 });

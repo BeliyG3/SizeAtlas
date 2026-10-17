@@ -35,6 +35,8 @@ interface Props {
   trashNote: string | null;
   canScan: boolean;
   canRefresh: boolean;
+  /** Why refresh is not available, shown as its tooltip. */
+  refreshNote?: string | null;
   /** Queues a refresh of folder `id`. */
   onRefresh: (generation: number, id: number) => void;
   /** Queues a scan of folder `id` as a root of its own. */
@@ -53,6 +55,7 @@ export function ItemMenu({
   trashNote,
   canScan,
   canRefresh,
+  refreshNote = null,
   onRefresh,
   onScanFolder,
   onTrash,
@@ -98,7 +101,13 @@ export function ItemMenu({
     ],
     one &&
       target.isDir && [
-        item("refresh", t("menu.refresh"), () => onRefresh(generation, target.id), canRefresh),
+        item(
+          "refresh",
+          t("menu.refresh"),
+          () => onRefresh(generation, target.id),
+          canRefresh,
+          refreshNote,
+        ),
         target.id !== ROOT_ID &&
           item(
             "scan-folder",

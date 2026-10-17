@@ -1,6 +1,7 @@
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
-import type { Roots, Summary } from "../api/types";
+import type { Roots, Summary, TrashResult } from "../api/types";
 import { rootEntries } from "./roots";
 import { useTrash } from "./useTrash";
 import { useTrashRefused } from "./useTrashRefused";
@@ -42,9 +43,11 @@ vi.mock("react", async (original) => ({
   useEffect: (commit: () => void) => void commit(),
 }));
 vi.mock("../api/client", () => ({
-  api: { trashPreview: vi.fn(), trash: vi.fn(), trashRefused: vi.fn() },
+  api: { trashPreview: vi.fn(), trash: vi.fn(), trashRefused: vi.fn(), cancelTrash: vi.fn() },
   isCmdError: (e: unknown) => typeof e === "object" && e !== null && "code" in e,
+  onTrashProgress: () => Promise.resolve(() => {}),
 }));
+vi.mock("../settings/react", () => ({ useSize: () => String }));
 vi.mock("../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
 vi.mock("../features/trash/TrashDialog", () => ({ TrashDialog: () => null }));
 
@@ -190,5 +193,47 @@ describe("useTrash during scans", () => {
     useTrashRefused(job, 1, 4, [7]);
     expect(api.trashRefused).toHaveBeenCalledTimes(1);
     await flush();
+  });
+});
+
+describe("useTrash while it moves items", () => {
+  it("dims the rows, blocks another request, offers Stop, then reports what moved", async () => {
+    const roots: Roots = { roots: [summary(false)], queue: [] };
+    let finish: (result: TrashResult) => void = () => {};
+    vi.mocked(api.trash).mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    vi.mocked(api.cancelTrash).mockResolvedValue();
+    const push = vi.fn();
+    useRenderTrash(roots, 7, vi.fn(), push).onTrash(1, [7]);
+    await flush();
+    const asking = useRenderTrash(roots, 7, vi.fn(), push);
+    (asking.dialog as ReactElement<{ onConfirm: () => void }>).props.onConfirm();
+    expect(api.trash).toHaveBeenCalledWith(1, 4, [7]);
+
+    const running = useRenderTrash(roots, 7, vi.fn(), push);
+    expect([running.busy, running.root, running.menuTrash]).toEqual([true, "/root", null]);
+    expect(running.moving?.generation).toBe(1);
+    expect([...(running.moving?.ids ?? [])]).toEqual([7]);
+    expect(running.trashNote).toBe("trash.busy");
+    expect(running.window).toBeNull();
+    (running.status as ReactElement<{ onStop: () => void }>).props.onStop();
+    expect(api.cancelTrash).toHaveBeenCalled();
+
+    finish({ removed: 1, failed: [], warning: null, stopped: false });
+    await flush();
+    expect(push).toHaveBeenCalledWith("trash.doneOne");
+    const after = useRenderTrash(roots, 7, vi.fn(), push);
+    expect([after.busy, after.moving, after.status]).toEqual([false, null, null]);
+  });
+
+  it("shows a window with Stop for more than 20 items, and no Stop in the status bar", async () => {
+    const roots: Roots = { roots: [summary(false)], queue: [] };
+    vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
+    vi.mocked(api.trashPreview).mockResolvedValue({ count: 21, size: 1, scannedAt: 1, paths: [] });
+    useRenderTrash(roots).onTrash(1, [7]);
+    await flush();
+    (useRenderTrash(roots).dialog as ReactElement<{ onConfirm: () => void }>).props.onConfirm();
+    const running = useRenderTrash(roots);
+    expect(running.window).not.toBeNull();
+    expect((running.status as ReactElement<{ onStop: unknown }>).props.onStop).toBeNull();
   });
 });

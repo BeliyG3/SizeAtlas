@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::dto::{RootsDto, ScanErrorDto, SourcesDto, Summary, TrashDto};
+use crate::dto::{RootsDto, ScanErrorDto, SourcesDto, Summary, TrashDto, TrashProgressDto};
 use crate::error::CmdError;
 use crate::queue::ScanJob;
 use crate::state::AppState;
@@ -104,7 +104,8 @@ pub async fn refresh_folder(
 }
 
 /// Moves items of one tree to the trash after checking them against the disk (see
-/// `recycle::run`); refused while a running scan still lists one of them.
+/// `recycle::run_reporting`); refused while a running scan still lists one of them. Reports
+/// `trash-progress` meanwhile; `cancel_trash` stops it before the next item.
 #[tauri::command]
 pub async fn trash(
     app: AppHandle,
@@ -113,11 +114,13 @@ pub async fn trash(
     rev: u64,
     ids: Vec<u32>,
 ) -> Result<TrashDto, CmdError> {
+    state.reset_trash_stop();
     let write = state.begin_write().await?;
     let dir = cache_dir(&app)?;
     let state = state.inner().clone();
+    let events = app.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let result = recycle::run(
+        let result = recycle::run_reporting(
             &state,
             &dir,
             generation,
@@ -125,6 +128,9 @@ pub async fn trash(
             &ids,
             sizeatlas_core::can_recycle,
             recycle::move_to_trash,
+            |progress: TrashProgressDto| {
+                let _ = events.emit("trash-progress", progress);
+            },
         );
         drop(write);
         result
@@ -132,6 +138,13 @@ pub async fn trash(
     .await?;
     changed(&app);
     result
+}
+
+/// Stops the running trash request before its next item; the items moved stay in the trash.
+#[tauri::command]
+pub async fn cancel_trash(state: State<'_, AppState>) -> Result<(), CmdError> {
+    state.stop_trash();
+    Ok(())
 }
 
 /// Stops the scan of `path`: cancels it if it runs, drops it if it waits. Without a path,

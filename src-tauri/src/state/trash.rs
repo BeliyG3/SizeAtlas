@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use sizeatlas_core::tree::{Tree, VolumeUsage, flags};
 
@@ -55,6 +56,21 @@ pub struct Trashed {
 }
 
 impl AppState {
+    /// Asks the running trash request to stop before its next item; the items moved stay moved.
+    pub fn stop_trash(&self) {
+        self.0.trash_stop.store(true, Ordering::Release);
+    }
+
+    pub fn trash_stopped(&self) -> bool {
+        self.0.trash_stop.load(Ordering::Acquire)
+    }
+
+    /// A new trash request starts unstopped: called before it waits for `begin_write`, so a stop
+    /// asked while it waits still counts.
+    pub fn reset_trash_stop(&self) {
+        self.0.trash_stop.store(false, Ordering::Release);
+    }
+
     /// The items `ids` of the tree with `generation` at revision `rev`. `StaleId` unless every id
     /// is a live node of that very revision and none is the root (a first scan's tree changes its
     /// revision all the time but keeps its ids: any revision of it will do); `LossyName` when a

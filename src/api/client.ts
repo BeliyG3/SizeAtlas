@@ -14,6 +14,7 @@ import type {
   Sources,
   Summary,
   TrashPreview,
+  TrashProgress,
   TrashResult,
   TypeStats,
 } from "./types";
@@ -43,6 +44,8 @@ export const api = {
   /** Moves items of one tree to the trash; nothing moves if one changed on disk since the scan. */
   trash: (generation: number, rev: number, ids: number[]) =>
     invoke<TrashResult>("trash", { generation, rev, ids }),
+  /** Stops the running trash request before its next item; what went stays in the trash. */
+  cancelTrash: () => invoke<void>("cancel_trash"),
   /** Without a root: the running scan. A waiting root leaves the queue. */
   cancelScan: (root?: string) => invoke<void>("cancel_scan", { path: root ?? null }),
   /** Adds the saved scan as a root, or replaces the open one in place. */
@@ -103,6 +106,9 @@ export const api = {
 
 export const onScanProgress = (cb: (p: ScanProgress) => void): Promise<UnlistenFn> =>
   listen<ScanProgress>("scan-progress", (e) => cb(e.payload));
+
+export const onTrashProgress = (cb: (p: TrashProgress) => void): Promise<UnlistenFn> =>
+  listen<TrashProgress>("trash-progress", (e) => cb(e.payload));
 
 export const onClosing = (cb: () => void): Promise<UnlistenFn> => listen("closing", () => cb());
 

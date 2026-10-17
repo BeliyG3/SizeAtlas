@@ -141,3 +141,8 @@
   color: var(--text-dim);
   font-style: italic;
 }
+
+/* Being moved to the trash: dimmed until the request ends. */
+.crow.moving {
+  opacity: 0.5;
+}

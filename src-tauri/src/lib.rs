@@ -74,6 +74,7 @@ pub fn run() {
             commands::roots::scan,
             commands::roots::refresh_folder,
             commands::roots::trash,
+            commands::roots::cancel_trash,
             commands::roots::cancel_scan,
             commands::roots::open_cached,
             commands::roots::close_root,

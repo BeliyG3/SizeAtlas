@@ -22,6 +22,8 @@ interface Props {
   onRefresh: (() => void) | null;
   /** The current folder is the root: F5 scans it again, and the item says so. */
   refreshIsRescan: boolean;
+  /** Why F5 is not available, shown as its tooltip. */
+  refreshNote?: string | null;
   /** Scan › Move to the trash: the marked rows, else the selected item; null when none or busy. */
   onTrash: (() => void) | null;
   /** Why Scan › Move to the trash is unavailable, for its tooltip. */
@@ -51,6 +53,7 @@ export function AppMenuBar({
   rescanTarget,
   onRefresh,
   refreshIsRescan,
+  refreshNote,
   onTrash,
   trashNote,
   scanning,
@@ -125,7 +128,13 @@ export function AppMenuBar({
         <>
           {item("scan", t("toolbar.scan"), on(scanTarget, onScan))}
           {item("refresh", t("toolbar.rescan"), on(rescanTarget, onScan), "Ctrl+F5")}
-          {item("refresh", t(refreshIsRescan ? "toolbar.rescan" : "menu.refresh"), onRefresh, "F5")}
+          {item(
+            "refresh",
+            t(refreshIsRescan ? "toolbar.rescan" : "menu.refresh"),
+            onRefresh,
+            "F5",
+            refreshNote,
+          )}
           {item("cancel", t("toolbar.cancel"), scanning ? onCancel : null)}
           {item("forget", t("toolbar.forget"), on(forgetTarget, onForget))}
           <div role="separator" />
