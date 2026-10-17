@@ -3461,7 +3461,7 @@ checksum = "33f4fe9184a62d842c9ef383018f3306d8ba224fd9d836f56d7288308847c256"
 
 [[package]]
 name = "sizeatlas"
-version = "2026.10.2"
+version = "2026.10.3"
 dependencies = [
  "dunce",
  "serde",
@@ -3481,7 +3481,7 @@ dependencies = [
 
 [[package]]
 name = "sizeatlas-core"
-version = "2026.10.2"
+version = "2026.10.3"
 dependencies = [
  "dunce",
  "libc",
