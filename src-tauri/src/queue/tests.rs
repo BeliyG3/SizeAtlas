@@ -189,11 +189,19 @@ fn a_folder_is_not_queued_under_a_running_scan_of_its_root_and_stops_with_it() {
     assert!(queue.advance().is_none());
 }
 
+fn gone(path: &str) -> TrashedPath {
+    TrashedPath {
+        path: PathBuf::from(path),
+        parent_before: [Some(1), None],
+        parent_after: Some(2),
+    }
+}
+
 #[test]
 fn a_refresh_refuses_the_trash_only_inside_its_folder_and_above_it() {
     let mut queue = ScanQueue::default();
-    queue.push_folder("/a".into(), target(1)).unwrap();
-    let refused = |path: &str| queue.refuses_trash(Path::new(path));
+    let job = queue.push_folder("/a".into(), target(1)).unwrap();
+    let refused = |path: &str| job.refuses_trash(Path::new(path), "/a");
     assert!(refused("/a/f1"));
     assert!(refused("/a/f1/x.bin"));
     assert!(refused("/a"), "an ancestor takes the folder with it");
@@ -203,15 +211,31 @@ fn a_refresh_refuses_the_trash_only_inside_its_folder_and_above_it() {
 }
 
 #[test]
-fn a_full_scan_refuses_its_root_and_above_and_notes_what_goes_inside() {
+fn a_rescan_refuses_its_root_and_above_and_notes_what_goes_inside() {
     let mut queue = ScanQueue::default();
     let job = queue.push("/a/b".into()).unwrap();
-    assert!(queue.refuses_trash(Path::new("/a/b")));
-    assert!(queue.refuses_trash(Path::new("/a")));
-    assert!(!queue.refuses_trash(Path::new("/a/b/x")));
-    assert!(!queue.refuses_trash(Path::new("/a/c")));
-    queue.note_trashed(vec![PathBuf::from("/a/b/x"), PathBuf::from("/a/c")]);
-    assert_eq!(*job.trashed.lock().unwrap(), [PathBuf::from("/a/b/x")]);
+    let refused = |path: &str, tree: &str| job.refuses_trash(Path::new(path), tree);
+    assert!(refused("/a/b", "/a"));
+    assert!(refused("/a", "/"));
+    assert!(!refused("/a/b/x", "/a/b"));
+    assert!(!refused("/a/b/x", "/a"), "a rescan is told what went");
+    assert!(!refused("/a/c", "/a"));
+    queue.note_trashed(vec![gone("/a/b/x"), gone("/a/c")]);
+    assert_eq!(*job.trashed.lock().unwrap(), [gone("/a/b/x")]);
+}
+
+#[test]
+fn a_first_scan_refuses_what_it_holds_in_other_open_trees() {
+    let mut queue = ScanQueue::default();
+    let job = queue.push("/d".into()).unwrap();
+    job.first_scan.store(true, Ordering::Relaxed);
+    let refused = |path: &str, tree: &str| job.refuses_trash(Path::new(path), tree);
+    assert!(refused("/d/data/x", "/d/data"), "an open root inside it");
+    assert!(
+        !refused("/d/data/x", "/d"),
+        "its own tree decides by its flags"
+    );
+    assert!(!refused("/e/x", "/e"));
 }
 
 #[test]
@@ -219,7 +243,8 @@ fn a_cancelled_job_refuses_nothing_and_notes_nothing() {
     let mut queue = ScanQueue::default();
     let job = queue.push("/a".into()).unwrap();
     queue.cancel(Some("/a"));
-    assert!(!queue.refuses_trash(Path::new("/a")));
-    queue.note_trashed(vec![PathBuf::from("/a/x")]);
+    assert!(queue.running_job().is_none());
+    assert!(!job.refuses_trash(Path::new("/a"), "/"));
+    queue.note_trashed(vec![gone("/a/x")]);
     assert!(job.trashed.lock().unwrap().is_empty());
 }

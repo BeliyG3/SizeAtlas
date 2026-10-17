@@ -24,7 +24,10 @@ fn items_go_during_a_rescan_and_the_rescan_remembers_them() {
     )
     .unwrap();
     assert_eq!(done.removed, 1);
-    assert_eq!(*rescan.trashed.lock().unwrap(), [real(&dir, &["top.bin"])]);
+    let noted = rescan.trashed.lock().unwrap();
+    assert_eq!(noted.len(), 1);
+    assert_eq!(noted[0].path, real(&dir, &["top.bin"]));
+    assert!(noted[0].parent_after.is_some());
 }
 
 #[test]

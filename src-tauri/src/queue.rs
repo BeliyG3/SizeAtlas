@@ -37,9 +37,19 @@ pub struct ScanJob {
     pub progress: Arc<Progress>,
     /// Set when the worker chooses first-scan publication; stays set through the cache write.
     pub first_scan: Arc<AtomicBool>,
-    /// Paths that went to the trash while this full scan ran: its walk may have listed them
+    /// Items that went to the trash while this full scan ran: its walk may have listed them
     /// before they went, so they are taken out of its tree when it is installed.
-    pub trashed: Arc<Mutex<Vec<PathBuf>>>,
+    pub trashed: Arc<Mutex<Vec<TrashedPath>>>,
+}
+
+/// An item that went to the trash, by path, with the times of its folder around the move (see
+/// `state::settle_parent`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TrashedPath {
+    pub path: PathBuf,
+    /// The folder's own time just before, and as its parent listed it.
+    pub parent_before: [Option<i64>; 2],
+    pub parent_after: Option<i64>,
 }
 
 impl ScanJob {
@@ -57,6 +67,26 @@ impl ScanJob {
 
     pub fn cancelled(&self) -> bool {
         self.cancel.load(Ordering::Relaxed)
+    }
+
+    /// Whether this job, running, keeps `path` of the tree rooted at `tree_root` from going to
+    /// the trash: a refresh of a folder that holds `path` or lies inside it; a full scan of a
+    /// root that is `path` or lies inside it; a first scan of a root that holds `path` when the
+    /// path belongs to another open tree (its own tree says by its flags what is final). A rescan
+    /// of a root that holds `path` does not: see `ScanQueue::note_trashed`.
+    pub fn refuses_trash(&self, path: &Path, tree_root: &str) -> bool {
+        if self.cancelled() {
+            return false;
+        }
+        match &self.folder {
+            Some(folder) => path.starts_with(&folder.path) || folder.path.starts_with(path),
+            None => {
+                Path::new(&self.root).starts_with(path)
+                    || (self.first_scan.load(Ordering::Relaxed)
+                        && tree_root != self.root
+                        && path.starts_with(&self.root))
+            }
+        }
     }
 }
 
@@ -177,28 +207,20 @@ impl ScanQueue {
         })
     }
 
-    /// Whether the running job keeps `path` from going to the trash: a refresh of a folder that
-    /// holds `path` or lies inside it, a full scan of a root that is `path` or lies inside it. A
-    /// full scan of a root that holds `path` does not: see `note_trashed`.
-    pub fn refuses_trash(&self, path: &Path) -> bool {
-        self.current.iter().any(|job| {
-            !job.cancelled()
-                && match &job.folder {
-                    Some(folder) => path.starts_with(&folder.path) || folder.path.starts_with(path),
-                    None => Path::new(&job.root).starts_with(path),
-                }
-        })
+    /// The running job unless it was cancelled: a copy of its handles.
+    pub fn running_job(&self) -> Option<ScanJob> {
+        self.current.clone().filter(|job| !job.cancelled())
     }
 
-    /// Remembers the `paths` that went to the trash in the running full scan whose root holds
+    /// Remembers the items that went to the trash in the running full scan whose root holds
     /// them (see `ScanJob::trashed`).
-    pub fn note_trashed(&self, paths: Vec<PathBuf>) {
+    pub fn note_trashed(&self, items: Vec<TrashedPath>) {
         let Some(job) = &self.current else { return };
         if job.cancelled() || job.folder.is_some() {
             return;
         }
         let mut trashed = job.trashed.lock().unwrap_or_else(PoisonError::into_inner);
-        trashed.extend(paths.into_iter().filter(|p| p.starts_with(&job.root)));
+        trashed.extend(items.into_iter().filter(|i| i.path.starts_with(&job.root)));
     }
 }
 

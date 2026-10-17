@@ -8,9 +8,11 @@ use std::path::Path;
 
 use sizeatlas_core::cache::cache_path;
 use sizeatlas_core::scanner::mtime_of;
+use sizeatlas_core::tree::flags;
 
 use crate::dto::{TrashDto, TrashFailureDto};
 use crate::error::CmdError;
+use crate::queue::TrashedPath;
 use crate::state::{AppState, TrashItem, Trashed};
 use crate::{jobs, sources};
 
@@ -20,12 +22,13 @@ use crate::{jobs, sources};
 /// of its size on disk and its length. The caller holds `begin_write`, so no refresh changes the
 /// tree meanwhile and closing the app waits for the saved scan.
 ///
-/// Nothing moves when a running scan still lists an item (`Busy`, see `AppState::trash_refused`)
-/// or when an item changed on disk since the scan (`Changed`). A running full scan of a root
-/// that holds the items is told which went (`ScanQueue::note_trashed`). After that every item is checked again right before it
-/// goes; one that changed (`Changed`), cannot be read (`NoAccess`, `Io`), would be deleted for
-/// good (`NoTrash`) or that the OS refuses (`Io`) is reported and stays, the others go. Once the
-/// app starts closing, the items left stay where they are.
+/// Nothing moves when a running scan still lists an item (`Busy`, see
+/// `AppState::trash_refused`) or when an item changed on disk since the scan (`Changed`). A
+/// running full scan of a root that holds the items is told which went
+/// (`ScanQueue::note_trashed`). After that every item is checked again right before it goes;
+/// one that changed (`Changed`), cannot be read (`NoAccess`, `Io`), would be deleted for good
+/// (`NoTrash`) or that the OS refuses (`Io`) is reported and stays, the others go. Once the app
+/// starts closing, the items left stay where they are. A first scan's tree is not saved here.
 pub fn run(
     state: &AppState,
     cache_dir: &Path,
@@ -74,7 +77,11 @@ pub fn run(
                     parent_listed,
                     parent_after: modified(&item.parent_path),
                 });
-                gone.push(item.path.clone());
+                gone.push(TrashedPath {
+                    path: item.path.clone(),
+                    parent_before: [parent_before, parent_listed],
+                    parent_after: modified(&item.parent_path),
+                });
             }
             Err(os_message) => failed.push(TrashFailureDto {
                 path: path.clone(),
@@ -87,6 +94,9 @@ pub fn run(
         state.note_trashed(gone);
         let volume = sources::volume_usage(Path::new(&plan.root));
         warning = match state.remove_trashed(generation, &trashed, volume) {
+            // A first scan's tree is saved once it is complete (`worker::live::finish`): saved
+            // now, it would replace a complete saved scan with a partial one.
+            Some(tree) if tree.node(0).has(flags::SCANNING) => None,
             Some(tree) => jobs::save(&tree, cache_dir).err(),
             // Closed or reopened meanwhile: its saved scan still lists what went.
             None => {

@@ -96,7 +96,8 @@ async fn scan_one(
 }
 
 /// Installs a walked tree unless its root was closed or its scan cancelled meanwhile, then
-/// saves it and releases `write`. What went to the trash during the walk is taken out first. Closing the app does not discard it: the exit waits.
+/// saves it and releases `write`. What went to the trash during the walk is taken out first.
+/// Closing the app does not discard it: the exit waits.
 fn install_and_save(
     state: &AppState,
     cache_dir: &Path,

@@ -194,7 +194,7 @@ export function App() {
             onTrash={trash.onTrash}
             onMarks={trash.onMarks}
             busyRoots={busy}
-            jobRunning={trash.jobRunning}
+            job={trash.job}
             fullScans={fullScans}
             trashing={trash.busy}
             onCloseRoot={roots.closeRoot}

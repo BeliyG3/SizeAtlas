@@ -66,13 +66,10 @@ impl AppState {
         rev: u64,
         ids: &[u32],
     ) -> Result<TrashPlan, CmdError> {
+        // Before the tree is read: never the queue lock while a read holds the tree.
+        let running = self.scans().running_job();
         let tree = self.tree(generation)?;
-        let wanted: BTreeSet<u32> = ids.iter().copied().collect();
-        let known = |id: u32| id != 0 && tree.get(id).is_some();
-        let live = tree.node(0).has(flags::SCANNING);
-        if (tree.rev != rev && !live) || wanted.is_empty() || !wanted.iter().all(|&id| known(id)) {
-            return Err(CmdError::StaleId);
-        }
+        let wanted = wanted_ids(&tree, rev, ids)?;
         let mut items = Vec::new();
         let mut unfinished = false;
         for &id in &wanted {
@@ -83,10 +80,7 @@ impl AppState {
             if tree.has_lossy_path(id) {
                 return Err(CmdError::LossyName);
             }
-            // A folder a first scan has not finished, or anything in it.
-            unfinished |= chain[1..]
-                .iter()
-                .any(|&a| tree.node(a).flags & (flags::PENDING | flags::SCANNING) != 0);
+            unfinished |= during_scan::unfinished(&tree, id);
             let node = tree.node(id);
             items.push(TrashItem {
                 id,
@@ -105,24 +99,15 @@ impl AppState {
             scanned_at: tree.scanned_at,
             items,
         };
-        // Let go of the tree before taking the queue lock: a change waits for reads under it.
-        drop(tree);
-        let scans = self.scans();
-        if unfinished || plan.items.iter().any(|i| scans.refuses_trash(&i.path)) {
+        let refused = |i: &TrashItem| {
+            running
+                .as_ref()
+                .is_some_and(|job| job.refuses_trash(&i.path, &plan.root))
+        };
+        if unfinished || plan.items.iter().any(refused) {
             return Err(CmdError::Busy);
         }
         Ok(plan)
-    }
-
-    /// Whether a scan keeps one of `ids` from going to the trash now, for the menus: a first scan
-    /// that has not finished its folder, a refresh of a folder that holds it or lies inside it,
-    /// a full scan of a root inside it. Anywhere else it may go while a scan runs.
-    pub fn trash_refused(&self, generation: u64, rev: u64, ids: &[u32]) -> Result<bool, CmdError> {
-        match self.trash_plan(generation, rev, ids) {
-            Ok(_) => Ok(false),
-            Err(CmdError::Busy) => Ok(true),
-            Err(e) => Err(e),
-        }
     }
 
     /// What a trash request would move, for its confirmation.
@@ -162,14 +147,12 @@ impl AppState {
                 if tree.get(t.id).is_some() {
                     tree.remove(t.id);
                 }
-                let known = tree.get(t.parent).map(|p| p.mtime);
-                let before = [t.parent_before, t.parent_listed];
-                if let Some(after) = t.parent_after
-                    && known.is_some()
-                    && before.contains(&known)
-                {
-                    tree.set_mtime(t.parent, after);
-                }
+                settle_parent(
+                    tree,
+                    t.parent,
+                    [t.parent_before, t.parent_listed],
+                    t.parent_after,
+                );
             }
             tree.volume = volume;
             Some(())
@@ -177,5 +160,32 @@ impl AppState {
     }
 }
 
+/// Gives the live folder `parent` of an item that went to the trash its time `after`, but only
+/// if its time just before (`before`: its own, or as its parent listed it) is the one the tree
+/// knows: a folder changed outside SizeAtlas keeps its old time, so moving it to the trash later
+/// still fails the check.
+pub fn settle_parent(tree: &mut Tree, parent: u32, before: [Option<i64>; 2], after: Option<i64>) {
+    let known = tree.get(parent).map(|p| p.mtime);
+    if let Some(after) = after
+        && known.is_some()
+        && before.contains(&known)
+    {
+        tree.set_mtime(parent, after);
+    }
+}
+
+/// `ids` as a set, if every one is a live node other than the root of `tree` at revision `rev`
+/// (any revision of a first scan's tree: it keeps its ids); else `StaleId`.
+fn wanted_ids(tree: &Tree, rev: u64, ids: &[u32]) -> Result<BTreeSet<u32>, CmdError> {
+    let wanted: BTreeSet<u32> = ids.iter().copied().collect();
+    let known = |id: u32| id != 0 && tree.get(id).is_some();
+    let live = tree.node(0).has(flags::SCANNING);
+    if (tree.rev != rev && !live) || wanted.is_empty() || !wanted.iter().all(|&id| known(id)) {
+        return Err(CmdError::StaleId);
+    }
+    Ok(wanted)
+}
+
+mod during_scan;
 #[cfg(test)]
 mod tests;

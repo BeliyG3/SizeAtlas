@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { Roots } from "../api/types";
-import { jobRuns, trashAvailability } from "./trashRule";
+import { runningJob, trashAvailability, trashNoteKey } from "./trashRule";
 
-describe("jobRuns", () => {
-  it("asks only while a job runs, not for queued ones", () => {
+describe("runningJob", () => {
+  it("is the running job only, not a queued one", () => {
+    const job = { root: "/a", state: "scanning", folder: "/a/b" } as const;
     const roots = (state: "scanning" | "queued"): Roots => ({
       roots: [],
-      queue: [{ root: "/a", state, folder: null }],
+      queue: [{ ...job, state }],
     });
-    expect(jobRuns(roots("scanning"))).toBe(true);
-    expect(jobRuns(roots("queued"))).toBe(false);
-    expect(jobRuns({ roots: [], queue: [] })).toBe(false);
+    expect(runningJob(roots("scanning"))).toEqual(job);
+    expect(runningJob(roots("queued"))).toBeNull();
+    expect(runningJob({ roots: [], queue: [] })).toBeNull();
   });
 });
 
@@ -22,9 +23,18 @@ describe("trashAvailability", () => {
     expect(trashAvailability(true, false, undefined)).toEqual({ enabled: false, reason: null });
     expect(trashAvailability(true, true, true)).toEqual({ enabled: false, reason: null });
   });
-  it("waits for the backend while a job runs, then follows it", () => {
+  it("waits for the backend's first answer while a job runs, then follows it", () => {
     expect(trashAvailability(false, true, undefined)).toEqual({ enabled: false, reason: null });
     expect(trashAvailability(false, true, false)).toEqual({ enabled: true, reason: null });
     expect(trashAvailability(false, true, true)).toEqual({ enabled: false, reason: "scanning" });
+  });
+});
+
+describe("trashNoteKey", () => {
+  it("names a folder, a file, an item of unknown kind or several items", () => {
+    expect(trashNoteKey(1, true)).toBe("trash.scanningFolder");
+    expect(trashNoteKey(1, false)).toBe("trash.scanningFile");
+    expect(trashNoteKey(1)).toBe("trash.scanningItem");
+    expect(trashNoteKey(3, true)).toBe("trash.scanningItems");
   });
 });

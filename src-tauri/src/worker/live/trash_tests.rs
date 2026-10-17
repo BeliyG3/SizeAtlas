@@ -33,6 +33,12 @@ fn a_first_scan_lets_finished_folders_and_root_files_go_but_not_pending_ones() {
     let (dir, cache) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     files(dir.path(), &["top.txt", "a/f.txt", "a/g.txt", "b/h.txt"]);
     let state = AppState::default();
+    // A complete saved scan, then a first scan again (the root was closed): a trash meanwhile
+    // must not replace the saved scan with the partial tree.
+    run_queue(&state, cache.path(), state.enqueue(root_of(&dir)).unwrap());
+    jobs::close_root(&state, &root_of(&dir));
+    let file = cache_path(cache.path(), Path::new(&root_of(&dir)));
+    let complete = fs::read(&file).unwrap();
     let job = state.enqueue(root_of(&dir)).unwrap().unwrap();
     let root = PathBuf::from(&job.root);
     let notify: Notify = Arc::new(|_| {});
@@ -68,7 +74,13 @@ fn a_first_scan_lets_finished_folders_and_root_files_go_but_not_pending_ones() {
         };
         assert_eq!(trash(&[top, f, b]), Err(CmdError::Busy));
         assert!(log.lock().unwrap().is_empty(), "nothing moved");
-        assert_eq!(trash(&[top, f]).unwrap().removed, 2);
+        let done = trash(&[top, f]).unwrap();
+        assert_eq!((done.removed, done.warning), (2, None));
+        assert_eq!(
+            fs::read(&file).unwrap(),
+            complete,
+            "the saved scan is untouched"
+        );
         let tree = state.tree(scan).expect("same generation: ids stay");
         assert_eq!((tree.name(b), tree.node(0).files), ("b", 1));
         assert_totals(&tree);
@@ -132,4 +144,19 @@ fn an_item_a_rescan_listed_before_it_went_is_not_in_the_installed_tree() {
     let saved = saved(cache.path(), &old.root);
     assert!(saved.find_path(&x).is_none());
     assert_eq!(saved.node(0).files, 2);
+    // Its folder has the time it got from the trash, so the folder can go too.
+    let sub = tree.find_path(&root.join("sub")).unwrap();
+    let now = state.summaries()[0].rev;
+    drop(tree);
+    let done = crate::recycle::run(
+        &state,
+        cache.path(),
+        summary.generation,
+        now,
+        &[sub],
+        anywhere,
+        deleting(&log),
+    )
+    .unwrap();
+    assert_eq!((done.removed, done.failed), (1, Vec::new()));
 }

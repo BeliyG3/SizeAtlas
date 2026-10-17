@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import type { ScanProgress, Sources } from "../api/types";
+import type { QueueEntry, ScanProgress, Sources } from "../api/types";
 import { DEFAULT_SORT, type SortState } from "../features/contents/columns";
 import { DrivesPanel } from "../features/drives/DrivesPanel";
 import { ItemMenu, menuIds, type MenuTarget } from "../features/menu/ItemMenu";
@@ -16,7 +16,7 @@ import { useT } from "../i18n/react";
 import { itemMenuActions } from "./itemActions";
 import type { RootEntry } from "./roots";
 import type { Selection } from "./selection";
-import { trashAvailability } from "./trashRule";
+import { trashAvailability, trashNoteKey } from "./trashRule";
 import { useTrashRefused } from "./useTrashRefused";
 
 interface Props {
@@ -40,8 +40,8 @@ interface Props {
   onMarks: (ids: readonly number[]) => void;
   /** Roots with a running job: they cannot be scanned again from their menu. */
   busyRoots: ReadonlySet<string>;
-  /** A job runs: it may keep the items of a menu from the trash (the backend says). */
-  jobRunning: boolean;
+  /** The running job: it may keep the items of a menu from the trash (the backend says). */
+  job: QueueEntry | null;
   /** Roots inside a running full scan: refresh and child scans are unavailable. */
   fullScans: ReadonlySet<string>;
   /** A trash request runs. */
@@ -79,7 +79,7 @@ export function Browser({
   onTrash,
   onMarks,
   busyRoots,
-  jobRunning,
+  job,
   fullScans,
   trashing,
   onCloseRoot,
@@ -142,13 +142,9 @@ export function Browser({
   const itemRev =
     entries.find((e) => itemMenu && e.summary?.generation === itemMenu.generation)?.summary?.rev ??
     null;
-  const refused = useTrashRefused(
-    jobRunning,
-    itemMenu?.generation ?? null,
-    itemRev,
-    itemMenu ? menuIds(itemMenu.target) : NO_IDS,
-  );
-  const itemTrash = trashAvailability(trashing, jobRunning, refused);
+  const menuItems = itemMenu ? menuIds(itemMenu.target) : NO_IDS;
+  const refused = useTrashRefused(job, itemMenu?.generation ?? null, itemRev, menuItems);
+  const itemTrash = trashAvailability(trashing, job !== null, refused);
   let content: ReactNode;
   if (!selection) {
     content = <p className="empty-hint dim">{t("empty.hint")}</p>;
@@ -217,7 +213,7 @@ export function Browser({
           target={menu.target}
           generation={menu.generation}
           canTrash={itemTrash.enabled}
-          trashNote={itemTrash.reason && t("trash.scanning")}
+          trashNote={itemTrash.reason && t(trashNoteKey(menuItems.length, menu.target.isDir))}
           canScan={itemActions.scanFolder}
           canRefresh={itemActions.refresh}
           onRefresh={onRefresh}

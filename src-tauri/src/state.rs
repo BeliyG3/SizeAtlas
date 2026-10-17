@@ -265,7 +265,7 @@ mod live;
 mod paths;
 mod trash;
 
-pub use self::trash::{TrashItem, Trashed};
+pub use self::trash::{TrashItem, Trashed, settle_parent};
 
 #[cfg(test)]
 mod tests;

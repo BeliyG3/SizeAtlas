@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import type { Roots, Summary } from "../api/types";
 import { rootEntries } from "./roots";
 import { useTrash } from "./useTrash";
+import { useTrashRefused } from "./useTrashRefused";
 
 const hooks = vi.hoisted(() => {
   const state = {
@@ -42,6 +43,7 @@ vi.mock("react", async (original) => ({
 }));
 vi.mock("../api/client", () => ({
   api: { trashPreview: vi.fn(), trash: vi.fn(), trashRefused: vi.fn() },
+  isCmdError: (e: unknown) => typeof e === "object" && e !== null && "code" in e,
 }));
 vi.mock("../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
 vi.mock("../features/trash/TrashDialog", () => ({ TrashDialog: () => null }));
@@ -63,13 +65,13 @@ const summary = (scanning: boolean): Summary => ({
   volume: null,
 });
 
-function useRenderTrash(roots: Roots, id = 7, onError = vi.fn()) {
+function useRenderTrash(roots: Roots, id = 7, onError = vi.fn(), push = vi.fn()) {
   hooks.beginRender();
   return useTrash({
     roots,
     entries: rootEntries(roots),
     selection: { root: "/root", generation: 1, id, folder: id },
-    push: vi.fn(),
+    push,
     onError,
     errorText: String,
   });
@@ -118,7 +120,7 @@ describe("useTrash during scans", () => {
     await flush();
     const trash = useRenderTrash(roots);
     expect(trash.menuTrash).toBeNull();
-    expect(trash.trashNote).toBe("trash.scanning");
+    expect(trash.trashNote).toBe("trash.scanningItems");
   });
 
   it("asks nothing while a rescan only waits in the queue", () => {
@@ -147,12 +149,45 @@ describe("useTrash during scans", () => {
     expect(api.trashPreview).toHaveBeenCalledWith(1, 4, [8, 9]);
   });
 
-  it("leaves direct requests to the backend, which refuses with the same rule", () => {
+  it("leaves direct requests to the backend and says why it refuses them", async () => {
     const roots: Roots = {
       roots: [summary(false)],
       queue: [{ root: "/root", state: "scanning", folder: null }],
     };
-    useRenderTrash(roots).onTrash(1, [7]);
+    vi.mocked(api.trashPreview).mockRejectedValue({ code: "Busy" });
+    const [onError, push] = [vi.fn(), vi.fn()];
+    useRenderTrash(roots, 7, onError, push).onTrash(1, [7]);
     expect(api.trashPreview).toHaveBeenCalledWith(1, 4, [7]);
+    await flush();
+    expect(push).toHaveBeenCalledWith("trash.scanningItem");
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("keeps the last answer while a live update asks again, and asks again for a new job", async () => {
+    const job = { root: "/root", state: "scanning", folder: null } as const;
+    const at = (rev: number, folder: string | null = null): Roots => ({
+      roots: [{ ...summary(true), rev }],
+      queue: [{ ...job, folder }],
+    });
+    vi.mocked(api.trashRefused).mockResolvedValue(false);
+    useRenderTrash(at(4));
+    await flush();
+    const later = useRenderTrash(at(5));
+    expect(later.menuTrash).toBeTypeOf("function");
+    expect(later.trashNote).toBeNull();
+    expect(api.trashRefused).toHaveBeenLastCalledWith(1, 5, [7]);
+    await flush();
+    const calls = vi.mocked(api.trashRefused).mock.calls.length;
+    useRenderTrash(at(5, "/root/sub"));
+    expect(api.trashRefused).toHaveBeenCalledTimes(calls + 1);
+  });
+
+  it("asks once for the same items when two views ask at the same time", async () => {
+    const job = { root: "/root", state: "scanning", folder: null } as const;
+    hooks.beginRender();
+    useTrashRefused(job, 1, 4, [7]);
+    useTrashRefused(job, 1, 4, [7]);
+    expect(api.trashRefused).toHaveBeenCalledTimes(1);
+    await flush();
   });
 });

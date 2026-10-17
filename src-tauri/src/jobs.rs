@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::Ordering;
 
 use sizeatlas_core::cache::{self, CacheError, cache_path};
@@ -13,7 +13,7 @@ use sizeatlas_core::tree::Tree;
 use crate::dto::Summary;
 use crate::error::CmdError;
 use crate::exit::RUNNING;
-use crate::queue::{FolderTarget, ScanJob};
+use crate::queue::{FolderTarget, ScanJob, TrashedPath};
 use crate::sources;
 use crate::state::AppState;
 
@@ -55,8 +55,8 @@ impl AppState {
     }
 
     /// See `ScanQueue::note_trashed`.
-    pub fn note_trashed(&self, paths: Vec<PathBuf>) {
-        self.scans().note_trashed(paths);
+    pub fn note_trashed(&self, items: Vec<TrashedPath>) {
+        self.scans().note_trashed(items);
     }
 }
 

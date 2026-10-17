@@ -1,7 +1,8 @@
-import type { Roots } from "../api/types";
+import type { QueueEntry, Roots } from "../api/types";
 
-/** A job runs: only then can a scan keep items from the trash, so only then is the backend asked. */
-export const jobRuns = (roots: Roots): boolean => roots.queue.some((q) => q.state === "scanning");
+/** The running job: only while one runs can a scan keep items from the trash (the backend says). */
+export const runningJob = (roots: Roots): QueueEntry | null =>
+  roots.queue.find((q) => q.state === "scanning") ?? null;
 
 /** "Move to the trash" for some items: available, or not, with the reason for its tooltip. */
 export interface TrashAvailability {
@@ -12,8 +13,8 @@ export interface TrashAvailability {
 
 /**
  * Whether items can go to the trash now. Another trash request blocks it; while a job runs, the
- * backend says whether the scan still lists one of them (`refused`, undefined while asked): a
- * first scan's unfinished folders and a refreshed folder are refused, the rest may go.
+ * backend says whether the scan still lists one of them (`refused`, undefined until it first
+ * answers): a first scan's unfinished folders and a refreshed folder are refused, the rest may go.
  */
 export function trashAvailability(
   trashing: boolean,
@@ -23,4 +24,11 @@ export function trashAvailability(
   if (trashing) return { enabled: false, reason: null };
   if (!jobRunning) return { enabled: true, reason: null };
   return { enabled: refused === false, reason: refused === true ? "scanning" : null };
+}
+
+/** The text that says why `count` items cannot go; `isDir` of one item when it is known. */
+export function trashNoteKey(count: number, isDir?: boolean): string {
+  if (count > 1) return "trash.scanningItems";
+  if (isDir === undefined) return "trash.scanningItem";
+  return isDir ? "trash.scanningFolder" : "trash.scanningFile";
 }
