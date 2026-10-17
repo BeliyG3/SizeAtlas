@@ -11,6 +11,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
     t("app.title"),
     t("about.version", { version: displayVersion(version) }),
     t("about.license"),
+    t("about.author"),
   ].join("\n");
   return (
     <ConfirmDialog

@@ -134,6 +134,7 @@
   "export.done_other": "Экспортировано {rows} строки в {file}",
   "about.version": "Версия {version}",
   "about.license": "Свободная программа под лицензией MIT.",
+  "about.author": "Автор: Yuri Grib",
   "unit.auto": "Авто",
   "theme.system": "Как в системе",
   "theme.dark": "Тёмная",

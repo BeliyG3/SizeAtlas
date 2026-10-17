@@ -122,6 +122,7 @@
   "export.done_other": "Exported {rows} rows to {file}",
   "about.version": "Version {version}",
   "about.license": "Free software under the MIT license.",
+  "about.author": "Made by Yuri Grib",
   "unit.auto": "Auto",
   "theme.system": "System theme",
   "theme.dark": "Dark",
