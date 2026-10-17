@@ -67,6 +67,7 @@ pub fn run() {
             commands::restart_elevated,
             commands::take_startup_rescans,
             commands::open_privacy_settings,
+            commands::open_url,
             title_bar::set_title_bar,
             commands::roots::list_sources,
             commands::roots::list_roots,

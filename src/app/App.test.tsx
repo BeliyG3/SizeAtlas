@@ -41,6 +41,16 @@ vi.mock("../features/toasts/Toasts", () => ({
 }));
 vi.mock("../features/menubar/AppMenuBar", () => ({ AppMenuBar: () => null }));
 vi.mock("../features/shell/AccessBanner", () => ({ AccessBanner: () => null }));
+vi.mock("../features/update/UpdateBanner", () => ({ UpdateBanner: () => null }));
+vi.mock("../features/update/useUpdateCheck", () => ({
+  useUpdateCheck: () => ({
+    offered: null,
+    dismiss: vi.fn(),
+    checkNow: vi.fn(),
+    auto: true,
+    setAuto: vi.fn(),
+  }),
+}));
 vi.mock("../features/shell/StatusBar", () => ({ StatusBar: () => null }));
 vi.mock("../features/shell/Toolbar", () => ({ Toolbar: () => null }));
 vi.mock("../features/shell/chooseFolder", () => ({ chooseFolder: vi.fn() }));

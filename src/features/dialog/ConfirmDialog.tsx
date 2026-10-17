@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useT } from "../../i18n/react";
 import "./dialog.css";
 
@@ -8,8 +8,8 @@ export interface DialogAction {
 }
 
 interface Props {
-  /** Line breaks start new lines. */
-  message: string;
+  /** Line breaks start new lines; may hold a link. */
+  message: ReactNode;
   /**
    * Left to right, before Cancel. The first is the main one: it has the focus (unless
    * `focusCancel`), Enter presses it.

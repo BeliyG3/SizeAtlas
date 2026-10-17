@@ -10,6 +10,8 @@ import { StatusBar } from "../features/shell/StatusBar";
 import { Toolbar } from "../features/shell/Toolbar";
 import { expectedBytes, forgettable, savedScan } from "../features/shell/source";
 import { Toasts, useToasts } from "../features/toasts/Toasts";
+import { UpdateBanner } from "../features/update/UpdateBanner";
+import { useUpdateCheck } from "../features/update/useUpdateCheck";
 import { MODE_KEY, parseMode } from "../features/lists/modes";
 import { useStored } from "../settings/storage";
 import { formatCount } from "../format";
@@ -33,6 +35,7 @@ export function App() {
     [push, t, errorText],
   );
   const [mode, setMode] = useStored(MODE_KEY, parseMode);
+  const update = useUpdateCheck(push);
   const roots = useRoots(pushError, onSkipped, onScanError);
   const { sources, scanning, running, progress, refreshRoots } = roots;
 
@@ -149,6 +152,7 @@ export function App() {
         onCancel={() => roots.cancel()}
         onForget={roots.forget}
         onError={pushError}
+        update={update}
       />
       <Toolbar
         canBack={history.canBack}
@@ -170,6 +174,9 @@ export function App() {
         mode={mode}
         onMode={setMode}
       />
+      {update.offered && (
+        <UpdateBanner release={update.offered} onDismiss={update.dismiss} onError={pushError} />
+      )}
       {summary && summary.accessErrors > 0 && (
         <AccessBanner
           count={summary.accessErrors}

@@ -89,6 +89,8 @@ export const api = {
   takeStartupRescans: () => invoke<string[]>("take_startup_rescans"),
   /** Opens the Full Disk Access list in the macOS privacy settings. */
   openPrivacySettings: () => invoke<void>("open_privacy_settings"),
+  /** Opens a page of the SizeAtlas repository on GitHub in the browser; other URLs are refused. */
+  openUrl: (url: string) => invoke<void>("open_url", { url }),
   /**
    * Asks where to save `text` (the Save dialog suggests `suggestedName`) and writes it as UTF-8
    * with a BOM; the saved file's name, or null if the dialog was cancelled.

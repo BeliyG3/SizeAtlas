@@ -39,6 +39,14 @@
   padding: 2px 10px;
 }
 
+.banner button + button {
+  margin-left: 0;
+}
+
+.banner .close {
+  padding: 2px 8px;
+}
+
 .workspace {
   display: flex;
   flex: 1;

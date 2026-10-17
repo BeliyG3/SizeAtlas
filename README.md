@@ -1,6 +1,6 @@
 <h1><img src="src-tauri/icons/128x128.png" width="48" height="48" alt="" align="top"> SizeAtlas</h1>
 
-**Contents:** [What it does](#what-it-does) · [Install](#install) · [Using SizeAtlas](#using-sizeatlas) · [Benchmark](#benchmark) · [How sizes are counted](#how-sizes-are-counted) · [Moving to the trash](#moving-to-the-trash) · [Saved scans](#saved-scans) · [Building](#building) · [Releases](#releases) · [License](#license)
+**Contents:** [What it does](#what-it-does) · [Install](#install) · [Using SizeAtlas](#using-sizeatlas) · [Benchmark](#benchmark) · [How sizes are counted](#how-sizes-are-counted) · [Moving to the trash](#moving-to-the-trash) · [Saved scans](#saved-scans) · [Updates](#updates) · [Building](#building) · [Releases](#releases) · [License](#license)
 
 A cross-platform disk usage analyzer: see which folders and file types take up your disk space.
 
@@ -138,6 +138,10 @@ SizeAtlas saves each scan to the app data folder. At the next start it reopens t
 A saved scan that cannot be read any more is skipped, with one message for all of them. Scans that were still running or waiting are not restarted.
 
 Each file records the version of the cache format. The source list and the drives panel label a scan saved by an older version of SizeAtlas as **saved by another version**. Scan the drive or folder again to replace it.
+
+## Updates
+
+Once a day, at startup, SizeAtlas asks GitHub for the latest published release of [BeliyG3/SizeAtlas](https://github.com/BeliyG3/SizeAtlas). GitHub sees your IP address; nothing else is sent. If a newer version is out, a banner offers **Download**, which opens the release page in your browser; close the banner and that version is not offered again. SizeAtlas never downloads or installs anything itself. Turn the daily check off with **Help › Check for updates automatically**, or check at any time with **Help › Check for updates**. **Help › SizeAtlas on GitHub** and the link in **Help › About SizeAtlas** open the project page.
 
 ## Building
 

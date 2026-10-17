@@ -201,3 +201,62 @@ pub async fn open_privacy_settings() -> Result<(), CmdError> {
         os_message: e.to_string(),
     })
 }
+
+/// The project page on GitHub; `open_url` opens nothing else.
+const REPOSITORY: &str = "https://github.com/BeliyG3/SizeAtlas";
+
+/// The project page itself or a plain path under it, such as a release page.
+fn is_repository_url(url: &str) -> bool {
+    match url.strip_prefix(REPOSITORY) {
+        Some("") => true,
+        Some(rest) => {
+            rest.starts_with('/')
+                && !rest.contains("..")
+                && rest
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "/._-".contains(c))
+        }
+        None => false,
+    }
+}
+
+/// Opens a page of the project on GitHub in the browser; any other URL is refused.
+#[tauri::command]
+pub async fn open_url(url: String) -> Result<(), CmdError> {
+    if !is_repository_url(&url) {
+        return Err(CmdError::Io {
+            path: url,
+            os_message: "not a page of the SizeAtlas repository".to_owned(),
+        });
+    }
+    tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| CmdError::Io {
+        path: url,
+        os_message: e.to_string(),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_repository_url;
+
+    #[test]
+    fn opens_only_pages_of_the_repository() {
+        assert!(is_repository_url("https://github.com/BeliyG3/SizeAtlas"));
+        assert!(is_repository_url(
+            "https://github.com/BeliyG3/SizeAtlas/releases/tag/v2026.11.1"
+        ));
+        for url in [
+            "https://github.com/BeliyG3/SizeAtlasX",
+            "https://github.com/BeliyG3/SizeAtlas.evil.com",
+            "https://github.com/BeliyG3/SizeAtlas@evil.com",
+            "https://github.com/BeliyG3/SizeAtlas/../../other",
+            "https://github.com/BeliyG3/SizeAtlas/?q=1",
+            "http://github.com/BeliyG3/SizeAtlas",
+            "https://evil.com/https://github.com/BeliyG3/SizeAtlas",
+            "file:///C:/Windows",
+            "",
+        ] {
+            assert!(!is_repository_url(url), "{url}");
+        }
+    }
+}

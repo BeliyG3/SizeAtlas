@@ -1,10 +1,14 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useState } from "react";
+import { api } from "../../api/client";
 import { useT } from "../../i18n/react";
 import type { Separator } from "../export/csv";
 import { Icon } from "../icons/Icon";
 import type { IconName } from "../icons/paths";
+import { MenuChoice } from "../menu/MenuChoice";
 import { SubMenu } from "../menu/SubMenu";
+import { REPOSITORY } from "../update/github";
+import type { UpdateCheck } from "../update/useUpdateCheck";
 import { AboutDialog } from "./AboutDialog";
 import { MenuBar, type BarMenu } from "./MenuBar";
 import { ViewItems } from "./ViewItems";
@@ -37,6 +41,8 @@ interface Props {
   /** Deletes the saved scan of `root`, closing it if it is open. */
   onForget: (root: string) => void;
   onError: (e: unknown) => void;
+  /** Help › Check for updates and its automatic check. */
+  update: UpdateCheck;
 }
 
 /** File, Scan, View and Help above the toolbar. */
@@ -56,6 +62,7 @@ export function AppMenuBar({
   onCancel,
   onForget,
   onError,
+  update,
 }: Props) {
   const { t } = useT();
   const [about, setAbout] = useState(false);
@@ -94,6 +101,7 @@ export function AppMenuBar({
       onError(e);
     }
   };
+  const openRepository = () => void api.openUrl(REPOSITORY).catch(onError);
   const menus: BarMenu[] = [
     {
       id: "file",
@@ -129,13 +137,26 @@ export function AppMenuBar({
     {
       id: "help",
       label: t("menubar.help"),
-      items: item("info", t("menubar.about"), () => setAbout(true)),
+      items: (
+        <>
+          {item("refresh", t("update.check"), update.checkNow)}
+          <MenuChoice
+            kind="check"
+            checked={update.auto}
+            label={t("update.auto")}
+            onPick={() => update.setAuto(!update.auto)}
+          />
+          <div role="separator" />
+          {item("open", t("menubar.github"), openRepository)}
+          {item("info", t("menubar.about"), () => setAbout(true))}
+        </>
+      ),
     },
   ];
   return (
     <>
       <MenuBar label={t("menubar.label")} menus={menus} />
-      {about && <AboutDialog onClose={() => setAbout(false)} />}
+      {about && <AboutDialog onClose={() => setAbout(false)} onOpenRepository={openRepository} />}
     </>
   );
 }
