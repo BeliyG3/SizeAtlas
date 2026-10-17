@@ -34,7 +34,7 @@ Download the installer for your system from the [Releases](https://github.com/Be
 | Platform | Status |
 |---|---|
 | Windows | Tested |
-| macOS | Tested on the `.dmg` (architecture pending) |
+| macOS | Tested on the `.dmg` for Apple silicon (MacBook Air M2); the Intel build is untested |
 | Linux | Untested |
 
 **Versions** are calendar versions `YEAR.MONTH.N`. The first release of a month is shown as `2026.10`, the next ones as `2026.10.1`, `2026.10.2` and so on.
