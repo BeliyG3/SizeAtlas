@@ -140,6 +140,41 @@ fn unreadable_folders_are_not_empty() {
 }
 
 #[test]
+fn unreadable_folders_are_listed_by_path_without_the_root_and_dead_nodes() {
+    let locked = |id, parent, name| {
+        let mut d = dir(id, parent, name, 1, vec![]);
+        d.flags = flags::IS_DIR | flags::ACCESS_ERROR;
+        d
+    };
+    let tree_of = || {
+        Tree::from_records(
+            vec![
+                locked(0, NO_PARENT, "/r"),
+                dir(1, 0, "a", 1, vec![file("f", 1, 1)]),
+                locked(2, 1, "b"),
+                locked(3, 0, "c"),
+                locked(4, 0, "dead"),
+                dir(5, 0, "open", 1, vec![]),
+            ],
+            META,
+        )
+    };
+    let mut tree = tree_of();
+    let dead = id_of(&tree, "dead");
+    tree.nodes_mut_for_test()[dead as usize].flags &= !flags::ALIVE;
+    fn list(tree: &Tree, id: u32, limit: usize) -> Vec<&str> {
+        names(tree, tree.list(id, ListKind::Unreadable, limit).items)
+    }
+    // a/b comes before c: by path, the root left out, the dead one skipped.
+    assert_eq!(list(&tree, 0, 10), ["b", "c"]);
+    assert_eq!(list(&tree, id_of(&tree, "a"), 10), ["b"]);
+    let capped = tree.list(0, ListKind::Unreadable, 1);
+    assert_eq!(names(&tree, capped.items), ["b"]);
+    assert!(capped.truncated);
+    assert_eq!(list(&tree_of(), 0, 10), ["b", "c", "dead"]);
+}
+
+#[test]
 fn longest_paths_follow_the_full_path_in_characters() {
     let tree = tree();
     let chars = |id: u32| tree.path(id).to_string_lossy().chars().count();

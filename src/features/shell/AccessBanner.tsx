@@ -40,18 +40,41 @@ function useElevated(ask: boolean): boolean | null {
   return elevated;
 }
 
+/** Whether the app has Full Disk Access on macOS, asked once per mount; null until known. */
+function useFullDiskAccess(ask: boolean): boolean | null {
+  const [granted, setGranted] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!ask) return;
+    let live = true;
+    // Unknown counts as no access: the settings button stays.
+    void api
+      .hasFullDiskAccess()
+      .catch(() => false)
+      .then((value) => {
+        if (live) setGranted(value);
+      });
+    return () => {
+      live = false;
+    };
+  }, [ask]);
+  return granted;
+}
+
 interface Props {
   count: number;
   /** The root the banner is about: the one rescanned after a restart. */
   root: string;
   push: (text: string) => void;
   errorText: (e: unknown) => string;
+  /** Lists the unreadable folders of `root`. */
+  onShow: () => void;
 }
 
-export function AccessBanner({ count, root, push, errorText }: Props) {
+export function AccessBanner({ count, root, push, errorText, onShow }: Props) {
   const { t, lang } = useT();
   const os = platform();
   const elevated = useElevated(os === "windows");
+  const fullDiskAccess = useFullDiskAccess(os === "mac");
   const [busy, setBusy] = useState(false);
   // The banner can go away while the restart waits for the UAC prompt.
   const live = useRef(true);
@@ -75,8 +98,14 @@ export function AccessBanner({ count, root, push, errorText }: Props) {
   };
   const openPrivacy = () => void api.openPrivacySettings().catch((e) => push(osText(e)));
   const canRestart = os === "windows" && elevated === false;
-  // An administrator has nothing left to try: what stays unread is closed to everyone.
-  const hint = os === "windows" && elevated === true ? "banner.hintAdmin" : HINT[os];
+  // An administrator, or a Mac app with Full Disk Access, has nothing left to try: what stays
+  // unread is closed to everyone.
+  const hint =
+    os === "windows" && elevated === true
+      ? "banner.hintAdmin"
+      : os === "mac" && fullDiskAccess === true
+        ? "banner.hintMacFda"
+        : HINT[os];
 
   return (
     <p className="banner" role="note">
@@ -88,7 +117,10 @@ export function AccessBanner({ count, root, push, errorText }: Props) {
           {t("banner.restartElevated")}
         </button>
       )}
-      {os === "mac" && <button onClick={openPrivacy}>{t("banner.openPrivacy")}</button>}
+      {os === "mac" && fullDiskAccess !== true && (
+        <button onClick={openPrivacy}>{t("banner.openPrivacy")}</button>
+      )}
+      <button onClick={onShow}>{t("banner.show")}</button>
     </p>
   );
 }

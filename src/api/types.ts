@@ -180,6 +180,7 @@ export type ListKind =
   | "emptyFolders"
   | "emptyFiles"
   | "empty"
+  | "unreadable"
   | "longestPaths";
 
 export interface ListItem extends Item {

@@ -189,6 +189,10 @@ export function App() {
           root={summary.root}
           push={push}
           errorText={errorText}
+          onShow={() => {
+            setMode("unreadable");
+            selectRoot(summary.root);
+          }}
         />
       )}
       <main className="workspace">

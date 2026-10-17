@@ -172,6 +172,11 @@ pub fn is_elevated() -> bool {
     elevate::is_elevated()
 }
 
+#[tauri::command]
+pub fn has_full_disk_access() -> bool {
+    elevate::has_full_disk_access()
+}
+
 /// Starts the app again as administrator to scan `roots` again, then closes this window the
 /// way its close button does. Windows only.
 #[tauri::command]

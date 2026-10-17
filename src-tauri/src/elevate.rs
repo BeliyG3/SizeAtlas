@@ -1,4 +1,5 @@
-//! Restarting as administrator on Windows, and the roots that the restarted app scans again.
+//! Restarting as administrator on Windows, and the roots that the restarted app scans again;
+//! whether the app has Full Disk Access on macOS.
 
 use std::mem;
 use std::sync::{Mutex, PoisonError};
@@ -86,6 +87,19 @@ pub fn is_elevated() -> bool {
         windows::is_elevated()
     }
     #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+/// Whether this process has Full Disk Access on macOS: the privacy database opens only with it.
+/// Any failure counts as no access (always false off macOS).
+pub fn has_full_disk_access() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        std::fs::File::open("/Library/Application Support/com.apple.TCC/TCC.db").is_ok()
+    }
+    #[cfg(not(target_os = "macos"))]
     {
         false
     }

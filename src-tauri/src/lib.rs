@@ -64,6 +64,7 @@ pub fn run() {
             commands::items::item_path,
             commands::items::show_properties,
             commands::is_elevated,
+            commands::has_full_disk_access,
             commands::restart_elevated,
             commands::take_startup_rescans,
             commands::open_privacy_settings,

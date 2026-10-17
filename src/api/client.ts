@@ -86,6 +86,8 @@ export const api = {
   itemPath: (generation: number, id: number) => invoke<string>("item_path", { generation, id }),
   /** Whether the app runs as administrator; false off Windows. */
   isElevated: () => invoke<boolean>("is_elevated"),
+  /** Whether the app has Full Disk Access; false off macOS. */
+  hasFullDiskAccess: () => invoke<boolean>("has_full_disk_access"),
   /** Starts the app again as administrator to rescan `roots`, then closes this window. Windows only. */
   restartElevated: (roots: string[]) => invoke<void>("restart_elevated", { roots }),
   /** Roots to rescan, named when the app was started; empty after the first call. */

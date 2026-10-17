@@ -24,6 +24,7 @@ export const MODE_MENU: readonly ModeEntry[] = [
   { submenu: "oldest", modes: ["oldestFiles", "oldestFolders", "oldest"] },
   { submenu: "newest", modes: ["newestFiles", "newestFolders", "newest"] },
   { submenu: "empty", modes: ["emptyFolders", "emptyFiles", "empty"] },
+  "unreadable",
   "-",
   "longestPaths",
 ];

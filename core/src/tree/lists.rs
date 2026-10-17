@@ -1,5 +1,5 @@
 //! Flat lists over a subtree for the contents table: the largest, oldest or newest items, empty
-//! ones and the longest paths.
+//! ones, unreadable folders and the longest paths.
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -30,6 +30,8 @@ pub enum ListKind {
     EmptyFolders,
     EmptyFiles,
     Empty,
+    /// Folders that could not be read, by path.
+    Unreadable,
     /// Files and folders by the length of their full path in characters, longest first.
     LongestPaths,
 }
@@ -55,6 +57,8 @@ enum Rank {
     Newest,
     /// Tree order, which is the order of the paths.
     Empty,
+    /// Tree order too.
+    Unreadable,
     Longest,
 }
 
@@ -75,6 +79,7 @@ impl ListKind {
             K::EmptyFolders => (Folders, Rank::Empty),
             K::EmptyFiles => (Files, Rank::Empty),
             K::Empty => (Both, Rank::Empty),
+            K::Unreadable => (Folders, Rank::Unreadable),
             K::LongestPaths => (Both, Rank::Longest),
         }
     }
@@ -90,10 +95,14 @@ impl Tree {
             Items::Both => true,
         };
         let mut matched = 0usize;
-        if let Rank::Empty = rank {
+        if let Rank::Empty | Rank::Unreadable = rank {
             let mut found = Vec::new();
             self.walk_below(id, false, |node, n, _| {
-                if wanted(n) && self.is_empty_item(node, n) {
+                let fits = match rank {
+                    Rank::Empty => self.is_empty_item(node, n),
+                    _ => n.has(flags::ACCESS_ERROR),
+                };
+                if wanted(n) && fits {
                     matched += 1;
                     if found.len() < limit {
                         found.push(node);

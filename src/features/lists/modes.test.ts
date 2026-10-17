@@ -12,7 +12,7 @@ describe("table modes", () => {
   });
 
   it("offer every mode once, each with a label", () => {
-    expect(MODES).toHaveLength(15);
+    expect(MODES).toHaveLength(16);
     expect(new Set(MODES).size).toBe(MODES.length);
     for (const mode of MODES) expect(en).toHaveProperty([`mode.${mode}`]);
     for (const entry of MODE_MENU) {
@@ -23,6 +23,6 @@ describe("table modes", () => {
   it("tell the flat lists from the folder views", () => {
     expect(isListMode("all")).toBe(false);
     expect(isListMode("folders")).toBe(false);
-    expect(MODES.filter(isListMode)).toHaveLength(13);
+    expect(MODES.filter(isListMode)).toHaveLength(14);
   });
 });

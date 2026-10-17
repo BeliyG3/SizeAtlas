@@ -189,6 +189,7 @@ fn list_kinds_and_list_items_use_camel_case() {
         ("emptyFolders", ListKind::EmptyFolders),
         ("emptyFiles", ListKind::EmptyFiles),
         ("empty", ListKind::Empty),
+        ("unreadable", ListKind::Unreadable),
         ("longestPaths", ListKind::LongestPaths),
     ];
     for (name, kind) in kinds {
