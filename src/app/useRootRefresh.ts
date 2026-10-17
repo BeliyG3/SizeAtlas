@@ -12,6 +12,9 @@ export function useRootRefresh(onError: (e: unknown) => void) {
   const current = useRef(EMPTY);
   const times = useRef(new Map<number, number>());
   const asked = useRef(0);
+  // An immediate refresh asked for since the last answer landed: a later request may supersede
+  // it (the trash command also emits roots-changed), so the answer that lands applies it.
+  const urgent = useRef(false);
   const lifecycle = useRef({ live: false });
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
@@ -26,15 +29,18 @@ export function useRootRefresh(onError: (e: unknown) => void) {
     /** `now`: apply every revision at once, as after a change the user made (a trash). */
     function request(now = false): Promise<void> {
       const id = ++asked.current;
+      if (now) urgent.current = true;
       const life = lifecycle.current;
       return api.listRoots().then(
         (next) => {
           if (!life.live || id !== asked.current) return;
+          const immediate = urgent.current;
+          urgent.current = false;
           const update = liveRoots(
             current.current,
             next,
             performance.now(),
-            now ? 0 : refreshInterval("tree"),
+            immediate ? 0 : refreshInterval("tree"),
             times.current,
           );
           current.current = update.roots;

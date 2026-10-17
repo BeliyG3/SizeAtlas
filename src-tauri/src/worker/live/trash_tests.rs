@@ -5,6 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use sizeatlas_core::cache::{self, cache_path};
+use sizeatlas_core::tree::{ListOrder, flags};
 
 use super::tests::assert_totals;
 use super::*;
@@ -99,6 +100,18 @@ fn a_first_scan_lets_finished_folders_and_root_files_go_but_not_pending_ones() {
         "g.txt and h.txt; b was grafted after the trash"
     );
     assert!(tree.find_path(&root.join("b/h.txt")).is_some());
+    // What the contents table asks for once the scan is over: the summary, then the folder.
+    let summary = state.summaries()[0].clone();
+    assert_eq!((summary.generation, summary.rev), (scan, tree.rev));
+    assert!(!summary.scanning);
+    let a = tree.find_path(&root.join("a")).unwrap();
+    drop(tree);
+    let page = state
+        .children(summary.generation, a, 0, 200, ListOrder::DEFAULT)
+        .unwrap();
+    assert_eq!((page.rev, page.total), (summary.rev, 1));
+    let names: Vec<_> = page.items.iter().map(|i| i.name.as_str()).collect();
+    assert_eq!(names, ["g.txt"]);
     let saved = saved(cache.path(), &job.root);
     assert_eq!(saved.node(0).files, 2);
     assert!(saved.find_path(&root.join("a/f.txt")).is_none());
@@ -159,4 +172,77 @@ fn an_item_a_rescan_listed_before_it_went_is_not_in_the_installed_tree() {
     )
     .unwrap();
     assert_eq!((done.removed, done.failed), (1, Vec::new()));
+}
+
+/// The whole worker, as the app runs it: a trash of a finished folder's file during a first
+/// scan (holding the write, as the command does) is gone from the tree the scan installs.
+#[test]
+fn a_file_trashed_during_a_first_scan_stays_out_of_the_finished_tree() {
+    let (dir, cache) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    files(dir.path(), &["a/f.txt", "a/g.txt", "b/h.txt"]);
+    // Enough in b that the walk is still busy when the trash takes the write.
+    for i in 0..2000 {
+        fs::write(dir.path().join(format!("b/{i}")), b"x").unwrap();
+    }
+    let state = AppState::default();
+    let job = state.enqueue(root_of(&dir)).unwrap();
+    let root = PathBuf::from(&root_of(&dir));
+    let log = Mutex::new(Vec::new());
+    std::thread::scope(|s| {
+        let trasher = s.spawn(|| {
+            let wait = |done: &dyn Fn() -> bool| {
+                let start = Instant::now();
+                while !done() {
+                    assert!(
+                        start.elapsed() < Duration::from_secs(10),
+                        "scan never got there"
+                    );
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            };
+            wait(&|| !state.summaries().is_empty());
+            // Before the walk ends: the scan cannot finish until this write is released.
+            let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+            let summary = state.summaries()[0].clone();
+            let a_done = || {
+                let tree = state.tree(summary.generation).unwrap();
+                tree.find_path(&root.join("a/f.txt")).is_some()
+            };
+            wait(&a_done);
+            let tree = state.tree(summary.generation).unwrap();
+            assert!(tree.node(0).has(flags::SCANNING));
+            let f = tree.find_path(&root.join("a/f.txt")).unwrap();
+            drop(tree);
+            let done = crate::recycle::run(
+                &state,
+                cache.path(),
+                summary.generation,
+                summary.rev,
+                &[f],
+                anywhere,
+                deleting(&log),
+            )
+            .unwrap();
+            assert_eq!((done.removed, done.warning), (1, None));
+            drop(write);
+        });
+        run_queue(&state, cache.path(), job);
+        trasher.join().unwrap();
+    });
+    let summary = state.summaries()[0].clone();
+    assert!(!summary.scanning);
+    let tree = state.tree(summary.generation).unwrap();
+    assert!(tree.find_path(&root.join("a/f.txt")).is_none());
+    let a = tree.find_path(&root.join("a")).unwrap();
+    drop(tree);
+    let page = state
+        .children(summary.generation, a, 0, 200, ListOrder::DEFAULT)
+        .unwrap();
+    let names: Vec<_> = page.items.iter().map(|i| i.name.as_str()).collect();
+    assert_eq!((page.rev, names), (summary.rev, vec!["g.txt"]));
+    assert!(
+        saved(cache.path(), &summary.root)
+            .find_path(&root.join("a/f.txt"))
+            .is_none()
+    );
 }
