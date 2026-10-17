@@ -13,3 +13,6 @@ Thumbs.db
 
 # Icon sources and packs, not published (the app uses the files in src-tauri/icons)
 ico/
+
+# Release files collected for distribution (Patreon), not published here
+Builds/
