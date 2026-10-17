@@ -12,8 +12,19 @@
   background: rgb(0 0 0 / 40%);
 }
 
+.confirm .body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.confirm .body .icon {
+  flex: 0 0 auto;
+}
+
 .confirm p {
-  margin: 0 0 16px;
+  margin: 0;
   overflow-wrap: anywhere;
   white-space: pre-line;
 }

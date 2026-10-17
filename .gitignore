@@ -10,3 +10,6 @@ src-tauri/gen/schemas/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Icon sources and packs, not published (the app uses the files in src-tauri/icons)
+ico/

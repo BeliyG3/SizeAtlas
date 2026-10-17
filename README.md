@@ -1,4 +1,4 @@
-# SizeAtlas
+<h1><img src="src-tauri/icons/128x128.png" width="48" height="48" alt="" align="top"> SizeAtlas</h1>
 
 **Contents:** [What it does](#what-it-does) · [Install](#install) · [Using SizeAtlas](#using-sizeatlas) · [Benchmark](#benchmark) · [How sizes are counted](#how-sizes-are-counted) · [Moving to the trash](#moving-to-the-trash) · [Saved scans](#saved-scans) · [Building](#building) · [Releases](#releases) · [License](#license)
 

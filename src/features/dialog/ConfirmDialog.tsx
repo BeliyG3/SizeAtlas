@@ -21,13 +21,22 @@ interface Props {
   cancelLabel?: string;
   /** Any button or Escape closes the dialog. */
   onClose: () => void;
+  /** An image at the left of the message, such as the app icon. */
+  icon?: string;
 }
 
 /**
  * A modal question inside the window: the rest of the window is inert while it is open, Escape
  * cancels, and the focus goes back where it was when it closes.
  */
-export function ConfirmDialog({ message, actions, cancelLabel, focusCancel, onClose }: Props) {
+export function ConfirmDialog({
+  message,
+  actions,
+  cancelLabel,
+  focusCancel,
+  onClose,
+  icon,
+}: Props) {
   const { t } = useT();
   const id = useId();
   const box = useRef<HTMLDialogElement>(null);
@@ -63,7 +72,10 @@ export function ConfirmDialog({ message, actions, cancelLabel, focusCancel, onCl
       // Escape: the browser closes the dialog (it may not let a page refuse that).
       onClose={onClose}
     >
-      <p id={id}>{message}</p>
+      <div className="body">
+        {icon && <img className="icon" src={icon} width={64} height={64} alt="" />}
+        <p id={id}>{message}</p>
+      </div>
       <div className="actions">
         {actions.map((a, i) => (
           <button

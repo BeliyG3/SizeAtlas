@@ -1,4 +1,5 @@
 import { version } from "../../../package.json";
+import appIcon from "../../assets/app-icon-128.png";
 import { useT } from "../../i18n/react";
 import { ConfirmDialog } from "../dialog/ConfirmDialog";
 import { displayVersion } from "./version";
@@ -17,6 +18,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
       actions={[]}
       cancelLabel={t("dialog.close")}
       onClose={onClose}
+      icon={appIcon}
     />
   );
 }
