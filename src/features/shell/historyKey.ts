@@ -2,15 +2,19 @@
 export const BACK_BUTTON = 3;
 export const FORWARD_BUTTON = 4;
 
-type Key = Pick<KeyboardEvent, "key" | "altKey" | "ctrlKey" | "shiftKey" | "metaKey">;
+type Key = Pick<KeyboardEvent, "key" | "code" | "altKey" | "ctrlKey" | "shiftKey" | "metaKey">;
+
+const ALT_KEYS: Record<string, -1 | 1> = { ArrowLeft: -1, ArrowRight: 1 };
+/** By physical key, so ⌘[ and ⌘] work on any keyboard layout. */
+const META_CODES: Record<string, -1 | 1> = { BracketLeft: -1, BracketRight: 1 };
 
 /**
- * -1 for Alt+←, 1 for Alt+→ (back and forward through visited folders), else null. Controls that
- * take arrow keys leave these to the history.
+ * -1 for Alt+← or ⌘[, 1 for Alt+→ or ⌘] (back and forward through visited folders), else null.
+ * Controls that take arrow keys leave these to the history.
  */
 export function historyKey(e: Key): -1 | 1 | null {
-  if (!e.altKey || e.ctrlKey || e.shiftKey || e.metaKey) return null;
-  if (e.key === "ArrowLeft") return -1;
-  if (e.key === "ArrowRight") return 1;
+  if (e.ctrlKey || e.shiftKey) return null;
+  if (e.altKey && !e.metaKey) return ALT_KEYS[e.key] ?? null;
+  if (e.metaKey && !e.altKey) return META_CODES[e.code] ?? null;
   return null;
 }

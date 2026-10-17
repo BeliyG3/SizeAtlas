@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BACK_BUTTON, FORWARD_BUTTON, historyKey } from "../features/shell/historyKey";
+import { idleSwipe, scrollsAlong, swipeDelta, swipeStep } from "../features/shell/swipe";
 import { emptyHistory, restore, step, toVisit, visit } from "./history";
 import type { RootEntry } from "./roots";
 import type { Selection } from "./selection";
 
-/** Typing in these must keep Alt+arrows to itself. */
+/** Typing in these must keep Alt+arrows and Cmd+brackets to itself. */
 export const typing = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName));
@@ -16,7 +17,7 @@ export const busy = (target: EventTarget | null) =>
 
 /**
  * Back and forward through the folders the view showed, from the mouse side buttons, Alt+← and
- * Alt+→. `record` adds a folder the user chose; `jump` shows one without recording it.
+ * Alt+→, ⌘[ and ⌘], and a two-finger swipe on a trackpad. `record` adds a folder the user chose; `jump` shows one without recording it.
  */
 export function useHistory(
   selection: Selection | null,
@@ -74,13 +75,26 @@ export function useHistory(
       e.preventDefault();
       if (!e.repeat && !busy(e.target)) latestGo.current(dir);
     };
+    let swipe = idleSwipe;
+    // Passive: the swipe never stops the scrolling it shares the wheel events with.
+    const wheel = (e: WheelEvent) => {
+      const dx = swipeDelta(e);
+      if (dx === null) return;
+      const r = swipeStep(swipe, dx, e.timeStamp, scrollsAlong(e.target, dx));
+      swipe = r.swipe;
+      if (r.dir !== null && !typing(document.activeElement) && !busy(e.target)) {
+        latestGo.current(r.dir);
+      }
+    };
     window.addEventListener("mousedown", press);
     window.addEventListener("mouseup", release);
     window.addEventListener("keydown", key);
+    window.addEventListener("wheel", wheel, { passive: true });
     return () => {
       window.removeEventListener("mousedown", press);
       window.removeEventListener("mouseup", release);
       window.removeEventListener("keydown", key);
+      window.removeEventListener("wheel", wheel);
     };
   }, []);
 
