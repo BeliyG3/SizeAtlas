@@ -94,6 +94,7 @@ function render(scanning: boolean, state: "queued" | "scanning", folder: number)
     closeRoot: vi.fn(),
     forget: vi.fn(),
     refreshRoots: vi.fn(),
+    refreshRootsNow: vi.fn(),
   });
   vi.mocked(useSelection).mockReturnValue({
     selection: { root: "/root", generation: 1, id: folder, folder },

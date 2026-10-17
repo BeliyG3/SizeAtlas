@@ -23,6 +23,8 @@ interface Args {
   entries: readonly RootEntry[];
   selection: Selection | null;
   push: (text: string) => void;
+  /** Shows the tree without the trashed items at once, even while a first scan paces updates. */
+  onTrashed: () => void;
   onError: (e: unknown) => void;
   errorText: (e: unknown) => string;
 }
@@ -35,7 +37,7 @@ interface Args {
  * item (never a root); null while there is none, a trash runs or a scan still lists one of them
  * (`trashNote` then says why). The backend refuses the same items.
  */
-export function useTrash({ roots, entries, selection, push, onError, errorText }: Args) {
+export function useTrash({ roots, entries, selection, push, onTrashed, onError, errorText }: Args) {
   const { t, lang } = useT();
   const [asking, setAsking] = useState<Asking | null>(null);
   const [busy, setBusy] = useState(false);
@@ -65,6 +67,7 @@ export function useTrash({ roots, entries, selection, push, onError, errorText }
     api
       .trash(generation, rev, ids)
       .then((result) => {
+        onTrashed();
         for (const text of trashReport(result, t, errorText, (n) => formatCount(n, lang))) {
           push(text);
         }

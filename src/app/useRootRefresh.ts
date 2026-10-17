@@ -23,7 +23,8 @@ export function useRootRefresh(onError: (e: unknown) => void) {
     };
   }, []);
   const refresh = useCallback(
-    function request(): Promise<void> {
+    /** `now`: apply every revision at once, as after a change the user made (a trash). */
+    function request(now = false): Promise<void> {
       const id = ++asked.current;
       const life = lifecycle.current;
       return api.listRoots().then(
@@ -33,7 +34,7 @@ export function useRootRefresh(onError: (e: unknown) => void) {
             current.current,
             next,
             performance.now(),
-            refreshInterval("tree"),
+            now ? 0 : refreshInterval("tree"),
             times.current,
           );
           current.current = update.roots;

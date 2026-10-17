@@ -166,5 +166,7 @@ export function useRoots(
     closeRoot,
     forget,
     refreshRoots,
+    /** Applies the latest revisions at once, without the live-scan pacing. */
+    refreshRootsNow: useCallback(() => void refreshRoots(true), [refreshRoots]),
   };
 }

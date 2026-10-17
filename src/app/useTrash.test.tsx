@@ -72,6 +72,7 @@ function useRenderTrash(roots: Roots, id = 7, onError = vi.fn(), push = vi.fn())
     entries: rootEntries(roots),
     selection: { root: "/root", generation: 1, id, folder: id },
     push,
+    onTrashed: () => {},
     onError,
     errorText: String,
   });

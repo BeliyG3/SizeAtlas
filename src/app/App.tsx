@@ -119,6 +119,7 @@ export function App() {
     entries,
     selection,
     push,
+    onTrashed: roots.refreshRootsNow,
     onError: fail,
     errorText,
   });
