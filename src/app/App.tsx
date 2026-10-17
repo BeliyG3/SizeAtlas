@@ -15,7 +15,7 @@ import { useStored } from "../settings/storage";
 import { formatCount } from "../format";
 import { useT } from "../i18n/react";
 import { Browser } from "./Browser";
-import { fullScanRoots, rootEntries, runningFullScanRoots } from "./roots";
+import { busyRoots, fullScanRoots, rootEntries, runningFullScanRoots } from "./roots";
 import { useChangeKeys } from "./useChangeKeys";
 import { useTrash } from "./useTrash";
 import { useRoots } from "./useRoots";
@@ -57,6 +57,7 @@ export function App() {
   const inTree = useMemo(() => new Set(entries.map((e) => e.root)), [entries]);
   const waiting = useMemo(() => fullScanRoots(roots.roots), [roots.roots]);
   const fullScans = useMemo(() => runningFullScanRoots(roots.roots), [roots.roots]);
+  const busy = useMemo(() => busyRoots(roots.roots), [roots.roots]);
   const selectedRoot = selection?.root ?? null;
   // The source picked on the toolbar holds while the same root stays selected.
   const [picked, setPicked] = useState<{ path: string; base: string | null } | null>(null);
@@ -122,7 +123,11 @@ export function App() {
   useChangeKeys({
     onRefresh: () => refreshCurrent?.(),
     onRescan: () => rescan?.(),
-    onDelete: () => trash.menuTrash?.(),
+    // Refused while a scan still lists the items: say why, as the menu item does.
+    onDelete: () => {
+      if (trash.menuTrash) trash.menuTrash();
+      else if (trash.trashNote) push(trash.trashNote);
+    },
     onExport: () => void exporter.run(exporter.separator),
   });
 
@@ -134,6 +139,7 @@ export function App() {
         onRefresh={refreshCurrent}
         refreshIsRescan={atRoot}
         onTrash={trash.menuTrash}
+        trashNote={trash.trashNote}
         scanning={scanning !== null}
         forgetTarget={forgettable(sources, pending)}
         onChooseFolder={scanFolder}
@@ -187,7 +193,8 @@ export function App() {
             onScanFolder={scanItem}
             onTrash={trash.onTrash}
             onMarks={trash.onMarks}
-            busyRoots={trash.busyRoots}
+            busyRoots={busy}
+            jobRunning={trash.jobRunning}
             fullScans={fullScans}
             trashing={trash.busy}
             onCloseRoot={roots.closeRoot}

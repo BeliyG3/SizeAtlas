@@ -20,6 +20,8 @@ interface Props {
   refreshIsRescan: boolean;
   /** Scan › Move to the trash: the marked rows, else the selected item; null when none or busy. */
   onTrash: (() => void) | null;
+  /** Why Scan › Move to the trash is unavailable, for its tooltip. */
+  trashNote: string | null;
   /** A scan runs: Scan › Cancel stops it. */
   scanning: boolean;
   /** Scan › Forget: the picked source if it has a saved scan. */
@@ -44,6 +46,7 @@ export function AppMenuBar({
   onRefresh,
   refreshIsRescan,
   onTrash,
+  trashNote,
   scanning,
   forgetTarget,
   onChooseFolder,
@@ -57,11 +60,18 @@ export function AppMenuBar({
   const { t } = useT();
   const [about, setAbout] = useState(false);
   /** A menu item; `run` null disables it; `keys` is its shortcut, shown on the right. */
-  const item = (icon: IconName, label: string, run: (() => void) | null, keys?: string) => (
+  const item = (
+    icon: IconName,
+    label: string,
+    run: (() => void) | null,
+    keys?: string,
+    note?: string | null,
+  ) => (
     <button
       role="menuitem"
       className={keys ? "keyed" : undefined}
       disabled={run === null}
+      title={note ?? undefined}
       onClick={run ?? undefined}
     >
       <Icon name={icon} />
@@ -111,7 +121,7 @@ export function AppMenuBar({
           {item("cancel", t("toolbar.cancel"), scanning ? onCancel : null)}
           {item("forget", t("toolbar.forget"), on(forgetTarget, onForget))}
           <div role="separator" />
-          {item("trash", t("menu.trash"), onTrash, "Del")}
+          {item("trash", t("menu.trash"), onTrash, "Del", trashNote)}
         </>
       ),
     },

@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { ScanProgress, Sources } from "../api/types";
 import { DEFAULT_SORT, type SortState } from "../features/contents/columns";
 import { DrivesPanel } from "../features/drives/DrivesPanel";
-import { ItemMenu, type MenuTarget } from "../features/menu/ItemMenu";
+import { ItemMenu, menuIds, type MenuTarget } from "../features/menu/ItemMenu";
 import { RootMenu, type RootMenuTarget } from "../features/menu/RootMenu";
 import { ScanView } from "../features/scan/ScanView";
 import { Workspace } from "../features/shell/Workspace";
@@ -16,6 +16,8 @@ import { useT } from "../i18n/react";
 import { itemMenuActions } from "./itemActions";
 import type { RootEntry } from "./roots";
 import type { Selection } from "./selection";
+import { trashAvailability } from "./trashRule";
+import { useTrashRefused } from "./useTrashRefused";
 
 interface Props {
   entries: readonly RootEntry[];
@@ -36,8 +38,10 @@ interface Props {
   onTrash: (generation: number, ids: readonly number[]) => void;
   /** The marked rows of the table, whenever they change (stable). */
   onMarks: (ids: readonly number[]) => void;
-  /** Roots with a running job: nothing of them goes to the trash. */
+  /** Roots with a running job: they cannot be scanned again from their menu. */
   busyRoots: ReadonlySet<string>;
+  /** A job runs: it may keep the items of a menu from the trash (the backend says). */
+  jobRunning: boolean;
   /** Roots inside a running full scan: refresh and child scans are unavailable. */
   fullScans: ReadonlySet<string>;
   /** A trash request runs. */
@@ -53,6 +57,8 @@ interface Props {
   /** Stable handler for failed requests. */
   onFail: (e: unknown) => void;
 }
+
+const NO_IDS: readonly number[] = [];
 
 type MenuState =
   | { kind: "item"; generation: number; target: MenuTarget }
@@ -73,6 +79,7 @@ export function Browser({
   onTrash,
   onMarks,
   busyRoots,
+  jobRunning,
   fullScans,
   trashing,
   onCloseRoot,
@@ -130,13 +137,18 @@ export function Browser({
         }
       : null;
 
-  const itemActions = itemMenuActions(
-    entries,
-    menu?.kind === "item" ? menu.generation : undefined,
-    fullScans,
-    busyRoots,
-    trashing,
+  const itemMenu = menu?.kind === "item" ? menu : null;
+  const itemActions = itemMenuActions(entries, itemMenu?.generation, fullScans);
+  const itemRev =
+    entries.find((e) => itemMenu && e.summary?.generation === itemMenu.generation)?.summary?.rev ??
+    null;
+  const refused = useTrashRefused(
+    jobRunning,
+    itemMenu?.generation ?? null,
+    itemRev,
+    itemMenu ? menuIds(itemMenu.target) : NO_IDS,
   );
+  const itemTrash = trashAvailability(trashing, jobRunning, refused);
   let content: ReactNode;
   if (!selection) {
     content = <p className="empty-hint dim">{t("empty.hint")}</p>;
@@ -204,7 +216,8 @@ export function Browser({
         <ItemMenu
           target={menu.target}
           generation={menu.generation}
-          canTrash={itemActions.trash}
+          canTrash={itemTrash.enabled}
+          trashNote={itemTrash.reason && t("trash.scanning")}
           canScan={itemActions.scanFolder}
           canRefresh={itemActions.refresh}
           onRefresh={onRefresh}

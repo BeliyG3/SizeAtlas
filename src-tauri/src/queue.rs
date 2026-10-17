@@ -2,9 +2,9 @@
 //! a root, or refreshes one of its folders.
 
 use std::collections::VecDeque;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use sizeatlas_core::scanner::Progress;
 
@@ -37,6 +37,9 @@ pub struct ScanJob {
     pub progress: Arc<Progress>,
     /// Set when the worker chooses first-scan publication; stays set through the cache write.
     pub first_scan: Arc<AtomicBool>,
+    /// Paths that went to the trash while this full scan ran: its walk may have listed them
+    /// before they went, so they are taken out of its tree when it is installed.
+    pub trashed: Arc<Mutex<Vec<PathBuf>>>,
 }
 
 impl ScanJob {
@@ -48,6 +51,7 @@ impl ScanJob {
             discard: Arc::default(),
             progress: Arc::default(),
             first_scan: Arc::default(),
+            trashed: Arc::default(),
         }
     }
 
@@ -173,10 +177,28 @@ impl ScanQueue {
         })
     }
 
-    pub fn running(&self, root: &str) -> bool {
-        self.current
-            .as_ref()
-            .is_some_and(|job| !job.cancelled() && job.root == root)
+    /// Whether the running job keeps `path` from going to the trash: a refresh of a folder that
+    /// holds `path` or lies inside it, a full scan of a root that is `path` or lies inside it. A
+    /// full scan of a root that holds `path` does not: see `note_trashed`.
+    pub fn refuses_trash(&self, path: &Path) -> bool {
+        self.current.iter().any(|job| {
+            !job.cancelled()
+                && match &job.folder {
+                    Some(folder) => path.starts_with(&folder.path) || folder.path.starts_with(path),
+                    None => Path::new(&job.root).starts_with(path),
+                }
+        })
+    }
+
+    /// Remembers the `paths` that went to the trash in the running full scan whose root holds
+    /// them (see `ScanJob::trashed`).
+    pub fn note_trashed(&self, paths: Vec<PathBuf>) {
+        let Some(job) = &self.current else { return };
+        if job.cancelled() || job.folder.is_some() {
+            return;
+        }
+        let mut trashed = job.trashed.lock().unwrap_or_else(PoisonError::into_inner);
+        trashed.extend(paths.into_iter().filter(|p| p.starts_with(&job.root)));
     }
 }
 

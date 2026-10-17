@@ -5,8 +5,10 @@ import { trashReport } from "../features/trash/text";
 import { TrashDialog } from "../features/trash/TrashDialog";
 import { formatCount } from "../format";
 import { useT } from "../i18n/react";
-import { busyRoots, type RootEntry } from "./roots";
+import type { RootEntry } from "./roots";
 import type { Selection } from "./selection";
+import { jobRuns, trashAvailability } from "./trashRule";
+import { useTrashRefused } from "./useTrashRefused";
 
 /** A trash request waiting for its confirmation. */
 interface Asking {
@@ -30,23 +32,20 @@ interface Args {
  * table, the preview for the confirmation, the request (one at a time) and its report.
  * `onTrash` and `onMarks` are stable, for the memoized views. `menuTrash` is what Scan › Move to
  * the trash and Delete outside the table and the tree do: the marked rows, else the selected
- * item (never a root); null while there is none or a trash runs.
+ * item (never a root); null while there is none, a trash runs or a scan still lists one of them
+ * (`trashNote` then says why). The backend refuses the same items.
  */
 export function useTrash({ roots, entries, selection, push, onError, errorText }: Args) {
   const { t, lang } = useT();
   const [asking, setAsking] = useState<Asking | null>(null);
   const [busy, setBusy] = useState(false);
   const [marked, setMarked] = useState<readonly number[]>([]);
-  const busyAt = useMemo(() => busyRoots(roots), [roots]);
+  const jobRunning = useMemo(() => jobRuns(roots), [roots]);
 
   /** Asks to move `ids` of the tree with `generation` to the trash, showing what would go. */
   const ask = (generation: number, ids: readonly number[]) => {
     const entry = entries.find((e) => e.summary?.generation === generation);
     if (!entry?.summary || busy || ids.length === 0) return;
-    if (busyAt.has(entry.root)) {
-      onError({ code: "Busy" });
-      return;
-    }
     const { rev } = entry.summary;
     const list = [...ids];
     api
@@ -80,16 +79,16 @@ export function useTrash({ roots, entries, selection, push, onError, errorText }
   const generation = selection?.generation ?? null;
   const selected = selection && selection.id !== ROOT_ID ? [selection.id] : [];
   const targets = marked.length > 0 ? marked : selected;
+  const rev = entries.find((e) => e.summary?.generation === generation)?.summary?.rev ?? null;
+  const refused = useTrashRefused(jobRunning, generation, rev, targets);
+  const available = trashAvailability(busy, jobRunning, refused);
   const menuTrash =
-    generation !== null &&
-    targets.length > 0 &&
-    !busy &&
-    selection !== null &&
-    !busyAt.has(selection.root)
+    generation !== null && targets.length > 0 && available.enabled
       ? () => ask(generation, targets)
       : null;
+  const trashNote = targets.length > 0 && available.reason ? t("trash.scanning") : null;
   const dialog: ReactNode = asking && (
     <TrashDialog preview={asking.preview} onConfirm={confirm} onClose={() => setAsking(null)} />
   );
-  return { busy, busyRoots: busyAt, onTrash, onMarks: setMarked, menuTrash, dialog };
+  return { busy, jobRunning, onTrash, onMarks: setMarked, menuTrash, trashNote, dialog };
 }

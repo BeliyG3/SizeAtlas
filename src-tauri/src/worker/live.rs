@@ -71,10 +71,12 @@ impl Session {
                             if job.discard.load(Ordering::Relaxed) {
                                 return None;
                             }
+                            // Hard links are deduplicated across batches by the live scanner;
+                            // only a hard link moved to the trash makes the sizes approximate.
+                            let approximate = tree.approximate;
                             tree.reserve_graft(buffer);
                             tree.graft(id, sub);
-                            // Hard links are deduplicated across batches by the live scanner.
-                            tree.approximate = false;
+                            tree.approximate = approximate;
                             Some(())
                         })
                         .is_some();
@@ -216,12 +218,15 @@ fn finish(
     notify: &Notify,
 ) -> Result<(), CmdError> {
     let volume = sources::volume_usage(Path::new(&job.root));
+    // Items of the tree went straight out of it; those of an open root inside or around this
+    // one may have been listed before they went.
+    let gone = super::trashed::gone(job);
     let changed = state.change_scan(scan, |tree, _| {
         if job.discard.load(Ordering::Relaxed) {
             return None;
         }
+        super::trashed::remove(tree, &gone);
         tree.volume = volume;
-        tree.approximate = false;
         tree.set_scanning(0, false);
         Some(())
     });
@@ -242,3 +247,5 @@ mod lifecycle_tests;
 mod regressions;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod trash_tests;

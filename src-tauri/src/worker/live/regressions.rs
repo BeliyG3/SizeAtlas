@@ -96,7 +96,7 @@ fn unchanged_counters_and_absent_sessions_emit_no_live_ticks() {
 }
 
 #[test]
-fn queued_rescan_allows_old_tree_actions_but_running_rescan_is_busy() {
+fn queued_rescan_allows_old_tree_actions_and_running_rescan_allows_only_trash() {
     let (dir, cache, other) = (
         tempfile::tempdir().unwrap(),
         tempfile::tempdir().unwrap(),
@@ -137,8 +137,10 @@ fn queued_rescan_allows_old_tree_actions_but_running_rescan_is_busy() {
         state.refresh_target(summary.generation, 0),
         Err(CmdError::Busy)
     );
-    assert_eq!(
-        state.trash_preview(summary.generation, summary.rev, &[1]),
-        Err(CmdError::Busy)
+    assert!(
+        state
+            .trash_preview(summary.generation, summary.rev, &[1])
+            .is_ok(),
+        "the old tree is complete: the rescan is told what goes"
     );
 }

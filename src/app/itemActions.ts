@@ -6,16 +6,10 @@ export function itemMenuActions(
   entries: readonly RootEntry[],
   generation: number | undefined,
   fullScans: ReadonlySet<string>,
-  busyRoots: ReadonlySet<string>,
-  trashing: boolean,
 ) {
   const root =
     generation === undefined
       ? undefined
       : entries.find((entry) => entry.summary?.generation === generation)?.root;
-  return scanActions(
-    root === undefined || fullScans.has(root),
-    root === undefined || busyRoots.has(root),
-    trashing,
-  );
+  return scanActions(root === undefined || fullScans.has(root));
 }

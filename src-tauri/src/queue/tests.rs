@@ -188,3 +188,38 @@ fn a_folder_is_not_queued_under_a_running_scan_of_its_root_and_stops_with_it() {
     assert!(refresh.cancelled());
     assert!(queue.advance().is_none());
 }
+
+#[test]
+fn a_refresh_refuses_the_trash_only_inside_its_folder_and_above_it() {
+    let mut queue = ScanQueue::default();
+    queue.push_folder("/a".into(), target(1)).unwrap();
+    let refused = |path: &str| queue.refuses_trash(Path::new(path));
+    assert!(refused("/a/f1"));
+    assert!(refused("/a/f1/x.bin"));
+    assert!(refused("/a"), "an ancestor takes the folder with it");
+    assert!(!refused("/a/f10"), "a sibling with the same prefix");
+    assert!(!refused("/a/top.bin"));
+    assert!(!refused("/b/f1"));
+}
+
+#[test]
+fn a_full_scan_refuses_its_root_and_above_and_notes_what_goes_inside() {
+    let mut queue = ScanQueue::default();
+    let job = queue.push("/a/b".into()).unwrap();
+    assert!(queue.refuses_trash(Path::new("/a/b")));
+    assert!(queue.refuses_trash(Path::new("/a")));
+    assert!(!queue.refuses_trash(Path::new("/a/b/x")));
+    assert!(!queue.refuses_trash(Path::new("/a/c")));
+    queue.note_trashed(vec![PathBuf::from("/a/b/x"), PathBuf::from("/a/c")]);
+    assert_eq!(*job.trashed.lock().unwrap(), [PathBuf::from("/a/b/x")]);
+}
+
+#[test]
+fn a_cancelled_job_refuses_nothing_and_notes_nothing() {
+    let mut queue = ScanQueue::default();
+    let job = queue.push("/a".into()).unwrap();
+    queue.cancel(Some("/a"));
+    assert!(!queue.refuses_trash(Path::new("/a")));
+    queue.note_trashed(vec![PathBuf::from("/a/x")]);
+    assert!(job.trashed.lock().unwrap().is_empty());
+}

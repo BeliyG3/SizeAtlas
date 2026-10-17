@@ -22,11 +22,17 @@ export interface MenuTarget {
   y: number;
 }
 
+/** The items a menu acts on: the marked rows it opened on, else its one item. */
+export const menuIds = (target: MenuTarget): readonly number[] =>
+  target.marked && target.marked.length > 1 ? target.marked : [target.id];
+
 interface Props {
   target: MenuTarget;
   generation: number;
-  /** The root is not being scanned and no trash runs: its items can go to the trash. */
+  /** No scan still lists the items and no trash runs: they can go to the trash. */
   canTrash: boolean;
+  /** Why they cannot, shown as the tooltip of the disabled item. */
+  trashNote: string | null;
   canScan: boolean;
   canRefresh: boolean;
   /** Queues a refresh of folder `id`. */
@@ -44,6 +50,7 @@ export function ItemMenu({
   target,
   generation,
   canTrash,
+  trashNote,
   canScan,
   canRefresh,
   onRefresh,
@@ -53,7 +60,7 @@ export function ItemMenu({
   onFail,
 }: Props) {
   const { t, lang } = useT();
-  const ids = target.marked && target.marked.length > 1 ? target.marked : [target.id];
+  const ids = menuIds(target);
   const many = ids.length > 1;
   const one = !many;
   /** Calls a command on the one item the menu opened on. */
@@ -61,12 +68,18 @@ export function ItemMenu({
     void call(generation, target.id).catch(onFail);
   // One item whose name could not be read exactly has no real path; the backend checks several.
   const blocked = one && target.lossy;
-  const item = (icon: IconName, label: string, run: () => void, enabled = true) => (
+  const item = (
+    icon: IconName,
+    label: string,
+    run: () => void,
+    enabled = true,
+    note: string | null = null,
+  ) => (
     <button
       key={icon}
       role="menuitem"
       disabled={blocked || !enabled}
-      title={blocked ? t("menu.lossy") : undefined}
+      title={blocked ? t("menu.lossy") : (note ?? undefined)}
       onClick={() => {
         run();
         onClose();
@@ -107,6 +120,7 @@ export function ItemMenu({
           : t("menu.trash"),
         () => onTrash(generation, ids),
         canTrash,
+        trashNote,
       ),
     ],
   ];

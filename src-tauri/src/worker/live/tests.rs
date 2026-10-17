@@ -111,7 +111,7 @@ fn live_batches_are_browsable_stable_and_not_saved_until_finished() {
 }
 
 #[test]
-fn live_root_refuses_refresh_subfolder_scans_and_trash() {
+fn live_root_refuses_refresh_subfolder_scans_and_trash_of_unfinished_folders() {
     let (dir, cache) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     fs::create_dir(dir.path().join("sub")).unwrap();
     fs::write(dir.path().join("f.txt"), b"file").unwrap();
@@ -120,18 +120,25 @@ fn live_root_refuses_refresh_subfolder_scans_and_trash() {
     let notify: Notify = Arc::new(|_| {});
     let mut session = Session::new();
     scanner::scan_live(dir.path(), &job.cancel, &job.progress, |event| {
+        let finished = matches!(event, LiveEvent::FolderDone { .. });
         session.publish(&state, &job, event, &notify);
         let summary = state.summaries()[0].clone();
         assert_eq!(
             state.refresh_target(summary.generation, 0),
             Err(CmdError::Busy)
         );
+        if finished {
+            return;
+        }
+        let tree = state.tree(summary.generation).unwrap();
+        let sub = tree.find_path(&Path::new(&job.root).join("sub")).unwrap();
+        drop(tree);
         assert!(matches!(
             state.enqueue(format!("{}/sub", job.root)),
             Err(CmdError::Busy)
         ));
         assert_eq!(
-            state.trash_preview(summary.generation, summary.rev, &[1]),
+            state.trash_preview(summary.generation, summary.rev, &[sub]),
             Err(CmdError::Busy)
         );
         assert!(matches!(
@@ -140,7 +147,7 @@ fn live_root_refuses_refresh_subfolder_scans_and_trash() {
                 cache.path(),
                 summary.generation,
                 summary.rev,
-                &[1],
+                &[sub],
                 |_, _| panic!("no trash check"),
                 |_| panic!("no trash")
             ),

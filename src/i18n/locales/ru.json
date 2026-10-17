@@ -161,6 +161,7 @@
   "trash.more_many": "…и ещё {items}",
   "trash.more_other": "…и ещё {items}",
   "trash.summary": "Общий размер: {size}. Скан от {date}.",
+  "trash.scanning": "Недоступно, пока эта папка сканируется.",
   "trash.confirm": "В корзину",
   "trash.noAccess": "нет доступа",
   "trash.partial": "В корзину перемещено {moved} из {total}. Не удалось переместить: {failures}",

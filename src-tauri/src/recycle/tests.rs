@@ -246,27 +246,6 @@ fn an_item_inside_another_one_goes_with_it() {
 }
 
 #[test]
-fn a_root_with_a_running_scan_is_busy() {
-    let state = AppState::default();
-    let (_dir, generation) = open(&state);
-    let (cache, log) = (tempfile::tempdir().unwrap(), Mutex::new(Vec::new()));
-    let top = id(&state, generation, &["top.bin"]);
-    let root = state.summary(generation).unwrap().root;
-    let _scanning = state.enqueue(root).unwrap();
-    let done = run(
-        &state,
-        cache.path(),
-        generation,
-        0,
-        &[top],
-        anywhere,
-        deleting(&log),
-    );
-    assert_eq!(done, Err(CmdError::Busy));
-    assert!(log.lock().unwrap().is_empty());
-}
-
-#[test]
 fn an_unsaved_change_comes_back_as_a_warning() {
     let state = AppState::default();
     let (_dir, generation) = open(&state);

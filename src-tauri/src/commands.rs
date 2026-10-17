@@ -135,6 +135,21 @@ pub async fn trash_preview(
         .map_err(CmdError::from)?
 }
 
+/// Whether a running scan keeps one of `ids` from going to the trash now (see
+/// `AppState::trash_refused`): the menus disable the item and say why.
+#[tauri::command]
+pub async fn trash_refused(
+    state: State<'_, AppState>,
+    generation: u64,
+    rev: u64,
+    ids: Vec<u32>,
+) -> Result<bool, CmdError> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.trash_refused(generation, rev, &ids))
+        .await
+        .map_err(CmdError::from)?
+}
+
 /// Raw bytes: the UI receives an `ArrayBuffer` (format in `sizeatlas_core::treemap`).
 #[tauri::command]
 pub async fn get_treemap(

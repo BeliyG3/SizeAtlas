@@ -55,6 +55,7 @@ pub fn run() {
             commands::get_list,
             commands::get_live_ancestor,
             commands::trash_preview,
+            commands::trash_refused,
             commands::get_treemap,
             commands::export::export_table,
             commands::items::copy_paths,

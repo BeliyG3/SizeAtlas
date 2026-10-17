@@ -19,7 +19,7 @@ vi.mock("react", async (original) => ({
   useLayoutEffect: (commit: () => void) => commit(),
 }));
 vi.mock("../api/client", () => ({
-  api: { refreshFolder: vi.fn(), trashPreview: vi.fn(), trash: vi.fn() },
+  api: { refreshFolder: vi.fn(), trashPreview: vi.fn(), trash: vi.fn(), trashRefused: vi.fn() },
   isCmdError: () => false,
 }));
 vi.mock("./useRoots", () => ({ useRoots: vi.fn() }));
@@ -107,6 +107,7 @@ function render(scanning: boolean, state: "queued" | "scanning", folder: number)
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.refreshFolder).mockResolvedValue();
+  vi.mocked(api.trashRefused).mockResolvedValue(true);
   vi.mocked(api.trashPreview).mockResolvedValue({
     count: 1,
     size: 10,
@@ -125,6 +126,9 @@ describe("App live scan action wiring", () => {
 
     expect(api.refreshFolder).not.toHaveBeenCalled();
     expect(api.trashPreview).not.toHaveBeenCalled();
+    // Until the backend says the item may go; the root itself never goes.
+    if (folder === 0) expect(api.trashRefused).not.toHaveBeenCalled();
+    else expect(api.trashRefused).toHaveBeenCalledWith(1, 4, [7]);
   });
 
   it.each([0, 7])("disables menu refresh and F5 for folder %i during a rescan", (folder) => {

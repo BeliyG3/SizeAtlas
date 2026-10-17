@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Roots, Summary } from "../api/types";
 import { itemMenuActions } from "./itemActions";
-import { busyRoots, rootEntries, runningFullScanRoots } from "./roots";
+import { rootEntries, runningFullScanRoots } from "./roots";
 
-function menu(roots: Roots, generation = 2, trashing = false) {
-  return itemMenuActions(
-    rootEntries(roots),
-    generation,
-    runningFullScanRoots(roots),
-    busyRoots(roots),
-    trashing,
-  );
+function menu(roots: Roots, generation = 2) {
+  return itemMenuActions(rootEntries(roots), generation, runningFullScanRoots(roots));
 }
 
 describe("Browser item scan actions", () => {
@@ -24,7 +18,7 @@ describe("Browser item scan actions", () => {
         ],
         queue: [{ root: "/scan", state: "scanning", folder: null }],
       });
-      expect(actions).toEqual({ refresh: false, scanFolder: false, trash: false });
+      expect(actions).toEqual({ refresh: false, scanFolder: false });
     },
   );
 
@@ -44,7 +38,7 @@ describe("Browser item scan actions", () => {
           },
         ],
       });
-      expect(actions).toEqual({ refresh: true, scanFolder: true, trash: job === "queued" });
+      expect(actions).toEqual({ refresh: true, scanFolder: true });
     },
   );
 
@@ -56,7 +50,7 @@ describe("Browser item scan actions", () => {
       ],
       queue: [{ root: "/scan", state: "scanning", folder: null }],
     });
-    expect(actions).toEqual({ refresh: false, scanFolder: false, trash: false });
+    expect(actions).toEqual({ refresh: false, scanFolder: false });
   });
 
   it("uses the menu item's generation even when another root is busy", () => {
@@ -67,7 +61,7 @@ describe("Browser item scan actions", () => {
       ],
       queue: [{ root: "/other", state: "scanning", folder: null }],
     });
-    expect(actions).toEqual({ refresh: true, scanFolder: true, trash: true });
+    expect(actions).toEqual({ refresh: true, scanFolder: true });
   });
 
   it("disables actions when the menu's tree was replaced or removed", () => {
@@ -75,15 +69,6 @@ describe("Browser item scan actions", () => {
       roots: [{ root: "/scan", generation: 3 } as Summary],
       queue: [],
     });
-    expect(actions).toEqual({ refresh: false, scanFolder: false, trash: false });
-  });
-
-  it("disables only trash while a trash request runs", () => {
-    const actions = menu(
-      { roots: [{ root: "/scan", generation: 2 } as Summary], queue: [] },
-      2,
-      true,
-    );
-    expect(actions).toEqual({ refresh: true, scanFolder: true, trash: false });
+    expect(actions).toEqual({ refresh: false, scanFolder: false });
   });
 });

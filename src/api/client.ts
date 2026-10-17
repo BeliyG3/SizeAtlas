@@ -37,6 +37,9 @@ export const api = {
   /** What `trash` would move: the items without those inside another one, their size, the first paths. */
   trashPreview: (generation: number, rev: number, ids: number[]) =>
     invoke<TrashPreview>("trash_preview", { generation, rev, ids }),
+  /** Whether a running scan keeps one of `ids` from going to the trash now (it still lists it). */
+  trashRefused: (generation: number, rev: number, ids: number[]) =>
+    invoke<boolean>("trash_refused", { generation, rev, ids }),
   /** Moves items of one tree to the trash; nothing moves if one changed on disk since the scan. */
   trash: (generation: number, rev: number, ids: number[]) =>
     invoke<TrashResult>("trash", { generation, rev, ids }),

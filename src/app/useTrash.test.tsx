@@ -38,9 +38,10 @@ vi.mock("react", async (original) => ({
   useMemo: (calculate: () => unknown) => calculate(),
   useCallback: (callback: unknown) => callback,
   useLayoutEffect: (commit: () => void) => commit(),
+  useEffect: (commit: () => void) => void commit(),
 }));
 vi.mock("../api/client", () => ({
-  api: { trashPreview: vi.fn(), trash: vi.fn() },
+  api: { trashPreview: vi.fn(), trash: vi.fn(), trashRefused: vi.fn() },
 }));
 vi.mock("../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
 vi.mock("../features/trash/TrashDialog", () => ({ TrashDialog: () => null }));
@@ -78,6 +79,7 @@ beforeEach(() => {
   hooks.state.values = [];
   hooks.state.refs = [];
   vi.clearAllMocks();
+  vi.mocked(api.trashRefused).mockResolvedValue(true);
   vi.mocked(api.trashPreview).mockResolvedValue({
     count: 1,
     size: 10,
@@ -86,30 +88,48 @@ beforeEach(() => {
   });
 });
 
-describe("useTrash live scan actions", () => {
-  it("disables the actual menu action for selected and marked items during a first scan", () => {
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe("useTrash during scans", () => {
+  it("asks the backend while a job runs and allows the items it does not refuse", async () => {
     const roots: Roots = {
       roots: [summary(true)],
       queue: [{ root: "/root", state: "scanning", folder: null }],
     };
-    const selected = useRenderTrash(roots);
-    expect(selected.menuTrash).toBeNull();
-    selected.onMarks([8, 9]);
-
+    vi.mocked(api.trashRefused).mockResolvedValue(false);
     expect(useRenderTrash(roots).menuTrash).toBeNull();
-    expect(api.trashPreview).not.toHaveBeenCalled();
+    expect(api.trashRefused).toHaveBeenCalledWith(1, 4, [7]);
+    await flush();
+    const trash = useRenderTrash(roots);
+    expect(trash.trashNote).toBeNull();
+    trash.menuTrash?.();
+    expect(api.trashPreview).toHaveBeenCalledWith(1, 4, [7]);
   });
 
-  it("allows the actual menu action while a rescan waits in the queue", () => {
+  it("disables the action for refused marked items and says why", async () => {
+    const roots: Roots = {
+      roots: [summary(true)],
+      queue: [{ root: "/root", state: "scanning", folder: null }],
+    };
+    vi.mocked(api.trashRefused).mockResolvedValue(true);
+    useRenderTrash(roots).onMarks([8, 9]);
+    useRenderTrash(roots);
+    expect(api.trashRefused).toHaveBeenLastCalledWith(1, 4, [8, 9]);
+    await flush();
+    const trash = useRenderTrash(roots);
+    expect(trash.menuTrash).toBeNull();
+    expect(trash.trashNote).toBe("trash.scanning");
+  });
+
+  it("asks nothing while a rescan only waits in the queue", () => {
     const roots: Roots = {
       roots: [summary(false)],
       queue: [{ root: "/root", state: "queued", folder: null }],
     };
     const trash = useRenderTrash(roots);
-    expect(trash.busyRoots.has("/root")).toBe(false);
     expect(trash.menuTrash).toBeTypeOf("function");
     trash.menuTrash?.();
-
+    expect(api.trashRefused).not.toHaveBeenCalled();
     expect(api.trashPreview).toHaveBeenCalledWith(1, 4, [7]);
     expect(api.trash).not.toHaveBeenCalled();
   });
@@ -127,17 +147,12 @@ describe("useTrash live scan actions", () => {
     expect(api.trashPreview).toHaveBeenCalledWith(1, 4, [8, 9]);
   });
 
-  it("keeps trash blocked during a running rescan and guards direct requests", () => {
+  it("leaves direct requests to the backend, which refuses with the same rule", () => {
     const roots: Roots = {
       roots: [summary(false)],
       queue: [{ root: "/root", state: "scanning", folder: null }],
     };
-    const onError = vi.fn();
-    const trash = useRenderTrash(roots, 7, onError);
-    expect(trash.menuTrash).toBeNull();
-    trash.onTrash(1, [7]);
-
-    expect(onError).toHaveBeenCalledWith({ code: "Busy" });
-    expect(api.trashPreview).not.toHaveBeenCalled();
+    useRenderTrash(roots).onTrash(1, [7]);
+    expect(api.trashPreview).toHaveBeenCalledWith(1, 4, [7]);
   });
 });

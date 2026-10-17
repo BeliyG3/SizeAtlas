@@ -96,15 +96,17 @@ async fn scan_one(
 }
 
 /// Installs a walked tree unless its root was closed or its scan cancelled meanwhile, then
-/// saves it and releases `write`. Closing the app does not discard it: the exit waits.
+/// saves it and releases `write`. What went to the trash during the walk is taken out first. Closing the app does not discard it: the exit waits.
 fn install_and_save(
     state: &AppState,
     cache_dir: &Path,
     job: &ScanJob,
-    tree: Tree,
+    mut tree: Tree,
     write: OwnedMutexGuard<()>,
     notify: &Notify,
 ) -> Result<(), CmdError> {
+    // Under `write`: no trash runs meanwhile, every one that ran during the walk is noted.
+    trashed::remove(&mut tree, &trashed::gone(job));
     let tree = Arc::new(tree);
     let Some((_, replaced)) = state.install_scan(tree.clone(), &job.discard) else {
         // Released before the discarded tree is dropped, which may take a while.
@@ -245,3 +247,4 @@ mod tests;
 mod refresh_tests;
 
 mod live;
+mod trashed;

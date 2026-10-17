@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
 use sizeatlas_core::cache::{self, CacheError, cache_path};
@@ -54,9 +54,9 @@ impl AppState {
         self.scans().advance()
     }
 
-    /// A running job prevents trash; a waiting rescan still has an editable complete tree.
-    pub fn is_scanning(&self, root: &str) -> bool {
-        self.scans().running(root)
+    /// See `ScanQueue::note_trashed`.
+    pub fn note_trashed(&self, paths: Vec<PathBuf>) {
+        self.scans().note_trashed(paths);
     }
 }
 

@@ -104,7 +104,7 @@ pub async fn refresh_folder(
 }
 
 /// Moves items of one tree to the trash after checking them against the disk (see
-/// `recycle::run`); refused while their root has a running scan or refresh.
+/// `recycle::run`); refused while a running scan still lists one of them.
 #[tauri::command]
 pub async fn trash(
     app: AppHandle,

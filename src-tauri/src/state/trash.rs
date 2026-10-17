@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use sizeatlas_core::tree::{Tree, VolumeUsage};
+use sizeatlas_core::tree::{Tree, VolumeUsage, flags};
 
 use super::AppState;
 use crate::dto::TrashPreviewDto;
@@ -56,22 +56,25 @@ pub struct Trashed {
 
 impl AppState {
     /// The items `ids` of the tree with `generation` at revision `rev`. `StaleId` unless every id
-    /// is a live node of that very revision and none is the root; `LossyName` when a path is
-    /// not exact. An item inside another one of the list is left out: it goes with that one.
+    /// is a live node of that very revision and none is the root (a first scan's tree changes its
+    /// revision all the time but keeps its ids: any revision of it will do); `LossyName` when a
+    /// path is not exact; `Busy` when a scan still lists an item (see `trash_refused`). An item
+    /// inside another one of the list is left out: it goes with that one.
     pub fn trash_plan(
         &self,
         generation: u64,
         rev: u64,
         ids: &[u32],
     ) -> Result<TrashPlan, CmdError> {
-        self.refuse_full_scan(generation)?;
         let tree = self.tree(generation)?;
         let wanted: BTreeSet<u32> = ids.iter().copied().collect();
         let known = |id: u32| id != 0 && tree.get(id).is_some();
-        if tree.rev != rev || wanted.is_empty() || !wanted.iter().all(|&id| known(id)) {
+        let live = tree.node(0).has(flags::SCANNING);
+        if (tree.rev != rev && !live) || wanted.is_empty() || !wanted.iter().all(|&id| known(id)) {
             return Err(CmdError::StaleId);
         }
         let mut items = Vec::new();
+        let mut unfinished = false;
         for &id in &wanted {
             let chain = tree.crumbs(id);
             if chain[..chain.len() - 1].iter().any(|a| wanted.contains(a)) {
@@ -80,6 +83,10 @@ impl AppState {
             if tree.has_lossy_path(id) {
                 return Err(CmdError::LossyName);
             }
+            // A folder a first scan has not finished, or anything in it.
+            unfinished |= chain[1..]
+                .iter()
+                .any(|&a| tree.node(a).flags & (flags::PENDING | flags::SCANNING) != 0);
             let node = tree.node(id);
             items.push(TrashItem {
                 id,
@@ -93,11 +100,29 @@ impl AppState {
                 parent_mtime: tree.node(node.parent).mtime,
             });
         }
-        Ok(TrashPlan {
+        let plan = TrashPlan {
             root: tree.name(0).to_owned(),
             scanned_at: tree.scanned_at,
             items,
-        })
+        };
+        // Let go of the tree before taking the queue lock: a change waits for reads under it.
+        drop(tree);
+        let scans = self.scans();
+        if unfinished || plan.items.iter().any(|i| scans.refuses_trash(&i.path)) {
+            return Err(CmdError::Busy);
+        }
+        Ok(plan)
+    }
+
+    /// Whether a scan keeps one of `ids` from going to the trash now, for the menus: a first scan
+    /// that has not finished its folder, a refresh of a folder that holds it or lies inside it,
+    /// a full scan of a root inside it. Anywhere else it may go while a scan runs.
+    pub fn trash_refused(&self, generation: u64, rev: u64, ids: &[u32]) -> Result<bool, CmdError> {
+        match self.trash_plan(generation, rev, ids) {
+            Ok(_) => Ok(false),
+            Err(CmdError::Busy) => Ok(true),
+            Err(e) => Err(e),
+        }
     }
 
     /// What a trash request would move, for its confirmation.

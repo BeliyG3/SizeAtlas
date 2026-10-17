@@ -54,7 +54,7 @@ export function fullScanRoots(roots: Roots): ReadonlySet<string> {
   ]);
 }
 
-/** Running jobs block trash; a queued rescan keeps an editable complete tree. */
+/** Roots with a running job (or inside a running full scan): their menu offers no rescan. */
 export const busyRoots = (roots: Roots): ReadonlySet<string> =>
   new Set([
     ...roots.queue.filter((q) => q.state === "scanning").map((q) => q.root),

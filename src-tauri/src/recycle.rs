@@ -20,8 +20,9 @@ use crate::{jobs, sources};
 /// of its size on disk and its length. The caller holds `begin_write`, so no refresh changes the
 /// tree meanwhile and closing the app waits for the saved scan.
 ///
-/// Nothing moves when the root has a running job (`Busy`) or when an item changed on
-/// disk since the scan (`Changed`). After that every item is checked again right before it
+/// Nothing moves when a running scan still lists an item (`Busy`, see `AppState::trash_refused`)
+/// or when an item changed on disk since the scan (`Changed`). A running full scan of a root
+/// that holds the items is told which went (`ScanQueue::note_trashed`). After that every item is checked again right before it
 /// goes; one that changed (`Changed`), cannot be read (`NoAccess`, `Io`), would be deleted for
 /// good (`NoTrash`) or that the OS refuses (`Io`) is reported and stays, the others go. Once the
 /// app starts closing, the items left stay where they are.
@@ -35,13 +36,11 @@ pub fn run(
     trash_one: impl Fn(&Path) -> Result<(), String>,
 ) -> Result<TrashDto, CmdError> {
     let plan = state.trash_plan(generation, rev, ids)?;
-    if state.is_scanning(&plan.root) {
-        return Err(CmdError::Busy);
-    }
     for item in &plan.items {
         check(item)?;
     }
     let mut trashed = Vec::new();
+    let mut gone = Vec::new();
     let mut failed = Vec::new();
     for item in &plan.items {
         if state.closing() {
@@ -67,13 +66,16 @@ pub fn run(
             listed_mtime(&item.parent_path)
         };
         match trash_one(&item.path) {
-            Ok(()) => trashed.push(Trashed {
-                id: item.id,
-                parent: item.parent,
-                parent_before,
-                parent_listed,
-                parent_after: modified(&item.parent_path),
-            }),
+            Ok(()) => {
+                trashed.push(Trashed {
+                    id: item.id,
+                    parent: item.parent,
+                    parent_before,
+                    parent_listed,
+                    parent_after: modified(&item.parent_path),
+                });
+                gone.push(item.path.clone());
+            }
             Err(os_message) => failed.push(TrashFailureDto {
                 path: path.clone(),
                 error: CmdError::Io { path, os_message },
@@ -82,6 +84,7 @@ pub fn run(
     }
     let mut warning = None;
     if !trashed.is_empty() {
+        state.note_trashed(gone);
         let volume = sources::volume_usage(Path::new(&plan.root));
         warning = match state.remove_trashed(generation, &trashed, volume) {
             Some(tree) => jobs::save(&tree, cache_dir).err(),
@@ -160,6 +163,8 @@ pub fn move_to_trash(path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod during_tests;
 #[cfg(test)]
-mod fixture;
+pub(crate) mod fixture;
+#[cfg(test)]
+mod scan_tests;
 #[cfg(test)]
 mod tests;
