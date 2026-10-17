@@ -77,6 +77,18 @@ pub fn run() {
             commands::roots::close_root,
             commands::roots::forget_scan,
         ])
+        .setup(|app| {
+            let title = title_bar::window_title(
+                &app.package_info().version.to_string(),
+                cfg!(debug_assertions),
+            );
+            if let Some(window) = app.get_webview_window("main")
+                && let Err(e) = window.set_title(&title)
+            {
+                eprintln!("SizeAtlas: could not set the window title: {e}");
+            }
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let state = window.state::<AppState>().inner().clone();

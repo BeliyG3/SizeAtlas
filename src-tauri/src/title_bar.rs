@@ -1,6 +1,6 @@
 //! The native title bar in the app's theme. Windows 11 paints the caption in the colors given
 //! here, over the accent color the user may show on title bars; Windows 10 takes only the dark
-//! mode flag. Elsewhere the title bar stays as the system draws it.
+//! mode flag. Elsewhere the title bar stays as the system draws it. The title names the version.
 
 /// Caption and text colors (0xRRGGBB): `--bg` and `--text` of each theme in theme.css.
 // Off Windows only the tests use them.
@@ -61,5 +61,29 @@ mod tests {
         assert_eq!(colorref(0x12_34_56), 0x56_34_12);
         assert_eq!(colorref(LIGHT.0), 0xf8_f6_f5);
         assert_eq!(colorref(DARK.0), 0x18_18_18);
+    }
+}
+
+/// `SizeAtlas <version>`, the version as shown to people (`YEAR.MONTH` for the first release of a
+/// month, as in the About dialog), with ` (dev)` for a development build.
+pub fn window_title(version: &str, dev: bool) -> String {
+    let shown = match version.strip_suffix(".0") {
+        Some(rest) if version.split('.').count() == 3 => rest,
+        _ => version,
+    };
+    let suffix = if dev { " (dev)" } else { "" };
+    format!("SizeAtlas {shown}{suffix}")
+}
+
+#[cfg(test)]
+mod title_tests {
+    use super::window_title;
+
+    #[test]
+    fn the_title_shows_the_version_as_people_see_it() {
+        assert_eq!(window_title("2026.10.0", false), "SizeAtlas 2026.10");
+        assert_eq!(window_title("2026.10.1", false), "SizeAtlas 2026.10.1");
+        assert_eq!(window_title("2026.10.20", false), "SizeAtlas 2026.10.20");
+        assert_eq!(window_title("2026.10.1", true), "SizeAtlas 2026.10.1 (dev)");
     }
 }
