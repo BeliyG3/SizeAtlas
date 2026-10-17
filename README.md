@@ -4,6 +4,9 @@
 
 A cross-platform disk usage analyzer: see which folders and file types take up your disk space.
 
+**Development notes, and a way to support the work if the add-on is useful to you:** 🤔😄🤗
+[patreon.com/YGLabs](https://www.patreon.com/c/YGLabs).🤗
+
 ![SizeAtlas: the folder tree, the largest files of a drive and a pie chart](assets/screenshot-main.png)
 
 ## What it does
