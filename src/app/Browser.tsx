@@ -101,6 +101,8 @@ export function Browser({
   );
   // The table sort lives here: it survives folder and root changes.
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
+  /** Width the drives panel needs: the left pane opens that wide (until its border is moved). */
+  const [drivesWidth, setDrivesWidth] = useState(0);
   const selected = entries.find((e) => e.root === selection?.root);
   const summary = selected?.summary ?? null;
   const roots = useMemo<RootInfo[]>(
@@ -209,9 +211,11 @@ export function Browser({
             onOpen={onOpenDrive}
             onScan={onScanDrive}
             onForget={onForget}
+            onWidth={setDrivesWidth}
           />
         }
         content={content}
+        drivesWidth={drivesWidth}
       />
       {menu?.kind === "item" && itemOpen && (
         <ItemMenu

@@ -7,13 +7,20 @@ interface Props {
   tree: ReactNode;
   drives: ReactNode;
   content: ReactNode;
+  /** Width the drives panel needs to show its columns in full (see DrivesPanel `onWidth`). */
+  drivesWidth: number;
 }
+
+/** Default width of the left pane, unless the drives need more. */
+const LEFT_WIDTH = 340;
+/** The pane's border and rounding: the drives table must not scroll at exactly its width. */
+const LEFT_SLACK = 2;
 
 /**
  * Window body: the folder tree above the drives on the left (View › Drives panel hides them), the
  * content on the right.
  */
-export function Workspace({ tree, drives, content }: Props) {
+export function Workspace({ tree, drives, content, drivesWidth }: Props) {
   const { t } = useT();
   const { showDrives } = useSettings();
   return (
@@ -21,7 +28,8 @@ export function Workspace({ tree, drives, content }: Props) {
       direction="row"
       sized="first"
       storageKey="sizeatlas.split.left"
-      defaultSize={340}
+      // Until the border is moved, the pane is as wide as the drives need in this language.
+      defaultSize={showDrives ? Math.max(LEFT_WIDTH, drivesWidth + LEFT_SLACK) : LEFT_WIDTH}
       label={t("split.left")}
       first={
         <SplitPane

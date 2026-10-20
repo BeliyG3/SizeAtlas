@@ -25,6 +25,7 @@ import { driveChoice, type DriveChoice, type DriveRoot } from "./choice";
 import { DriveAsk } from "./DriveAsk";
 import { DriveMenu } from "./DriveMenu";
 import { DrivesHeader } from "./DrivesHeader";
+import { MIN_NAME, drivesWidth, useFittedWidths } from "./fit";
 import {
   DRIVE_SORT_KEY,
   parseDriveSort,
@@ -37,8 +38,6 @@ import "./drives.css";
 /** Every column can be moved; the drive name takes the width the number columns leave. */
 const DEFAULT_ORDER: readonly DriveColumn[] = ["name", "size", "used", "free"];
 const DEFAULT_WIDTHS = { size: 84, used: 84, free: 84 };
-/** The name column never gets narrower than this: the panel scrolls instead. */
-const MIN_NAME = 100;
 
 interface Props {
   sources: Sources | null;
@@ -50,6 +49,8 @@ interface Props {
   onScan: (mount: string) => void;
   /** Deletes the saved scan of the drive, closing it if it is open. */
   onForget: (mount: string) => void;
+  /** The width the table needs to show every column in full, whenever it changes. */
+  onWidth?: (width: number) => void;
 }
 
 /**
@@ -57,15 +58,21 @@ interface Props {
  * click or Enter asks whether to scan the drive or open its scan; the context menu (right click,
  * Shift+F10) scans, opens or forgets it.
  */
-export function DrivesPanel({ sources, roots, onOpen, onScan, onForget }: Props) {
+export function DrivesPanel({ sources, roots, onOpen, onScan, onForget, onWidth }: Props) {
   const { t, lang } = useT();
   const size = useSize();
   const [order, move] = useColumnOrder("sizeatlas.drives.columns.order", DEFAULT_ORDER);
   const [sort, setSort] = useStored(DRIVE_SORT_KEY, parseDriveSort, serializeDriveSort);
-  const { widths, resize } = useColumnWidths("sizeatlas.drives.columns", DEFAULT_WIDTHS);
   const box = useRef<HTMLElement>(null);
+  const fitted = useFittedWidths(box);
+  const { widths, resize } = useColumnWidths<Exclude<DriveColumn, "name">>(
+    "sizeatlas.drives.columns",
+    DEFAULT_WIDTHS,
+    fitted ?? undefined,
+  );
   const disks = useMemo(() => sortDisks(sources?.disks ?? [], sort), [sources, sort]);
-  const minWidth = MIN_NAME + widths.size + widths.used + widths.free;
+  const minWidth = drivesWidth({ ...widths, name: fitted?.name ?? MIN_NAME });
+  useEffect(() => onWidth?.(minWidth), [onWidth, minWidth]);
   const [selected, setSelected] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ mount: string; x: number; y: number } | null>(null);
   const [asking, setAsking] = useState<{
@@ -126,7 +133,7 @@ export function DrivesPanel({ sources, roots, onOpen, onScan, onForget }: Props)
     const state = d.connected ? "" : ` · ${t("drives.disconnected")}`;
     // A narrow panel cuts the cells short: each shows in full on hover.
     return (
-      <td key="name" title={`${d.mount} ${d.name}${state}`}>
+      <td key="name" data-col="name" title={`${d.mount} ${d.name}${state}`}>
         <Icon name={d.network ? "network-drive" : "drive"} className="drive-icon" /> {d.mount}{" "}
         <span className="dim">{d.name}</span>
         {state && <span className="dim">{state}</span>}

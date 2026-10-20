@@ -42,7 +42,12 @@ export function SplitPane({
   second,
   collapse,
 }: Props) {
-  const [size, setSize] = useState(() => parseSize(readStored(storageKey), defaultSize));
+  // Null until the border is moved (or a size was stored): the pane follows `defaultSize`.
+  const [moved, setSize] = useState<number | null>(() => {
+    const raw = readStored(storageKey);
+    return raw === null ? null : parseSize(raw, defaultSize);
+  });
+  const size = moved ?? defaultSize;
   const box = useRef<HTMLDivElement>(null);
   const row = direction === "row";
   const rtl = isRtl(useT().lang);

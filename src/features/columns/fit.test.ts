@@ -5,7 +5,9 @@ import {
   clampWidth,
   dragWidth,
   fitWidth,
+  columnWidths,
   parseWidths,
+  storedWidths,
   resizeStep,
 } from "./fit";
 
@@ -50,5 +52,21 @@ describe("column widths", () => {
       size: 96,
     });
     expect(parseWidths(JSON.stringify({ name: "wide" }), defaults)).toEqual(defaults);
+  });
+
+  it("keep apart the widths the user set", () => {
+    const defaults = { name: 280, size: 96 } as const;
+    expect(storedWidths(null, defaults)).toEqual({});
+    expect(storedWidths(JSON.stringify({ size: 120, name: 3 }), defaults)).toEqual({ size: 120 });
+  });
+
+  it("take a width the user set over one fitted to the content, and that over the default", () => {
+    const defaults = { name: 280, size: 96 } as const;
+    // Arabic spells the units out: the fitted Size column is wider than the default.
+    expect(columnWidths(defaults, { name: 150, size: 118 }, { name: 400 })).toEqual({
+      name: 400,
+      size: 118,
+    });
+    expect(columnWidths(defaults, {}, {})).toEqual(defaults);
   });
 });

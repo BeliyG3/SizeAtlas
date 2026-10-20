@@ -36,18 +36,18 @@ export function dragWidth(
   return clampWidth(width + outwards);
 }
 
-/** Stored widths over `defaults`; unknown columns and unusable values are ignored. */
-export function parseWidths<K extends string>(
+/** The usable stored widths of the columns of `defaults`; unknown columns and bad values are left out. */
+export function storedWidths<K extends string>(
   raw: string | null,
   defaults: Readonly<Record<K, number>>,
-): Record<K, number> {
+): Partial<Record<K, number>> {
   let stored: unknown = null;
   try {
     stored = raw === null ? null : JSON.parse(raw);
   } catch {
-    // Garbage in storage: use the defaults.
+    // Garbage in storage: nothing stored.
   }
-  const widths: Record<K, number> = { ...defaults };
+  const widths: Partial<Record<K, number>> = {};
   if (stored !== null && typeof stored === "object" && !Array.isArray(stored)) {
     for (const id of Object.keys(defaults) as K[]) {
       const value = (stored as Record<string, unknown>)[id];
@@ -58,6 +58,22 @@ export function parseWidths<K extends string>(
   }
   return widths;
 }
+
+/** Stored widths over `defaults`. */
+export const parseWidths = <K extends string>(
+  raw: string | null,
+  defaults: Readonly<Record<K, number>>,
+): Record<K, number> => ({ ...defaults, ...storedWidths(raw, defaults) });
+
+/**
+ * The width of each column: one the user set (stored) wins over one fitted to the content in the
+ * current language, which wins over the fixed default.
+ */
+export const columnWidths = <K extends string>(
+  defaults: Readonly<Record<K, number>>,
+  fitted: Partial<Record<K, number>>,
+  stored: Partial<Record<K, number>>,
+): Record<K, number> => ({ ...defaults, ...fitted, ...stored });
 
 /**
  * Natural width of the widest rendered cell of column `col` (elements with `data-col`, the
