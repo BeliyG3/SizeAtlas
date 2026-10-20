@@ -1,13 +1,13 @@
 import type { Sources } from "../../api/types";
 import { Icon } from "../icons/Icon";
 import { MenuChoice } from "../menu/MenuChoice";
-import { recentFolders } from "./source";
+import { diskLabel, folderLabel, recentFolders, type Translate } from "./source";
 
 interface Props {
   sources: Sources | null;
   /** The source picked now; one that is in neither list is shown first. */
   pending: string | null;
-  t: (key: string, params?: Record<string, string | number>) => string;
+  t: Translate;
   onPick: (path: string) => void;
   onChooseFolder: () => void;
 }
@@ -34,21 +34,11 @@ export function SourceItems({ sources, pending, t, onPick, onChooseFolder }: Pro
     <>
       {pending !== null && !listed.has(pending) && choice(pending, pending, "folder")}
       <div className="heading">{t("toolbar.drives")}</div>
-      {sources?.disks.map((d) =>
-        choice(
-          d.mount,
-          (d.name ? `${d.mount}  ${d.name}` : d.mount) +
-            (d.connected ? "" : ` (${t("drives.disconnected")})`),
-          "drive",
-          !d.connected,
-        ),
-      )}
+      {sources?.disks.map((d) => choice(d.mount, diskLabel(d, t), "drive", !d.connected))}
       {folders.length > 0 && (
         <>
           <div className="heading">{t("toolbar.recent")}</div>
-          {folders.map((s) =>
-            choice(s.root, s.outdated ? t("toolbar.outdated", { root: s.root }) : s.root, "folder"),
-          )}
+          {folders.map((s) => choice(s.root, folderLabel(s, t), "folder"))}
         </>
       )}
       <div role="separator" />

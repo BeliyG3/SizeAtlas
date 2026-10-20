@@ -24,6 +24,7 @@
 }
 
 .toolbar .source > .text {
+  unicode-bidi: plaintext; /* a path keeps its own direction: "D:\" stays "D:\" in Arabic */
   flex: 1;
   min-width: 0;
   text-align: start;

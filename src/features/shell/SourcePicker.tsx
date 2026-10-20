@@ -4,6 +4,7 @@ import { Icon } from "../icons/Icon";
 import { Menu } from "../menu/Menu";
 import { useMenuButton } from "../menu/useMenuButton";
 import { SourceItems } from "./SourceItems";
+import { sourceLabel } from "./source";
 
 interface Props {
   sources: Sources | null;
@@ -18,13 +19,13 @@ interface Props {
 export function SourcePicker({ sources, pending, onPick, onChooseFolder }: Props) {
   const { t } = useT();
   const { at, close, buttonProps } = useMenuButton();
-  const text = pending ?? t("toolbar.pickSource");
+  const text = pending === null ? t("toolbar.pickSource") : sourceLabel(sources, pending, t);
   return (
     <>
       <button
         className="source with-icon"
         aria-label={t("toolbar.source")}
-        title={text}
+        title={pending ?? text}
         {...buttonProps}
       >
         <span className={pending === null ? "text ellipsis dim" : "text ellipsis"}>{text}</span>

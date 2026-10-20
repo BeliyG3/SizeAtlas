@@ -9,6 +9,7 @@ import {
   savedScan,
   scanFraction,
   sourceAction,
+  sourceLabel,
 } from "./source";
 
 const scan = (root: string, outdated = false): CachedScan => ({
@@ -83,5 +84,27 @@ describe("rootLabel", () => {
     expect(isDrive(sources, "C:\\")).toBe(true);
     expect(isDrive(sources, "D:\\Photos")).toBe(false);
     expect(isDrive(null, "C:\\")).toBe(false);
+  });
+});
+
+describe("sourceLabel", () => {
+  const t = (key: string, params?: Record<string, string | number>) =>
+    params ? `${key}:${params.root}` : key;
+  const disks = [
+    sources.disks[0],
+    { ...sources.disks[0], name: "", mount: "Z:\\", connected: false },
+  ];
+  const all: Sources = { ...sources, disks };
+
+  it("is the text of the item in the list", () => {
+    expect(sourceLabel(all, "C:\\", t)).toBe("C:\\  System");
+    expect(sourceLabel(all, "Z:\\", t)).toBe("Z:\\ (drives.disconnected)");
+    expect(sourceLabel(all, "D:\\Photos", t)).toBe("D:\\Photos");
+    expect(sourceLabel(all, "E:\\Old", t)).toBe("toolbar.outdated:E:\\Old");
+  });
+
+  it("is the path itself when the list does not have it", () => {
+    expect(sourceLabel(all, "F:\\Else", t)).toBe("F:\\Else");
+    expect(sourceLabel(null, "F:\\Else", t)).toBe("F:\\Else");
   });
 });

@@ -1,4 +1,4 @@
-import type { CachedScan, Sources } from "../../api/types";
+import type { CachedScan, Disk, Sources } from "../../api/types";
 
 /** What the main toolbar button does with the chosen source. */
 export type SourceAction = "open" | "scan" | "rescan";
@@ -55,4 +55,24 @@ export function expectedBytes(sources: Sources | null, path: string): number | n
 /** Share of the scan done; undefined shows an indeterminate progress bar. */
 export function scanFraction(bytes: number, expected: number | null): number | undefined {
   return expected !== null && expected > 0 ? Math.min(1, bytes / expected) : undefined;
+}
+
+/** The translate function of `useT`. */
+export type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+/** Text of a drive in the source list: "C:\  Label", with a note when it is disconnected. */
+export const diskLabel = (d: Disk, t: Translate): string =>
+  (d.name ? `${d.mount}  ${d.name}` : d.mount) +
+  (d.connected ? "" : ` (${t("drives.disconnected")})`);
+
+/** Text of a recent folder in the source list. */
+export const folderLabel = (s: CachedScan, t: Translate): string =>
+  s.outdated ? t("toolbar.outdated", { root: s.root }) : s.root;
+
+/** Text the source list shows for `source`: its item's label, else the path itself. */
+export function sourceLabel(sources: Sources | null, source: string, t: Translate): string {
+  const disk = sources?.disks.find((d) => d.mount === source);
+  if (disk) return diskLabel(disk, t);
+  const scan = sources?.scans.find((s) => s.root === source);
+  return scan ? folderLabel(scan, t) : source;
 }
