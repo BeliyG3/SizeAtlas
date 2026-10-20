@@ -27,6 +27,8 @@ interface Props {
   focusFirst?: boolean;
   /** A submenu (see SubMenu): rendered inside its parent menu; ← (→ right-to-left) closes it. */
   nested?: boolean;
+  /** Taller than the window: scrolls (the focused item is scrolled into view by `focus()`). */
+  scroll?: boolean;
   /**
    * Picking an item that does not open a submenu, Escape, Tab, pressing anywhere else, losing
    * the window focus or resizing the window closes the menu.
@@ -63,7 +65,16 @@ const ownItems = (el: HTMLElement | null): HTMLElement[] =>
  * A menu rendered over everything, kept inside the window. Keys: arrows, Enter, Escape. An item
  * picked in a submenu closes the menus around it too: its click bubbles through them.
  */
-export function Menu({ x, y, label, focusFirst = true, nested = false, onClose, children }: Props) {
+export function Menu({
+  x,
+  y,
+  label,
+  focusFirst = true,
+  nested = false,
+  scroll = false,
+  onClose,
+  children,
+}: Props) {
   const menu = useRef<HTMLDivElement>(null);
   const rtl = isRtl(useT().lang);
   // Where the focus goes back on close, and where if the menu removed that element (a hidden
@@ -148,7 +159,7 @@ export function Menu({ x, y, label, focusFirst = true, nested = false, onClose, 
 
   const box = (
     <div
-      className="menu"
+      className={scroll ? "menu menu-scroll" : "menu"}
       role="menu"
       aria-label={label}
       ref={menu}

@@ -143,6 +143,11 @@ describe("translate", () => {
     expect(languageName("ru")).toBe("Русский");
   });
 
+  // Task 7 enables this once all twenty locale files exist.
+  it.todo(
+    "lists the languages sorted by code: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pl, pt-BR, ru, th, tr, uk, vi, zh-Hans",
+  );
+
   it("detects the language from preferences", () => {
     expect(detectLang(["ru-RU", "en"])).toBe("ru");
     expect(detectLang(["de-DE"])).toBe("en");

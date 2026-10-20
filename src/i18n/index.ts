@@ -4,7 +4,10 @@ import ru from "./locales/ru.json";
 export type Messages = Readonly<Record<string, string>>;
 export type Params = Readonly<Record<string, string | number>>;
 
-/** Supported languages. To add one: add `locales/<code>.json` (with `lang.name`) and one line here. */
+/**
+ * Supported languages, sorted by code (the View › Language menu lists them in this order). To add
+ * one: add `locales/<code>.json` (with `lang.name`) and one line here, in place.
+ */
 export const LANGUAGES = [
   { code: "en", messages: en as Messages },
   { code: "ru", messages: ru as Messages },

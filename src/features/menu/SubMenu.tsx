@@ -11,6 +11,8 @@ interface Props {
   checked?: boolean;
   /** Shown in place of the check mark, as on the items of a command menu. */
   icon?: IconName;
+  /** The nested menu scrolls when taller than the window (a long list). */
+  scroll?: boolean;
   /** Items of the submenu. */
   children: ReactNode;
 }
@@ -24,7 +26,7 @@ const ALIGN = 5;
  * so does the focus moving elsewhere (another submenu opened by pointing at it): one nested menu
  * at a time, whatever opened it.
  */
-export function SubMenu({ label, checked = false, icon, children }: Props) {
+export function SubMenu({ label, checked = false, icon, scroll, children }: Props) {
   const [open, setOpen] = useState<{ x: number; y: number; keyboard: boolean } | null>(null);
   const item = useRef<HTMLButtonElement>(null);
   const rtl = isRtl(useT().lang);
@@ -76,7 +78,15 @@ export function SubMenu({ label, checked = false, icon, children }: Props) {
         </span>
       </button>
       {open && (
-        <Menu x={open.x} y={open.y} label={label} focusFirst={open.keyboard} nested onClose={close}>
+        <Menu
+          x={open.x}
+          y={open.y}
+          label={label}
+          focusFirst={open.keyboard}
+          nested
+          scroll={scroll}
+          onClose={close}
+        >
           {children}
         </Menu>
       )}

@@ -1,4 +1,4 @@
-import { LANGUAGES, languageName } from "../../i18n/index";
+import { LANGUAGES, isRtl, languageName } from "../../i18n/index";
 import { useT } from "../../i18n/react";
 import { useSettings } from "../../settings/react";
 import { THEMES, UNITS } from "../../settings/settings";
@@ -50,13 +50,14 @@ export function ViewItems() {
           />
         ))}
       </SubMenu>
-      <SubMenu label={t("menubar.language")}>
+      <SubMenu label={t("menubar.language")} scroll>
         {LANGUAGES.map((l) => (
           <MenuChoice
             key={l.code}
             kind="radio"
             checked={lang === l.code}
             label={languageName(l.code)}
+            language={{ lang: l.code, dir: isRtl(l.code) ? "rtl" : "ltr" }}
             onPick={() => setLang(l.code)}
           />
         ))}

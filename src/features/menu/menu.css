@@ -66,6 +66,12 @@
   padding-inline-start: 16px;
 }
 
+/* A long list (languages): as tall as the window leaves room for (the placement keeps 4px at both ends). */
+.menu-scroll {
+  max-block-size: calc(100vh - 8px);
+  overflow-y: auto;
+}
+
 .submenu {
   display: grid;
 }

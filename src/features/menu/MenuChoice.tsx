@@ -4,10 +4,12 @@ interface Props {
   checked: boolean;
   label: string;
   onPick: () => void;
+  /** The label is in another language: its tag and direction, so its script renders as its own. */
+  language?: { lang: string; dir: "ltr" | "rtl" };
 }
 
 /** A menu item with a mark: a dot on the chosen one of a group, a check mark on an option that is on. */
-export function MenuChoice({ kind, checked, label, onPick }: Props) {
+export function MenuChoice({ kind, checked, label, onPick, language }: Props) {
   return (
     <button
       role={kind === "radio" ? "menuitemradio" : "menuitemcheckbox"}
@@ -17,7 +19,7 @@ export function MenuChoice({ kind, checked, label, onPick }: Props) {
       <span className="check" aria-hidden="true">
         {checked ? (kind === "radio" ? "●" : "✓") : ""}
       </span>
-      {label}
+      {language ? <span {...language}>{label}</span> : label}
     </button>
   );
 }
