@@ -27,17 +27,22 @@ export function SourceItems({ sources, pending, t, onPick, onChooseFolder }: Pro
       label={label}
       icon={icon}
       dim={dim}
+      path
       onPick={() => onPick(root)}
     />
   );
   return (
     <>
       {pending !== null && !listed.has(pending) && choice(pending, pending, "folder")}
-      <div className="heading">{t("toolbar.drives")}</div>
+      <div className="heading" role="presentation">
+        {t("toolbar.drives")}
+      </div>
       {sources?.disks.map((d) => choice(d.mount, diskLabel(d, t), "drive", !d.connected))}
       {folders.length > 0 && (
         <>
-          <div className="heading">{t("toolbar.recent")}</div>
+          <div className="heading" role="presentation">
+            {t("toolbar.recent")}
+          </div>
           {folders.map((s) => choice(s.root, folderLabel(s, t), "folder"))}
         </>
       )}

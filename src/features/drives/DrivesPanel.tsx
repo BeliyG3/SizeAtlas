@@ -13,7 +13,6 @@ import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import { useSize } from "../../settings/react";
 import { useStored } from "../../settings/storage";
-import { Icon } from "../icons/Icon";
 import { fitWidth, measureColumn } from "../columns/fit";
 import { useColumnOrder } from "../columns/useColumnOrder";
 import { useColumnWidths } from "../columns/useColumnWidths";
@@ -24,6 +23,7 @@ import { keyTarget } from "../tree/model";
 import { driveChoice, type DriveChoice, type DriveRoot } from "./choice";
 import { DriveAsk } from "./DriveAsk";
 import { DriveMenu } from "./DriveMenu";
+import { DriveName } from "./DriveName";
 import { DrivesHeader } from "./DrivesHeader";
 import { MIN_NAME, drivesWidth, useFittedWidths } from "./fit";
 import {
@@ -124,29 +124,9 @@ export function DrivesPanel({ sources, roots, onOpen, onScan, onForget, onWidth 
     e.preventDefault();
   };
 
-  const nameCell = (d: Disk) => {
-    const saved = sources && savedScan(sources, d.mount);
-    const mark = saved && {
-      label: t(saved.outdated ? "drives.outdated" : "drives.saved"),
-      glyph: saved.outdated ? "○" : "●",
-    };
-    const state = d.connected ? "" : ` · ${t("drives.disconnected")}`;
-    // A narrow panel cuts the cells short: each shows in full on hover.
-    return (
-      <td key="name" data-col="name" title={`${d.mount} ${d.name}${state}`}>
-        <Icon name={d.network ? "network-drive" : "drive"} className="drive-icon" /> {d.mount}{" "}
-        <span className="dim">{d.name}</span>
-        {state && <span className="dim">{state}</span>}
-        {mark && (
-          <span className="mark" role="img" aria-label={mark.label} title={mark.label}>
-            {mark.glyph}
-          </span>
-        )}
-      </td>
-    );
-  };
   const cell = (d: Disk, id: DriveColumn): ReactNode => {
-    if (id === "name") return nameCell(d);
+    if (id === "name")
+      return <DriveName key="name" disk={d} saved={sources && savedScan(sources, d.mount)} t={t} />;
     if (!d.connected) return <td key={id} data-col={id} className="num" />;
     const text = size({ size: d.total, used: d.total - d.available, free: d.available }[id]);
     return (

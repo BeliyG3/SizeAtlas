@@ -19,6 +19,8 @@ const ALLOWED: Record<string, string> = {
   ':dir(rtl) .crow [data-col="path"]': "plaintext path, RTL column side",
   ":dir(ltr) .toolbar .source > .text": "plaintext path, LTR button side",
   ":dir(rtl) .toolbar .source > .text": "plaintext path, RTL button side",
+  ":dir(ltr) .menu .path": "plaintext path, LTR menu side",
+  ":dir(rtl) .menu .path": "plaintext path, RTL menu side",
 };
 
 const PHYSICAL_PROPERTY =

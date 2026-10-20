@@ -13,10 +13,12 @@ interface Props {
   dim?: boolean;
   /** The label is in another language: its tag and direction, so its script renders as its own. */
   language?: { lang: string; dir: "ltr" | "rtl" };
+  /** The label is a file system path: it keeps its own direction, is cut short and shows in full on hover. */
+  path?: boolean;
 }
 
 /** A menu item with a mark: a dot on the chosen one of a group, a check mark on an option that is on. */
-export function MenuChoice({ kind, checked, label, onPick, icon, dim, language }: Props) {
+export function MenuChoice({ kind, checked, label, onPick, icon, dim, language, path }: Props) {
   return (
     <button
       role={kind === "radio" ? "menuitemradio" : "menuitemcheckbox"}
@@ -28,7 +30,15 @@ export function MenuChoice({ kind, checked, label, onPick, icon, dim, language }
         {checked ? (kind === "radio" ? "●" : "✓") : ""}
       </span>
       {icon && <Icon name={icon} />}
-      {language ? <span {...language}>{label}</span> : label}
+      {path ? (
+        <span className="path" title={label}>
+          {label}
+        </span>
+      ) : language ? (
+        <span {...language}>{label}</span>
+      ) : (
+        label
+      )}
     </button>
   );
 }

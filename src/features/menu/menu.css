@@ -1,7 +1,9 @@
 .menu {
   position: fixed;
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* a long label is cut short, it does not widen the menu */
   min-width: 200px;
+  max-inline-size: calc(100vw - 8px);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -61,6 +63,26 @@
   top: 50%;
   inset-inline-start: 29px;
   translate: 0 -50%;
+}
+
+/* A path label (the source list): it keeps its own direction, is cut short, shows in full on hover. */
+.menu .path {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: plaintext; /* "D:\" stays "D:\" in Arabic, "/Users" keeps its slash */
+  text-align: start;
+}
+
+/* `plaintext` resolves `start` against the path's own direction, so a Latin path would sit at the
+   wrong side of a right-to-left menu: the side is set from the interface direction. */
+:dir(ltr) .menu .path {
+  text-align: left;
+}
+
+:dir(rtl) .menu .path {
+  text-align: right;
 }
 
 /* The label of a group of items; not an item: the arrow keys skip it. */

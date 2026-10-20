@@ -35,7 +35,7 @@ describe("SourceItems", () => {
     expect(at('role="separator"')).toBeLessThan(at("Choose folder…"));
     expect(html).toContain("D:\\Old (saved by another version)");
     // C:\ is a drive: it is not repeated among the recent folders.
-    expect(html.split("C:\\").length - 1).toBe(1);
+    expect(html.split(">C:\\").length - 1).toBe(1);
   });
 
   it("marks only the current source and dims a disconnected drive", () => {
@@ -52,5 +52,23 @@ describe("SourceItems", () => {
 
   it("has no recent heading without recent folders", () => {
     expect(render(null, { disks: sources.disks, scans: [] })).not.toContain("Recent folders");
+  });
+
+  it("keeps the direction of every path label and shows it in full on hover", () => {
+    const html = render("/Users/me/Downloads", {
+      disks: [disk("Z:\\", "", false)],
+      scans: [scan("/Users/me/Work")],
+    });
+    // The pending path, the drive and the recent folder: each label is its own path span.
+    expect(html.match(/<span class="path" title="[^"]+">/g)).toHaveLength(3);
+    expect(html).toContain(
+      '<span class="path" title="/Users/me/Downloads">/Users/me/Downloads</span>',
+    );
+    expect(html).toContain('title="Z:\\ (Disconnected)"');
+  });
+
+  it("marks the group headings as presentation inside the menu", () => {
+    const html = render("C:\\");
+    expect(html.match(/<div class="heading" role="presentation">/g)).toHaveLength(2);
   });
 });
