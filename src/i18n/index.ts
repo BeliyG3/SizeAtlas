@@ -8,7 +8,10 @@ import nl from "./locales/nl.json";
 import pl from "./locales/pl.json";
 import ptBR from "./locales/pt-BR.json";
 import ru from "./locales/ru.json";
+import th from "./locales/th.json";
 import tr from "./locales/tr.json";
+import uk from "./locales/uk.json";
+import vi from "./locales/vi.json";
 
 export type Messages = Readonly<Record<string, string>>;
 export type Params = Readonly<Record<string, string | number>>;
@@ -28,7 +31,10 @@ export const LANGUAGES = [
   { code: "pl", messages: pl as Messages },
   { code: "pt-BR", messages: ptBR as Messages },
   { code: "ru", messages: ru as Messages },
+  { code: "th", messages: th as Messages },
   { code: "tr", messages: tr as Messages },
+  { code: "uk", messages: uk as Messages },
+  { code: "vi", messages: vi as Messages },
 ] as const;
 
 export type Lang = (typeof LANGUAGES)[number]["code"];
