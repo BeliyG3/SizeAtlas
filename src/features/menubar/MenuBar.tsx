@@ -9,7 +9,7 @@ import {
 } from "react";
 import { Menu, closeMenus } from "../menu/Menu";
 import { loneAlt } from "./altKey";
-import { mnemonic } from "./mnemonic";
+import { mnemonic, mnemonicHit } from "./mnemonic";
 import "./menubar.css";
 
 export interface BarMenu {
@@ -70,8 +70,8 @@ export function MenuBar({ label, menus }: Props) {
   };
 
   // Called by the window listeners below, which are added once.
-  const openKey = (key: string) => {
-    const menu = menus.find((m) => mnemonic(m.label).key === key.toLocaleLowerCase());
+  const openKey = (key: string, code: string) => {
+    const menu = menus.find((m) => mnemonicHit(m.label, key, code));
     if (!menu) return false;
     enter();
     show(menu.id, true);
@@ -100,7 +100,7 @@ export function MenuBar({ label, menus }: Props) {
       alone = loneAlt(alone, e);
       if (e.key === "Alt") return;
       const plain = e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.repeat;
-      if (plain && latest.current.openKey(e.key)) e.preventDefault();
+      if (plain && latest.current.openKey(e.key, e.code)) e.preventDefault();
     };
     const up = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Alt") {
