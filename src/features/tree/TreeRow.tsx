@@ -95,7 +95,7 @@ export const TreeRow = memo(function TreeRow({
           ))}
       </span>
       {root?.drive ? <Icon name="drive" className="drive-icon" /> : <ItemIcon isDir category={0} />}
-      <span className="label" title={root?.root}>
+      <span className="label" dir="auto" title={root?.root}>
         {cell.name}
       </span>
       {root && root.status !== "open" && <ScanMark status={root.status} files={scanFiles} />}

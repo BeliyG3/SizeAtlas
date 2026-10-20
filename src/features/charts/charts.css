@@ -19,15 +19,13 @@
 
 /* File names and folders keep their own direction, whatever the language of the interface. */
 .crumbs > button,
-.crumbs > [aria-current],
-.panel-row .ellipsis,
-.legend .ellipsis,
-.bar-row .ellipsis {
+.crumbs > [aria-current] {
   unicode-bidi: plaintext;
 }
 
-/* `plaintext` resolves `start` against the name's own direction, so a Latin name would sit on the
-   far side of a right-to-left column: the column's side is set from the interface direction. */
+/* Names in lists carry dir="auto" (WebKit cuts a name at the end its `direction` gives), so `start`
+   follows the name and a Latin name would sit on the far side of a right-to-left column: the
+   column's side is set from the interface direction. */
 :dir(ltr) :is(.panel-row, .legend, .bar-row) .ellipsis {
   text-align: left;
 }

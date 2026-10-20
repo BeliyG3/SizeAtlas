@@ -34,7 +34,9 @@ export function PieChart({ slices, onPick }: Props) {
           <li key={s.id ?? "other"}>
             <button disabled={s.id === null} onClick={() => onPick(s)}>
               <span className="swatch" style={{ background: s.color }} />
-              <span className="ellipsis">{s.name}</span>
+              <span className="ellipsis" dir="auto">
+                {s.name}
+              </span>
               <span className="num">{formatPercent(s.share, lang)}</span>
               <span className="num dim">{size(s.size)}</span>
             </button>

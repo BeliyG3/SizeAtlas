@@ -34,7 +34,7 @@ export function MenuChoice({ kind, checked, label, onPick, icon, dim, language, 
       </span>
       {icon && <Icon name={icon} />}
       {path ? (
-        <span className="path" title={isolate(label, lang)}>
+        <span className="path" dir="auto" title={isolate(label, lang)}>
           {label}
         </span>
       ) : language ? (

@@ -71,12 +71,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  unicode-bidi: plaintext; /* "D:\" stays "D:\" in Arabic, "/Users" keeps its slash */
-  text-align: start;
 }
 
-/* `plaintext` resolves `start` against the path's own direction, so a Latin path would sit at the
-   wrong side of a right-to-left menu: the side is set from the interface direction. */
+/* The path carries dir="auto": "D:\" stays "D:\" in Arabic and WebKit cuts it at its own end.
+   `start` follows the path, so a Latin path would sit at the wrong side of a right-to-left menu:
+   the side is set from the interface direction. */
 :dir(ltr) .menu .path {
   text-align: left;
 }

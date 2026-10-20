@@ -104,7 +104,9 @@ export const ContentsRow = memo(function ContentsRow({
       "name",
       <>
         <ItemIcon isDir={dir} category={item.category} />
-        <span className="ellipsis">{item.name}</span>
+        <span className="ellipsis" dir="auto">
+          {item.name}
+        </span>
         {moving && <span className="tag">{t("trash.moving")}</span>}
         {item.scanning && <ScanMark status="scanning" files={undefined} />}
         {waiting && <span className="tag">{t("tree.pending")}</span>}
@@ -146,6 +148,7 @@ export const ContentsRow = memo(function ContentsRow({
           key={id}
           role="gridcell"
           data-col={id}
+          dir={id === "path" ? "auto" : undefined}
           className={cells[id][0]}
           title={id === "path" ? pathTitle(folderPath, item, lang) : undefined}
         >

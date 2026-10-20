@@ -20,8 +20,8 @@
   unicode-bidi: plaintext; /* a translated message: its own direction, not the map's */
 }
 
+/* The text carries dir="auto": a path keeps its own direction and is cut at its own end. */
 .tooltip {
-  unicode-bidi: plaintext;
   position: absolute;
   max-width: 60%;
   padding: 4px 8px;

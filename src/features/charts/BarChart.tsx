@@ -18,7 +18,9 @@ export function BarChart({ slices, onPick }: Props) {
       {slices.map((s) => (
         <li key={s.id ?? "other"}>
           <button className="bar-row" disabled={s.id === null} onClick={() => onPick(s)}>
-            <span className="ellipsis">{s.name}</span>
+            <span className="ellipsis" dir="auto">
+              {s.name}
+            </span>
             <span className="bar-track">
               <span
                 style={{

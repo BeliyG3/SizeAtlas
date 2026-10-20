@@ -121,7 +121,6 @@
 }
 
 .tree-row .label {
-  unicode-bidi: plaintext; /* a file name keeps its own direction */
   overflow: hidden;
   text-overflow: ellipsis;
 }

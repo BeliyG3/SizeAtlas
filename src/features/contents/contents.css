@@ -116,14 +116,10 @@
   gap: 6px;
 }
 
-/* File names and folders keep their own direction, whatever the language of the interface. */
-.crow .name .ellipsis,
-.crow [data-col="path"] {
-  unicode-bidi: plaintext;
-}
-
-/* `plaintext` resolves `start` against the name's own direction, so a Latin name would sit on the
-   far side of a right-to-left column: the column's side is set from the interface direction. */
+/* File names and folders keep their own direction: dir="auto" in the markup, not
+   `unicode-bidi: plaintext`, which WebKit ignores when it places the ellipsis. `start` then follows
+   the path, so a Latin path would sit on the far side of a right-to-left column: the column's side
+   is set from the interface direction. */
 :dir(ltr) .crow [data-col="path"] {
   text-align: left;
 }

@@ -63,9 +63,9 @@ describe("SourceItems", () => {
       scans: [scan("/Users/me/Work")],
     });
     // The pending path, the drive and the recent folder: each label is its own path span.
-    expect(html.match(/<span class="path" title="[^"]+">/g)).toHaveLength(3);
+    expect(html.match(/<span class="path" dir="auto" title="[^"]+">/g)).toHaveLength(3);
     expect(html).toContain(
-      '<span class="path" title="/Users/me/Downloads">/Users/me/Downloads</span>',
+      '<span class="path" dir="auto" title="/Users/me/Downloads">/Users/me/Downloads</span>',
     );
     expect(html).toContain('title="Z:\\ (Disconnected)"');
   });

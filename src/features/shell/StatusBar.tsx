@@ -41,7 +41,7 @@ function ScanStatus({ root, folder, progress, expected }: NonNullable<Props["sca
           ? t("status.scanning", { root, ...files })
           : t("status.refreshing", { folder, ...files })}
       </span>
-      <span className="ellipsis path dim" title={current}>
+      <span className="ellipsis path dim" dir="auto" title={current}>
         {current}
       </span>
       <progress

@@ -187,7 +187,7 @@ export function Treemap({
       />
       {data?.rects.length === 0 && <p className="treemap-empty dim">{t("treemap.empty")}</p>}
       {tip && hover && tip.id === hover.rect.id && (
-        <div className="tooltip" style={tipStyle}>
+        <div className="tooltip" dir="auto" style={tipStyle}>
           {tip.text}
         </div>
       )}

@@ -69,9 +69,13 @@ export function LargestPanel({ generation, rev, viewId, onSelect, onMenu, onFail
             }}
           >
             <ItemIcon isDir={false} category={f.category} />
-            <span className="ellipsis">
+            <span className="ellipsis" dir="auto">
               {f.name}
-              {f.folder && <span className="dim folder ellipsis">{f.folder}</span>}
+              {f.folder && (
+                <span className="dim folder ellipsis" dir="auto">
+                  {f.folder}
+                </span>
+              )}
             </span>
             <span className="num">{size(f.size)}</span>
           </button>

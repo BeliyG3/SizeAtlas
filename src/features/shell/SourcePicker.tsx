@@ -28,7 +28,9 @@ export function SourcePicker({ sources, pending, onPick, onChooseFolder }: Props
         title={pending ?? text}
         {...buttonProps}
       >
-        <span className={pending === null ? "text ellipsis dim" : "text ellipsis"}>{text}</span>
+        <span className={pending === null ? "text ellipsis dim" : "text ellipsis"} dir="auto">
+          {text}
+        </span>
         <Icon name="chevron-down" />
       </button>
       {at && (
