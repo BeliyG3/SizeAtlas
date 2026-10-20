@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Sources } from "../../api/types";
 import { translate } from "../../i18n";
+import { I18nProvider } from "../../i18n/react";
 import { SourceItems } from "./SourceItems";
 
 const disk = (mount: string, name: string, connected = true) =>
@@ -15,13 +16,15 @@ const sources: Sources = {
 
 const render = (pending: string | null, s: Sources | null = sources) =>
   renderToStaticMarkup(
-    <SourceItems
-      sources={s}
-      pending={pending}
-      t={(key, params) => translate("en", key, params)}
-      onPick={() => {}}
-      onChooseFolder={() => {}}
-    />,
+    <I18nProvider>
+      <SourceItems
+        sources={s}
+        pending={pending}
+        t={(key, params) => translate("en", key, params)}
+        onPick={() => {}}
+        onChooseFolder={() => {}}
+      />
+    </I18nProvider>,
   );
 
 describe("SourceItems", () => {

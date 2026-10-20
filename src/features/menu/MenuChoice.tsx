@@ -1,3 +1,5 @@
+import { isolate } from "../../i18n";
+import { useT } from "../../i18n/react";
 import { Icon } from "../icons/Icon";
 import type { IconName } from "../icons/paths";
 
@@ -19,6 +21,7 @@ interface Props {
 
 /** A menu item with a mark: a dot on the chosen one of a group, a check mark on an option that is on. */
 export function MenuChoice({ kind, checked, label, onPick, icon, dim, language, path }: Props) {
+  const { lang } = useT();
   return (
     <button
       role={kind === "radio" ? "menuitemradio" : "menuitemcheckbox"}
@@ -31,7 +34,7 @@ export function MenuChoice({ kind, checked, label, onPick, icon, dim, language, 
       </span>
       {icon && <Icon name={icon} />}
       {path ? (
-        <span className="path" title={label}>
+        <span className="path" title={isolate(label, lang)}>
           {label}
         </span>
       ) : language ? (

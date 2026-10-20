@@ -106,7 +106,7 @@ export function languageName(lang: Lang): string {
  * text around it in a right-to-left language; other languages get it unchanged.
  */
 export function isolate(text: string, lang: string): string {
-  return isRtl(lang) ? `⁨${text}⁩` : text;
+  return isRtl(lang) ? `\u2068${text}\u2069` : text;
 }
 
 export function translate(lang: Lang, key: string, params: Params = {}): string {
