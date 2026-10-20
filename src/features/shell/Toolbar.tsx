@@ -4,11 +4,9 @@ import { Icon } from "../icons/Icon";
 import type { IconName } from "../icons/paths";
 import { ModeMenu } from "../lists/ModeMenu";
 import type { Mode } from "../lists/modes";
-import { forgettable, recentFolders, sourceAction, type SourceAction } from "./source";
+import { SourcePicker } from "./SourcePicker";
+import { forgettable, sourceAction, type SourceAction } from "./source";
 import "./shell.css";
-
-/** Option value of "Choose folder…"; a NUL cannot appear in a path. */
-const CHOOSE = "\u0000choose";
 
 /** Icon of the main button, by what it does. */
 const ACTION_ICONS: Record<SourceAction, IconName> = {
@@ -74,11 +72,6 @@ export function Toolbar({
   const action = sourceAction(pending, selectedRoot, inTree, sources?.scans ?? []);
   const ready = action === "open" || (pending !== null && !waiting.has(pending));
   const forget = forgettable(sources, pending);
-  const folders = recentFolders(sources);
-  const listed = new Set([
-    ...(sources?.disks.map((d) => d.mount) ?? []),
-    ...folders.map((s) => s.root),
-  ]);
 
   const run = () => {
     if (pending === null || action === null) return;
@@ -108,40 +101,12 @@ export function Toolbar({
           <Icon name="forward" className="icon-dir" />
         </button>
       </div>
-      <select
-        className="source"
-        aria-label={t("toolbar.source")}
-        value={pending ?? ""}
-        onChange={(e) => {
-          if (e.target.value === CHOOSE) onChooseFolder();
-          else onPick(e.target.value);
-        }}
-      >
-        {pending === null && (
-          <option value="" disabled>
-            {t("toolbar.pickSource")}
-          </option>
-        )}
-        {pending !== null && !listed.has(pending) && <option value={pending}>{pending}</option>}
-        <optgroup label={t("toolbar.drives")}>
-          {sources?.disks.map((d) => (
-            <option key={d.mount} value={d.mount} className={d.connected ? undefined : "dim"}>
-              {d.name ? `${d.mount}  ${d.name}` : d.mount}
-              {d.connected ? "" : ` (${t("drives.disconnected")})`}
-            </option>
-          ))}
-        </optgroup>
-        {folders.length > 0 && (
-          <optgroup label={t("toolbar.recent")}>
-            {folders.map((s) => (
-              <option key={s.root} value={s.root}>
-                {s.outdated ? t("toolbar.outdated", { root: s.root }) : s.root}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        <option value={CHOOSE}>{t("toolbar.chooseFolder")}</option>
-      </select>
+      <SourcePicker
+        sources={sources}
+        pending={pending}
+        onPick={onPick}
+        onChooseFolder={onChooseFolder}
+      />
       <button className="primary with-icon" disabled={action === null || !ready} onClick={run}>
         <Icon name={ACTION_ICONS[action ?? "scan"]} />
         {t(`toolbar.${action ?? "scan"}`)}

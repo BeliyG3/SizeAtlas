@@ -51,6 +51,25 @@
   text-align: center;
 }
 
+/* A choice with an icon after its mark (the source list): a second column for the icon. */
+.menu button.iconic {
+  padding-inline-start: 52px;
+}
+
+.menu button.iconic > .icon {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 29px;
+  translate: 0 -50%;
+}
+
+/* The label of a group of items; not an item: the arrow keys skip it. */
+.menu .heading {
+  padding: 4px 8px 2px;
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
 /* An item that opens a submenu: the arrow sits at the right edge. */
 .menu [aria-haspopup="menu"] {
   display: flex;

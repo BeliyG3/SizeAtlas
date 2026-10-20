@@ -18,8 +18,15 @@
   color: var(--accent);
 }
 
+/* The source list's button: as wide as the field was; a long path is cut short. */
 .toolbar .source {
   width: 280px;
+}
+
+.toolbar .source > .text {
+  flex: 1;
+  min-width: 0;
+  text-align: start;
 }
 
 .banner {
