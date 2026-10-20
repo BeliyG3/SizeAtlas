@@ -101,6 +101,14 @@ export function languageName(lang: Lang): string {
   return translate(lang, "lang.name");
 }
 
+/**
+ * First-strong-isolate marks keep a left-to-right value (a path, a file name) from reordering the
+ * text around it in a right-to-left language; other languages get it unchanged.
+ */
+export function isolate(text: string, lang: string): string {
+  return isRtl(lang) ? `⁨${text}⁩` : text;
+}
+
 export function translate(lang: Lang, key: string, params: Params = {}): string {
   return translateWith(CATALOGS, lang, key, params);
 }
@@ -119,10 +127,8 @@ export function translateWith(
     lookup(catalogs, lang, key, params.count) ??
     lookup(catalogs, FALLBACK_LANG, key, params.count) ??
     key;
-  // First-strong-isolate marks keep a left-to-right value (a path, a file name) from reordering the sentence.
-  const [open, close] = isRtl(lang) ? ["⁨", "⁩"] : ["", ""];
   return template.replace(/\{(\w+)\}/g, (match, name: string) =>
-    name in params ? `${open}${String(params[name])}${close}` : match,
+    name in params ? isolate(String(params[name]), lang) : match,
   );
 }
 

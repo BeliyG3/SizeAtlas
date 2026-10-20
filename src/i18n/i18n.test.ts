@@ -209,13 +209,13 @@ describe("translate", () => {
 
   it("isolates parameters in right-to-left languages", () => {
     const catalogs = { en: { m: "Moved {name}" }, he: { m: "הועבר {name}" } };
-    expect(translateWith(catalogs, "he", "m", { name: "a.mp4" })).toBe("הועבר ⁨a.mp4⁩");
+    expect(translateWith(catalogs, "he", "m", { name: "a.mp4" })).toBe("הועבר \u2068a.mp4\u2069");
     expect(translateWith(catalogs, "en", "m", { name: "a.mp4" })).toBe("Moved a.mp4");
   });
 
   it("isolates parameters by the displayed language, even on an English fallback", () => {
     const catalogs = { en: { m: "Moved {name}" }, ar: {} };
-    expect(translateWith(catalogs, "ar", "m", { name: "a.mp4" })).toBe("Moved ⁨a.mp4⁩");
+    expect(translateWith(catalogs, "ar", "m", { name: "a.mp4" })).toBe("Moved \u2068a.mp4\u2069");
   });
 
   it("uses Western digits for Arabic and the language code otherwise", () => {

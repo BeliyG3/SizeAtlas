@@ -13,6 +13,7 @@ import { isListMode, type Mode } from "../lists/modes";
 import type { MenuTarget } from "../menu/ItemMenu";
 import { SplitPane } from "../shell/SplitPane";
 import { MIN_PANE } from "../shell/split";
+import { crumbsPath } from "../export/names";
 import { useCrumbs } from "./useCrumbs";
 import { useDebounced } from "./useDebounced";
 import { useLiveRevision } from "../scan/useLiveRevision";
@@ -124,6 +125,7 @@ export const Viewer = memo(function Viewer({
             summary={summary}
             kind={mode}
             base={base}
+            basePath={crumbsPath(crumbs.slice(0, baseAt + 1))}
             parent={baseParent}
             selectedId={selection.id}
             details={details}

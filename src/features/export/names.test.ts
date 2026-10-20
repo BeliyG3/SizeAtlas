@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exportFileName, joinPath } from "./names";
+import { exportFileName, itemPath, joinPath } from "./names";
 
 describe("joinPath", () => {
   it("joins with the separator of the root, without doubling it", () => {
@@ -25,5 +25,12 @@ describe("exportFileName", () => {
 
   it("leaves the name out when nothing of it is left", () => {
     expect(exportFileName("/", day)).toBe("SizeAtlas - 2026-10-09.csv");
+  });
+});
+
+describe("itemPath", () => {
+  it("is the full path of a list item, the same as the export writes", () => {
+    expect(itemPath("D:\\", { folder: "Backups", name: "a.vhdx" })).toBe("D:\\Backups\\a.vhdx");
+    expect(itemPath("/srv", { folder: "", name: "a" })).toBe("/srv/a");
   });
 });

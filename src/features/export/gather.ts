@@ -1,7 +1,7 @@
 import { api } from "../../api/client";
 import type { Detail, Item, ListItem } from "../../api/types";
 import { COLUMNS } from "../contents/columns";
-import { joinPath } from "./names";
+import { crumbsPath, itemPath } from "./names";
 import type { ExportSource } from "./source";
 
 /** Rows per request: few enough requests for a huge folder, each one sorts the folder again. */
@@ -76,7 +76,7 @@ async function gatherOnce(source: ExportSource): Promise<Gathered | null> {
   const scanning = initial.scanning === true;
   const folder = source.kind === "folder" ? source.folder : source.base;
   const crumbs = await api.getCrumbs(generation, folder);
-  const folderPath = joinPath(crumbs.map((c) => c.name));
+  const folderPath = crumbsPath(crumbs);
 
   let items: readonly (Item | ListItem)[];
   let folderSize: number;
@@ -148,7 +148,7 @@ async function gatherOnce(source: ExportSource): Promise<Gathered | null> {
     details,
     folderSize,
     folderName: crumbs.at(-1)?.name ?? "",
-    pathOf: (item) => joinPath([folderPath, "folder" in item ? item.folder : "", item.name]),
+    pathOf: (item) => itemPath(folderPath, item),
   };
 }
 

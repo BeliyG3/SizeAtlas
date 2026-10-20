@@ -33,6 +33,8 @@ interface Props {
   kind: ListKind;
   /** The folder whose subtree is listed. */
   base: number;
+  /** Full path of `base`; empty while unknown. */
+  basePath: string;
   /** Parent of `base`; null at the scan root or while unknown. */
   parent: number | null;
   selectedId: number;
@@ -58,6 +60,7 @@ export function ListTable({
   summary,
   kind,
   base,
+  basePath,
   parent,
   selectedId,
   details,
@@ -191,6 +194,7 @@ export function ListTable({
         columns={layout.ids}
         template={layout.template}
         width={layout.width}
+        folderPath={basePath}
         selected={marks.ids.size > 0 ? marks.ids.has(item.id) : item.id === selectedId}
         cursor={index === cursor}
         moving={moving.has(item.id)}

@@ -6,6 +6,7 @@ import { useSize } from "../../settings/react";
 import type { ColumnId } from "./columns";
 import { ItemIcon } from "./ItemIcon";
 import { markHow, type MarkHow } from "./marks";
+import { pathTitle } from "./pathTitle";
 import { ROW_HEIGHT } from "./pages";
 import { ScanMark } from "../tree/RootMarks";
 
@@ -23,6 +24,8 @@ interface Props {
   columns: readonly ColumnId[];
   template: string;
   width: number;
+  /** Full path of the listed folder (lists): the Path cell shows the item's full path on hover. */
+  folderPath?: string;
   selected: boolean;
   cursor: boolean;
   /** It is being moved to the trash: dimmed, with a tag. */
@@ -43,6 +46,7 @@ export const ContentsRow = memo(function ContentsRow({
   columns,
   template,
   width,
+  folderPath = "",
   selected,
   cursor,
   moving = false,
@@ -138,7 +142,13 @@ export const ContentsRow = memo(function ContentsRow({
       }}
     >
       {columns.map((id) => (
-        <span key={id} role="gridcell" data-col={id} className={cells[id][0]}>
+        <span
+          key={id}
+          role="gridcell"
+          data-col={id}
+          className={cells[id][0]}
+          title={id === "path" ? pathTitle(folderPath, item, lang) : undefined}
+        >
           {cells[id][1]}
         </span>
       ))}

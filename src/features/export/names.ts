@@ -24,3 +24,12 @@ export function exportFileName(name: string, day: Date): string {
   const date = `${day.getFullYear()}-${month}-${String(day.getDate()).padStart(2, "0")}`;
   return clean === "" ? `SizeAtlas - ${date}.csv` : `SizeAtlas - ${clean} - ${date}.csv`;
 }
+
+/** The full path of an item of a table: the listed folder, the item's folder in it (lists), its name. */
+export function itemPath(folderPath: string, item: { name: string; folder?: string }): string {
+  return joinPath([folderPath, item.folder ?? "", item.name]);
+}
+
+/** The path a chain of crumbs (root first) leads to. */
+export const crumbsPath = (crumbs: readonly { name: string }[]): string =>
+  joinPath(crumbs.map((c) => c.name));
