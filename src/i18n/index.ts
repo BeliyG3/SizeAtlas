@@ -4,6 +4,8 @@ import es from "./locales/es.json";
 import fr from "./locales/fr.json";
 import id from "./locales/id.json";
 import it from "./locales/it.json";
+import ja from "./locales/ja.json";
+import ko from "./locales/ko.json";
 import nl from "./locales/nl.json";
 import pl from "./locales/pl.json";
 import ptBR from "./locales/pt-BR.json";
@@ -12,6 +14,7 @@ import th from "./locales/th.json";
 import tr from "./locales/tr.json";
 import uk from "./locales/uk.json";
 import vi from "./locales/vi.json";
+import zhHans from "./locales/zh-Hans.json";
 
 export type Messages = Readonly<Record<string, string>>;
 export type Params = Readonly<Record<string, string | number>>;
@@ -27,6 +30,8 @@ export const LANGUAGES = [
   { code: "fr", messages: fr as Messages },
   { code: "id", messages: id as Messages },
   { code: "it", messages: it as Messages },
+  { code: "ja", messages: ja as Messages },
+  { code: "ko", messages: ko as Messages },
   { code: "nl", messages: nl as Messages },
   { code: "pl", messages: pl as Messages },
   { code: "pt-BR", messages: ptBR as Messages },
@@ -35,6 +40,7 @@ export const LANGUAGES = [
   { code: "tr", messages: tr as Messages },
   { code: "uk", messages: uk as Messages },
   { code: "vi", messages: vi as Messages },
+  { code: "zh-Hans", messages: zhHans as Messages },
 ] as const;
 
 export type Lang = (typeof LANGUAGES)[number]["code"];
