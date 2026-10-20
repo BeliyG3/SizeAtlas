@@ -1,4 +1,4 @@
-import { translate, type Lang } from "./i18n/index";
+import { intlLocale, translate, type Lang } from "./i18n/index";
 import type { SizeUnit } from "./settings/settings";
 
 const numberFormats = new Map<string, Intl.NumberFormat>();
@@ -9,7 +9,7 @@ function numberFormat(lang: Lang, digits?: number): Intl.NumberFormat {
   let format = numberFormats.get(key);
   if (!format) {
     format = new Intl.NumberFormat(
-      lang,
+      intlLocale(lang),
       digits === undefined ? {} : { minimumFractionDigits: digits, maximumFractionDigits: digits },
     );
     numberFormats.set(key, format);
@@ -83,9 +83,9 @@ export function formatAgo(epochSecs: number, nowMs: number, lang: Lang): string 
   let value = (epochSecs * 1000 - nowMs) / 1000;
   // "auto" gives "now" for zero, but also "yesterday"/"the day before yesterday" for -1/-2 days; keep numbers.
   if (Math.abs(value) < 60) {
-    return new Intl.RelativeTimeFormat(lang, { numeric: "auto" }).format(0, "second");
+    return new Intl.RelativeTimeFormat(intlLocale(lang), { numeric: "auto" }).format(0, "second");
   }
-  const rtf = new Intl.RelativeTimeFormat(lang, { numeric: "always" });
+  const rtf = new Intl.RelativeTimeFormat(intlLocale(lang), { numeric: "always" });
   for (const [unit, size] of STEPS) {
     if (Math.abs(value) < size) return rtf.format(Math.round(value), unit);
     value /= size;
@@ -100,7 +100,7 @@ export function formatPercent(share: number, lang: Lang): string {
   if (!Number.isFinite(share)) return "—";
   let format = percentFormats.get(lang);
   if (!format) {
-    format = new Intl.NumberFormat(lang, {
+    format = new Intl.NumberFormat(intlLocale(lang), {
       style: "percent",
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
@@ -117,7 +117,7 @@ export function formatDate(ms: number | null, lang: Lang): string {
   if (ms === null || !Number.isFinite(ms) || ms === 0) return "—";
   let format = dateFormats.get(lang);
   if (!format) {
-    format = new Intl.DateTimeFormat(lang, { dateStyle: "short", timeStyle: "short" });
+    format = new Intl.DateTimeFormat(intlLocale(lang), { dateStyle: "short", timeStyle: "short" });
     dateFormats.set(lang, format);
   }
   return format.format(ms);

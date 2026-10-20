@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { LANGUAGES, detectLang, languageName, translate, translateWith } from "./index";
+import {
+  LANGUAGES,
+  detectLang,
+  intlLocale,
+  isRtl,
+  languageName,
+  translate,
+  translateWith,
+} from "./index";
 
 const PLURAL = /_(zero|one|two|few|many|other)$/;
 const baseKeys = (messages: Record<string, string>) =>
@@ -92,5 +100,30 @@ describe("translate", () => {
   it("detects the language from preferences", () => {
     expect(detectLang(["ru-RU", "en"])).toBe("ru");
     expect(detectLang(["de-DE"])).toBe("en");
+  });
+
+  it("knows the right-to-left languages", () => {
+    expect(isRtl("ar")).toBe(true);
+    expect(isRtl("he")).toBe(true);
+    expect(isRtl("en")).toBe(false);
+    expect(isRtl("ru")).toBe(false);
+  });
+
+  it.todo("maps system tags to the supported codes"); // enabled in Task 7, when the codes exist
+
+  it("isolates parameters in right-to-left languages", () => {
+    const catalogs = { en: { m: "Moved {name}" }, he: { m: "הועבר {name}" } };
+    expect(translateWith(catalogs, "he", "m", { name: "a.mp4" })).toBe("הועבר ⁨a.mp4⁩");
+    expect(translateWith(catalogs, "en", "m", { name: "a.mp4" })).toBe("Moved a.mp4");
+  });
+
+  it("isolates parameters by the displayed language, even on an English fallback", () => {
+    const catalogs = { en: { m: "Moved {name}" }, ar: {} };
+    expect(translateWith(catalogs, "ar", "m", { name: "a.mp4" })).toBe("Moved ⁨a.mp4⁩");
+  });
+
+  it("uses Western digits for Arabic and the language code otherwise", () => {
+    expect(intlLocale("ar")).toBe("ar-u-nu-latn");
+    expect(intlLocale("ru")).toBe("ru");
   });
 });

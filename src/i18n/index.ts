@@ -17,10 +17,35 @@ const CATALOGS: Readonly<Record<string, Messages>> = Object.fromEntries(
   LANGUAGES.map((l) => [l.code, l.messages]),
 );
 
+const RTL = new Set(["ar", "he"]);
+
+/** Right-to-left languages: the document direction flips and parameters are bidi-isolated. */
+export function isRtl(lang: string): boolean {
+  return RTL.has(lang);
+}
+
+/** The `Intl` locale for a language; Arabic keeps Western digits. */
+export function intlLocale(lang: string): string {
+  return lang === "ar" ? "ar-u-nu-latn" : lang;
+}
+
+/** A system language tag as one of our codes (legacy codes and script/region variants folded); null if unsupported. */
+function normalizeTag(tag: string): string | null {
+  const [base = "", ...rest] = tag.toLowerCase().split("-");
+  if (base === "iw") return "he";
+  if (base === "in") return "id";
+  if (base === "pt") return "pt-BR";
+  if (base === "zh") {
+    // Only Simplified Chinese is translated; Traditional falls through to English.
+    return rest.some((p) => ["hant", "tw", "hk", "mo"].includes(p)) ? null : "zh-Hans";
+  }
+  return base;
+}
+
 export function detectLang(preferred: readonly string[]): Lang {
   for (const tag of preferred) {
-    const base = tag.toLowerCase().split("-")[0];
-    const hit = LANGUAGES.find((l) => l.code === base);
+    const code = normalizeTag(tag);
+    const hit = LANGUAGES.find((l) => l.code === code);
     if (hit) return hit.code;
   }
   return FALLBACK_LANG;
@@ -49,8 +74,10 @@ export function translateWith(
     lookup(catalogs, lang, key, params.count) ??
     lookup(catalogs, FALLBACK_LANG, key, params.count) ??
     key;
+  // First-strong-isolate marks keep a left-to-right value (a path, a file name) from reordering the sentence.
+  const [open, close] = isRtl(lang) ? ["⁨", "⁩"] : ["", ""];
   return template.replace(/\{(\w+)\}/g, (match, name: string) =>
-    name in params ? String(params[name]) : match,
+    name in params ? `${open}${String(params[name])}${close}` : match,
   );
 }
 

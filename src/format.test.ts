@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Lang } from "./i18n/index";
 import { formatAgo, formatCount, formatDate, formatPercent, formatSize } from "./format";
 
 describe("formatSize", () => {
@@ -74,5 +75,11 @@ describe("formatPercent and formatDate", () => {
     expect(formatDate(noon, "ru")).toContain("07.2026");
     expect(formatDate(null, "en")).toBe("—");
     expect(formatDate(0, "en")).toBe("—");
+  });
+});
+
+describe("Arabic numbers", () => {
+  it("are formatted with Western digits", () => {
+    expect(formatCount(1234, "ar" as Lang)).toMatch(/1.?234/);
   });
 });

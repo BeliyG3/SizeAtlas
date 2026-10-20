@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { LANGUAGES, detectLang, translate, type Lang, type Params } from "./index";
+import { LANGUAGES, detectLang, isRtl, translate, type Lang, type Params } from "./index";
 
 const STORAGE_KEY = "sizeatlas.lang";
 
@@ -40,9 +40,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       // Not remembering the choice is acceptable.
     }
   }, []);
-  // Screen readers and spell checking use the document language.
+  // Screen readers and spell checking use the document language; the direction follows the script.
   useEffect(() => {
     document.documentElement.lang = lang;
+    document.documentElement.dir = isRtl(lang) ? "rtl" : "ltr";
   }, [lang]);
   const value = useMemo<I18n>(
     () => ({ lang, setLang, t: (key, params) => translate(lang, key, params) }),
