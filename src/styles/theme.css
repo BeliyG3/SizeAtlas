@@ -266,15 +266,6 @@ button.with-icon {
   padding: 0;
 }
 
-select {
-  font: inherit;
-  color: var(--text);
-  background: var(--field);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 3px 6px;
-}
-
 .toasts {
   position: fixed;
   inset-inline-end: 16px;

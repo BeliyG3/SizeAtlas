@@ -142,8 +142,8 @@ export function Menu({
   const onKey = (e: KeyboardEvent) => {
     const items = ownItems(menu.current);
     const at = items.findIndex((b) => b === document.activeElement);
-    const back = nested && mirrorArrow(e.key, rtl) === "ArrowLeft";
-    if (e.key === "Escape" || e.key === "Tab" || back) onClose();
+    const closesBack = nested && mirrorArrow(e.key, rtl) === "ArrowLeft";
+    if (e.key === "Escape" || e.key === "Tab" || closesBack) onClose();
     else if (e.key === "ArrowDown") items[(at + 1) % items.length]?.focus();
     else if (e.key === "ArrowUp") items[(at <= 0 ? items.length : at) - 1]?.focus();
     else return;
