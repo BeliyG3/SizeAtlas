@@ -143,10 +143,35 @@ describe("translate", () => {
     expect(languageName("ru")).toBe("Русский");
   });
 
-  // Task 7 enables this once all twenty locale files exist.
-  it.todo(
-    "lists the languages sorted by code: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pl, pt-BR, ru, th, tr, uk, vi, zh-Hans",
-  );
+  it("lists the languages sorted by code: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pl, pt-BR, ru, th, tr, uk, vi, zh-Hans", () => {
+    expect(LANGUAGES.map((l) => l.code)).toEqual([
+      "ar",
+      "de",
+      "en",
+      "es",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt-BR",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh-Hans",
+    ]);
+  });
+
+  it("marks exactly Arabic and Hebrew right-to-left in the language list", () => {
+    // The View › Language items take their `dir` from isRtl (MenuChoice.test checks the markup).
+    expect(LANGUAGES.filter((l) => isRtl(l.code)).map((l) => l.code)).toEqual(["ar", "he"]);
+  });
 
   it("detects the language from preferences", () => {
     expect(detectLang(["ru-RU", "en"])).toBe("ru");
@@ -170,7 +195,17 @@ describe("translate", () => {
     expect(mirrorArrow("Enter", true)).toBe("Enter");
   });
 
-  it.todo("maps system tags to the supported codes"); // enabled in Task 7, when the codes exist
+  it("maps system tags to the supported codes", () => {
+    expect(detectLang(["iw-IL"])).toBe("he");
+    expect(detectLang(["in-ID"])).toBe("id");
+    expect(detectLang(["zh-CN"])).toBe("zh-Hans");
+    expect(detectLang(["zh-Hans-CN"])).toBe("zh-Hans");
+    expect(detectLang(["zh-TW"])).toBe("en");
+    expect(detectLang(["zh-Hant"])).toBe("en");
+    expect(detectLang(["pt-PT"])).toBe("pt-BR");
+    expect(detectLang(["pt"])).toBe("pt-BR");
+    expect(detectLang(["de-AT"])).toBe("de");
+  });
 
   it("isolates parameters in right-to-left languages", () => {
     const catalogs = { en: { m: "Moved {name}" }, he: { m: "הועבר {name}" } };
