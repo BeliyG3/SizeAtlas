@@ -10,6 +10,7 @@ import { SubMenu } from "../menu/SubMenu";
 import { REPOSITORY } from "../update/github";
 import type { UpdateCheck } from "../update/useUpdateCheck";
 import { AboutDialog } from "./AboutDialog";
+import { LanguageButton } from "./LanguageButton";
 import { MenuBar, type BarMenu } from "./MenuBar";
 import { ViewItems } from "./ViewItems";
 
@@ -164,7 +165,7 @@ export function AppMenuBar({
   ];
   return (
     <>
-      <MenuBar label={t("menubar.label")} menus={menus} />
+      <MenuBar label={t("menubar.label")} menus={menus} trailing={<LanguageButton />} />
       {about && <AboutDialog onClose={() => setAbout(false)} onOpenRepository={openRepository} />}
     </>
   );

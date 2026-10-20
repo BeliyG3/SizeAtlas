@@ -26,6 +26,8 @@ export interface BarMenu {
 interface Props {
   label: string;
   menus: readonly BarMenu[];
+  /** After the last menu: a button that is not a menu of the bar (see LanguageButton). */
+  trailing?: ReactNode;
 }
 
 interface Opened {
@@ -43,7 +45,7 @@ interface Opened {
  * while one is open; ↓, Enter and Space open the focused one; Escape closes the menu, then leaves
  * the bar.
  */
-export function MenuBar({ label, menus }: Props) {
+export function MenuBar({ label, menus, trailing }: Props) {
   const [open, setOpen] = useState<Opened | null>(null);
   const bar = useRef<HTMLDivElement>(null);
   const rtl = isRtl(useT().lang);
@@ -215,6 +217,7 @@ export function MenuBar({ label, menus }: Props) {
           </button>
         );
       })}
+      {trailing}
       {open && shown && (
         <Menu
           x={open.x}

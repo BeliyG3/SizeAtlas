@@ -1,13 +1,13 @@
-import { LANGUAGES, isRtl, languageName } from "../../i18n/index";
 import { useT } from "../../i18n/react";
 import { useSettings } from "../../settings/react";
 import { THEMES, UNITS } from "../../settings/settings";
 import { MenuChoice } from "../menu/MenuChoice";
 import { SubMenu } from "../menu/SubMenu";
+import { LanguageChoices } from "./LanguageChoices";
 
 /** View: size units, the drives panel and the chart, theme and language. */
 export function ViewItems() {
-  const { t, lang, setLang } = useT();
+  const { t } = useT();
   const { unit, setUnit, theme, setTheme, showDrives, setShowDrives, showChart, setShowChart } =
     useSettings();
   // "B,KB,MB,GB,…" in the current language; UNITS[i] is units[i - 1] after "auto".
@@ -51,16 +51,7 @@ export function ViewItems() {
         ))}
       </SubMenu>
       <SubMenu label={t("menubar.language")} scroll>
-        {LANGUAGES.map((l) => (
-          <MenuChoice
-            key={l.code}
-            kind="radio"
-            checked={lang === l.code}
-            label={languageName(l.code)}
-            language={{ lang: l.code, dir: isRtl(l.code) ? "rtl" : "ltr" }}
-            onPick={() => setLang(l.code)}
-          />
-        ))}
+        <LanguageChoices />
       </SubMenu>
     </>
   );

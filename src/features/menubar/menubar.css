@@ -19,3 +19,10 @@
   background: var(--panel-hover);
   outline: none;
 }
+
+/* The language button: the globe and the code side by side. */
+.menubar > button.language {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
