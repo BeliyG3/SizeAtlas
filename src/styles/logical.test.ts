@@ -17,6 +17,8 @@ const ALLOWED: Record<string, string> = {
   ":dir(rtl) :is(.panel-row, .legend, .bar-row) .ellipsis": "plaintext name, RTL column side",
   ':dir(ltr) .crow [data-col="path"]': "plaintext path, LTR column side",
   ':dir(rtl) .crow [data-col="path"]': "plaintext path, RTL column side",
+  ":dir(ltr) .toolbar .source > .text": "plaintext path, LTR button side",
+  ":dir(rtl) .toolbar .source > .text": "plaintext path, RTL button side",
 };
 
 const PHYSICAL_PROPERTY =
@@ -86,8 +88,8 @@ describe("logical CSS properties", () => {
 
   // `plaintext` alone puts a Latin name on the far side of a right-to-left column, away from its
   // header and swatch.
-  it("aligns file names of the legend, lists and table with the interface direction", () => {
-    for (const name of ["charts.css", "contents.css"]) {
+  it("aligns file names of the legend, lists, table and source button with the interface direction", () => {
+    for (const name of ["charts.css", "contents.css", "shell.css"]) {
       const css = Object.entries(sheets).find(([f]) => f.endsWith(name))?.[1] ?? "";
       expect(css, name).toMatch(/:dir\(rtl\)[^{]*\{\s*text-align:\s*right/);
       expect(css, name).toMatch(/:dir\(ltr\)[^{]*\{\s*text-align:\s*left/);

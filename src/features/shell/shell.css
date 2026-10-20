@@ -30,6 +30,16 @@
   text-align: start;
 }
 
+/* `plaintext` resolves `start` against the path's own direction, so a Latin path would sit next to
+   the chevron in a right-to-left toolbar: the side is set from the interface direction. */
+:dir(ltr) .toolbar .source > .text {
+  text-align: left;
+}
+
+:dir(rtl) .toolbar .source > .text {
+  text-align: right;
+}
+
 .banner {
   display: flex;
   align-items: center;
