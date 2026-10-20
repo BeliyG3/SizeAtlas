@@ -178,15 +178,17 @@ button.with-icon {
 }
 
 .joined > button + button {
-  margin-left: -1px;
+  margin-inline-start: -1px;
 }
 
 .joined > button:first-child {
-  border-radius: 4px 0 0 4px;
+  border-start-start-radius: 4px;
+  border-end-start-radius: 4px;
 }
 
 .joined > button:last-child {
-  border-radius: 0 4px 4px 0;
+  border-start-end-radius: 4px;
+  border-end-end-radius: 4px;
 }
 
 /* Above its neighbours, so the whole ring shows. */
@@ -219,8 +221,10 @@ button.with-icon {
   font-size: 18px;
 }
 
+/* A bar fills from the left in every language: it is a chart, not text. */
 .meter {
   display: block;
+  direction: ltr;
   height: 6px;
   background: var(--border);
   border-radius: 3px;
@@ -239,8 +243,14 @@ button.with-icon {
 }
 
 .num {
-  text-align: right;
+  text-align: end;
   font-variant-numeric: tabular-nums;
+}
+
+/* A glyph that points along the reading direction (back, forward, expander, submenu arrow,
+   crumb separator) faces the other way in a right-to-left layout. */
+:dir(rtl) .icon-dir {
+  transform: scaleX(-1);
 }
 
 .ellipsis {
@@ -267,7 +277,7 @@ select {
 
 .toasts {
   position: fixed;
-  right: 16px;
+  inset-inline-end: 16px;
   bottom: 16px;
   display: grid;
   gap: 8px;
@@ -278,6 +288,6 @@ select {
   padding: 10px 14px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--danger);
+  border-inline-start: 3px solid var(--danger);
   border-radius: 4px;
 }

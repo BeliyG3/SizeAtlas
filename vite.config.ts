@@ -21,5 +21,6 @@ export default defineConfig({
     },
   },
   build: { target: "es2022" },
-  test: { environment: "node" },
+  // Stylesheets read as text (src/styles/logical.test.ts) are not emptied by Vitest.
+  test: { environment: "node", css: { include: /\.css\?raw$/ } },
 });

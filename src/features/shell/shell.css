@@ -35,12 +35,12 @@
 
 .banner button {
   flex: none;
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 2px 10px;
 }
 
 .banner button + button {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 
 .banner .close {
@@ -143,6 +143,7 @@
 }
 
 .statusbar .scan .path {
+  unicode-bidi: plaintext; /* a path keeps its own direction */
   flex: 0 1 auto;
   min-width: 0;
 }
@@ -157,5 +158,5 @@
 
 /* The table mode stands apart from the scan buttons, as in Folder Size. */
 .toolbar .mode {
-  margin-left: 12px;
+  margin-inline-start: 12px;
 }

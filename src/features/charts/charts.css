@@ -17,6 +17,15 @@
   padding: 3px 10px;
 }
 
+/* File names and folders keep their own direction, whatever the language of the interface. */
+.crumbs > button,
+.crumbs > [aria-current],
+.panel-row .ellipsis,
+.legend .ellipsis,
+.bar-row .ellipsis {
+  unicode-bidi: plaintext;
+}
+
 .crumbs {
   display: flex;
   align-items: center;
@@ -50,7 +59,7 @@
   border: none;
   border-radius: 4px;
   background: none;
-  text-align: left;
+  text-align: start;
 }
 
 .panel-row.active {
@@ -125,7 +134,7 @@
   border: none;
   border-radius: 4px;
   background: none;
-  text-align: left;
+  text-align: start;
 }
 
 .legend button {
@@ -143,6 +152,7 @@
 }
 
 .bar-track {
+  direction: ltr; /* a bar fills from the left in every language: it is a chart, not text */
   height: 12px;
   overflow: hidden;
   background: var(--border);

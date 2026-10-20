@@ -1,4 +1,5 @@
 .treemap {
+  direction: ltr; /* the map is not mirrored; the tooltip below sets its own direction */
   position: relative;
   flex: 1;
   min-height: 0;
@@ -19,6 +20,7 @@
 }
 
 .tooltip {
+  unicode-bidi: plaintext;
   position: absolute;
   max-width: 60%;
   padding: 4px 8px;

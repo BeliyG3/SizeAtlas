@@ -22,7 +22,7 @@ export function Crumbs({ crumbs, onSelect }: Props) {
             <button className="link" onClick={() => onSelect(c.id, true)}>
               {c.name}
             </button>
-            <span className="dim" aria-hidden="true">
+            <span className="dim icon-dir" aria-hidden="true">
               ›
             </span>
           </Fragment>

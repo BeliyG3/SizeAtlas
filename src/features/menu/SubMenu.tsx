@@ -67,7 +67,7 @@ export function SubMenu({ label, checked = false, icon, children }: Props) {
           </span>
         )}
         {label}
-        <span className="arrow" aria-hidden="true">
+        <span className="arrow icon-dir" aria-hidden="true">
           ›
         </span>
       </button>

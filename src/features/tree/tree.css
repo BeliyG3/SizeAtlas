@@ -62,11 +62,11 @@
 
 /* The border between the name and the size sits in the middle of the column gap. */
 .tree-head .col-divider.left {
-  left: -8px;
+  inset-inline-start: -8px;
 }
 
 .tree-head .col-divider.right {
-  right: -8px;
+  inset-inline-end: -8px;
 }
 
 .tree-row {
@@ -97,23 +97,31 @@
    chevron of each ancestor, as in Blender's outliner: one 18 px step (INDENT in TreeRow.tsx) per
    level across the indent (--indent), under the middle of the 14 px expander. */
 .tree-row .name {
+  --to-end: to right;
+  --at-start: left;
   display: flex;
   align-self: stretch;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  padding-left: var(--indent);
+  padding-inline-start: var(--indent);
   white-space: nowrap;
   background: repeating-linear-gradient(
-      to right,
+      var(--to-end),
       transparent 0 6.5px,
       var(--tree-guide) 6.5px 7.5px,
       transparent 7.5px 18px
     )
-    left / var(--indent) 100% no-repeat;
+    var(--at-start) / var(--indent) 100% no-repeat;
+}
+
+:dir(rtl) .tree-row .name {
+  --to-end: to left;
+  --at-start: right;
 }
 
 .tree-row .label {
+  unicode-bidi: plaintext; /* a file name keeps its own direction */
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -137,19 +145,19 @@
 }
 
 .tag {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   font-size: 12px;
   color: var(--text-dim);
 }
 
 .tree-row .size {
   position: relative;
-  text-align: right;
+  text-align: end;
 }
 
 .tree-row .bar {
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 2px;
   bottom: 2px;
   background: var(--bar);
@@ -180,7 +188,7 @@
   box-sizing: border-box;
   width: 10px;
   height: 10px;
-  margin-left: 4px;
+  margin-inline-start: 4px;
   border: 2px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;

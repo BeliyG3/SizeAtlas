@@ -21,7 +21,7 @@
   z-index: 1;
   padding: 0;
   font-weight: normal;
-  text-align: left;
+  text-align: start;
   color: var(--text-dim);
   background: var(--bg);
   border-bottom: 1px solid var(--border);
@@ -41,16 +41,18 @@
 /* Each sticky header cell paints over its neighbours: a border on the right edge of a cell
    (a number column left of the name) stays inside it, its line on the cell's edge. */
 .drives th .col-divider.right {
-  right: 0;
+  inset-inline-end: 0;
 }
 
 .drives th .col-divider.right::after {
-  left: 6px;
+  inset-inline-start: auto;
+  inset-inline-end: 0;
 }
 
 .drives th .col-divider.right:hover::after,
 .drives th .col-divider.right:focus-visible::after {
-  left: 4px;
+  inset-inline-start: auto;
+  inset-inline-end: 0;
 }
 
 /* Header cells must not clip: their borders reach into the next cell. */
@@ -62,11 +64,11 @@
 }
 
 .drives td.num {
-  text-align: right;
+  text-align: end;
 }
 
 .drives .drive-icon {
-  margin-right: 2px;
+  margin-inline-end: 2px;
   color: var(--text-dim);
 }
 
@@ -75,7 +77,7 @@
 }
 
 .drives .mark {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   color: var(--accent);
 }
 

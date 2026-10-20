@@ -19,9 +19,9 @@
 /* Every item keeps a column on its left for an icon or a check mark, so all texts line up. */
 .menu button {
   position: relative;
-  padding-left: 30px;
+  padding-inline-start: 30px;
   border: none;
-  text-align: left;
+  text-align: start;
   background: none;
 }
 
@@ -29,7 +29,7 @@
 .menu .check {
   position: absolute;
   top: 50%;
-  left: 7px;
+  inset-inline-start: 7px;
   translate: 0 -50%;
 }
 
@@ -62,8 +62,8 @@
 }
 
 .menu .arrow {
-  margin-left: auto;
-  padding-left: 16px;
+  margin-inline-start: auto;
+  padding-inline-start: 16px;
 }
 
 .submenu {
@@ -77,7 +77,7 @@
 }
 
 .menu .key {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-dim);
 }
 

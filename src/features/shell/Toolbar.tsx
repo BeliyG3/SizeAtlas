@@ -96,7 +96,7 @@ export function Toolbar({
           aria-label={t("toolbar.back")}
           onClick={onBack}
         >
-          <Icon name="back" />
+          <Icon name="back" className="icon-dir" />
         </button>
         <button
           className="nav"
@@ -105,7 +105,7 @@ export function Toolbar({
           aria-label={t("toolbar.forward")}
           onClick={onForward}
         >
-          <Icon name="forward" />
+          <Icon name="forward" className="icon-dir" />
         </button>
       </div>
       <select

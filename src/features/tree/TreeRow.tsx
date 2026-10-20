@@ -53,7 +53,7 @@ export const TreeRow = memo(function TreeRow({
       <div
         {...shared}
         className={`tree-row more${focusClass}`}
-        style={{ paddingLeft: 8 + row.depth * INDENT + INDENT }}
+        style={{ paddingInlineStart: 8 + row.depth * INDENT + INDENT }}
       >
         {t("tree.more", { count: row.restCount, size: size(row.restSize) })}
       </div>
@@ -87,7 +87,12 @@ export const TreeRow = memo(function TreeRow({
         }}
         onDoubleClick={(e) => e.stopPropagation()}
       >
-        {cell.expandable && <Icon name={row.expanded ? "chevron-down" : "chevron-right"} />}
+        {cell.expandable &&
+          (row.expanded ? (
+            <Icon name="chevron-down" />
+          ) : (
+            <Icon name="chevron-right" className="icon-dir" />
+          ))}
       </span>
       {root?.drive ? <Icon name="drive" className="drive-icon" /> : <ItemIcon isDir category={0} />}
       <span className="label" title={root?.root}>
