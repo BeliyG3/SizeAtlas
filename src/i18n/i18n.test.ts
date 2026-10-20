@@ -8,6 +8,7 @@ import {
   translate,
   translateWith,
 } from "./index";
+import { mnemonic } from "../features/menubar/mnemonic";
 
 const PLURAL = /_(zero|one|two|few|many|other)$/;
 const baseKeys = (messages: Record<string, string>) =>
@@ -31,6 +32,50 @@ describe("locales", () => {
       for (const key of plural)
         for (const form of forms) expect(lang.messages).toHaveProperty([`${key}_${form}`]);
     }
+  });
+
+  it("placeholders match English", () => {
+    const tokens = (text: string) => [...new Set(text.match(/\{\w+\}/g) ?? [])].sort();
+    for (const lang of LANGUAGES)
+      for (const [key, text] of Object.entries(lang.messages)) {
+        const english = en[PLURAL.test(key) ? key.replace(PLURAL, "_other") : key];
+        expect(tokens(text), `${lang.code} ${key}`).toEqual(tokens(english));
+      }
+  });
+
+  it("size units are six names", () => {
+    for (const lang of LANGUAGES) {
+      const units = lang.messages["size.units"].split(",");
+      expect(units, lang.code).toHaveLength(6);
+      for (const unit of units) expect(unit.trim(), lang.code).not.toBe("");
+    }
+  });
+
+  it("language names are non-empty and not English outside English", () => {
+    for (const lang of LANGUAGES) {
+      expect(lang.messages["lang.name"], lang.code).not.toBe("");
+      if (lang.code !== "en")
+        expect(lang.messages["lang.name"], lang.code).not.toBe(en["lang.name"]);
+    }
+  });
+
+  it("top menus each have one mnemonic and the four keys differ", () => {
+    for (const lang of LANGUAGES) {
+      const keys = ["file", "scan", "view", "help"].map((menu) => {
+        const title = lang.messages[`menubar.${menu}`];
+        expect(title.split("&").length - 1, `${lang.code} ${menu}`).toBe(1);
+        return mnemonic(title).key;
+      });
+      expect(keys, lang.code).not.toContain(null);
+      expect(new Set(keys).size, lang.code).toBe(4);
+    }
+  });
+
+  it("no mnemonic marker outside the top menus", () => {
+    for (const lang of LANGUAGES)
+      for (const [key, text] of Object.entries(lang.messages))
+        if (!/^menubar\.(file|scan|view|help)$/.test(key))
+          expect(text, `${lang.code} ${key}`).not.toMatch(/&\p{L}/u);
   });
 
   it("every CmdError code has a message", () => {
