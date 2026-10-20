@@ -52,21 +52,36 @@ export function swipeStep(
   return { swipe: { sum: 0, done: true, last: now }, dir: sum < 0 ? -1 : 1 };
 }
 
+/**
+ * The history step of a swipe going `dir`: mirrored in right-to-left layouts, where the swipe to
+ * the left goes back.
+ */
+export const historyStep = (dir: -1 | 1, rtl: boolean): -1 | 1 =>
+  rtl ? (dir === 1 ? -1 : 1) : dir;
+
 export type ScrollBox = Pick<Element, "scrollLeft" | "scrollWidth" | "clientWidth">;
 
-/** Whether a box can still scroll in the direction of `deltaX`, not being at that edge yet. */
-export function canScrollX(box: ScrollBox, deltaX: number): boolean {
+/**
+ * Whether a box can still scroll in the direction of `deltaX`, not being at that edge yet. A
+ * right-to-left box starts at its right edge: its scrollLeft runs from 0 down to minus the range.
+ */
+export function canScrollX(box: ScrollBox, deltaX: number, rtl: boolean): boolean {
   const max = box.scrollWidth - box.clientWidth;
   if (max <= 0) return false;
+  // Distance from the start edge, and whether the movement goes towards the end one.
+  const from = rtl ? -box.scrollLeft : box.scrollLeft;
+  const toEnd = rtl ? deltaX < 0 : deltaX > 0;
   // One pixel of slack: fractional scaling leaves scrollLeft just short of the edge.
-  return deltaX < 0 ? box.scrollLeft > 0 : box.scrollLeft < max - 1;
+  return toEnd ? from < max - 1 : from > 0;
 }
 
 /** Whether the target or one of its parents scrolls sideways with this movement. */
 export function scrollsAlong(target: EventTarget | null, deltaX: number): boolean {
   for (let el = target instanceof Element ? target : null; el; el = el.parentElement) {
-    const { overflowX } = getComputedStyle(el);
-    if ((overflowX === "auto" || overflowX === "scroll") && canScrollX(el, deltaX)) return true;
+    // Each box by its own direction: the treemap stays left-to-right in every language.
+    const { overflowX, direction } = getComputedStyle(el);
+    const scrolls = overflowX === "auto" || overflowX === "scroll";
+    if (scrolls && canScrollX(el, deltaX, direction === "rtl")) return true;
   }
   return false;
 }

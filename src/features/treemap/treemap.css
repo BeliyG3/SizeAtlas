@@ -17,6 +17,7 @@
   display: grid;
   place-items: center;
   margin: 0;
+  unicode-bidi: plaintext; /* a translated message: its own direction, not the map's */
 }
 
 .tooltip {

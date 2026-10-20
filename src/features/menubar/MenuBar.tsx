@@ -7,7 +7,10 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { isRtl, mirrorArrow } from "../../i18n";
+import { useT } from "../../i18n/react";
 import { Menu, closeMenus } from "../menu/Menu";
+import { anchorX } from "../menu/place";
 import { loneAlt } from "./altKey";
 import { mnemonic, mnemonicHit } from "./mnemonic";
 import "./menubar.css";
@@ -36,12 +39,14 @@ interface Opened {
 /**
  * The window's menu bar. A press opens a menu and a press on its title closes it; while one is
  * open, pointing at another title opens that one. Alt alone moves the focus to the bar and back,
- * Alt and the underlined letter open a menu. ← and → go to the next menu, also while one is open;
- * ↓, Enter and Space open the focused one; Escape closes the menu, then leaves the bar.
+ * Alt and the underlined letter open a menu. ← and → go to the next menu on that side, also
+ * while one is open; ↓, Enter and Space open the focused one; Escape closes the menu, then leaves
+ * the bar.
  */
 export function MenuBar({ label, menus }: Props) {
   const [open, setOpen] = useState<Opened | null>(null);
   const bar = useRef<HTMLDivElement>(null);
+  const rtl = isRtl(useT().lang);
   // Where the focus was before the bar took it: it goes back there when the bar is left.
   const returnTo = useRef<Element | null>(null);
 
@@ -62,7 +67,7 @@ export function MenuBar({ label, menus }: Props) {
   };
   const show = (id: string, keyboard: boolean) => {
     const box = title(id)?.getBoundingClientRect();
-    if (box) setOpen({ id, x: box.left, y: box.bottom, keyboard });
+    if (box) setOpen({ id, x: anchorX(box, rtl), y: box.bottom, keyboard });
   };
   const neighbour = (id: string, step: number) => {
     const at = menus.findIndex((m) => m.id === id);
@@ -135,8 +140,10 @@ export function MenuBar({ label, menus }: Props) {
     const focused = e.target instanceof HTMLElement ? e.target.dataset.menu : undefined;
     const current = open?.id ?? focused;
     if (current === undefined) return;
-    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      const next = neighbour(current, e.key === "ArrowLeft" ? -1 : 1);
+    // In right-to-left layouts the menus run from right to left.
+    const arrow = mirrorArrow(e.key, rtl);
+    if (arrow === "ArrowLeft" || arrow === "ArrowRight") {
+      const next = neighbour(current, arrow === "ArrowLeft" ? -1 : 1);
       if (open) show(next, true);
       else title(next)?.focus();
     } else if (!open && (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")) {

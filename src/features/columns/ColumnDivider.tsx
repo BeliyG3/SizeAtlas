@@ -1,6 +1,8 @@
 import type { KeyboardEvent, PointerEvent } from "react";
+import { isRtl } from "../../i18n";
+import { useT } from "../../i18n/react";
 import { historyKey } from "../shell/historyKey";
-import { MAX_WIDTH, MIN_WIDTH, clampWidth, resizeStep } from "./fit";
+import { MAX_WIDTH, MIN_WIDTH, dragWidth, resizeStep } from "./fit";
 import "./columns.css";
 
 interface Props {
@@ -8,7 +10,7 @@ interface Props {
   label: string;
   /** Current width of the column it sizes. */
   width: number;
-  /** Edge of that column the border sits on: "left" for a column that grows to the left. */
+  /** Edge of that column the border sits on: "left" is the inline-start one, "right" the end. */
   side?: "left" | "right";
   /** Live while dragging; `done` on release or a key press, when the width should be stored. */
   onResize: (width: number, done: boolean) => void;
@@ -21,7 +23,7 @@ interface Props {
  * column, or focus it and use the arrow keys (Shift: bigger steps) and Enter.
  */
 export function ColumnDivider({ label, width, side = "right", onResize, onFit }: Props) {
-  const sign = side === "right" ? 1 : -1;
+  const rtl = isRtl(useT().lang);
 
   const startDrag = (e: PointerEvent<HTMLSpanElement>) => {
     if (e.button !== 0) return;
@@ -41,7 +43,7 @@ export function ColumnDivider({ label, width, side = "right", onResize, onFit }:
     function move(ev: globalThis.PointerEvent) {
       // The button came up where no pointerup reached us.
       if (ev.buttons === 0) return stop(ev);
-      last = clampWidth(width + sign * (ev.clientX - startX));
+      last = dragWidth(width, ev.clientX - startX, side, rtl);
       onResize(last, false);
     }
     // Released: the new width is stored. Anything else (cancelled, capture lost to Alt+Tab or a
@@ -58,9 +60,9 @@ export function ColumnDivider({ label, width, side = "right", onResize, onFit }:
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLSpanElement>) => {
-    if (historyKey(e) !== null) return;
+    if (historyKey(e, rtl) !== null) return;
     const step = resizeStep(e.key, e.shiftKey);
-    if (step !== null) onResize(clampWidth(width + sign * step), true);
+    if (step !== null) onResize(dragWidth(width, step, side, rtl), true);
     else if (e.key === "Enter") onFit();
     else return;
     // The table and tree act on these keys too.

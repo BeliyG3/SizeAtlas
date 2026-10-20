@@ -1,3 +1,5 @@
+import { mirrorArrow } from "../../i18n";
+
 /** Mouse buttons that go back and forward (MouseEvent.button). */
 export const BACK_BUTTON = 3;
 export const FORWARD_BUTTON = 4;
@@ -10,11 +12,12 @@ const META_CODES: Record<string, -1 | 1> = { BracketLeft: -1, BracketRight: 1 };
 
 /**
  * -1 for Alt+← or ⌘[, 1 for Alt+→ or ⌘] (back and forward through visited folders), else null.
- * Controls that take arrow keys leave these to the history.
+ * Controls that take arrow keys leave these to the history. In right-to-left layouts Alt+→ goes
+ * back and Alt+← forward; ⌘[ and ⌘] stay as they are.
  */
-export function historyKey(e: Key): -1 | 1 | null {
+export function historyKey(e: Key, rtl: boolean): -1 | 1 | null {
   if (e.ctrlKey || e.shiftKey) return null;
-  if (e.altKey && !e.metaKey) return ALT_KEYS[e.key] ?? null;
+  if (e.altKey && !e.metaKey) return ALT_KEYS[mirrorArrow(e.key, rtl)] ?? null;
   if (e.metaKey && !e.altKey) return META_CODES[e.code] ?? null;
   return null;
 }

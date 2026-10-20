@@ -1,5 +1,7 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from "react";
-import { dropIndex, ghostLeft } from "./order";
+import { isRtl } from "../../i18n";
+import { useT } from "../../i18n/react";
+import { dropEdge, dropIndex, ghostLeft } from "./order";
 
 /** Pixels the pointer must travel before pressing a header becomes dragging it. */
 const THRESHOLD = 5;
@@ -10,24 +12,34 @@ export interface DragView {
   label: string;
   /** Font, alignment and side padding of the dragged header, so the ghost reads like it. */
   font: string;
-  alignRight: boolean;
+  /** The label sits at the inline-end edge, as the ghost's own direction (the page's) reads it. */
+  alignEnd: boolean;
   padding: string;
   ghost: { left: number; top: number; width: number; height: number };
   /** Where the column would drop: a line across the header. */
   line: { left: number; top: number; height: number };
 }
 
+type Align = Pick<CSSStyleDeclaration, "textAlign" | "justifyContent">;
+
+/**
+ * Whether computed styles put a label at the inline-end edge: `flex-end` and `end` are logical,
+ * a physical `right` (or `left` in right-to-left layouts) is the end too.
+ */
+export function alignsEnd(s: Align, rtl: boolean): boolean {
+  if (s.justifyContent === "flex-end" || s.justifyContent === "end") return true;
+  return s.textAlign === "end" || s.textAlign === (rtl ? "left" : "right");
+}
+
 /** How the label of a header cell looks: its text sits in the cell's sort button, if any. */
-function lookOf(cell: HTMLElement) {
+function lookOf(cell: HTMLElement, rtl: boolean) {
   const text = cell.querySelector<HTMLElement>(".col-sort, .label") ?? cell;
   const [inner, outer] = [getComputedStyle(text), getComputedStyle(cell)];
-  const right = (s: CSSStyleDeclaration) =>
-    s.justifyContent === "flex-end" || s.textAlign === "right";
   return {
     // Every header renders its label in an `.ellipsis` span, next to the arrow.
     label: (cell.querySelector(".ellipsis") ?? cell).textContent ?? "",
     font: outer.font,
-    alignRight: right(inner) || right(outer),
+    alignEnd: alignsEnd(inner, rtl) || alignsEnd(outer, rtl),
     padding: `0 ${inner.paddingRight} 0 ${inner.paddingLeft}`,
   };
 }
@@ -59,6 +71,7 @@ export function useColumnDrag<K extends string>(
 ) {
   const [drag, setDrag] = useState<{ id: K; view: DragView } | null>(null);
   const dropped = useRef(false);
+  const rtl = isRtl(useT().lang);
 
   /** Pointer down on the header cell of column `id`. */
   const start = (id: K, e: PointerEvent<HTMLElement>) => {
@@ -77,7 +90,7 @@ export function useColumnDrag<K extends string>(
       c.getBoundingClientRect(),
     );
     const centers = boxes.map((b) => (b.left + b.right) / 2);
-    const look = lookOf(cell);
+    const look = lookOf(cell, rtl);
     let at: number | null = null;
 
     const move = (ev: globalThis.PointerEvent) => {
@@ -89,8 +102,8 @@ export function useColumnDrag<K extends string>(
         if (Math.abs(ev.clientX - startX) < THRESHOLD) return;
         cell.setPointerCapture(pointer);
       }
-      at = Math.max(pinned === undefined ? 0 : 1, dropIndex(centers, ev.clientX));
-      const edge = at < boxes.length ? boxes[at].left : boxes[boxes.length - 1].right;
+      at = Math.max(pinned === undefined ? 0 : 1, dropIndex(centers, ev.clientX, rtl));
+      const edge = dropEdge(boxes, at, rtl);
       const left = ghostLeft(ev.clientX, startX - own.left, own.width, shown.left, shown.right);
       setDrag({
         id,

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Disk, Sources } from "../../api/types";
+import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import { useSize } from "../../settings/react";
 import { useStored } from "../../settings/storage";
@@ -17,6 +18,7 @@ import { fitWidth, measureColumn } from "../columns/fit";
 import { useColumnOrder } from "../columns/useColumnOrder";
 import { useColumnWidths } from "../columns/useColumnWidths";
 import { isMenuKey } from "../menu/Menu";
+import { anchorX } from "../menu/place";
 import { savedScan } from "../shell/source";
 import { keyTarget } from "../tree/model";
 import { driveChoice, type DriveChoice, type DriveRoot } from "./choice";
@@ -56,7 +58,7 @@ interface Props {
  * Shift+F10) scans, opens or forgets it.
  */
 export function DrivesPanel({ sources, roots, onOpen, onScan, onForget }: Props) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const size = useSize();
   const [order, move] = useColumnOrder("sizeatlas.drives.columns.order", DEFAULT_ORDER);
   const [sort, setSort] = useStored(DRIVE_SORT_KEY, parseDriveSort, serializeDriveSort);
@@ -104,7 +106,7 @@ export function DrivesPanel({ sources, roots, onOpen, onScan, onForget }: Props)
     if (isMenuKey(e)) {
       const row = current && document.getElementById(rowId(current.mount));
       const rect = row?.getBoundingClientRect();
-      if (current && rect) menuAt(current.mount, rect.left + 24, rect.bottom);
+      if (current && rect) menuAt(current.mount, anchorX(rect, isRtl(lang), 24), rect.bottom);
     } else if (e.key === "Enter") {
       if (current) activate(current.mount);
     } else {

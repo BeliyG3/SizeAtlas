@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { api } from "../../api/client";
 import type { Detail, ListOrder, Summary } from "../../api/types";
+import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import { useExportSource, type ExportSource } from "../export/source";
 import type { MenuTarget } from "../menu/ItemMenu";
@@ -64,7 +65,7 @@ export function ContentsTable({
   onMarks,
   onFail,
 }: Props) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const { generation, rev, rootId } = summary;
   const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
@@ -256,7 +257,7 @@ export function ContentsTable({
       aria-activedescendant={cursorShown ? `crow-${cursor}` : undefined}
       tabIndex={0}
       onScroll={onScroll}
-      onKeyDown={(e) => tableKeyDown(e, { cursor, viewport, count }, actions)}
+      onKeyDown={(e) => tableKeyDown(e, { cursor, viewport, count }, actions, isRtl(lang))}
       // Entering with Tab: put the cursor on the first row so the keys have something to act on.
       onFocus={(e) => {
         if (e.target === e.currentTarget && cursor === null && count > 0) setCursor(0);

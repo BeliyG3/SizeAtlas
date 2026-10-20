@@ -35,9 +35,23 @@ export function parseOrder<K extends string>(raw: string | null, defaults: reado
 
 export const serializeOrder = (order: readonly string[]) => JSON.stringify(order);
 
-/** Where a dragged header lands: the number of columns whose center is left of `x`. */
-export const dropIndex = (centers: readonly number[], x: number) =>
-  centers.filter((center) => center < x).length;
+/**
+ * Where a dragged header lands: the number of columns whose center is before `x` (left of it, or
+ * right of it in right-to-left layouts).
+ */
+export const dropIndex = (centers: readonly number[], x: number, rtl: boolean) =>
+  centers.filter((center) => (rtl ? center > x : center < x)).length;
+
+/** Where the line of drop index `at` goes: the start edge of that column, or the end of the last. */
+export function dropEdge(
+  boxes: readonly Pick<DOMRect, "left" | "right">[],
+  at: number,
+  rtl: boolean,
+): number {
+  if (at < boxes.length) return rtl ? boxes[at].right : boxes[at].left;
+  const last = boxes[boxes.length - 1];
+  return rtl ? last.left : last.right;
+}
 
 /**
  * Left edge of the ghost of a dragged header: it follows the pointer at `x`, held `grab` pixels

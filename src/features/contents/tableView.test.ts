@@ -40,7 +40,7 @@ describe("tableKeyDown", () => {
   it("moves the cursor with the navigation keys", () => {
     const a = actions();
     for (const key of ["ArrowDown", "ArrowUp", "PageDown", "Home", "End"]) {
-      tableKeyDown(press(key), table, a);
+      tableKeyDown(press(key), table, a, false);
     }
     expect(vi.mocked(a.point).mock.calls).toEqual([
       [4, "one"],
@@ -53,10 +53,10 @@ describe("tableKeyDown", () => {
 
   it("extends the marks with Shift and marks all with Ctrl+A, also from a header button", () => {
     const a = actions();
-    tableKeyDown(press("ArrowDown", { shiftKey: true }), table, a);
+    tableKeyDown(press("ArrowDown", { shiftKey: true }), table, a, false);
     // Ctrl+A on any keyboard layout: the key is known by its place.
     const all = press("ф", { ctrlKey: true, code: "KeyA" }, true);
-    tableKeyDown(all, table, a);
+    tableKeyDown(all, table, a, false);
     expect(vi.mocked(a.point).mock.calls).toEqual([[4, "range"]]);
     expect(a.markAll).toHaveBeenCalledOnce();
     expect(all.preventDefault).toHaveBeenCalled();
@@ -64,18 +64,18 @@ describe("tableKeyDown", () => {
 
   it("moves the marks to the trash with Delete, never with Shift and not while it repeats", () => {
     const a = actions();
-    tableKeyDown(press("Delete"), table, a);
-    tableKeyDown(press("Delete", { shiftKey: true }), table, a);
-    tableKeyDown(press("Delete", { repeat: true }), table, a);
+    tableKeyDown(press("Delete"), table, a, false);
+    tableKeyDown(press("Delete", { shiftKey: true }), table, a, false);
+    tableKeyDown(press("Delete", { repeat: true }), table, a, false);
     expect(a.trash).toHaveBeenCalledOnce();
   });
 
   it("opens the cursor row once per press and goes up", () => {
     const a = actions();
-    tableKeyDown(press("Enter"), table, a);
-    tableKeyDown(press("Enter", { repeat: true }), table, a);
-    tableKeyDown(press("Backspace"), table, a);
-    tableKeyDown(press("ArrowUp", { altKey: true }), table, a);
+    tableKeyDown(press("Enter"), table, a, false);
+    tableKeyDown(press("Enter", { repeat: true }), table, a, false);
+    tableKeyDown(press("Backspace"), table, a, false);
+    tableKeyDown(press("ArrowUp", { altKey: true }), table, a, false);
     expect(vi.mocked(a.open).mock.calls).toEqual([[3]]);
     expect(a.up).toHaveBeenCalledTimes(2);
     expect(a.point).not.toHaveBeenCalled();
@@ -84,9 +84,9 @@ describe("tableKeyDown", () => {
   it("leaves the keys of the header buttons and other keys alone", () => {
     const a = actions();
     const onHeader = press("Enter", {}, true);
-    tableKeyDown(onHeader, table, a);
+    tableKeyDown(onHeader, table, a, false);
     const other = press("x");
-    tableKeyDown(other, table, a);
+    tableKeyDown(other, table, a, false);
     expect(a.open).not.toHaveBeenCalled();
     expect(onHeader.preventDefault).not.toHaveBeenCalled();
     expect(other.preventDefault).not.toHaveBeenCalled();
@@ -95,7 +95,7 @@ describe("tableKeyDown", () => {
   it("takes the menu key even on a header button, and without a cursor row opens nothing", () => {
     const a = actions();
     const e = press("F10", { shiftKey: true }, true);
-    tableKeyDown(e, { ...table, cursor: null }, a);
+    tableKeyDown(e, { ...table, cursor: null }, a, false);
     expect(e.preventDefault).toHaveBeenCalled();
     expect(a.menuAt).not.toHaveBeenCalled();
   });

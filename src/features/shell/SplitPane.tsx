@@ -8,8 +8,10 @@ import {
 } from "react";
 import { parseSize } from "../../settings/settings";
 import { readStored, writeStored } from "../../settings/storage";
+import { isRtl } from "../../i18n";
+import { useT } from "../../i18n/react";
 import { historyKey } from "./historyKey";
-import { MIN_PANE, SPLITTER, clampPane, keyStep } from "./split";
+import { MIN_PANE, SPLITTER, clampPane, keyStep, movePane } from "./split";
 
 interface Props {
   /** "row": panes side by side; "column": one above the other. */
@@ -43,8 +45,7 @@ export function SplitPane({
   const [size, setSize] = useState(() => parseSize(readStored(storageKey), defaultSize));
   const box = useRef<HTMLDivElement>(null);
   const row = direction === "row";
-  // Moving the border towards the second pane grows the first one.
-  const sign = sized === "first" ? 1 : -1;
+  const rtl = isRtl(useT().lang);
 
   /** Called from event handlers only: reads the container size at that moment. */
   const limit = (value: number) => {
@@ -61,7 +62,7 @@ export function SplitPane({
     const from = size;
     let last = from;
     const move = (ev: globalThis.PointerEvent) => {
-      last = limit(from + sign * ((row ? ev.clientX : ev.clientY) - start));
+      last = limit(movePane(from, (row ? ev.clientX : ev.clientY) - start, sized, row, rtl));
       setSize(last);
     };
     const stop = () => {
@@ -80,11 +81,11 @@ export function SplitPane({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (historyKey(e) !== null) return;
+    if (historyKey(e, rtl) !== null) return;
     const step = keyStep(e.key, e.shiftKey, row);
     if (step === null) return;
     e.preventDefault();
-    const next = limit(size + sign * step);
+    const next = limit(movePane(size, step, sized, row, rtl));
     setSize(next);
     writeStored(storageKey, String(next));
   };

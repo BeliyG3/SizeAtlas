@@ -14,12 +14,26 @@ export const clampWidth = (width: number) =>
 /** Width that shows content `measured` pixels wide (padding included) without cutting it. */
 export const fitWidth = (measured: number) => clampWidth(Math.ceil(measured) + FIT_SLACK);
 
-/** Change of width for a key pressed on a column border, or null for other keys. */
+/** How far on screen (right: positive) a key moves a column border, or null for other keys. */
 export function resizeStep(key: string, shift: boolean): number | null {
   const step = shift ? BIG_STEP : STEP;
   if (key === "ArrowLeft") return -step;
   if (key === "ArrowRight") return step;
   return null;
+}
+
+/**
+ * Width of a column after its border on the `side` edge ("left": inline-start, "right":
+ * inline-end) moved `delta` pixels on screen. In right-to-left layouts the inline-end is the left.
+ */
+export function dragWidth(
+  width: number,
+  delta: number,
+  side: "left" | "right",
+  rtl: boolean,
+): number {
+  const outwards = (side === "right") !== rtl ? delta : -delta;
+  return clampWidth(width + outwards);
 }
 
 /** Stored widths over `defaults`; unknown columns and unusable values are ignored. */

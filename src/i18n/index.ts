@@ -24,6 +24,12 @@ export function isRtl(lang: string): boolean {
   return RTL.has(lang);
 }
 
+/** The arrow key as a left-to-right layout means it: ← and → swap in right-to-left layouts. */
+export function mirrorArrow(key: string, rtl: boolean): string {
+  if (!rtl) return key;
+  return key === "ArrowLeft" ? "ArrowRight" : key === "ArrowRight" ? "ArrowLeft" : key;
+}
+
 /** The `Intl` locale for a language; Arabic keeps Western digits. */
 export function intlLocale(lang: string): string {
   return lang === "ar" ? "ar-u-nu-latn" : lang;

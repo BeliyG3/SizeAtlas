@@ -1,8 +1,10 @@
 import { useCallback, useState } from "react";
+import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import { Icon } from "../icons/Icon";
 import { Menu } from "../menu/Menu";
 import { MenuChoice } from "../menu/MenuChoice";
+import { anchorX } from "../menu/place";
 import { SubMenu } from "../menu/SubMenu";
 import { MODE_MENU, type Mode } from "./modes";
 
@@ -13,12 +15,12 @@ interface Props {
 
 /** The toolbar button that picks what the table shows, and its menu. */
 export function ModeMenu({ value, onChange }: Props) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const [at, setAt] = useState<{ x: number; y: number; keyboard: boolean } | null>(null);
   const close = useCallback(() => setAt(null), []);
   const show = (el: HTMLElement, keyboard: boolean) => {
     const box = el.getBoundingClientRect();
-    setAt({ x: box.left, y: box.bottom, keyboard });
+    setAt({ x: anchorX(box, isRtl(lang)), y: box.bottom, keyboard });
   };
   const choice = (mode: Mode) => (
     <MenuChoice

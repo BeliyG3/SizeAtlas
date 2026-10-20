@@ -9,6 +9,7 @@ import {
   type UIEvent,
 } from "react";
 import { isMenuKey } from "../menu/Menu";
+import { anchorX } from "../menu/place";
 import type { MarkHow } from "./marks";
 import { HEADER_HEIGHT, ROW_HEIGHT, rowTarget } from "./pages";
 
@@ -86,17 +87,18 @@ export function useRowCallbacks(actions: RowActions) {
 /**
  * Keys of a focused table: the menu key and Ctrl+A (also on a header button), Backspace and
  * Alt+↑, the navigation keys (with Shift: marking from the anchor) and Enter. Other keys, and
- * other keys pressed on the header buttons, are left alone.
+ * other keys pressed on the header buttons, are left alone. `rtl`: the page is right-to-left.
  */
 export function tableKeyDown(
   e: KeyboardEvent<HTMLDivElement>,
   table: { cursor: number | null; viewport: number; count: number },
   actions: RowActions,
+  rtl: boolean,
 ): void {
   const at = table.cursor ?? -1;
   if (isMenuKey(e)) {
     const box = e.currentTarget.querySelector(`[data-index="${at}"]`)?.getBoundingClientRect();
-    if (box) actions.menuAt(at, box.left + 24, box.bottom);
+    if (box) actions.menuAt(at, anchorX(box, rtl, 24), box.bottom);
     e.preventDefault();
     return;
   }

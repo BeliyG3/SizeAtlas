@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BACK_BUTTON, FORWARD_BUTTON, historyKey } from "../features/shell/historyKey";
-import { idleSwipe, scrollsAlong, swipeDelta, swipeStep } from "../features/shell/swipe";
+import {
+  historyStep,
+  idleSwipe,
+  scrollsAlong,
+  swipeDelta,
+  swipeStep,
+} from "../features/shell/swipe";
+import { isRtl } from "../i18n";
+import { useT } from "../i18n/react";
 import { emptyHistory, restore, step, toVisit, visit } from "./history";
 import type { RootEntry } from "./roots";
 import type { Selection } from "./selection";
@@ -17,7 +25,8 @@ export const busy = (target: EventTarget | null) =>
 
 /**
  * Back and forward through the folders the view showed, from the mouse side buttons, Alt+← and
- * Alt+→, ⌘[ and ⌘], and a two-finger swipe on a trackpad. `record` adds a folder the user chose; `jump` shows one without recording it.
+ * Alt+→, ⌘[ and ⌘], and a two-finger swipe on a trackpad; keys and swipe are mirrored in
+ * right-to-left layouts. `record` adds a folder the user chose; `jump` shows one without recording it.
  */
 export function useHistory(
   selection: Selection | null,
@@ -25,6 +34,7 @@ export function useHistory(
   jump: (next: Selection) => void,
 ) {
   const [history, setHistory] = useState(emptyHistory);
+  const rtl = isRtl(useT().lang);
   // Read by `record`, which must stay stable for the selection callbacks.
   const shown = useRef(selection);
   useLayoutEffect(() => {
@@ -52,7 +62,7 @@ export function useHistory(
     [history, entries, selection, jump],
   );
 
-  // The listeners subscribe once and call the latest `go`.
+  // The listeners subscribe once (again for a new direction) and call the latest `go`.
   const latestGo = useRef(go);
   useLayoutEffect(() => {
     latestGo.current = go;
@@ -70,7 +80,7 @@ export function useHistory(
       if (!busy(e.target)) latestGo.current(e.button === BACK_BUTTON ? -1 : 1);
     };
     const key = (e: KeyboardEvent) => {
-      const dir = historyKey(e);
+      const dir = historyKey(e, rtl);
       if (dir === null || typing(e.target)) return;
       e.preventDefault();
       if (!e.repeat && !busy(e.target)) latestGo.current(dir);
@@ -83,7 +93,7 @@ export function useHistory(
       const r = swipeStep(swipe, dx, e.timeStamp, scrollsAlong(e.target, dx));
       swipe = r.swipe;
       if (r.dir !== null && !typing(document.activeElement) && !busy(e.target)) {
-        latestGo.current(r.dir);
+        latestGo.current(historyStep(r.dir, rtl));
       }
     };
     window.addEventListener("mousedown", press);
@@ -96,7 +106,7 @@ export function useHistory(
       window.removeEventListener("keydown", key);
       window.removeEventListener("wheel", wheel);
     };
-  }, []);
+  }, [rtl]);
 
   return {
     record,

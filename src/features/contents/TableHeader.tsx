@@ -1,9 +1,11 @@
 import { useCallback, useState, type KeyboardEvent } from "react";
+import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import { ColumnDivider } from "../columns/ColumnDivider";
 import { DragGhost } from "../columns/DragGhost";
 import { useColumnDrag } from "../columns/useColumnDrag";
 import { isMenuKey } from "../menu/Menu";
+import { anchorX } from "../menu/place";
 import type { Column, HeaderSort } from "./columns";
 import { HeaderMenu, type HeaderMenuTarget } from "./HeaderMenu";
 import type { ColumnLayout } from "./useColumnLayout";
@@ -31,7 +33,7 @@ const ariaSort = (c: Column, sort: HeaderSort | null, sortable: boolean) => {
  * context menu fits, shows, hides and resets columns.
  */
 export function TableHeader({ layout, sort, canSort, sizeHint, onSort }: Props) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const { columns, widths, template, width } = layout;
   const [menu, setMenu] = useState<HeaderMenuTarget | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
@@ -47,7 +49,7 @@ export function TableHeader({ layout, sort, canSort, sizeHint, onSort }: Props) 
     const cell = e.target instanceof Element ? e.target.closest<HTMLElement>("[data-col]") : null;
     if (!cell) return;
     const box = cell.getBoundingClientRect();
-    setMenu({ id: cell.dataset.col as Column["id"], x: box.left, y: box.bottom });
+    setMenu({ id: cell.dataset.col as Column["id"], x: anchorX(box, isRtl(lang)), y: box.bottom });
   };
 
   return (

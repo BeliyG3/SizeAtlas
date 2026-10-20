@@ -7,10 +7,16 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { isRtl, mirrorArrow } from "../../i18n";
+import { useT } from "../../i18n/react";
+import { EDGE, menuLeft } from "./place";
 import "./menu.css";
 
 interface Props {
-  /** Where it opens, in viewport coordinates. */
+  /**
+   * Where it opens, in viewport coordinates: the inline-start corner, so in right-to-left layouts
+   * it opens to the left of `x` (see `anchorX`).
+   */
   x: number;
   y: number;
   label?: string;
@@ -19,7 +25,7 @@ interface Props {
    * arrow keys still move through it.
    */
   focusFirst?: boolean;
-  /** A submenu (see SubMenu): rendered inside its parent menu; ← closes it. */
+  /** A submenu (see SubMenu): rendered inside its parent menu; ← (→ right-to-left) closes it. */
   nested?: boolean;
   /**
    * Picking an item that does not open a submenu, Escape, Tab, pressing anywhere else, losing
@@ -34,8 +40,6 @@ interface Props {
 export const isMenuKey = (e: { key: string; shiftKey: boolean }) =>
   e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey);
 
-/** Distance kept from the window edges. */
-const EDGE = 4;
 const ITEMS = '[role^="menuitem"]:not(:disabled)';
 
 /** The open menus that are not submenus: `onClose` → close and give the focus back now. */
@@ -61,6 +65,7 @@ const ownItems = (el: HTMLElement | null): HTMLElement[] =>
  */
 export function Menu({ x, y, label, focusFirst = true, nested = false, onClose, children }: Props) {
   const menu = useRef<HTMLDivElement>(null);
+  const rtl = isRtl(useT().lang);
   // Where the focus goes back on close, and where if the menu removed that element (a hidden
   // column's header): the focusable container that held it.
   const back = useRef<{ previous: HTMLElement | null; home: HTMLElement | null | undefined }>({
@@ -83,9 +88,8 @@ export function Menu({ x, y, label, focusFirst = true, nested = false, onClose, 
       };
     }
     const target = back.current;
-    const left = Math.min(x, window.innerWidth - el.offsetWidth - EDGE);
     const top = Math.min(y, window.innerHeight - el.offsetHeight - EDGE);
-    el.style.left = `${Math.max(EDGE, left)}px`;
+    el.style.left = `${menuLeft(x, el.offsetWidth, window.innerWidth, rtl)}px`;
     el.style.top = `${Math.max(EDGE, top)}px`;
     ((focusFirst && ownItems(el)[0]) || el).focus();
     return () => {
@@ -99,7 +103,7 @@ export function Menu({ x, y, label, focusFirst = true, nested = false, onClose, 
           (target.previous?.isConnected ? target.previous : target.home)?.focus();
       });
     };
-  }, [x, y, focusFirst]);
+  }, [x, y, focusFirst, rtl]);
 
   useEffect(() => {
     const close = () => onClose();
@@ -127,7 +131,8 @@ export function Menu({ x, y, label, focusFirst = true, nested = false, onClose, 
   const onKey = (e: KeyboardEvent) => {
     const items = ownItems(menu.current);
     const at = items.findIndex((b) => b === document.activeElement);
-    if (e.key === "Escape" || e.key === "Tab" || (nested && e.key === "ArrowLeft")) onClose();
+    const back = nested && mirrorArrow(e.key, rtl) === "ArrowLeft";
+    if (e.key === "Escape" || e.key === "Tab" || back) onClose();
     else if (e.key === "ArrowDown") items[(at + 1) % items.length]?.focus();
     else if (e.key === "ArrowUp") items[(at <= 0 ? items.length : at) - 1]?.focus();
     else return;

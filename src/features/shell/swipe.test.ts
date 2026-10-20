@@ -4,6 +4,7 @@ import {
   SWIPE_THRESHOLD,
   type Swipe,
   canScrollX,
+  historyStep,
   idleSwipe,
   swipeDelta,
   swipeStep,
@@ -73,6 +74,12 @@ describe("swipeStep", () => {
     expect(feed([-30], first.swipe, first.swipe.last + SWIPE_GAP_MS + 1).dirs).toEqual([]);
   });
 
+  it("goes the other way in right-to-left layouts: a swipe to the left goes back", () => {
+    expect(historyStep(1, true)).toBe(-1);
+    expect(historyStep(-1, true)).toBe(1);
+    expect(historyStep(-1, false)).toBe(-1);
+  });
+
   it("leaves a gesture that scrolled something to the scrolling", () => {
     const scrolled = feed([-50], idleSwipe, 0, true);
     expect(scrolled.dirs).toEqual([]);
@@ -89,19 +96,29 @@ describe("canScrollX", () => {
   });
 
   it("is false for a box that fits", () => {
-    expect(canScrollX(box(0, 400), -10)).toBe(false);
-    expect(canScrollX(box(0, 400), 10)).toBe(false);
+    expect(canScrollX(box(0, 400), -10, false)).toBe(false);
+    expect(canScrollX(box(0, 400), 10, false)).toBe(false);
   });
 
   it("is false at the edge the movement goes to", () => {
-    expect(canScrollX(box(0), -10)).toBe(false);
-    expect(canScrollX(box(600), 10)).toBe(false);
-    expect(canScrollX(box(599.5), 10)).toBe(false);
+    expect(canScrollX(box(0), -10, false)).toBe(false);
+    expect(canScrollX(box(600), 10, false)).toBe(false);
+    expect(canScrollX(box(599.5), 10, false)).toBe(false);
   });
 
   it("is true away from that edge", () => {
-    expect(canScrollX(box(0), 10)).toBe(true);
-    expect(canScrollX(box(600), -10)).toBe(true);
-    expect(canScrollX(box(300), -10)).toBe(true);
+    expect(canScrollX(box(0), 10, false)).toBe(true);
+    expect(canScrollX(box(600), -10, false)).toBe(true);
+    expect(canScrollX(box(300), -10, false)).toBe(true);
+  });
+
+  it("reads the edges of a right-to-left box, where scrollLeft runs from 0 down", () => {
+    // At the right edge (the start).
+    expect(canScrollX(box(0), 40, true)).toBe(false);
+    expect(canScrollX(box(0), -40, true)).toBe(true);
+    // At the left edge (the end).
+    expect(canScrollX(box(-600), -40, true)).toBe(false);
+    expect(canScrollX(box(-599.5), -40, true)).toBe(false);
+    expect(canScrollX(box(-600), 40, true)).toBe(true);
   });
 });

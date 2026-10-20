@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dropIndex, ghostLeft, moveColumn, parseOrder, repairOrder } from "./order";
+import { dropEdge, dropIndex, ghostLeft, moveColumn, parseOrder, repairOrder } from "./order";
 
 const DEFAULTS = ["name", "size", "used", "free"] as const;
 
@@ -35,10 +35,34 @@ describe("column order", () => {
 
   it("finds where a dragged header drops from the column centers", () => {
     const centers = [50, 150, 250];
-    expect(dropIndex(centers, 10)).toBe(0);
-    expect(dropIndex(centers, 149)).toBe(1);
-    expect(dropIndex(centers, 151)).toBe(2);
-    expect(dropIndex(centers, 999)).toBe(3);
+    expect(dropIndex(centers, 10, false)).toBe(0);
+    expect(dropIndex(centers, 149, false)).toBe(1);
+    expect(dropIndex(centers, 151, false)).toBe(2);
+    expect(dropIndex(centers, 999, false)).toBe(3);
+  });
+
+  it("counts from the right in right-to-left layouts", () => {
+    // Columns in order from right to left.
+    const centers = [250, 150, 50];
+    expect(dropIndex(centers, 999, true)).toBe(0);
+    expect(dropIndex(centers, 151, true)).toBe(1);
+    expect(dropIndex(centers, 149, true)).toBe(2);
+    expect(dropIndex(centers, 10, true)).toBe(3);
+  });
+
+  it("draws the drop line at the start edge of the column it drops before", () => {
+    const ltr = [
+      { left: 0, right: 100 },
+      { left: 100, right: 200 },
+    ];
+    expect(dropEdge(ltr, 1, false)).toBe(100);
+    expect(dropEdge(ltr, 2, false)).toBe(200);
+    const rtl = [
+      { left: 100, right: 200 },
+      { left: 0, right: 100 },
+    ];
+    expect(dropEdge(rtl, 0, true)).toBe(200);
+    expect(dropEdge(rtl, 2, true)).toBe(0);
   });
 
   it("keeps the drag ghost inside the header", () => {

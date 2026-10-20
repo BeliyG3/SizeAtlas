@@ -2,11 +2,13 @@ import { useBatchCost } from "../scan/useBatchCost";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import type { List, ListItem } from "../../api/types";
+import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import { useSize } from "../../settings/react";
 import { ItemIcon } from "../contents/ItemIcon";
 import type { MenuTarget } from "../menu/ItemMenu";
 import { isMenuKey } from "../menu/Menu";
+import { anchorX } from "../menu/place";
 
 const LIMIT = 100;
 
@@ -22,7 +24,7 @@ interface Props {
 
 /** The largest files of the current folder; a click shows the file in the tree. */
 export function LargestPanel({ generation, rev, viewId, onSelect, onMenu, onFail }: Props) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const size = useSize();
   const [files, setFiles] = useState<List | null>(null);
   const measure = useBatchCost("charts", files);
@@ -63,7 +65,7 @@ export function LargestPanel({ generation, rev, viewId, onSelect, onMenu, onFail
               if (!isMenuKey(e)) return;
               e.preventDefault();
               const box = e.currentTarget.getBoundingClientRect();
-              menuAt(f, box.left + 24, box.bottom);
+              menuAt(f, anchorX(box, isRtl(lang), 24), box.bottom);
             }}
           >
             <ItemIcon isDir={false} category={f.category} />

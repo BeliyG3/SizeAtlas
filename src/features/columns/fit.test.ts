@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { MAX_WIDTH, MIN_WIDTH, clampWidth, fitWidth, parseWidths, resizeStep } from "./fit";
+import {
+  MAX_WIDTH,
+  MIN_WIDTH,
+  clampWidth,
+  dragWidth,
+  fitWidth,
+  parseWidths,
+  resizeStep,
+} from "./fit";
 
 describe("column widths", () => {
   it("clamp to the allowed range and round", () => {
@@ -19,6 +27,15 @@ describe("column widths", () => {
     expect(resizeStep("ArrowLeft", false)).toBe(-8);
     expect(resizeStep("ArrowRight", true)).toBe(32);
     expect(resizeStep("Enter", false)).toBeNull();
+  });
+
+  it("follow the border on screen, mirrored in right-to-left layouts", () => {
+    // The inline-end border: on the right of the column, or on its left in right-to-left layouts.
+    expect(dragWidth(100, 30, "right", false)).toBe(130);
+    expect(dragWidth(100, 30, "right", true)).toBe(70);
+    expect(dragWidth(100, 30, "left", false)).toBe(70);
+    expect(dragWidth(100, 30, "left", true)).toBe(130);
+    expect(dragWidth(100, -90, "right", false)).toBe(MIN_WIDTH);
   });
 
   it("restore stored widths over the defaults and ignore garbage", () => {

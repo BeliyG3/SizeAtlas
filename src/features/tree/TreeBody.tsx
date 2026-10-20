@@ -9,9 +9,11 @@ import {
 } from "react";
 import { api } from "../../api/client";
 import { ROOT_ID, type ListOrder } from "../../api/types";
+import { isRtl, mirrorArrow } from "../../i18n";
 import { useT } from "../../i18n/react";
 import type { MenuTarget } from "../menu/ItemMenu";
 import { isMenuKey } from "../menu/Menu";
+import { anchorX } from "../menu/place";
 import {
   PAGE_SIZE,
   buildRows,
@@ -77,7 +79,8 @@ export function TreeBody({
   onTrash,
   onFail,
 }: BodyProps) {
-  const { t } = useT();
+  const { t, lang } = useT();
+  const rtl = isRtl(lang);
   const { loaded, expanded, collapsed, load, toggleRoot, toggleFolder, showPath } = useTreeData(
     roots,
     order,
@@ -207,7 +210,7 @@ export function TreeBody({
       const box = list.current
         ?.querySelector(`[data-key="${shownFocus}"]`)
         ?.getBoundingClientRect();
-      if (row && box) openMenu(rowKey(row), box.left + 24, box.bottom);
+      if (row && box) openMenu(rowKey(row), anchorX(box, rtl, 24), box.bottom);
       e.preventDefault();
       return;
     }
@@ -219,11 +222,13 @@ export function TreeBody({
       e.preventDefault();
       return;
     }
-    switch (e.key) {
+    // Right-to-left, the arrows swap: ← expands and → collapses.
+    const key = mirrorArrow(e.key, rtl);
+    switch (key) {
       case "ArrowRight":
       case "ArrowLeft":
         // Right expands a collapsed folder or root, Left collapses an expanded one.
-        if (canToggle(row) && row.expanded === (e.key === "ArrowLeft")) toggle(row);
+        if (canToggle(row) && row.expanded === (key === "ArrowLeft")) toggle(row);
         break;
       case "Enter":
         if (row) activate(rowKey(row));

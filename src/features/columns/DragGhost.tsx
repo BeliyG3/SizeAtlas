@@ -19,7 +19,7 @@ export function DragGhost({ view }: { view: DragView | null }) {
           ...ghost,
           font: view.font,
           padding: view.padding,
-          justifyContent: view.alignRight ? "flex-end" : undefined,
+          justifyContent: view.alignEnd ? "flex-end" : undefined,
         }}
       >
         {view.label}

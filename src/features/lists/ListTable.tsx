@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "../../api/client";
 import type { Detail, List, ListItem, ListKind, Summary } from "../../api/types";
 import { formatCount } from "../../format";
+import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import type { Column } from "../contents/columns";
 import { ContentsRow } from "../contents/ContentsRow";
@@ -212,7 +213,9 @@ export function ListTable({
       aria-activedescendant={cursorShown ? `crow-${cursor}` : undefined}
       tabIndex={0}
       onScroll={onScroll}
-      onKeyDown={(e) => tableKeyDown(e, { cursor, viewport, count: rows.length }, actions)}
+      onKeyDown={(e) =>
+        tableKeyDown(e, { cursor, viewport, count: rows.length }, actions, isRtl(lang))
+      }
       // Entering with Tab: put the cursor on the first row so the keys have something to act on.
       onFocus={(e) => {
         if (e.target === e.currentTarget && cursor === null && rows.length > 0) setCursor(0);

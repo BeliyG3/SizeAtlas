@@ -5,6 +5,7 @@ import {
   intlLocale,
   isRtl,
   languageName,
+  mirrorArrow,
   translate,
   translateWith,
 } from "./index";
@@ -152,6 +153,15 @@ describe("translate", () => {
     expect(isRtl("he")).toBe(true);
     expect(isRtl("en")).toBe(false);
     expect(isRtl("ru")).toBe(false);
+  });
+
+  it("swaps the horizontal arrows in right-to-left layouts", () => {
+    // Menu bar: → goes to the previous menu; tree: ← expands and → collapses; submenu: ← opens.
+    expect(mirrorArrow("ArrowRight", true)).toBe("ArrowLeft");
+    expect(mirrorArrow("ArrowLeft", true)).toBe("ArrowRight");
+    expect(mirrorArrow("ArrowRight", false)).toBe("ArrowRight");
+    expect(mirrorArrow("ArrowUp", true)).toBe("ArrowUp");
+    expect(mirrorArrow("Enter", true)).toBe("Enter");
   });
 
   it.todo("maps system tags to the supported codes"); // enabled in Task 7, when the codes exist
