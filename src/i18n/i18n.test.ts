@@ -150,7 +150,8 @@ describe("translate", () => {
 
   it("detects the language from preferences", () => {
     expect(detectLang(["ru-RU", "en"])).toBe("ru");
-    expect(detectLang(["de-DE"])).toBe("en");
+    expect(detectLang(["de-DE"])).toBe("de");
+    expect(detectLang(["sv-SE"])).toBe("en");
   });
 
   it("knows the right-to-left languages", () => {

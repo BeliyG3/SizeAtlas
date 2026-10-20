@@ -1,4 +1,7 @@
+import de from "./locales/de.json";
 import en from "./locales/en.json";
+import nl from "./locales/nl.json";
+import pl from "./locales/pl.json";
 import ru from "./locales/ru.json";
 
 export type Messages = Readonly<Record<string, string>>;
@@ -9,7 +12,10 @@ export type Params = Readonly<Record<string, string | number>>;
  * one: add `locales/<code>.json` (with `lang.name`) and one line here, in place.
  */
 export const LANGUAGES = [
+  { code: "de", messages: de as Messages },
   { code: "en", messages: en as Messages },
+  { code: "nl", messages: nl as Messages },
+  { code: "pl", messages: pl as Messages },
   { code: "ru", messages: ru as Messages },
 ] as const;
 
