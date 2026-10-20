@@ -1,11 +1,9 @@
-import { useCallback, useState } from "react";
-import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import { Icon } from "../icons/Icon";
 import { Menu } from "../menu/Menu";
 import { MenuChoice } from "../menu/MenuChoice";
-import { anchorX } from "../menu/place";
 import { SubMenu } from "../menu/SubMenu";
+import { useMenuButton } from "../menu/useMenuButton";
 import { MODE_MENU, type Mode } from "./modes";
 
 interface Props {
@@ -15,13 +13,8 @@ interface Props {
 
 /** The toolbar button that picks what the table shows, and its menu. */
 export function ModeMenu({ value, onChange }: Props) {
-  const { t, lang } = useT();
-  const [at, setAt] = useState<{ x: number; y: number; keyboard: boolean } | null>(null);
-  const close = useCallback(() => setAt(null), []);
-  const show = (el: HTMLElement, keyboard: boolean) => {
-    const box = el.getBoundingClientRect();
-    setAt({ x: anchorX(box, isRtl(lang)), y: box.bottom, keyboard });
-  };
+  const { t } = useT();
+  const { at, close, buttonProps } = useMenuButton();
   const choice = (mode: Mode) => (
     <MenuChoice
       key={mode}
@@ -33,23 +26,7 @@ export function ModeMenu({ value, onChange }: Props) {
   );
   return (
     <>
-      <button
-        className="mode with-icon"
-        title={t("mode.label")}
-        aria-haspopup="menu"
-        aria-expanded={at !== null}
-        // Opens on press, as a menu bar does. A press while it is open closes it: the menu
-        // closes itself on that press, before this handler runs with the old state.
-        onPointerDown={(e) => {
-          if (e.button === 0 && at === null) show(e.currentTarget, false);
-        }}
-        // The press must not take the focus from the menu it opened: its keys would stop working.
-        onMouseDown={(e) => e.preventDefault()}
-        // Enter and Space; a pointer click was handled on press.
-        onClick={(e) => {
-          if (e.detail === 0) show(e.currentTarget, true);
-        }}
-      >
+      <button className="mode with-icon" title={t("mode.label")} {...buttonProps}>
         <Icon name="list" />
         {t(`mode.${value}`)}
         <Icon name="chevron-down" />
