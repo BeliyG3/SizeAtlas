@@ -1,7 +1,10 @@
+import ar from "./locales/ar.json";
 import de from "./locales/de.json";
 import en from "./locales/en.json";
 import es from "./locales/es.json";
 import fr from "./locales/fr.json";
+import he from "./locales/he.json";
+import hi from "./locales/hi.json";
 import id from "./locales/id.json";
 import it from "./locales/it.json";
 import ja from "./locales/ja.json";
@@ -24,10 +27,13 @@ export type Params = Readonly<Record<string, string | number>>;
  * one: add `locales/<code>.json` (with `lang.name`) and one line here, in place.
  */
 export const LANGUAGES = [
+  { code: "ar", messages: ar as Messages },
   { code: "de", messages: de as Messages },
   { code: "en", messages: en as Messages },
   { code: "es", messages: es as Messages },
   { code: "fr", messages: fr as Messages },
+  { code: "he", messages: he as Messages },
+  { code: "hi", messages: hi as Messages },
   { code: "id", messages: id as Messages },
   { code: "it", messages: it as Messages },
   { code: "ja", messages: ja as Messages },
