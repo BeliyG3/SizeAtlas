@@ -38,6 +38,8 @@ export function DrivesHeader({ order, onMove, sort, onSort, widths, onResize, on
               data-col={id}
               aria-sort={active ? (sort.descending ? "descending" : "ascending") : "none"}
               className={classes.filter(Boolean).join(" ") || undefined}
+              // A label cut short by a narrow column shows in full on hover.
+              title={label}
               onPointerDown={(e) => drag.start(id, e)}
               onClickCapture={drag.suppressClick}
             >

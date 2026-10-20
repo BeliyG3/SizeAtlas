@@ -123,11 +123,13 @@ export function DrivesPanel({ sources, roots, onOpen, onScan, onForget }: Props)
       label: t(saved.outdated ? "drives.outdated" : "drives.saved"),
       glyph: saved.outdated ? "○" : "●",
     };
+    const state = d.connected ? "" : ` · ${t("drives.disconnected")}`;
+    // A narrow panel cuts the cells short: each shows in full on hover.
     return (
-      <td key="name">
+      <td key="name" title={`${d.mount} ${d.name}${state}`}>
         <Icon name={d.network ? "network-drive" : "drive"} className="drive-icon" /> {d.mount}{" "}
         <span className="dim">{d.name}</span>
-        {!d.connected && <span className="dim"> · {t("drives.disconnected")}</span>}
+        {state && <span className="dim">{state}</span>}
         {mark && (
           <span className="mark" role="img" aria-label={mark.label} title={mark.label}>
             {mark.glyph}
@@ -139,10 +141,10 @@ export function DrivesPanel({ sources, roots, onOpen, onScan, onForget }: Props)
   const cell = (d: Disk, id: DriveColumn): ReactNode => {
     if (id === "name") return nameCell(d);
     if (!d.connected) return <td key={id} data-col={id} className="num" />;
-    const bytes = { size: d.total, used: d.total - d.available, free: d.available }[id];
+    const text = size({ size: d.total, used: d.total - d.available, free: d.available }[id]);
     return (
-      <td key={id} data-col={id} className="num">
-        {size(bytes)}
+      <td key={id} data-col={id} className="num" title={text}>
+        {text}
       </td>
     );
   };

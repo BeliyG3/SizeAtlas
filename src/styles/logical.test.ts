@@ -12,6 +12,11 @@ const ALLOWED: Record<string, string> = {
   ".col-drop": "drop line centred on a JS pointer coordinate",
   // Centred on the screen together with translate(-50%, -50%): mirrors onto itself.
   ".trash-window": "centred on the window, symmetric",
+  // `unicode-bidi: plaintext` makes `start` follow the name, not the interface: set per direction.
+  ":dir(ltr) :is(.panel-row, .legend, .bar-row) .ellipsis": "plaintext name, LTR column side",
+  ":dir(rtl) :is(.panel-row, .legend, .bar-row) .ellipsis": "plaintext name, RTL column side",
+  ':dir(ltr) .crow [data-col="path"]': "plaintext path, LTR column side",
+  ':dir(rtl) .crow [data-col="path"]': "plaintext path, RTL column side",
 };
 
 const PHYSICAL_PROPERTY =
@@ -77,5 +82,15 @@ describe("logical CSS properties", () => {
   it("mirrors the direction icons in right-to-left layouts", () => {
     const theme = Object.entries(sheets).find(([f]) => f.endsWith("theme.css"))?.[1] ?? "";
     expect(theme).toMatch(/:dir\(rtl\)\s+\.icon-dir\s*\{[^}]*scaleX\(-1\)/);
+  });
+
+  // `plaintext` alone puts a Latin name on the far side of a right-to-left column, away from its
+  // header and swatch.
+  it("aligns file names of the legend, lists and table with the interface direction", () => {
+    for (const name of ["charts.css", "contents.css"]) {
+      const css = Object.entries(sheets).find(([f]) => f.endsWith(name))?.[1] ?? "";
+      expect(css, name).toMatch(/:dir\(rtl\)[^{]*\{\s*text-align:\s*right/);
+      expect(css, name).toMatch(/:dir\(ltr\)[^{]*\{\s*text-align:\s*left/);
+    }
   });
 });

@@ -39,7 +39,7 @@ export function TreeHeader({ columns, onMove, sort, sizeHint, onSort, ...size }:
             aria-sort={active ? (sort.descending ? "descending" : "ascending") : "none"}
             data-col={key}
             className={drag.dragging === key ? "col-dragging" : undefined}
-            title={key === "size" ? sizeHint : undefined}
+            title={key === "size" ? sizeHint : label}
             onPointerDown={(e) => drag.start(key, e)}
             onClickCapture={drag.suppressClick}
           >

@@ -71,7 +71,8 @@ export function TableHeader({ layout, sort, canSort, sizeHint, onSort }: Props) 
             aria-sort={ariaSort(c, sort, sortable)}
             data-col={c.id}
             className={classes.filter(Boolean).join(" ") || undefined}
-            title={c.id === "size" || c.id === "percent" ? sizeHint : undefined}
+            // A label cut short by a narrow column shows in full on hover.
+            title={c.id === "size" || c.id === "percent" ? sizeHint : label}
             onPointerDown={(e) => drag.start(c.id, e)}
             onClickCapture={drag.suppressClick}
             onContextMenu={(e) => {

@@ -26,6 +26,16 @@
   unicode-bidi: plaintext;
 }
 
+/* `plaintext` resolves `start` against the name's own direction, so a Latin name would sit on the
+   far side of a right-to-left column: the column's side is set from the interface direction. */
+:dir(ltr) :is(.panel-row, .legend, .bar-row) .ellipsis {
+  text-align: left;
+}
+
+:dir(rtl) :is(.panel-row, .legend, .bar-row) .ellipsis {
+  text-align: right;
+}
+
 .crumbs {
   display: flex;
   align-items: center;

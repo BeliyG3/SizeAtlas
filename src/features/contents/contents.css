@@ -122,6 +122,16 @@
   unicode-bidi: plaintext;
 }
 
+/* `plaintext` resolves `start` against the name's own direction, so a Latin name would sit on the
+   far side of a right-to-left column: the column's side is set from the interface direction. */
+:dir(ltr) .crow [data-col="path"] {
+  text-align: left;
+}
+
+:dir(rtl) .crow [data-col="path"] {
+  text-align: right;
+}
+
 .crow .tag {
   font-size: 12px;
   color: var(--text-dim);
