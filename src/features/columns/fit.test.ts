@@ -5,6 +5,7 @@ import {
   clampWidth,
   dragWidth,
   fitWidth,
+  legacyWidths,
   columnWidths,
   parseWidths,
   storedWidths,
@@ -60,6 +61,15 @@ describe("column widths", () => {
     expect(storedWidths(JSON.stringify({ size: 120, name: 3 }), defaults)).toEqual({ size: 120 });
   });
 
+  it("carry over from the old storage only the widths that differ from the old defaults", () => {
+    const defaults = { name: 280, size: 96, files: 80 } as const;
+    // Fit and Reset used to store every column, the untouched ones at their defaults.
+    expect(legacyWidths(JSON.stringify({ name: 280, size: 120, files: 80 }), defaults)).toEqual({
+      size: 120,
+    });
+    expect(legacyWidths(null, defaults)).toEqual({});
+  });
+
   it("take a width the user set over one fitted to the content, and that over the default", () => {
     const defaults = { name: 280, size: 96 } as const;
     // Arabic spells the units out: the fitted Size column is wider than the default.
@@ -68,11 +78,10 @@ describe("column widths", () => {
       size: 118,
     });
     expect(columnWidths(defaults, {}, {})).toEqual(defaults);
-    // Fit and Reset used to store every column, the untouched ones at their defaults: a stored
-    // default counts as no width set.
+    // A border dragged or stepped onto the default stays there, even where the fitted width differs.
     expect(columnWidths(defaults, { name: 150, size: 118 }, { name: 280, size: 96 })).toEqual({
-      name: 150,
-      size: 118,
+      name: 280,
+      size: 96,
     });
   });
 });

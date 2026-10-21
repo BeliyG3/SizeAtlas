@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useStored } from "../../settings/storage";
-import { columnWidths, storedWidths } from "./fit";
+import { readStored, useStored } from "../../settings/storage";
+import { columnWidths, legacyWidths, storedWidths } from "./fit";
 
 const serialize = (widths: object) => JSON.stringify(widths);
 const NONE = {};
@@ -8,16 +8,21 @@ const NONE = {};
 /**
  * Column widths stored under `key` (one number per column id): live while a border is dragged,
  * stored when the drag ends. `defaults` must be a module-level constant; `fitted` (widths that
- * fit the content) stand in for the defaults of columns the user has not sized.
+ * fit the content) stand in for the defaults of columns the user has not sized. Until something is
+ * stored under `key`, the widths come from `legacyKey`, of the old format (see `legacyWidths`).
  */
 export function useColumnWidths<K extends string>(
   key: string,
   defaults: Readonly<Record<K, number>>,
   fitted: Partial<Record<K, number>> = NONE,
+  legacyKey?: string,
 ) {
   const [stored, store] = useStored<Partial<Record<K, number>>>(
     key,
-    (raw) => storedWidths(raw, defaults),
+    (raw) =>
+      raw === null && legacyKey
+        ? legacyWidths(readStored(legacyKey), defaults)
+        : storedWidths(raw, defaults),
     serialize,
   );
   const [dragged, setDragged] = useState<Partial<Record<K, number>> | null>(null);

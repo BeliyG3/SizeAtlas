@@ -16,8 +16,13 @@ import {
   visibleColumns,
 } from "./layout";
 
-/** The key and shape of the widths stored before columns could be moved or hidden. */
-const WIDTHS_KEY = "sizeatlas.columns";
+/** The widths the user set, one per column id. */
+const WIDTHS_KEY = "sizeatlas.columns.widths";
+/**
+ * The same, from before the defaults fitted the header labels: Fit and Reset stored every column,
+ * so its widths at a default are left behind once (see `legacyWidths`).
+ */
+const LEGACY_WIDTHS_KEY = "sizeatlas.columns";
 
 /** Widths, order and visibility of the table's columns, all stored. `body` holds the cells; `lists`: a flat list, which also shows the Path column. */
 export function useColumnLayout(body: RefObject<HTMLElement | null>, lists: boolean) {
@@ -25,6 +30,7 @@ export function useColumnLayout(body: RefObject<HTMLElement | null>, lists: bool
     WIDTHS_KEY,
     DEFAULT_WIDTHS,
     useHeaderWidths(body),
+    LEGACY_WIDTHS_KEY,
   );
   const [view, setView] = useStored(VIEW_KEY, parseView, serializeView);
   const columns = useMemo(() => visibleColumns(view, lists), [view, lists]);

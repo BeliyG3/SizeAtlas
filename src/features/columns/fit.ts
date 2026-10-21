@@ -66,18 +66,27 @@ export const parseWidths = <K extends string>(
 ): Record<K, number> => ({ ...defaults, ...storedWidths(raw, defaults) });
 
 /**
+ * The widths the user set in storage of the old format, where Fit and Reset stored every column:
+ * one at its default was most likely never set, so it is left out.
+ */
+export function legacyWidths<K extends string>(
+  raw: string | null,
+  defaults: Readonly<Record<K, number>>,
+): Partial<Record<K, number>> {
+  const widths = storedWidths(raw, defaults);
+  for (const id of Object.keys(widths) as K[]) if (widths[id] === defaults[id]) delete widths[id];
+  return widths;
+}
+
+/**
  * The width of each column: one the user set (stored) wins over one fitted to the content in the
- * current language, which wins over the fixed default. A stored width equal to the default counts
- * as none: Fit and Reset once stored every column.
+ * current language, which wins over the fixed default.
  */
 export const columnWidths = <K extends string>(
   defaults: Readonly<Record<K, number>>,
   fitted: Partial<Record<K, number>>,
   stored: Partial<Record<K, number>>,
-): Record<K, number> => {
-  const set = Object.entries(stored).filter(([id, width]) => width !== defaults[id as K]);
-  return { ...defaults, ...fitted, ...Object.fromEntries(set) };
-};
+): Record<K, number> => ({ ...defaults, ...fitted, ...stored });
 
 /**
  * Natural width of the widest rendered cell of column `col` (elements with `data-col`, the
