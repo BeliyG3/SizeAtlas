@@ -58,6 +58,8 @@ export function closeMenus(keep?: () => void): void {
   for (const [onClose, dismiss] of openMenus) if (onClose !== keep) dismiss();
 }
 
+const isChecked = (item: HTMLElement) => item.getAttribute("aria-checked") === "true";
+
 /** Items of the menu `el`, without those of a submenu open inside it. */
 const ownItems = (el: HTMLElement | null): HTMLElement[] =>
   [...(el?.querySelectorAll<HTMLElement>(ITEMS) ?? [])].filter(
@@ -73,6 +75,23 @@ export const openingItem = <T,>(
   scroll: boolean,
   checked: (item: T) => boolean,
 ): T | undefined => (scroll && items.find(checked)) || items[0];
+
+/**
+ * The item ↓ (`down`) or ↑ moves to from `current`, wrapping. With none focused it starts from
+ * the checked item of a scrolling list (which `openingItem` scrolled into view), else ↓ gives the
+ * first item and ↑ the last.
+ */
+export function arrowItem<T>(
+  items: readonly T[],
+  current: T | null,
+  down: boolean,
+  scroll: boolean,
+  checked: (item: T) => boolean,
+): T | undefined {
+  let at = current === null ? -1 : items.indexOf(current);
+  if (at < 0 && scroll) at = items.findIndex(checked);
+  return down ? items[(at + 1) % items.length] : items[(at <= 0 ? items.length : at) - 1];
+}
 
 /**
  * A menu rendered over everything, kept inside the window. Keys: arrows, Enter, Escape. An item
@@ -115,11 +134,7 @@ export function Menu({
     const top = Math.min(y, window.innerHeight - el.offsetHeight - EDGE);
     el.style.left = `${menuLeft(x, el.offsetWidth, window.innerWidth, rtl)}px`;
     el.style.top = `${Math.max(EDGE, top)}px`;
-    const start = openingItem(
-      ownItems(el),
-      scroll,
-      (item) => item.getAttribute("aria-checked") === "true",
-    );
+    const start = openingItem(ownItems(el), scroll, isChecked);
     if (focusFirst && start) start.focus();
     else {
       el.focus();
@@ -163,11 +178,11 @@ export function Menu({
 
   const onKey = (e: KeyboardEvent) => {
     const items = ownItems(menu.current);
-    const at = items.findIndex((b) => b === document.activeElement);
+    const active = items.find((b) => b === document.activeElement) ?? null;
     const closesBack = nested && mirrorArrow(e.key, rtl) === "ArrowLeft";
     if (e.key === "Escape" || e.key === "Tab" || closesBack) onClose();
-    else if (e.key === "ArrowDown") items[(at + 1) % items.length]?.focus();
-    else if (e.key === "ArrowUp") items[(at <= 0 ? items.length : at) - 1]?.focus();
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp")
+      arrowItem(items, active, e.key === "ArrowDown", scroll, isChecked)?.focus();
     else return;
     e.preventDefault();
     e.stopPropagation();
