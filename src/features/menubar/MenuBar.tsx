@@ -12,7 +12,7 @@ import { useT } from "../../i18n/react";
 import { Menu, closeMenus } from "../menu/Menu";
 import { anchorX } from "../menu/place";
 import { loneAlt } from "./altKey";
-import { mnemonic, mnemonicHit } from "./mnemonic";
+import { mnemonic, mnemonicMenu } from "./mnemonic";
 import { neighbour } from "./neighbour";
 import "./menubar.css";
 
@@ -80,7 +80,7 @@ export function MenuBar({ label, menus }: Props) {
 
   // Called by the window listeners below, which are added once.
   const openKey = (key: string, code: string) => {
-    const menu = menus.find((m) => mnemonicHit(m.label, key, code));
+    const menu = mnemonicMenu(menus, key, code);
     if (!menu) return false;
     enter();
     show(menu.id, true);

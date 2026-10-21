@@ -11,13 +11,22 @@ export function mnemonic(label: string): { text: string; at: number; key: string
 }
 
 /**
- * Whether Alt+`key` (`KeyboardEvent.key`, with `code` its physical key) opens the menu titled
- * `label`: the typed letter matches, or the mnemonic is a Latin letter and its physical key was
- * pressed, which keeps "(&F)" working on an Arabic, Hebrew, Russian or Thai layout.
+ * The menu Alt+`key` (`KeyboardEvent.key`, with `code` its physical key) opens: the first whose
+ * letter was typed, else the first whose mnemonic is a Latin letter on that physical key, which
+ * keeps "(&F)" working on an Arabic, Hebrew, Russian or Thai layout. The typed letter goes first
+ * so that on AZERTY or Dvorak a menu's letter is not taken by another menu's physical key.
  */
-export function mnemonicHit(label: string, key: string, code: string): boolean {
-  const letter = mnemonic(label).key;
-  if (letter === null) return false;
-  if (letter === key.toLocaleLowerCase()) return true;
-  return /^[a-z]$/.test(letter) && code === `Key${letter.toUpperCase()}`;
+export function mnemonicMenu<T extends { label: string }>(
+  menus: readonly T[],
+  key: string,
+  code: string,
+): T | undefined {
+  const typed = key.toLocaleLowerCase();
+  const letters = menus.map((m) => mnemonic(m.label).key);
+  const at = letters.indexOf(typed);
+  if (at >= 0) return menus[at];
+  return menus.find((_, i) => {
+    const letter = letters[i];
+    return letter !== null && /^[a-z]$/.test(letter) && code === `Key${letter.toUpperCase()}`;
+  });
 }
