@@ -4,6 +4,7 @@ import { fitWidth, measureColumn } from "../columns/fit";
 import { moveColumn } from "../columns/order";
 import { useColumnWidths } from "../columns/useColumnWidths";
 import { DEFAULT_WIDTHS, type ColumnId } from "./columns";
+import { useHeaderWidths } from "./headerFit";
 import {
   DEFAULT_VIEW,
   VIEW_KEY,
@@ -20,7 +21,11 @@ const WIDTHS_KEY = "sizeatlas.columns";
 
 /** Widths, order and visibility of the table's columns, all stored. `body` holds the cells; `lists`: a flat list, which also shows the Path column. */
 export function useColumnLayout(body: RefObject<HTMLElement | null>, lists: boolean) {
-  const { widths, resize, store } = useColumnWidths(WIDTHS_KEY, DEFAULT_WIDTHS);
+  const { widths, stored, resize, store } = useColumnWidths(
+    WIDTHS_KEY,
+    DEFAULT_WIDTHS,
+    useHeaderWidths(body),
+  );
   const [view, setView] = useStored(VIEW_KEY, parseView, serializeView);
   const columns = useMemo(() => visibleColumns(view, lists), [view, lists]);
   // One array per view: the memoized rows render these cells.
@@ -28,7 +33,8 @@ export function useColumnLayout(body: RefObject<HTMLElement | null>, lists: bool
 
   /** Event handlers only: sizes columns to their rendered header and rows. */
   const fit = (fitted: readonly ColumnId[]) => {
-    const next: Record<ColumnId, number> = { ...widths };
+    // Only these become widths the user set: the others keep following their header labels.
+    const next: Partial<Record<ColumnId, number>> = { ...stored };
     for (const id of fitted) next[id] = fitWidth(measureColumn(body.current, id));
     store(next);
   };
@@ -48,7 +54,8 @@ export function useColumnLayout(body: RefObject<HTMLElement | null>, lists: bool
     move: (id: ColumnId, before: ColumnId | null) =>
       setView({ ...view, order: moveColumn(view.order, id, before, "name") }),
     reset: () => {
-      store(DEFAULT_WIDTHS);
+      // No width the user set: the defaults, fitted to the header labels, take over.
+      store({});
       setView(DEFAULT_VIEW);
     },
   };

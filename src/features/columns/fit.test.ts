@@ -68,5 +68,11 @@ describe("column widths", () => {
       size: 118,
     });
     expect(columnWidths(defaults, {}, {})).toEqual(defaults);
+    // Fit and Reset used to store every column, the untouched ones at their defaults: a stored
+    // default counts as no width set.
+    expect(columnWidths(defaults, { name: 150, size: 118 }, { name: 280, size: 96 })).toEqual({
+      name: 150,
+      size: 118,
+    });
   });
 });

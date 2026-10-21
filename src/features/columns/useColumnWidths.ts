@@ -29,5 +29,5 @@ export function useColumnWidths<K extends string>(
     if (done) store(next);
     setDragged(done ? null : next);
   };
-  return { widths, resize, store };
+  return { widths, stored, resize, store };
 }
