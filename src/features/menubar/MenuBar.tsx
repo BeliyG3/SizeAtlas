@@ -13,6 +13,7 @@ import { Menu, closeMenus } from "../menu/Menu";
 import { anchorX } from "../menu/place";
 import { loneAlt } from "./altKey";
 import { mnemonic, mnemonicHit } from "./mnemonic";
+import { neighbour } from "./neighbour";
 import "./menubar.css";
 
 export interface BarMenu {
@@ -21,13 +22,18 @@ export interface BarMenu {
   label: string;
   /** Items of the menu (see Menu). */
   items: ReactNode;
+  /**
+   * Drawn on the title instead of the label (the globe of the language menu), with `name` for
+   * its tooltip and assistive technology. Such a title can also be reached with Tab.
+   */
+  face?: { content: ReactNode; name: string };
+  /** The menu scrolls when taller than the window (a long list). */
+  scroll?: boolean;
 }
 
 interface Props {
   label: string;
   menus: readonly BarMenu[];
-  /** After the last menu: a button that is not a menu of the bar (see LanguageButton). */
-  trailing?: ReactNode;
 }
 
 interface Opened {
@@ -45,7 +51,7 @@ interface Opened {
  * while one is open; ↓, Enter and Space open the focused one; Escape closes the menu, then leaves
  * the bar.
  */
-export function MenuBar({ label, menus, trailing }: Props) {
+export function MenuBar({ label, menus }: Props) {
   const [open, setOpen] = useState<Opened | null>(null);
   const bar = useRef<HTMLDivElement>(null);
   const rtl = isRtl(useT().lang);
@@ -70,10 +76,6 @@ export function MenuBar({ label, menus, trailing }: Props) {
   const show = (id: string, keyboard: boolean) => {
     const box = title(id)?.getBoundingClientRect();
     if (box) setOpen({ id, x: anchorX(box, rtl), y: box.bottom, keyboard });
-  };
-  const neighbour = (id: string, step: number) => {
-    const at = menus.findIndex((m) => m.id === id);
-    return menus[(at + step + menus.length) % menus.length].id;
   };
 
   // Called by the window listeners below, which are added once.
@@ -145,7 +147,8 @@ export function MenuBar({ label, menus, trailing }: Props) {
     // In right-to-left layouts the menus run from right to left.
     const arrow = mirrorArrow(e.key, rtl);
     if (arrow === "ArrowLeft" || arrow === "ArrowRight") {
-      const next = neighbour(current, arrow === "ArrowLeft" ? -1 : 1);
+      const ids = menus.map((m) => m.id);
+      const next = neighbour(ids, current, arrow === "ArrowLeft" ? -1 : 1);
       if (open) show(next, true);
       else title(next)?.focus();
     } else if (!open && (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")) {
@@ -181,7 +184,10 @@ export function MenuBar({ label, menus, trailing }: Props) {
             key={m.id}
             data-menu={m.id}
             role="menuitem"
-            tabIndex={-1}
+            tabIndex={m.face ? undefined : -1}
+            className={m.face ? "face" : undefined}
+            aria-label={m.face?.name}
+            title={m.face?.name}
             aria-haspopup="menu"
             aria-expanded={open?.id === m.id}
             // A press does not move the focus to the title: the menu it opens takes it.
@@ -205,7 +211,9 @@ export function MenuBar({ label, menus, trailing }: Props) {
               show(m.id, true);
             }}
           >
-            {at < 0 ? (
+            {m.face ? (
+              m.face.content
+            ) : at < 0 ? (
               text
             ) : (
               <>
@@ -217,13 +225,13 @@ export function MenuBar({ label, menus, trailing }: Props) {
           </button>
         );
       })}
-      {trailing}
       {open && shown && (
         <Menu
           x={open.x}
           y={open.y}
           label={mnemonic(shown.label).text}
           focusFirst={open.keyboard}
+          scroll={shown.scroll}
           onClose={leave}
         >
           {shown.items}

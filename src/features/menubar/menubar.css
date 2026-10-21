@@ -20,8 +20,8 @@
   outline: none;
 }
 
-/* The language button: the globe and the code side by side. */
-.menubar > button.language {
+/* A title drawn as an icon and text (the language menu): side by side. */
+.menubar > button.face {
   display: inline-flex;
   align-items: center;
   gap: 4px;

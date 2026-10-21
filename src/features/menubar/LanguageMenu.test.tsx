@@ -1,29 +1,37 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LANGUAGES } from "../../i18n";
-import { I18nProvider } from "../../i18n/react";
-import { LanguageButton } from "./LanguageButton";
+import { I18nProvider, useT } from "../../i18n/react";
 import { LanguageChoices } from "./LanguageChoices";
+import { languageMenu } from "./LanguageMenu";
+import { MenuBar } from "./MenuBar";
 
 const inLanguage = (browser: string, ui: React.ReactElement) => {
   vi.stubGlobal("navigator", { languages: [browser] });
   return renderToStaticMarkup(<I18nProvider>{ui}</I18nProvider>);
 };
 
-describe("LanguageButton", () => {
+function LanguageBar() {
+  const { t, lang } = useT();
+  return <MenuBar label="bar" menus={[languageMenu(t, lang)]} />;
+}
+
+describe("languageMenu", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("shows a globe and the code, and names the language for assistive technology", () => {
-    const html = inLanguage("de", <LanguageButton />);
+    const html = inLanguage("de", <LanguageBar />);
     expect(html).toMatch(/<\/svg>DE<\/button>/);
     expect(html).toContain('aria-label="Sprache: Deutsch"');
     expect(html).toContain('title="Sprache: Deutsch"');
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('aria-expanded="false"');
+    // Reachable with Tab, unlike the titles with a letter.
+    expect(html).not.toContain('tabindex="-1"');
   });
 
   it("uses the base subtag for a regional language", () => {
-    expect(inLanguage("pt-BR", <LanguageButton />)).toMatch(/<\/svg>PT<\/button>/);
+    expect(inLanguage("pt-BR", <LanguageBar />)).toMatch(/<\/svg>PT<\/button>/);
   });
 });
 

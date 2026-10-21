@@ -10,7 +10,7 @@ import { SubMenu } from "../menu/SubMenu";
 import { REPOSITORY } from "../update/github";
 import type { UpdateCheck } from "../update/useUpdateCheck";
 import { AboutDialog } from "./AboutDialog";
-import { LanguageButton } from "./LanguageButton";
+import { languageMenu } from "./LanguageMenu";
 import { MenuBar, type BarMenu } from "./MenuBar";
 import { ViewItems } from "./ViewItems";
 
@@ -48,7 +48,7 @@ interface Props {
   update: UpdateCheck;
 }
 
-/** File, Scan, View and Help above the toolbar. */
+/** File, Scan, View, Help and the language above the toolbar. */
 export function AppMenuBar({
   scanTarget,
   rescanTarget,
@@ -68,7 +68,7 @@ export function AppMenuBar({
   onError,
   update,
 }: Props) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const [about, setAbout] = useState(false);
   /** A menu item; `run` null disables it; `keys` is its shortcut, shown on the right. */
   const item = (
@@ -162,10 +162,11 @@ export function AppMenuBar({
         </>
       ),
     },
+    languageMenu(t, lang),
   ];
   return (
     <>
-      <MenuBar label={t("menubar.label")} menus={menus} trailing={<LanguageButton />} />
+      <MenuBar label={t("menubar.label")} menus={menus} />
       {about && <AboutDialog onClose={() => setAbout(false)} onOpenRepository={openRepository} />}
     </>
   );
