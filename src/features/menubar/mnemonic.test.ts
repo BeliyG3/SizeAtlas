@@ -19,6 +19,14 @@ describe("menu titles", () => {
       expect(new Set(keys).size).toBe(keys.length);
     }
   });
+
+  it("give the languages written without Latin letters a Latin one in parentheses", () => {
+    for (const code of ["ja", "zh-Hans", "ko", "ar", "he", "hi", "th"] as const) {
+      for (const id of ["file", "scan", "view", "help"]) {
+        expect(translate(code, `menubar.${id}`), `${code} ${id}`).toMatch(/\(&[A-Z]\)$/);
+      }
+    }
+  });
 });
 
 describe("mnemonicMenu", () => {

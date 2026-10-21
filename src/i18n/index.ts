@@ -81,7 +81,9 @@ function normalizeTag(tag: string): string | null {
   if (base === "in") return "id";
   if (base === "pt") return "pt-BR";
   if (base === "zh") {
-    // Only Simplified Chinese is translated; Traditional falls through to English.
+    // Only Simplified Chinese is translated; Traditional falls through to English. An explicit
+    // script wins over the region (zh-Hans-HK is Simplified).
+    if (rest.includes("hans")) return "zh-Hans";
     return rest.some((p) => ["hant", "tw", "hk", "mo"].includes(p)) ? null : "zh-Hans";
   }
   return base;

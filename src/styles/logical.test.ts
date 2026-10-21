@@ -74,7 +74,7 @@ describe("logical CSS properties", () => {
   });
 
   it("no physical left/right in CSS outside the allowlist", () => {
-    const stray = all.filter((h) => !(h.selector in ALLOWED));
+    const stray = all.filter((h) => !Object.hasOwn(ALLOWED, h.selector));
     expect(stray.map((h) => `${h.file} ${h.selector} { ${h.declaration} }`)).toEqual([]);
   });
 

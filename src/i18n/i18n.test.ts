@@ -202,6 +202,10 @@ describe("translate", () => {
     expect(detectLang(["zh-Hans-CN"])).toBe("zh-Hans");
     expect(detectLang(["zh-TW"])).toBe("en");
     expect(detectLang(["zh-Hant"])).toBe("en");
+    // An explicit Simplified script wins over a region that usually writes Traditional.
+    expect(detectLang(["zh-Hans-HK"])).toBe("zh-Hans");
+    expect(detectLang(["zh-Hans-MO"])).toBe("zh-Hans");
+    expect(detectLang(["zh-HK"])).toBe("en");
     expect(detectLang(["pt-PT"])).toBe("pt-BR");
     expect(detectLang(["pt"])).toBe("pt-BR");
     expect(detectLang(["de-AT"])).toBe("de");

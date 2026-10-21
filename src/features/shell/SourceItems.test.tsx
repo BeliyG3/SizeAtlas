@@ -27,15 +27,28 @@ const render = (pending: string | null, s: Sources | null = sources) =>
     </I18nProvider>,
   );
 
+/** Every needle is in `html`, each after the one before it (a missing one fails). */
+const expectInOrder = (html: string, ...needles: string[]) => {
+  const at = needles.map((needle) => html.indexOf(needle));
+  needles.forEach((needle, i) => {
+    expect(at[i], `${needle} is missing`).toBeGreaterThanOrEqual(0);
+    if (i > 0) expect(at[i], `${needle} after ${needles[i - 1]}`).toBeGreaterThan(at[i - 1]);
+  });
+};
+
 describe("SourceItems", () => {
   it("lists drives, recent folders without the drives, then Choose folder", () => {
     const html = render("C:\\");
-    const at = (s: string) => html.indexOf(s);
-    expect(at(">Drives<")).toBeLessThan(at("C:\\  System"));
-    expect(at("Z:\\ (Disconnected)")).toBeLessThan(at(">Recent folders<"));
-    expect(at(">Recent folders<")).toBeLessThan(at("D:\\Work"));
-    expect(at("D:\\Work")).toBeLessThan(at('role="separator"'));
-    expect(at('role="separator"')).toBeLessThan(at("Choose folder…"));
+    expectInOrder(
+      html,
+      ">Drives<",
+      "C:\\  System",
+      "Z:\\ (Disconnected)",
+      ">Recent folders<",
+      "D:\\Work",
+      'role="separator"',
+      "Choose folder…",
+    );
     expect(html).toContain("D:\\Old (saved by another version)");
     // C:\ is a drive: it is not repeated among the recent folders.
     expect(html.split(">C:\\").length - 1).toBe(1);
@@ -50,7 +63,7 @@ describe("SourceItems", () => {
 
   it("shows a source that is in neither list first", () => {
     const html = render("E:\\Other");
-    expect(html.indexOf("E:\\Other")).toBeLessThan(html.indexOf(">Drives<"));
+    expectInOrder(html, "E:\\Other", ">Drives<");
   });
 
   it("has no recent heading without recent folders", () => {

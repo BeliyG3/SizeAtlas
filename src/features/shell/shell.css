@@ -29,8 +29,8 @@
 }
 
 /* The path carries dir="auto" ("D:\" stays "D:\" in Arabic), so `start` follows the path and a
-   Latin path would sit next to
-   the chevron in a right-to-left toolbar: the side is set from the interface direction. */
+   Latin path would sit next to the chevron in a right-to-left toolbar: the side is set from the
+   interface direction. */
 :dir(ltr) .toolbar .source > .text {
   text-align: left;
 }
