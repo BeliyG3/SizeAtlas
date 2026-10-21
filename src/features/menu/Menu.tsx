@@ -27,7 +27,10 @@ interface Props {
   focusFirst?: boolean;
   /** A submenu (see SubMenu): rendered inside its parent menu; ← (→ right-to-left) closes it. */
   nested?: boolean;
-  /** Taller than the window: scrolls (the focused item is scrolled into view by `focus()`). */
+  /**
+   * Taller than the window: scrolls, and opens at its checked item (see `openingItem`), focused
+   * from the keyboard and scrolled into view for the pointer.
+   */
   scroll?: boolean;
   /**
    * Picking an item that does not open a submenu, Escape, Tab, pressing anywhere else, losing
@@ -60,6 +63,16 @@ const ownItems = (el: HTMLElement | null): HTMLElement[] =>
   [...(el?.querySelectorAll<HTMLElement>(ITEMS) ?? [])].filter(
     (item) => item.closest('[role="menu"]') === el,
   );
+
+/**
+ * The item a menu opens at: in a scrolling list (the languages) the checked one, so the current
+ * choice is in view; else, or with nothing checked, the first.
+ */
+export const openingItem = <T,>(
+  items: readonly T[],
+  scroll: boolean,
+  checked: (item: T) => boolean,
+): T | undefined => (scroll && items.find(checked)) || items[0];
 
 /**
  * A menu rendered over everything, kept inside the window. Keys: arrows, Enter, Escape. An item
@@ -102,7 +115,16 @@ export function Menu({
     const top = Math.min(y, window.innerHeight - el.offsetHeight - EDGE);
     el.style.left = `${menuLeft(x, el.offsetWidth, window.innerWidth, rtl)}px`;
     el.style.top = `${Math.max(EDGE, top)}px`;
-    ((focusFirst && ownItems(el)[0]) || el).focus();
+    const start = openingItem(
+      ownItems(el),
+      scroll,
+      (item) => item.getAttribute("aria-checked") === "true",
+    );
+    if (focusFirst && start) start.focus();
+    else {
+      el.focus();
+      if (scroll) start?.scrollIntoView({ block: "nearest" });
+    }
     return () => {
       // Closed by clicking another control: leave the focus there.
       const active = document.activeElement;
@@ -114,7 +136,7 @@ export function Menu({
           (target.previous?.isConnected ? target.previous : target.home)?.focus();
       });
     };
-  }, [x, y, focusFirst, rtl]);
+  }, [x, y, focusFirst, scroll, rtl]);
 
   useEffect(() => {
     const close = () => onClose();
