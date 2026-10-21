@@ -38,6 +38,11 @@ import "./drives.css";
 /** Every column can be moved; the drive name takes the width the number columns leave. */
 const DEFAULT_ORDER: readonly DriveColumn[] = ["name", "size", "used", "free"];
 const DEFAULT_WIDTHS = { size: 84, used: 84, free: 84 };
+/**
+ * Widths the user set. Those stored under "sizeatlas.drives.columns", before the columns were
+ * fitted to their content, are left behind: they often cut the sizes short.
+ */
+const WIDTHS_KEY = "sizeatlas.drives.widths";
 
 interface Props {
   sources: Sources | null;
@@ -66,7 +71,7 @@ export function DrivesPanel({ sources, roots, onOpen, onScan, onForget, onWidth 
   const box = useRef<HTMLElement>(null);
   const fitted = useFittedWidths(box);
   const { widths, resize } = useColumnWidths<Exclude<DriveColumn, "name">>(
-    "sizeatlas.drives.columns",
+    WIDTHS_KEY,
     DEFAULT_WIDTHS,
     fitted ?? undefined,
   );
