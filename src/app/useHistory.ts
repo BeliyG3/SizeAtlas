@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BACK_BUTTON, FORWARD_BUTTON, historyKey } from "../features/shell/historyKey";
+import { busy, typing } from "../features/shell/keyGuards";
 import {
   historyStep,
   idleSwipe,
@@ -12,16 +13,6 @@ import { useT } from "../i18n/react";
 import { emptyHistory, restore, step, toVisit, visit } from "./history";
 import type { RootEntry } from "./roots";
 import type { Selection } from "./selection";
-
-/** Typing in these must keep Alt+arrows and Cmd+brackets to itself. */
-export const typing = (target: EventTarget | null) =>
-  target instanceof HTMLElement &&
-  (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName));
-
-/** An open dialog or menu keeps the view where it is. */
-export const busy = (target: EventTarget | null) =>
-  document.querySelector("dialog[open]") !== null ||
-  (target instanceof Element && target.closest('[role="menu"]') !== null);
 
 /**
  * Back and forward through the folders the view showed, from the mouse side buttons, Alt+← and

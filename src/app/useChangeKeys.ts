@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { busy, typing } from "./useHistory";
+import { busy, typing } from "../features/shell/keyGuards";
 
 interface Keys {
   /** F5: refresh the current folder. */

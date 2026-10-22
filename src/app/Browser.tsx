@@ -24,6 +24,10 @@ interface Props {
   selection: Selection | null;
   /** What the table shows. */
   mode: Mode;
+  /** The words searched for (committed): the table shows the results over any mode. */
+  query: string;
+  /** Enter or a double click on a folder of the results: the search is over (stable). */
+  onLeaveSearch: () => void;
   sources: Sources | null;
   /** Progress of the running scan. */
   progress: ScanProgress | null;
@@ -71,6 +75,8 @@ export function Browser({
   entries,
   selection,
   mode,
+  query,
+  onLeaveSearch,
   sources,
   progress,
   onSelectNode,
@@ -174,7 +180,8 @@ export function Browser({
         summary={summary}
         selection={selection}
         mode={mode}
-        query=""
+        query={query}
+        onLeaveSearch={onLeaveSearch}
         sort={sort}
         onSort={setSort}
         onSelect={onSelectNode}

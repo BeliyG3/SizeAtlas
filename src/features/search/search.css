@@ -1,0 +1,56 @@
+/* The toolbar's search field, at the end of it: up to 220px, down to 120px before it moves to the next line. */
+.search {
+  display: flex;
+  flex: 1 1 120px;
+  align-items: center;
+  gap: 4px;
+  max-inline-size: 220px;
+  margin-inline-start: auto;
+  padding-inline: 6px;
+  color: var(--text-dim);
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.search:focus-within {
+  color: var(--text);
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.search > .icon {
+  flex: none;
+}
+
+.search input {
+  flex: 1;
+  min-inline-size: 0;
+  padding-block: 3px;
+  padding-inline: 0;
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: 0;
+}
+
+.search input::placeholder {
+  color: var(--text-dim);
+}
+
+/* Clearing: a small cross inside the field, not a button of its own. */
+.search .clear {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+}
+
+.search .clear:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--field-hover);
+}

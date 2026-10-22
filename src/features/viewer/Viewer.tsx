@@ -31,6 +31,8 @@ interface Props {
   mode: Mode;
   /** The words searched for: while they are not blank, the table shows the results over any mode. */
   query: string;
+  /** Enter or a double click on a folder of the results: the search is over (stable). */
+  onLeaveSearch: () => void;
   /** The table sort; kept by the parent, so it survives folder and root changes. */
   sort: SortState;
   onSort: (sort: SortState) => void;
@@ -50,6 +52,7 @@ export const Viewer = memo(function Viewer({
   selection,
   mode,
   query,
+  onLeaveSearch,
   sort,
   onSort,
   onSelect,
@@ -104,6 +107,14 @@ export const Viewer = memo(function Viewer({
     },
     [enter, select],
   );
+  // A folder of the results is shown, not searched: the search ends, the list is made for it.
+  const leaveSearch = useCallback(
+    (id: number, parent?: number) => {
+      onLeaveSearch();
+      enterFolder(id, parent);
+    },
+    [onLeaveSearch, enterFolder],
+  );
   const { details, request: needDetails } = useDetails(generation, onFail);
   const parent = crumbs.length >= 2 ? crumbs[crumbs.length - 2].id : null;
   // The list's folder is the current folder or above it, so among its crumbs.
@@ -138,6 +149,7 @@ export const Viewer = memo(function Viewer({
             onNeedDetails={needDetails}
             onPick={pickItem}
             onEnter={enterFolder}
+            onOpenFolder={list === "search" ? leaveSearch : undefined}
             onMenu={menu}
             onTrash={trash}
             onMarks={onMarks}

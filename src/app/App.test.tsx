@@ -27,6 +27,7 @@ vi.mock("../settings/react", () => ({ useSize: () => String }));
 vi.mock("./useRoots", () => ({ useRoots: vi.fn() }));
 vi.mock("./useSelection", () => ({ useSelection: vi.fn() }));
 vi.mock("./useChangeKeys", () => ({ useChangeKeys: vi.fn() }));
+vi.mock("../features/search/useSearchKey", () => ({ useSearchKey: vi.fn() }));
 vi.mock("../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
 vi.mock("../settings/storage", () => ({ useStored: () => ["all", vi.fn()] }));
 vi.mock("../features/export/useExport", () => ({

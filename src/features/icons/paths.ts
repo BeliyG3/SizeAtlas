@@ -14,6 +14,7 @@ export const ICONS = {
   forward: "M3 8h10M9 4l4 4-4 4",
   refresh: "M13.5 8A5.5 5.5 0 1 1 11.9 4.1M9.2 4.1h2.7V1.4",
   cancel: "M4 4l8 8M12 4l-8 8",
+  search: "M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 1 1 9 0zM10.2 10.2L14 14",
   forget: "M6.5 13.5l-4-4 6-6 4 4zM5.5 6.5l4 4M6.5 13.5h7",
   list: "M6 4h7.5M6 8h7.5M6 12h7.5M2.5 4h.01M2.5 8h.01M2.5 12h.01",
   "chevron-down": "M4.5 6.5L8 10l3.5-3.5",

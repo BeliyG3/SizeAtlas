@@ -100,11 +100,13 @@ const answer = (found: List["found"], items: ListItem[] = []): List => ({
 const none = () => {};
 const onTrash = vi.fn();
 const onMarks = vi.fn();
+const onEnter = vi.fn();
+const onOpenFolder = vi.fn();
 const details = new Map();
 
 let shown: ReactElement | null = null;
 
-function render(query: string) {
+function render(query: string, leaves = true) {
   for (let pass = 0; pass < 20; pass++) {
     rt.state.at = 0;
     rt.state.dirty = false;
@@ -119,7 +121,8 @@ function render(query: string) {
       details,
       onNeedDetails: none,
       onPick: none,
-      onEnter: none,
+      onEnter,
+      onOpenFolder: leaves ? onOpenFolder : undefined,
       onMenu: none,
       onTrash,
       onMarks,
@@ -165,6 +168,8 @@ beforeEach(() => {
   vi.mocked(api.getList).mockReset();
   onTrash.mockReset();
   onMarks.mockReset();
+  onEnter.mockReset();
+  onOpenFolder.mockReset();
 });
 
 describe("ListTable for a search", () => {
@@ -247,5 +252,37 @@ describe("ListTable for a search", () => {
     await settle("a");
     const line = (shown!.props as { children: ReactElement[] }).children[0];
     expect((line.props as { role?: string }).role).toBe("status");
+  });
+
+  describe("opening a folder of the results", () => {
+    const folder = { id: 7, name: "backup", isDir: true, parent: 3, deleted: false } as ListItem;
+    const rows = [folder];
+
+    async function onFolder(leaves = true) {
+      vi.mocked(api.getList).mockResolvedValue(answer({ count: 1, size: 1 }, rows));
+      await settle("backup");
+      render("backup", leaves);
+      press({ key: "ArrowDown" });
+      render("backup", leaves);
+    }
+
+    it("leaves the search for the folder on Enter", async () => {
+      await onFolder();
+      press({ key: "Enter", repeat: false });
+      expect(onOpenFolder).toHaveBeenCalledWith(7, 3);
+      expect(onEnter).not.toHaveBeenCalled();
+    });
+
+    it("keeps Backspace in the search: the list of the parent", async () => {
+      await onFolder();
+      press({ key: "Backspace" });
+      expect(onOpenFolder).not.toHaveBeenCalled();
+    });
+
+    it("enters the folder as other lists do when nothing is said about leaving", async () => {
+      await onFolder(false);
+      press({ key: "Enter", repeat: false });
+      expect(onEnter).toHaveBeenCalledWith(7, 3);
+    });
   });
 });

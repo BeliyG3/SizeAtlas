@@ -56,6 +56,8 @@ interface Props {
   onPick: (item: ListItem) => void;
   /** The list is made for folder `id` (in `parent`): double click or Enter on it, Backspace for the parent. */
   onEnter: (id: number, parent?: number) => void;
+  /** Instead of `onEnter` for Enter or a double click on a folder (not for Backspace): a search leaves itself there. */
+  onOpenFolder?: (id: number, parent?: number) => void;
   onMenu: (target: MenuTarget) => void;
   /** Delete: asks to move `ids` to the trash. */
   onTrash: (ids: readonly number[]) => void;
@@ -80,6 +82,7 @@ export function ListTable({
   onNeedDetails,
   onPick,
   onEnter,
+  onOpenFolder = onEnter,
   onMenu,
   onTrash,
   onMarks,
@@ -179,7 +182,7 @@ export function ListTable({
   const open = (index: number) => {
     const item = rows[index];
     if (item?.deleted) return;
-    if (item?.isDir) onEnter(item.id, item.parent);
+    if (item?.isDir) onOpenFolder(item.id, item.parent);
     else if (item) void api.openItem(generation, item.id).catch(onFail);
   };
   const menuAt = (index: number, x: number, y: number) => {

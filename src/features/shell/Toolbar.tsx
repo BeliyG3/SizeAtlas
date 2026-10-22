@@ -1,9 +1,11 @@
+import type { RefObject } from "react";
 import type { Sources } from "../../api/types";
 import { useT } from "../../i18n/react";
 import { Icon } from "../icons/Icon";
 import type { IconName } from "../icons/paths";
 import { ModeMenu } from "../lists/ModeMenu";
 import type { Mode } from "../lists/modes";
+import { SearchField } from "../search/SearchField";
 import { SourcePicker } from "./SourcePicker";
 import { forgettable, sourceAction, type SourceAction } from "./source";
 import "./shell.css";
@@ -45,9 +47,14 @@ interface Props {
   /** What the table shows. */
   mode: Mode;
   onMode: (mode: Mode) => void;
+  /** The text in the search field, and Enter in it; `searchRef` is the field, for Ctrl+F. */
+  query: string;
+  onQuery: (query: string) => void;
+  onSearch: (query: string) => void;
+  searchRef: RefObject<HTMLInputElement | null>;
 }
 
-/** Back and forward, the source list and its main button, Cancel, Forget and the table mode. */
+/** Back and forward, the source list and its main button, Cancel, Forget, the table mode and the search. */
 export function Toolbar({
   canBack,
   canForward,
@@ -67,6 +74,10 @@ export function Toolbar({
   onForget,
   mode,
   onMode,
+  query,
+  onQuery,
+  onSearch,
+  searchRef,
 }: Props) {
   const { t } = useT();
   const action = sourceAction(pending, selectedRoot, inTree, sources?.scans ?? []);
@@ -131,6 +142,7 @@ export function Toolbar({
         {t("toolbar.forget")}
       </button>
       <ModeMenu value={mode} onChange={onMode} />
+      <SearchField value={query} onChange={onQuery} onCommit={onSearch} inputRef={searchRef} />
     </header>
   );
 }

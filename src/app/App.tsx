@@ -13,7 +13,9 @@ import { Toasts, useToasts } from "../features/toasts/Toasts";
 import { MovingContext } from "../features/trash/moving";
 import { UpdateBanner } from "../features/update/UpdateBanner";
 import { useUpdateCheck } from "../features/update/useUpdateCheck";
-import { MODE_KEY, parseMode } from "../features/lists/modes";
+import { useCommittedQuery } from "../features/search/useCommittedQuery";
+import { useSearchKey } from "../features/search/useSearchKey";
+import { MODE_KEY, parseMode, type Mode } from "../features/lists/modes";
 import { useStored } from "../settings/storage";
 import { formatCount } from "../format";
 import { useT } from "../i18n/react";
@@ -36,6 +38,17 @@ export function App() {
     [push, t, errorText],
   );
   const [mode, setMode] = useStored(MODE_KEY, parseMode);
+  // The search is not stored. `query` is the text in the field; the table gets `committed`.
+  const [query, setQuery] = useState("");
+  const { committed, commit } = useCommittedQuery(query);
+  const searchField = useRef<HTMLInputElement>(null);
+  useSearchKey(searchField);
+  const endSearch = useCallback(() => setQuery(""), []);
+  // Picking a mode ends the search, so that the table shows the mode.
+  const showMode = (next: Mode) => {
+    setMode(next);
+    setQuery("");
+  };
   const update = useUpdateCheck(push);
   const roots = useRoots(pushError, onSkipped, onScanError);
   const { sources, scanning, running, progress, refreshRoots } = roots;
@@ -178,7 +191,11 @@ export function App() {
         onCancel={() => roots.cancel()}
         onForget={roots.forget}
         mode={mode}
-        onMode={setMode}
+        onMode={showMode}
+        query={query}
+        onQuery={setQuery}
+        onSearch={commit}
+        searchRef={searchField}
       />
       {update.offered && (
         <UpdateBanner release={update.offered} onDismiss={update.dismiss} onError={pushError} />
@@ -190,7 +207,7 @@ export function App() {
           push={push}
           errorText={errorText}
           onShow={() => {
-            setMode("unreadable");
+            showMode("unreadable");
             selectRoot(summary.root);
           }}
         />
@@ -202,6 +219,8 @@ export function App() {
               entries={entries}
               selection={selection}
               mode={mode}
+              query={committed}
+              onLeaveSearch={endSearch}
               sources={sources}
               progress={progress}
               onSelectNode={selectNode}
