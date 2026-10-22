@@ -160,8 +160,9 @@ pub async fn cancel_scan(
     Ok(())
 }
 
-/// Adds a saved scan as a root, or replaces the open one in place. Does not wait for scans nor
-/// for its baseline, which comes later with another `roots-changed`.
+/// Adds a saved scan as a root, or replaces the open one in place (see `jobs::open_cached`).
+/// Waits for a trash or a saved scan being written, not for scans nor for its baseline, which
+/// comes later with another `roots-changed`.
 #[tauri::command]
 pub async fn open_cached(
     app: AppHandle,
@@ -170,17 +171,16 @@ pub async fn open_cached(
 ) -> Result<Summary, CmdError> {
     let dir = cache_dir(&app)?;
     let state = state.inner().clone();
-    let (opening, open_dir) = (state.clone(), dir.clone());
-    let summary =
-        tauri::async_runtime::spawn_blocking(move || jobs::open_cached(&opening, &open_dir, &root))
-            .await??;
+    let summary = jobs::open_cached_waiting(state.clone(), dir.clone(), root).await?;
     changed(&app);
-    let (events, root) = (app.clone(), summary.root.clone());
-    tauri::async_runtime::spawn(async move {
-        if baseline::refresh_later(state, dir, root).await {
-            changed(&events);
-        }
-    });
+    if summary.baseline_pending {
+        let (events, root) = (app.clone(), summary.root.clone());
+        tauri::async_runtime::spawn(async move {
+            if baseline::refresh_later(state, dir, root).await {
+                changed(&events);
+            }
+        });
+    }
     Ok(summary)
 }
 

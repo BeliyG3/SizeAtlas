@@ -106,6 +106,7 @@ fn rescan_sets_baseline() {
         state.baseline(third).is_some(),
         "a first scan has a baseline"
     );
+    jobs::close_root(&state, &root_of(&dir));
     let opened = jobs::open_cached(&state, cache.path(), &root_of(&dir)).unwrap();
     compare_later(&state, cache.path(), &root_of(&dir));
     assert!(
@@ -236,6 +237,8 @@ fn outdated_base_gives_no_baseline() {
     fs::write(&files.base, outdated).unwrap();
 
     assert!(load_baseline(&files, &tree).is_none());
+    drop(tree);
+    jobs::close_root(&state, &root);
     let opened = jobs::open_cached(&state, cache.path(), &root).expect("no error");
     compare_later(&state, cache.path(), &root);
     assert!(state.baseline(opened.generation).is_none());

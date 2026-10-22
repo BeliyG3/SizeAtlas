@@ -54,7 +54,7 @@ fn an_opened_scan_is_compared_afterwards_once_busy_is_free() {
     let root = root_of(&dir);
     jobs::close_root(&state, &root);
 
-    // A trash or a saved scan holds `busy`: opening does not wait for it, comparing does.
+    // Opening holds `busy` (see `jobs::open_cached_waiting`); comparing waits until it is free.
     let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
     let opened = jobs::open_cached(&state, cache.path(), &root).unwrap();
     assert!(

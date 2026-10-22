@@ -2,7 +2,7 @@
 //! close a root, forget a saved scan. Plus the queue methods of `AppState`.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
 use sizeatlas_core::cache::{self, CacheError, ScanFiles, cache_path, scan_files};
@@ -116,13 +116,22 @@ fn write_scan(
     Ok(())
 }
 
-/// Adds the saved scan of `root` as a root, or replaces the open one in place. Its baseline
-/// comes later (`baseline::refresh_later`): comparing reads another saved scan.
-// ponytail: not synchronized with `forget` of the same root, so a load that ends just after the
-// forget opens the root again (its file is gone); hold `begin_write` here if that matters.
+/// Adds the saved scan of `root` as a root, or replaces the open one in place; when the open
+/// root is that very scan, it stays as it is and its summary comes back. A baseline still
+/// pending comes later (`baseline::refresh_later`): comparing reads another saved scan. The
+/// caller holds `begin_write` (see `open_cached_waiting`).
 pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Summary, CmdError> {
     state.refuse_cached(root)?;
     let file = cache_path(cache_dir, Path::new(root));
+    // Every change of an open tree saves it with the time of its scan.
+    let saved_at = cache::read_header(&file).map(|h| h.scanned_at).ok();
+    if let Some((generation, tree)) = state.root_tree(root)
+        && saved_at == Some(tree.scanned_at)
+    {
+        // Before the data lock is taken again (see `state::change::tree_mut`).
+        drop(tree);
+        return state.summary(generation);
+    }
     let (_, tree) = cache::load(&file).map_err(|e| match e {
         CacheError::Invalid(_) => CmdError::CacheInvalid,
         CacheError::Outdated { .. } => CmdError::CacheOutdated,
@@ -134,6 +143,23 @@ pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Sum
     let mut summary = Summary::of(0, &tree, None, 0, comparable);
     summary.generation = state.install_cached(tree, comparable)?;
     Ok(summary)
+}
+
+/// `open_cached` once `busy` is free, holding it meanwhile, as every change of the open trees:
+/// a trash, a saved scan being written and a forget of the root end before the saved scan is
+/// read, so it lists what they left and none of them replaces or deletes it meanwhile.
+pub async fn open_cached_waiting(
+    state: AppState,
+    cache_dir: PathBuf,
+    root: String,
+) -> Result<Summary, CmdError> {
+    let write = state.begin_write().await?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let opened = open_cached(&state, &cache_dir, &root);
+        drop(write);
+        opened
+    })
+    .await?
 }
 
 /// Closes a root by its canonical path, stopping its scan first, so a scan that ends meanwhile

@@ -60,10 +60,20 @@ fn unwritable_cache_is_not_saved() {
 }
 
 #[test]
-fn reopening_from_cache_replaces_the_root_with_a_new_generation() {
+fn reopening_the_open_scan_keeps_its_tree_and_another_one_replaces_it() {
     let (root, cache) = (folder(), tempfile::tempdir().unwrap());
     let state = AppState::default();
     let summary = scan_now(&state, root.path(), cache.path());
+    let tree = state.tree(summary.generation).unwrap();
+    let reopened = open_cached(&state, cache.path(), &summary.root).unwrap();
+    assert_eq!(reopened, summary, "the same scan is open already");
+    assert!(Arc::ptr_eq(&state.tree(summary.generation).unwrap(), &tree));
+    drop(tree);
+
+    // `scanned_at` counts seconds: the next scan must not share it.
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let job = job_for(root.path());
+    save(&walk(&job).unwrap().unwrap(), cache.path()).unwrap();
     let reopened = open_cached(&state, cache.path(), &summary.root).unwrap();
     assert!(reopened.generation > summary.generation);
     assert_eq!(reopened.total, summary.total);

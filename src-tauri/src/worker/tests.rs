@@ -224,13 +224,15 @@ fn an_unsaved_scan_stays_open_and_is_reported() {
 }
 
 #[test]
-fn opening_and_closing_wait_neither_for_a_scan_nor_for_a_write() {
+fn opening_does_not_wait_for_a_scan_nor_closing_for_a_write() {
     let (a, b, cache) = (folder(), folder(), tempfile::tempdir().unwrap());
     let state = AppState::default();
     run_queue(&state, cache.path(), state.enqueue(root_of(&a)).unwrap());
+    jobs::close_root(&state, &root_of(&a));
     let _scanning = state.enqueue(root_of(&b)).unwrap();
+    let opening = jobs::open_cached_waiting(state.clone(), cache.path().into(), root_of(&a));
+    let summary = tauri::async_runtime::block_on(opening).unwrap();
     let _saving = tauri::async_runtime::block_on(state.begin_write()).unwrap();
-    let summary = jobs::open_cached(&state, cache.path(), &root_of(&a)).unwrap();
     jobs::close_root(&state, &summary.root);
     assert!(state.summaries().is_empty());
 }

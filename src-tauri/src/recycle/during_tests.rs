@@ -3,7 +3,7 @@
 
 use std::fs::{self, File};
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
@@ -249,4 +249,49 @@ fn the_trash_limit_takes_the_length_of_an_item_small_on_disk() {
     assert_eq!(*asked.lock().unwrap(), [50 << 30]);
     assert_eq!(done.failed[0].error, CmdError::NoTrash);
     assert!(x.exists(), "never deleted for good");
+}
+
+#[test]
+fn a_root_opened_again_during_the_trash_waits_for_it_and_keeps_its_saved_scan() {
+    let state = crate::state::AppState::default();
+    let (_dir, generation) = open(&state);
+    let (cache, log) = (tempfile::tempdir().unwrap(), Mutex::new(Vec::new()));
+    let root = state.summary(generation).unwrap().root;
+    jobs::save(&state.tree(generation).unwrap(), cache.path()).unwrap();
+    let file = cache_path(cache.path(), Path::new(&root));
+    let top = id(&state, generation, &["top.bin"]);
+    // As the `trash` command does: the whole request holds `busy`.
+    let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+    let (opened, opening) = mpsc::channel();
+    let deletes = deleting(&log);
+    let reopening = |path: &Path| {
+        let done = deletes(path);
+        let (state, dir, root) = (state.clone(), cache.path().to_owned(), root.clone());
+        let opened = opened.clone();
+        thread::spawn(move || {
+            let summary = jobs::open_cached_waiting(state, dir, root);
+            opened
+                .send(tauri::async_runtime::block_on(summary))
+                .unwrap();
+        });
+        // An open that does not wait for `busy` ends meanwhile.
+        thread::sleep(Duration::from_millis(500));
+        done
+    };
+    let done = run(
+        &state,
+        cache.path(),
+        generation,
+        0,
+        &[top],
+        anywhere,
+        reopening,
+    )
+    .unwrap();
+    drop(write);
+    let summary = opening.recv().unwrap().unwrap();
+    assert_eq!((done.removed, done.warning), (1, None));
+    let (_, saved) = cache::load(&file).expect("the saved scan stays");
+    assert_eq!(saved.node(0).files, 2, "without the moved item");
+    assert_eq!(state.summary(summary.generation).unwrap().files, 2);
 }
