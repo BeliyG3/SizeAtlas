@@ -48,7 +48,7 @@ export const api = {
   cancelTrash: () => invoke<void>("cancel_trash"),
   /** Without a root: the running scan. A waiting root leaves the queue. */
   cancelScan: (root?: string) => invoke<void>("cancel_scan", { path: root ?? null }),
-  /** Adds the saved scan as a root, or replaces the open one in place. */
+  /** Adds the saved scan as a root, or replaces the open one in place; the same scan open already is kept. */
   openCached: (root: string) => invoke<Summary>("open_cached", { root }),
   /** Removes a root from the tree and stops its scan; its saved scan stays. */
   closeRoot: (root: string) => invoke<void>("close_root", { root }),

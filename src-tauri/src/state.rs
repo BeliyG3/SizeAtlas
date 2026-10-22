@@ -53,7 +53,8 @@ pub struct Shared {
     data: RwLock<Data>,
     /// The running scan and the roots waiting for it. Taken before `data` when both are needed.
     scans: Mutex<ScanQueue>,
-    /// Held while a saved scan is written or deleted (see `begin_write`); closing waits for it.
+    /// Held while a saved scan is written, deleted or read (see `begin_write`); closing waits
+    /// for it.
     pub busy: Arc<tokio::sync::Mutex<()>>,
     /// See `exit.rs`.
     pub exit: AtomicU8,

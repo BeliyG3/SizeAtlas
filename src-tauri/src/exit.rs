@@ -1,4 +1,5 @@
-//! Closing stops the scans and waits only for a saved scan that is being written or deleted.
+//! Closing stops the scans and waits only for a saved scan that is being written, deleted or
+//! read (an open drops what it read once closing started).
 //!
 //! RUNNING → (close, nothing written) → ALLOWED
 //! RUNNING → (close during a write) → WAITING → (write finished) → ALLOWED → app.exit

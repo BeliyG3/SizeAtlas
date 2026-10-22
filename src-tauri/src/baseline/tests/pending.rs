@@ -26,7 +26,8 @@ fn an_opened_scan_is_pending_until_compared() {
 
     let second = scan(&state, &dir, cache.path());
     assert!(!pending(&state, second), "a rescan ends compared");
-    // Without a previous scan nothing is pending (see `without_a_previous_scan_nothing_is_pending`).
+    // Without a previous scan nothing is pending
+    // (see `without_a_previous_scan_nothing_is_pending`).
     jobs::close_root(&state, &root);
     let opened = jobs::open_cached(&state, cache.path(), &root).unwrap();
     assert!(opened.baseline_pending);
@@ -116,7 +117,8 @@ fn without_a_previous_scan_nothing_is_pending() {
     assert!(!seen.is_empty() && !seen.contains(&true), "{seen:?}");
 
     // A compaction has nothing to compare again either.
-    let (sub, _) = item(&state, generation(&state), &dir, "sub");
+    let before = generation(&state);
+    let (sub, _) = item(&state, before, &dir, "sub");
     let trashed = Trashed {
         id: sub,
         parent: 0,
@@ -124,9 +126,8 @@ fn without_a_previous_scan_nothing_is_pending() {
         parent_listed: None,
         parent_after: None,
     };
-    state
-        .remove_trashed(generation(&state), &[trashed], None)
-        .unwrap();
+    state.remove_trashed(before, &[trashed], None).unwrap();
+    assert_ne!(generation(&state), before, "the tree is compacted");
     assert!(!pending(&state, generation(&state)));
 
     // Nor a saved scan opened without `.base`.

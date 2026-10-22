@@ -137,6 +137,10 @@ pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Sum
         CacheError::Outdated { .. } => CmdError::CacheOutdated,
         CacheError::Io(err) => CmdError::io(&file, err),
     })?;
+    // The app started closing while the file was read: nothing to show any more.
+    if state.closing() {
+        return Err(CmdError::Busy);
+    }
     // Described before installing: a rescan may replace the tree right after.
     // Compared afterwards, if there is anything to compare with.
     let comparable = baseline::comparable(cache_dir, root, false);
@@ -148,6 +152,9 @@ pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Sum
 /// `open_cached` once `busy` is free, holding it meanwhile, as every change of the open trees:
 /// a trash, a saved scan being written and a forget of the root end before the saved scan is
 /// read, so it lists what they left and none of them replaces or deletes it meanwhile.
+// ponytail: `busy` is held while the file is read, so a trash, a scan's save or closing the
+// app waits for a large saved scan to load; read first and re-check `scanned_at` under `busy`
+// if that wait shows.
 pub async fn open_cached_waiting(
     state: AppState,
     cache_dir: PathBuf,
