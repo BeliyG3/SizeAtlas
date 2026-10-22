@@ -28,10 +28,12 @@ function setup(value: string) {
     placeholder: string;
     value: string;
     "aria-label": string;
+    dir?: string;
   };
   const clear = find(tree, (p) => p["aria-label"] === "search.clear")[0]?.props as
     { onClick: () => void } | undefined;
-  return { field, clear, input, onChange, onCommit };
+  const role = (tree.props as { role?: string }).role;
+  return { field, clear, input, onChange, onCommit, role, dir: (field as { dir?: string }).dir };
 }
 
 const keyEvent = (key: string, extra: object = {}) => ({
@@ -73,6 +75,22 @@ describe("SearchField", () => {
     const { field, onCommit } = setup("ab");
     field.onKeyDown(keyEvent("Enter", { nativeEvent: { isComposing: true } }));
     expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("treats keyCode 229 as an input method too (WebKit ends the composition first)", () => {
+    const { field, onChange, onCommit } = setup("ab");
+    field.onKeyDown(keyEvent("Escape", { nativeEvent: { keyCode: 229 } }));
+    field.onKeyDown(keyEvent("Enter", { nativeEvent: { keyCode: 229 } }));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("reads each way: the text follows its own direction", () => {
+    expect(setup("").dir).toBe("auto");
+  });
+
+  it("is a search landmark", () => {
+    expect(setup("").role).toBe("search");
   });
 
   it("has a clear button that empties the field and keeps the focus there", () => {

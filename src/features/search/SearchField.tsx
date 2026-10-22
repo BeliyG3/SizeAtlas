@@ -17,8 +17,8 @@ interface Props {
 export function SearchField({ value, onChange, onCommit, inputRef }: Props) {
   const { t } = useT();
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    // Enter and Escape of an input method belong to its composition.
-    if (e.nativeEvent.isComposing) return;
+    // Enter and Escape of an input method belong to its composition; WebKit ends it before the key (229).
+    if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
     if (e.key === "Escape") {
       e.preventDefault();
       onChange("");
@@ -28,11 +28,12 @@ export function SearchField({ value, onChange, onCommit, inputRef }: Props) {
     }
   };
   return (
-    <div className="search">
+    <div className="search" role="search">
       <Icon name="search" />
       <input
         ref={inputRef}
         type="text"
+        dir="auto"
         value={value}
         placeholder={t("search.placeholder")}
         aria-label={t("search.label")}

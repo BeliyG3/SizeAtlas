@@ -19,6 +19,8 @@ const ALLOWED: Record<string, string> = {
   ':dir(rtl) .crow [data-col="path"]': "dir=auto path, RTL column side",
   ":dir(ltr) .toolbar .source > .text": "dir=auto path, LTR button side",
   ":dir(rtl) .toolbar .source > .text": "dir=auto path, RTL button side",
+  ":dir(ltr) .search input": "dir=auto query, LTR field side",
+  ":dir(rtl) .search input": "dir=auto query, RTL field side",
   ":dir(ltr) .menu .path": "dir=auto path, LTR menu side",
   ":dir(rtl) .menu .path": "dir=auto path, RTL menu side",
 };

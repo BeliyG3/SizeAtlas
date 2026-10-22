@@ -1,17 +1,22 @@
-import type { ComponentProps, ReactElement } from "react";
+import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { Roots, Summary } from "../api/types";
 import { AppMenuBar } from "../features/menubar/AppMenuBar";
+import { Toolbar } from "../features/shell/Toolbar";
 import { App } from "./App";
+import { Browser } from "./Browser";
 import { useChangeKeys } from "./useChangeKeys";
 import { useRoots } from "./useRoots";
 import { useSelection } from "./useSelection";
 
 // App's real action composition runs; child rendering and unrelated app hooks do not.
+// Every state of App shares one setter, so that a test sees what App sets.
+const setState = vi.hoisted(() => vi.fn());
+const setMode = vi.hoisted(() => vi.fn());
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
-  useState: (initial: unknown) => [initial, vi.fn()],
+  useState: (initial: unknown) => [initial, setState],
   useRef: (initial: unknown) => ({ current: initial }),
   useMemo: (calculate: () => unknown) => calculate(),
   useCallback: (callback: unknown) => callback,
@@ -29,7 +34,7 @@ vi.mock("./useSelection", () => ({ useSelection: vi.fn() }));
 vi.mock("./useChangeKeys", () => ({ useChangeKeys: vi.fn() }));
 vi.mock("../features/search/useSearchKey", () => ({ useSearchKey: vi.fn() }));
 vi.mock("../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
-vi.mock("../settings/storage", () => ({ useStored: () => ["all", vi.fn()] }));
+vi.mock("../settings/storage", () => ({ useStored: () => ["all", setMode] }));
 vi.mock("../features/export/useExport", () => ({
   useExport: () => ({ run: vi.fn(), register: vi.fn(), separator: "," }),
 }));
@@ -79,6 +84,21 @@ const summary = (scanning: boolean): Summary => ({
   baselineRev: 0,
   baselinePending: false,
 });
+
+/** The first element of `type` in the tree that `node` is the root of. */
+function findElement<P>(node: unknown, type: (props: P) => ReactNode): ReactElement<P> | undefined {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findElement(child, type);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (!node || typeof node !== "object" || !("props" in node)) return undefined;
+  const element = node as ReactElement<{ children?: unknown; value?: unknown }>;
+  if (element.type === type) return element as never;
+  return findElement(element.props.children, type);
+}
 
 function render(scanning: boolean, state: "queued" | "scanning", folder: number) {
   const roots: Roots = {
@@ -178,5 +198,26 @@ describe("App live scan action wiring", () => {
     expect(api.trashPreview).toHaveBeenCalledTimes(2);
     expect(api.trashPreview).toHaveBeenCalledWith(1, 4, [7]);
     expect(api.trash).not.toHaveBeenCalled();
+  });
+});
+
+describe("App search wiring", () => {
+  it("clears the query when a mode is picked, and picks the mode", () => {
+    render(false, "queued", 0);
+    const toolbar = App().props.children[1] as ReactElement<ComponentProps<typeof Toolbar>>;
+    expect(toolbar.type).toBe(Toolbar);
+    setState.mockClear();
+    toolbar.props.onMode("largest");
+    expect(setMode).toHaveBeenCalledWith("largest");
+    expect(setState).toHaveBeenCalledWith("");
+  });
+
+  it("hands the table the committed query and a way to end the search", () => {
+    render(false, "queued", 0);
+    const browser = findElement(App(), Browser);
+    expect(browser?.props.query).toBe("");
+    setState.mockClear();
+    browser?.props.onLeaveSearch();
+    expect(setState).toHaveBeenCalledWith("");
   });
 });

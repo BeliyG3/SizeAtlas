@@ -39,6 +39,16 @@
   color: var(--text-dim);
 }
 
+/* The text carries dir="auto" (a Latin ".mp4" stays ".mp4" in Arabic), so the side it starts on
+   is set from the interface direction, as for the source path. */
+:dir(ltr) .search input {
+  text-align: left;
+}
+
+:dir(rtl) .search input {
+  text-align: right;
+}
+
 /* Clearing: a small cross inside the field, not a button of its own. */
 .search .clear {
   display: inline-flex;
@@ -50,7 +60,13 @@
   border-radius: 3px;
 }
 
-.search .clear:hover:not(:disabled) {
+/* The field's own ring shows the focus; the cross shows it by its background. */
+.search .clear:focus-visible {
+  background: var(--field-hover);
+  outline: 0;
+}
+
+.search .clear:hover {
   color: var(--text);
   background: var(--field-hover);
 }

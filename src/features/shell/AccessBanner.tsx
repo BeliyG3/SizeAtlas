@@ -2,15 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, isCmdError } from "../../api/client";
 import { formatCount } from "../../format";
 import { useT } from "../../i18n/react";
-
-type Platform = "windows" | "mac" | "other";
-
-function platform(): Platform {
-  const agent = navigator.userAgent;
-  if (/Windows/i.test(agent)) return "windows";
-  if (/Mac/i.test(agent)) return "mac";
-  return "other";
-}
+import { platform } from "./platform";
 
 /** How to get access to unreadable folders on each platform. */
 const HINT = {

@@ -116,7 +116,7 @@ function render(query: string, leaves = true) {
       query,
       base: 1,
       basePath: "/root",
-      parent: null,
+      parent: 3,
       selectedId: 1,
       details,
       onNeedDetails: none,
@@ -277,6 +277,7 @@ describe("ListTable for a search", () => {
       await onFolder();
       press({ key: "Backspace" });
       expect(onOpenFolder).not.toHaveBeenCalled();
+      expect(onEnter).toHaveBeenCalledWith(3);
     });
 
     it("enters the folder as other lists do when nothing is said about leaving", async () => {

@@ -22,6 +22,9 @@ const page = (dialog: boolean) => {
   vi.stubGlobal("Element", class {});
 };
 
+const searched = (e: KeyboardEvent, field: ReturnType<typeof input>, mac = false) =>
+  searchKeyDown(e, field as unknown as HTMLInputElement, mac);
+
 const input = () => ({ focus: vi.fn(), select: vi.fn() });
 const asInput = (field: ReturnType<typeof input>) => field as unknown as HTMLInputElement;
 
@@ -38,20 +41,32 @@ describe("searchKeyDown", () => {
     expect(e.preventDefault).toHaveBeenCalled();
   });
 
-  it("does the same on Cmd+F, by the place of the key on any keyboard layout", () => {
+  it("uses Cmd+F on a Mac, by the place of the key on any keyboard layout", () => {
     page(false);
     const field = input();
-    searchKeyDown(key({ ctrlKey: false, metaKey: true, key: "а" }), asInput(field));
+    searched(key({ ctrlKey: false, metaKey: true, key: "а" }), field, true);
     expect(field.focus).toHaveBeenCalled();
   });
 
-  it("does nothing while a dialog is open, and leaves the key to the page", () => {
+  it("leaves Ctrl+F to the text field on a Mac, and Cmd+F to the system elsewhere", () => {
+    page(false);
+    const field = input();
+    const ctrl = key();
+    searched(ctrl, field, true);
+    const cmd = key({ ctrlKey: false, metaKey: true });
+    searched(cmd, field, false);
+    expect(field.focus).not.toHaveBeenCalled();
+    expect(ctrl.preventDefault).not.toHaveBeenCalled();
+    expect(cmd.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("does not focus while a dialog is open, but keeps the webview's find bar away", () => {
     page(true);
     const field = input();
     const e = key();
     searchKeyDown(e, asInput(field));
     expect(field.focus).not.toHaveBeenCalled();
-    expect(e.preventDefault).not.toHaveBeenCalled();
+    expect(e.preventDefault).toHaveBeenCalled();
   });
 
   it("does nothing inside a menu", () => {
@@ -61,8 +76,10 @@ describe("searchKeyDown", () => {
     }
     vi.stubGlobal("Element", Menu);
     const field = input();
-    searchKeyDown(key({ target: new Menu() as unknown as EventTarget }), asInput(field));
+    const e = key({ target: new Menu() as unknown as EventTarget });
+    searchKeyDown(e, asInput(field));
     expect(field.focus).not.toHaveBeenCalled();
+    expect(e.preventDefault).toHaveBeenCalled();
   });
 
   it.each([

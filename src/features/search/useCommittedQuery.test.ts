@@ -93,6 +93,27 @@ describe("useCommittedQuery", () => {
     expect(Render("x").committed).toBe("x");
   });
 
+  it("does not search again for a space typed or taken away", () => {
+    Render("backup");
+    vi.advanceTimersByTime(250);
+    const first = Render("backup").committed;
+    expect(first).toBe("backup");
+    Render("backup ");
+    rt.state.dirty = false;
+    vi.advanceTimersByTime(250);
+    expect(rt.state.dirty).toBe(false);
+    expect(Render("backup ").committed).toBe("backup");
+  });
+
+  it("passes the words on with single spaces", () => {
+    Render(" a   b ");
+    vi.advanceTimersByTime(250);
+    expect(Render(" a   b ").committed).toBe("a b");
+    const { commit } = Render(" a  c ");
+    commit(" a  c ");
+    expect(Render(" a  c ").committed).toBe("a c");
+  });
+
   it("treats blanks as no query", () => {
     Render("abc");
     vi.advanceTimersByTime(250);
