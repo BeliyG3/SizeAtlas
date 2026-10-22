@@ -1,5 +1,6 @@
 //! Core of SizeAtlas: directory scanning, the flat size tree and its on-disk cache.
 
+pub mod baseline;
 pub mod cache;
 pub mod categories;
 pub mod details;
