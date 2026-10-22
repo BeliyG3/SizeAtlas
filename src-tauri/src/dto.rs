@@ -45,6 +45,8 @@ pub struct Summary {
     pub baseline_at: Option<i64>,
     /// Counts the changes of the baseline, which leave `rev` as it is.
     pub baseline_rev: u64,
+    /// The baseline is being computed: until then there is none, and the UI does not say so.
+    pub baseline_pending: bool,
 }
 
 /// Space of the scanned volume, when the scan root is the root of a volume.
@@ -63,6 +65,7 @@ impl Summary {
         tree: &Tree,
         baseline: Option<&Baseline>,
         baseline_rev: u64,
+        baseline_pending: bool,
     ) -> Summary {
         let root = tree.node(0);
         Summary {
@@ -86,6 +89,7 @@ impl Summary {
             }),
             baseline_at: baseline.map(|b| b.scanned_at),
             baseline_rev,
+            baseline_pending,
         }
     }
 }
@@ -163,6 +167,7 @@ pub struct ChildrenDto {
     /// As in [`Summary`].
     pub baseline_at: Option<i64>,
     pub baseline_rev: u64,
+    pub baseline_pending: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]

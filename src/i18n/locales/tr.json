@@ -226,6 +226,7 @@
   "lists.empty": "Bu klasörde bu türden bir şey yok.",
   "lists.capped": "İlk {count} öğe gösteriliyor.",
   "lists.noBaseline": "Karşılaştırılacak önceki bir tarama yok. Neyin değiştiğini görmek için yeniden tarayın.",
+  "lists.baselinePending": "Önceki taramayla karşılaştırılıyor…",
   "col.name": "Ad",
   "col.path": "Yol",
   "col.len": "Boyut",

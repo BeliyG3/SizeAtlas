@@ -295,6 +295,8 @@ fn a_stale_baseline_is_not_installed_and_the_tree_keeps_its_revision() {
     let state = AppState::default();
     let generation = scan(&state, &dir, cache.path());
     let rev = state.tree(generation).unwrap().rev;
+    // The first scan ended without a baseline: once pending, once computed.
+    let counted = state.baseline_rev(generation).unwrap();
     let some = || {
         Some(Arc::new(Baseline {
             scanned_at: 0,
@@ -306,15 +308,16 @@ fn a_stale_baseline_is_not_installed_and_the_tree_keeps_its_revision() {
     assert_eq!(state.set_baseline(generation + 1, rev, some()), None);
     assert_eq!(state.set_baseline(generation, rev + 1, some()), None);
     assert!(state.baseline(generation).is_none());
-    assert_eq!(state.baseline_rev(generation), Some(0));
+    assert_eq!(state.baseline_rev(generation), Some(counted));
 
     assert_eq!(state.set_baseline(generation, rev, some()), Some(true));
     assert!(state.baseline(generation).is_some());
-    assert_eq!(state.baseline_rev(generation), Some(1));
+    assert_eq!(state.baseline_rev(generation), Some(counted + 1));
     assert_eq!(state.tree(generation).unwrap().rev, rev);
     assert_eq!(state.set_baseline(generation, rev, None), Some(true));
     assert_eq!(state.set_baseline(generation, rev, None), Some(false));
-    assert_eq!(state.baseline_rev(generation), Some(2));
+    assert_eq!(state.baseline_rev(generation), Some(counted + 2));
 }
 
+mod pending;
 mod races;

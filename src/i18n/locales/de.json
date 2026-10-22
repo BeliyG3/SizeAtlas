@@ -226,6 +226,7 @@
   "lists.empty": "Keine passenden Elemente in diesem Ordner.",
   "lists.capped": "Die ersten {count} werden angezeigt.",
   "lists.noBaseline": "Kein vorheriger Scan zum Vergleichen. Scannen Sie neu, um die Änderungen zu sehen.",
+  "lists.baselinePending": "Wird mit dem vorherigen Scan verglichen…",
   "col.name": "Name",
   "col.path": "Pfad",
   "col.len": "Größe",

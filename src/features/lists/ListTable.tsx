@@ -16,6 +16,7 @@ import {
   useRowCallbacks,
   useViewport,
 } from "../contents/tableView";
+import { comparedByDefault } from "../contents/layout";
 import { useColumnLayout } from "../contents/useColumnLayout";
 import { scrollToRow } from "../contents/useCursor";
 import { useMarks } from "../contents/useMarks";
@@ -23,7 +24,15 @@ import { useExportSource, type ExportSource } from "../export/source";
 import type { MenuTarget } from "../menu/ItemMenu";
 import { useMovingIds } from "../trash/moving";
 import { itemPath } from "../export/names";
-import { LIST_LIMIT, defaultListSort, liveId, nextListSort, sortRows, type ListSort } from "./rows";
+import {
+  LIST_LIMIT,
+  defaultListSort,
+  emptyListKey,
+  liveId,
+  nextListSort,
+  sortRows,
+  type ListSort,
+} from "./rows";
 import "../contents/contents.css";
 
 /** Details are read from disk for the rows on screen only, so their columns cannot sort a list. */
@@ -77,7 +86,7 @@ export function ListTable({
   const { generation, rev, baselineRev } = summary;
   const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
-  const layout = useColumnLayout(body, kind, summary.baselineAt !== null);
+  const layout = useColumnLayout(body, kind, comparedByDefault(summary));
   const [list, setList] = useState<List | null>(null);
   const measure = useBatchCost("tree", list);
   // Null: the order of the list itself.
@@ -246,11 +255,7 @@ export function ListTable({
       <div className="crows" style={{ height: rows.length * ROW_HEIGHT, width: layout.width }}>
         {shown}
       </div>
-      {list && rows.length === 0 && (
-        <p className="dim pad">
-          {t(kind === "grewMost" && list.baselineAt === null ? "lists.noBaseline" : "lists.empty")}
-        </p>
-      )}
+      {list && rows.length === 0 && <p className="dim pad">{t(emptyListKey(kind, list))}</p>}
       {list?.truncated && (
         <p className="dim pad">{t("lists.capped", { count: formatCount(LIST_LIMIT, lang) })}</p>
       )}

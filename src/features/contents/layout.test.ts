@@ -4,6 +4,7 @@ import { moveColumn as moveAny } from "../columns/order";
 import { COLUMNS, DEFAULT_SORT, DEFAULT_WIDTHS, type ColumnId } from "./columns";
 import {
   DEFAULT_VIEW,
+  comparedByDefault,
   gridTemplate,
   type ColumnView,
   parseView,
@@ -85,6 +86,16 @@ describe("column view", () => {
     expect(hidden.hidden).toEqual(["owner"]);
     expect(toggleColumn(hidden, "owner", true).hidden).toEqual([]);
     expect(toggleColumn(DEFAULT_VIEW, "name", true)).toBe(DEFAULT_VIEW);
+  });
+
+  it("counts a baseline being computed as one: Change keeps its place meanwhile", () => {
+    const root = (baselineAt: number | null, baselinePending: boolean) => ({
+      baselineAt,
+      baselinePending,
+    });
+    expect(comparedByDefault(root(5, false))).toBe(true);
+    expect(comparedByDefault(root(null, true))).toBe(true);
+    expect(comparedByDefault(root(null, false))).toBe(false);
   });
 
   it("hides Change by default without a baseline, unless the user showed it", () => {

@@ -13,12 +13,15 @@ use crate::dto::{ChildrenDto, Compared, ItemDto, ListItemDto, delta};
 use crate::error::CmdError;
 
 impl AppState {
-    /// The baseline of the root with `generation` and its `baseline_rev`. The revision is read
-    /// first: a baseline that changes in between is newer than it, so the UI fetches it again
-    /// rather than keep an old one.
-    pub(super) fn compared(&self, generation: u64) -> (Option<Arc<Baseline>>, u64) {
-        let rev = self.baseline_rev(generation).unwrap_or(0);
-        (self.baseline(generation), rev)
+    /// The baseline of the root with `generation`, its `baseline_rev` and whether it is being
+    /// computed, read together.
+    pub(super) fn compared(&self, generation: u64) -> (Option<Arc<Baseline>>, u64, bool) {
+        self.read_data()
+            .roots
+            .iter()
+            .find(|r| r.generation == generation)
+            .map(|r| (r.baseline.clone(), r.baseline_rev, r.baseline_pending))
+            .unwrap_or_default()
     }
 
     pub fn children(
@@ -29,7 +32,7 @@ impl AppState {
         limit: u32,
         order: ListOrder,
     ) -> Result<ChildrenDto, CmdError> {
-        let (baseline, baseline_rev) = self.compared(generation);
+        let (baseline, baseline_rev, baseline_pending) = self.compared(generation);
         self.with_live(generation, id, |tree| {
             let baseline = baseline.as_deref();
             let page = match order.key {
@@ -54,6 +57,7 @@ impl AppState {
                     .collect(),
                 baseline_at: baseline.map(|b| b.scanned_at),
                 baseline_rev,
+                baseline_pending,
             }
         })
     }

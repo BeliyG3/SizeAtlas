@@ -24,6 +24,7 @@ const summary = (baselineAt: number | null): Summary => ({
   volume: null,
   baselineAt,
   baselineRev: 0,
+  baselinePending: false,
 });
 
 const render = (s: Summary) =>

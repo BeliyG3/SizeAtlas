@@ -34,6 +34,7 @@ const summary = (rev: number): Summary => ({
   scanning: true,
   baselineAt: null,
   baselineRev: 0,
+  baselinePending: false,
 });
 const snapshot = (rev: number): Roots => ({ roots: [summary(rev)], queue: [] });
 const shownRev = () => (state.roots as Roots).roots[0]?.rev;

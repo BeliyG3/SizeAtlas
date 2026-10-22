@@ -226,6 +226,7 @@
   "lists.empty": "Geen items van dit type in deze map.",
   "lists.capped": "De eerste {count} worden getoond.",
   "lists.noBaseline": "Geen eerdere scan om mee te vergelijken. Scan opnieuw om te zien wat er is veranderd.",
+  "lists.baselinePending": "Wordt vergeleken met de eerdere scan…",
   "col.name": "Naam",
   "col.path": "Pad",
   "col.len": "Grootte",

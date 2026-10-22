@@ -128,7 +128,8 @@ pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Sum
         CacheError::Io(err) => CmdError::io(&file, err),
     })?;
     // Described before installing: a rescan may replace the tree right after.
-    let mut summary = Summary::of(0, &tree, None, 0);
+    // Compared afterwards.
+    let mut summary = Summary::of(0, &tree, None, 0, true);
     summary.generation = state.install_cached(tree)?;
     Ok(summary)
 }

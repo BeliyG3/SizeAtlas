@@ -96,6 +96,7 @@ const summary = (rev: number, scanning: boolean): Summary => ({
   volume: null,
   baselineAt: null,
   baselineRev: 0,
+  baselinePending: false,
 });
 
 const page = (rev: number, items: Item[]): ChildrenPage => ({
@@ -109,6 +110,7 @@ const page = (rev: number, items: Item[]): ChildrenPage => ({
   items,
   baselineAt: null,
   baselineRev: 0,
+  baselinePending: false,
 });
 
 let shown: ReactElement | null = null;

@@ -226,6 +226,7 @@
   "lists.empty": "Nothing of this kind in this folder.",
   "lists.capped": "Showing the first {count}.",
   "lists.noBaseline": "No previous scan to compare with. Rescan to see what changed.",
+  "lists.baselinePending": "Comparing with the previous scan…",
   "col.name": "Name",
   "col.path": "Path",
   "col.len": "Size",

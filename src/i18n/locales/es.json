@@ -241,6 +241,7 @@
   "lists.empty": "No hay nada de este tipo en esta carpeta.",
   "lists.capped": "Se muestran los primeros {count}.",
   "lists.noBaseline": "No hay un análisis anterior con el que comparar. Vuelve a analizar para ver qué cambió.",
+  "lists.baselinePending": "Comparando con el análisis anterior…",
   "col.name": "Nombre",
   "col.path": "Ruta",
   "col.len": "Tamaño",

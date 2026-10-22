@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Change, ListItem } from "../../api/types";
-import { defaultListSort, liveId, nextListSort, sortRows } from "./rows";
+import { defaultListSort, emptyListKey, liveId, nextListSort, sortRows } from "./rows";
 
 const item = (id: number, name: string, folder: string, size: number): ListItem => ({
   id,
@@ -94,5 +94,19 @@ describe("list rows", () => {
     expect(liveId(gone)).toBeUndefined();
     expect(liveId(list[0])).toBe(1);
     expect(liveId(undefined)).toBeUndefined();
+  });
+});
+
+describe("a list without rows", () => {
+  const list = (baselineAt: number | null, baselinePending: boolean) => ({
+    baselineAt,
+    baselinePending,
+  });
+
+  it("says why grew most is empty: no previous scan, or the comparison still running", () => {
+    expect(emptyListKey("grewMost", list(null, false))).toBe("lists.noBaseline");
+    expect(emptyListKey("grewMost", list(null, true))).toBe("lists.baselinePending");
+    expect(emptyListKey("grewMost", list(5, false))).toBe("lists.empty");
+    expect(emptyListKey("largestFiles", list(null, true))).toBe("lists.empty");
   });
 });

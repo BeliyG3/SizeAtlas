@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use sizeatlas_core::baseline::Baseline;
 use sizeatlas_core::tree::Tree;
+use sizeatlas_core::tree::flags::SCANNING;
 
 use super::{AppState, OpenRoot};
 use crate::error::CmdError;
@@ -32,7 +33,8 @@ impl AppState {
     /// write lock; `change` also gets the generation the tree has now and returns `None` when it
     /// changed nothing. After a change, a tree with more dead nodes than live ones is compacted
     /// and gets a new generation. Returns the changed tree, to save; `None` when nothing changed
-    /// or the root was rescanned or closed.
+    /// or the root was rescanned or closed. After a compaction, and after the change that ends a
+    /// first scan, the caller computes the baseline (`crate::baseline`): it is pending until then.
     pub fn change_scan(
         &self,
         scan: u64,
@@ -51,19 +53,19 @@ impl AppState {
             let at = data.roots.iter().position(find)?;
             let generation = data.roots[at].generation;
             let tree = tree_mut(&mut data.roots[at].tree);
+            let was_scanning = tree.node(0).has(SCANNING);
             change(tree, generation)?;
+            let scanning = tree.node(0).has(SCANNING);
             // FolderGone removes a listed folder during a first scan. Keep the remaining ids
             // stable until the scan finishes; only then may compaction renumber them.
-            let old = (tree.dead > tree.live
-                && !tree.node(0).has(sizeatlas_core::tree::flags::SCANNING))
-            .then(|| tree.compact());
+            let old = (tree.dead > tree.live && !scanning).then(|| tree.compact());
             if old.is_some() {
                 data.generation += 1;
                 data.roots[at].generation = data.generation;
-                // Indexed by the old ids: the caller computes it again (`crate::baseline`).
-                if data.roots[at].baseline.take().is_some() {
-                    data.roots[at].baseline_rev += 1;
-                }
+            }
+            // Indexed by the old ids, or none yet.
+            if old.is_some() || (was_scanning && !scanning) {
+                data.roots[at].compare_again();
             }
             (data.roots[at].tree.clone(), old)
         };
@@ -74,9 +76,10 @@ impl AppState {
         Some(changed)
     }
 
-    /// Gives the root with `generation` the baseline computed from its tree at revision `rev`;
-    /// a changed baseline gets a new `baseline_rev`, the tree stays as it is. Returns whether it
-    /// changed, or `None` when the tree changed meanwhile: the baseline is computed again.
+    /// Gives the root with `generation` the baseline computed from its tree at revision `rev`,
+    /// which is no longer pending; a change of either gets a new `baseline_rev`, the tree stays
+    /// as it is. Returns whether it changed, or `None` when the tree changed meanwhile: the
+    /// baseline is computed again.
     pub fn set_baseline(
         &self,
         generation: u64,
@@ -88,10 +91,11 @@ impl AppState {
             .roots
             .iter_mut()
             .find(|r| r.generation == generation && r.tree.rev == rev)?;
-        let changed = root.baseline.is_some() || baseline.is_some();
+        let changed = root.baseline.is_some() || baseline.is_some() || root.baseline_pending;
         if changed {
             root.baseline = baseline;
             root.baseline_rev += 1;
+            root.baseline_pending = false;
         }
         Some(changed)
     }
@@ -133,6 +137,15 @@ impl AppState {
             return Err(CmdError::StaleId);
         }
         Ok(tree.live_ancestor(id))
+    }
+}
+
+impl OpenRoot {
+    /// Drops the baseline until the caller computes it again.
+    fn compare_again(&mut self) {
+        self.baseline = None;
+        self.baseline_pending = true;
+        self.baseline_rev += 1;
     }
 }
 

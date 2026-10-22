@@ -6,7 +6,7 @@ import {
   type SortState,
   type Widths,
 } from "./columns";
-import type { ListKind } from "../../api/types";
+import type { ListKind, Summary } from "../../api/types";
 import { repairOrder } from "../columns/order";
 
 /** Which columns the table shows, and in what order. Name is always first and visible. */
@@ -31,6 +31,13 @@ function hiddenByDefault(baseline: boolean, list: ListKind | null): ColumnId[] {
   if (list !== null) return ["before", "change"];
   return baseline ? [] : ["change"];
 }
+
+/**
+ * Whether a root counts as having a baseline for `withDefaults`: it has one, or one is being
+ * computed, so the Change column does not vanish and come back meanwhile.
+ */
+export const comparedByDefault = (root: Pick<Summary, "baselineAt" | "baselinePending">) =>
+  root.baselineAt !== null || root.baselinePending;
 
 /** The view in effect: the columns hidden by default (see `hiddenByDefault`) the user did not show. */
 export function withDefaults(

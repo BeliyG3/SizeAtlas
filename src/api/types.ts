@@ -53,6 +53,8 @@ export interface Summary {
   baselineAt: number | null;
   /** Counts the changes of the baseline, which leave `rev` as it is: refetch rows when it changes. */
   baselineRev: number;
+  /** The baseline is being computed: `baselineAt` is null until then, which says nothing yet. */
+  baselinePending: boolean;
 }
 
 /** Id of the root node in every tree (`Summary.rootId`). */
@@ -103,6 +105,7 @@ export interface ChildrenPage {
   /** As in `Summary`. */
   baselineAt: number | null;
   baselineRev: number;
+  baselinePending: boolean;
 }
 
 export interface Crumb {
@@ -220,6 +223,7 @@ export interface List {
   /** As in `Summary`. */
   baselineAt: number | null;
   baselineRev: number;
+  baselinePending: boolean;
 }
 
 /** Details of one row read from disk; `null` fields are not available. Times in milliseconds. */

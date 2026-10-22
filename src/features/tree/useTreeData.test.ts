@@ -104,6 +104,7 @@ const page = (rev: number, id = 5): ChildrenPage => ({
   items: [item(id)],
   baselineAt: null,
   baselineRev: 0,
+  baselinePending: false,
 });
 const roots = (rev: number): RootInfo[] => [
   {

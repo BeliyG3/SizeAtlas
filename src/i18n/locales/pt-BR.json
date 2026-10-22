@@ -241,6 +241,7 @@
   "lists.empty": "Nada deste tipo nesta pasta.",
   "lists.capped": "Mostrando os primeiros {count}.",
   "lists.noBaseline": "Nenhuma análise anterior para comparar. Reanalise para ver o que mudou.",
+  "lists.baselinePending": "Comparando com a análise anterior…",
   "col.name": "Nome",
   "col.path": "Caminho",
   "col.len": "Tamanho",

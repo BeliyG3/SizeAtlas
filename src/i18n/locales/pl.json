@@ -256,6 +256,7 @@
   "lists.empty": "Brak takich elementów w tym folderze.",
   "lists.capped": "Pokazano pierwszych {count}.",
   "lists.noBaseline": "Brak wcześniejszego skanu do porównania. Skanuj ponownie, aby zobaczyć zmiany.",
+  "lists.baselinePending": "Porównywanie z wcześniejszym skanem…",
   "col.name": "Nazwa",
   "col.path": "Ścieżka",
   "col.len": "Rozmiar",

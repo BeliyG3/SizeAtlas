@@ -50,6 +50,7 @@ const page = (items: Item[], rest: number, rev = 0): ChildrenPage => ({
   items,
   baselineAt: null,
   baselineRev: 0,
+  baselinePending: false,
 });
 
 const info = (root: string, generation: number | null, size = 120): RootInfo => ({

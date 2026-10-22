@@ -211,6 +211,7 @@
   "lists.empty": "此文件夹中没有此类项目。",
   "lists.capped": "仅显示前 {count} 项。",
   "lists.noBaseline": "没有可供比较的上次扫描。请重新扫描以查看变化。",
+  "lists.baselinePending": "正在与上次扫描比较…",
   "col.name": "名称",
   "col.path": "路径",
   "col.len": "大小",

@@ -1,8 +1,14 @@
-import type { ListItem, ListKind } from "../../api/types";
+import type { List, ListItem, ListKind } from "../../api/types";
 import type { ColumnId } from "../contents/columns";
 
 /** The backend returns at most this many items of a list. */
 export const LIST_LIMIT = 1000;
+
+/** The message of a list without rows: "grew most" says why it has none. */
+export function emptyListKey(kind: ListKind, list: Pick<List, "baselineAt" | "baselinePending">) {
+  if (kind !== "grewMost" || list.baselineAt !== null) return "lists.empty";
+  return list.baselinePending ? "lists.baselinePending" : "lists.noBaseline";
+}
 
 /** A header sort of a flat list. */
 export interface ListSort {

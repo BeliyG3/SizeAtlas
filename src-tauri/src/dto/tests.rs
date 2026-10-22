@@ -42,6 +42,7 @@ fn summary_uses_camel_case_and_nests_the_volume() {
         }),
         baseline_at: Some(4),
         baseline_rev: 2,
+        baseline_pending: true,
     };
     assert_eq!(
         serde_json::to_value(summary).unwrap(),
@@ -50,7 +51,7 @@ fn summary_uses_camel_case_and_nests_the_volume() {
             "len": 12, "dirs": 1,
             "scannedAt": 5, "sizeMode": "ClusterEstimate", "accessErrors": 1,
             "approximate": false, "scanning": false, "volume": {"total": 100, "free": 60, "unaccounted": 30},
-            "baselineAt": 4, "baselineRev": 2
+            "baselineAt": 4, "baselineRev": 2, "baselinePending": true
         })
     );
 }
@@ -245,6 +246,7 @@ fn list_kinds_and_list_items_use_camel_case() {
         }],
         baseline_at: None,
         baseline_rev: 0,
+        baseline_pending: false,
     };
     let value = serde_json::to_value(list).unwrap();
     assert_eq!(

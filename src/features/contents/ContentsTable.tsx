@@ -8,7 +8,7 @@ import type { MenuTarget } from "../menu/ItemMenu";
 import { useMovingIds } from "../trash/moving";
 import { hasSortKey, nextSort, type SortState } from "./columns";
 import { ContentsRow } from "./ContentsRow";
-import { visibleSort } from "./layout";
+import { comparedByDefault, visibleSort } from "./layout";
 import { mark, markAll, marksKey, targets, type MarkHow } from "./marks";
 import { ROW_HEIGHT, pagesFor, visibleRange } from "./pages";
 import { TableHeader } from "./TableHeader";
@@ -69,7 +69,7 @@ export function ContentsTable({
   const { generation, rev, rootId, baselineRev } = summary;
   const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
-  const layout = useColumnLayout(body, null, summary.baselineAt !== null);
+  const layout = useColumnLayout(body, null, comparedByDefault(summary));
   // Hiding the sorted column hands the order to a shown one.
   const sort = visibleSort(chosenSort, layout.view);
   const order = useMemo<ListOrder>(

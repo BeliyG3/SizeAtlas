@@ -241,6 +241,7 @@
   "lists.empty": "Niente di questo tipo in questa cartella.",
   "lists.capped": "Vengono mostrati i primi {count}.",
   "lists.noBaseline": "Nessuna scansione precedente da confrontare. Ripeti la scansione per vedere cosa è cambiato.",
+  "lists.baselinePending": "Confronto con la scansione precedente…",
   "col.name": "Nome",
   "col.path": "Percorso",
   "col.len": "Dimensione",

@@ -241,6 +241,7 @@
   "lists.empty": "אין פריטים מסוג זה בתיקייה זו.",
   "lists.capped": "מוצגים {count} הראשונים.",
   "lists.noBaseline": "אין סריקה קודמת להשוואה. יש לסרוק מחדש כדי לראות מה השתנה.",
+  "lists.baselinePending": "משווה לסריקה הקודמת…",
   "col.name": "שם",
   "col.path": "נתיב",
   "col.len": "גודל",

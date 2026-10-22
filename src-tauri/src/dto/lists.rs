@@ -109,4 +109,5 @@ pub struct ListDto {
     /// As in [`super::Summary`].
     pub baseline_at: Option<i64>,
     pub baseline_rev: u64,
+    pub baseline_pending: bool,
 }

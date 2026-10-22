@@ -19,7 +19,7 @@ impl AppState {
         kind: ListKind,
         limit: u32,
     ) -> Result<ListDto, CmdError> {
-        let (baseline, baseline_rev) = self.compared(generation);
+        let (baseline, baseline_rev, baseline_pending) = self.compared(generation);
         self.with_live(generation, id, |tree| {
             let (baseline, limit) = (baseline.as_deref(), limit.min(MAX_LIST) as usize);
             let (items, truncated) = match (kind, baseline) {
@@ -40,6 +40,7 @@ impl AppState {
                 items,
                 baseline_at: baseline.map(|b| b.scanned_at),
                 baseline_rev,
+                baseline_pending,
             }
         })
     }

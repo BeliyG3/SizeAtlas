@@ -118,7 +118,10 @@ fn install_and_save(
     notify(Notice::RootsChanged);
     let saved = jobs::save_full(&tree, cache_dir);
     // Under `write`, as every long work on an open tree (see `state::change::tree_mut`).
-    let compared = saved.is_ok() && baseline::refresh(state, cache_dir, &job.root);
+    let compared = match &saved {
+        Ok(()) => baseline::refresh(state, cache_dir, &job.root),
+        Err(_) => baseline::forgo(state, &job.root),
+    };
     drop(write);
     // After `busy` is released: dropping millions of nodes must not delay closing.
     drop(replaced);

@@ -76,6 +76,7 @@ const summary = (scanning: boolean): Summary => ({
   volume: null,
   baselineAt: null,
   baselineRev: 0,
+  baselinePending: false,
 });
 
 function render(scanning: boolean, state: "queued" | "scanning", folder: number) {

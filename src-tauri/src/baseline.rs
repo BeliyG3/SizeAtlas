@@ -50,6 +50,12 @@ pub async fn refresh_later(state: AppState, cache_dir: PathBuf, root: String) ->
     .unwrap_or(false)
 }
 
+/// Like `refresh`, for a full scan whose save failed: `.base` is not the scan before it, so
+/// the root gets no baseline.
+pub fn forgo(state: &AppState, root: &str) -> bool {
+    give(state, root, |_| None)
+}
+
 /// Gives the open root `root` the baseline `compute` makes of its tree; see `refresh`.
 fn give(state: &AppState, root: &str, compute: impl Fn(&Tree) -> Option<Baseline>) -> bool {
     loop {

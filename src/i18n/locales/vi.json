@@ -211,6 +211,7 @@
   "lists.empty": "Thư mục này không có mục nào thuộc loại này.",
   "lists.capped": "Đang hiển thị {count} mục đầu tiên.",
   "lists.noBaseline": "Không có lần quét trước để so sánh. Hãy quét lại để xem những gì đã thay đổi.",
+  "lists.baselinePending": "Đang so sánh với lần quét trước…",
   "col.name": "Tên",
   "col.path": "Đường dẫn",
   "col.len": "Kích thước",

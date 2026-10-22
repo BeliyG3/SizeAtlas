@@ -29,6 +29,8 @@ struct OpenRoot {
     baseline: Option<Arc<Baseline>>,
     /// Counts the changes of `baseline`, so the UI fetches it again; the tree's `rev` stays.
     baseline_rev: u64,
+    /// `baseline` is being computed again (`crate::baseline::refresh` follows): `None` until then.
+    baseline_pending: bool,
 }
 
 struct Data {
@@ -103,7 +105,8 @@ impl AppState {
     /// Like `install_tree`, unless `discard` is set: then nothing changes. `discard` is read
     /// under the write lock, and closing a root sets it before removing the root, so a scan
     /// that ends meanwhile cannot bring a closed root back. Returns the replaced tree for the
-    /// caller to drop outside any lock (dropping millions of nodes takes a while).
+    /// caller to drop outside any lock (dropping millions of nodes takes a while). The caller
+    /// then computes the baseline (`crate::baseline`), which is pending until then.
     pub fn install_scan(
         &self,
         tree: Arc<Tree>,
@@ -122,6 +125,8 @@ impl AppState {
             tree,
             baseline: None,
             baseline_rev: 0,
+            // The caller computes it (`crate::baseline`).
+            baseline_pending: true,
         };
         let replaced = match at {
             Some(i) => Some(mem::replace(&mut data.roots[i], root).tree),
@@ -160,14 +165,23 @@ impl AppState {
         self.read_data()
             .roots
             .iter()
-            .map(|r| Summary::of(r.generation, &r.tree, r.baseline.as_deref(), r.baseline_rev))
+            .map(|r| {
+                let baseline = r.baseline.as_deref();
+                Summary::of(
+                    r.generation,
+                    &r.tree,
+                    baseline,
+                    r.baseline_rev,
+                    r.baseline_pending,
+                )
+            })
             .collect()
     }
 
     pub fn summary(&self, generation: u64) -> Result<Summary, CmdError> {
-        let (baseline, rev) = self.compared(generation);
+        let (baseline, rev, pending) = self.compared(generation);
         self.with_tree(generation, |tree| {
-            Summary::of(generation, tree, baseline.as_deref(), rev)
+            Summary::of(generation, tree, baseline.as_deref(), rev, pending)
         })
     }
 
@@ -192,6 +206,7 @@ impl AppState {
     }
 
     /// How often the baseline of the root with `generation` changed.
+    #[cfg(test)]
     pub fn baseline_rev(&self, generation: u64) -> Option<u64> {
         self.read_data()
             .roots

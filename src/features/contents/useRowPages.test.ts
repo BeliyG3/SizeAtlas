@@ -40,6 +40,7 @@ function answer(rev: number, items: Item[]): ChildrenPage {
     items,
     baselineAt: null,
     baselineRev: 0,
+    baselinePending: false,
   };
 }
 

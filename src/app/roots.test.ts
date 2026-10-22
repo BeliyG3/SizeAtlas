@@ -26,6 +26,7 @@ const summary = (root: string, generation: number): Summary => ({
   volume: null,
   baselineAt: null,
   baselineRev: 0,
+  baselinePending: false,
 });
 
 describe("rootEntries", () => {
