@@ -188,3 +188,41 @@ fn other_lists_ignore_the_query_and_report_no_totals() {
     assert_eq!(asked.items.len(), 4);
     assert_eq!(asked.found, None);
 }
+
+#[test]
+fn a_huge_or_odd_query_is_cut_and_harmless() {
+    let (state, generation) = searchable();
+    let started = std::time::Instant::now();
+    let huge = "a*".repeat(5_000);
+    let list = state
+        .list(generation, 0, ListKind::Search, 10, Some(&huge))
+        .unwrap();
+    assert!(list.found.is_some());
+    assert!(started.elapsed().as_secs() < 5, "{:?}", started.elapsed());
+
+    // Only the first 256 characters count, by character: the rest may be anything.
+    let long_tail = format!("backup{}{}", " ".repeat(300), "zzz");
+    let list = state
+        .list(generation, 0, ListKind::Search, 10, Some(&long_tail))
+        .unwrap();
+    assert_eq!(list.found.unwrap().count, 3, "the tail word was dropped");
+    let wide = "я".repeat(300);
+    state
+        .list(generation, 0, ListKind::Search, 10, Some(&wide))
+        .unwrap();
+
+    let list = state
+        .list(
+            generation,
+            0,
+            ListKind::Search,
+            10,
+            Some(
+                "{0}	
+",
+            ),
+        )
+        .unwrap();
+    assert!(list.items.is_empty());
+    assert_eq!(list.found.map(|f| f.count), Some(0));
+}

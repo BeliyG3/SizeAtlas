@@ -236,3 +236,22 @@ fn no_baseline_gives_empty_list() {
 }
 
 mod deleted;
+
+#[test]
+fn search_rows_carry_the_baseline_columns() {
+    let (state, generation) = open(build(vec![dir(1, 0, "alpha", 100)]), |t, b| {
+        b.before[ids(t, 0)["alpha"] as usize] = 40;
+    });
+    let list = state
+        .list(generation, 0, ListKind::Search, 10, Some("alpha"))
+        .unwrap();
+    assert_eq!(names(&list), ["alpha"]);
+    let row = &list.items[0].item;
+    assert_eq!(row.before, Some(40));
+    assert!(
+        matches!(row.change, Some(ChangeDto::Delta(d)) if d > 0),
+        "{:?}",
+        row.change
+    );
+    assert_eq!(list.baseline_at, Some(BASE_AT));
+}
