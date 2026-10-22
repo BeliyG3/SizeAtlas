@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement, ReactNode } from "react";
 import { api } from "../../api/client";
-import type { List, Summary } from "../../api/types";
+import type { List, ListItem, Summary } from "../../api/types";
 import { ListTable } from "./ListTable";
 
 // The same minimal hook runtime as ContentsTable.live.test.tsx: state, memos and effects survive
@@ -82,12 +82,14 @@ const summary = {
   sizeMode: "Allocated",
 } as Summary;
 
-const answer = (found: List["found"]): List => ({
+const row = (id: number) => ({ id, name: `f${id}`, isDir: false, deleted: false }) as ListItem;
+
+const answer = (found: List["found"], items: ListItem[] = []): List => ({
   generation: 1,
   rev: 3,
   size: 500,
   truncated: false,
-  items: [],
+  items,
   found,
   baselineAt: null,
   baselineRev: 0,
@@ -96,6 +98,8 @@ const answer = (found: List["found"]): List => ({
 
 // Stable, as the parent's are: a new one would run the effects again.
 const none = () => {};
+const onTrash = vi.fn();
+const onMarks = vi.fn();
 const details = new Map();
 
 let shown: ReactElement | null = null;
@@ -117,8 +121,8 @@ function render(query: string) {
       onPick: none,
       onEnter: none,
       onMenu: none,
-      onTrash: none,
-      onMarks: none,
+      onTrash,
+      onMarks,
       onFail: none,
     }) as ReactElement;
     for (const run of rt.state.queue.splice(0)) run();
@@ -148,9 +152,19 @@ function textOf(name: string): string[] {
   return found;
 }
 
+/** The grid element and a key pressed in it. */
+const grid = () => (shown!.props as { children: ReactElement[] }).children.flat().at(-1)!;
+function press(key: Partial<KeyboardEvent>) {
+  const props = grid().props as { onKeyDown: (e: unknown) => void };
+  const target = {};
+  props.onKeyDown({ target, currentTarget: target, preventDefault: () => {}, ...key });
+}
+
 beforeEach(() => {
   rt.state.slots = [];
   vi.mocked(api.getList).mockReset();
+  onTrash.mockReset();
+  onMarks.mockReset();
 });
 
 describe("ListTable for a search", () => {
@@ -176,5 +190,62 @@ describe("ListTable for a search", () => {
     await settle("zzz");
     expect(textOf("found")).toEqual([]);
     expect(JSON.stringify(shown)).toContain("search.none");
+  });
+
+  it("drops the answer to an older query that arrives late", async () => {
+    const pending = new Map<string, (list: List) => void>();
+    vi.mocked(api.getList).mockImplementation(
+      (...args) => new Promise((resolve) => pending.set(args[4]!, resolve)),
+    );
+    render("ab");
+    render("abc");
+    pending.get("abc")!(answer({ count: 3, size: 2048 }));
+    await Promise.resolve();
+    pending.get("ab")!(answer({ count: 9, size: 4096 }));
+    await Promise.resolve();
+    render("abc");
+    expect(textOf("found")).toEqual([expect.stringContaining('"count":3')]);
+  });
+
+  it("keeps no marks of one query on the results of another", async () => {
+    const pending = new Map<string, (list: List) => void>();
+    vi.mocked(api.getList).mockImplementation(
+      (...args) => new Promise((resolve) => pending.set(args[4]!, resolve)),
+    );
+    render("a");
+    pending.get("a")!(answer({ count: 2, size: 2 }, [row(1), row(2)]));
+    await Promise.resolve();
+    render("a");
+    press({ ctrlKey: true, code: "KeyA" });
+    render("a");
+    expect(onMarks).toHaveBeenLastCalledWith([1, 2]);
+
+    // The new query is loading: the old rows and their marks are still on screen.
+    render("ab");
+    expect(onMarks).toHaveBeenLastCalledWith([1, 2]);
+    pending.get("ab")!(answer({ count: 1, size: 1 }, [row(1)]));
+    await Promise.resolve();
+    render("ab");
+    expect(onMarks).toHaveBeenLastCalledWith([]);
+    press({ key: "Delete", repeat: false });
+    expect(onTrash).not.toHaveBeenCalled();
+  });
+
+  it("scrolls to the top when the results of another query arrive", async () => {
+    vi.mocked(api.getList).mockResolvedValue(answer({ count: 1, size: 1 }, [row(1)]));
+    await settle("a");
+    const scrolled = { scrollTop: 800, querySelector: () => null };
+    (grid().props as { ref: { current: unknown } }).ref.current = scrolled;
+    await settle("a");
+    expect(scrolled.scrollTop).toBe(800);
+    await settle("ab");
+    expect(scrolled.scrollTop).toBe(0);
+  });
+
+  it("announces the totals", async () => {
+    vi.mocked(api.getList).mockResolvedValue(answer({ count: 2, size: 2 }));
+    await settle("a");
+    const line = (shown!.props as { children: ReactElement[] }).children[0];
+    expect((line.props as { role?: string }).role).toBe("status");
   });
 });

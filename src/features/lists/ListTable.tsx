@@ -90,14 +90,18 @@ export function ListTable({
   const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
   const layout = useColumnLayout(body, kind, comparedByDefault(summary));
-  const [list, setList] = useState<List | null>(null);
+  // The answer on screen and the query it answers: the old rows stay until the new answer, and
+  // their marks and cursor with them.
+  const [answered, setAnswered] = useState<{ list: List; query: string } | null>(null);
+  const list = answered?.list ?? null;
+  const shownQuery = answered?.query ?? "";
   const measure = useBatchCost("tree", list);
   // Null: the order of the list itself.
   const [chosenSort, setSort] = useState<ListSort | null>(() => defaultListSort(kind));
   // Hiding the sorted column brings back the list's own order.
   const sort = chosenSort && layout.view.hidden.includes(chosenSort.column) ? null : chosenSort;
-  // The cursor and the marks belong to this order and revision of the list.
-  const listKey = `${summary.scanning ? "live" : `${rev}.${baselineRev}`}:${sort?.column ?? "list"}:${sort?.descending ?? false}`;
+  // The cursor and the marks belong to this order, revision and query of the list.
+  const listKey = `${summary.scanning ? "live" : `${rev}.${baselineRev}`}:${sort?.column ?? "list"}:${sort?.descending ?? false}:${shownQuery}`;
   const [cursorAt, setCursorAt] = useState<{ key: string; index: number } | null>(null);
   const cursor = cursorAt?.key === listKey ? cursorAt.index : null;
   const setCursor = (index: number) => setCursorAt({ key: listKey, index });
@@ -110,13 +114,13 @@ export function ListTable({
         generation,
         base,
         list: kind,
-        query,
+        query: shownQuery || undefined,
         rows,
         rev: list.rev,
         size: list.size,
         columns: layout.ids,
       },
-    [list, generation, base, kind, query, rows, layout.ids],
+    [list, generation, base, kind, shownQuery, rows, layout.ids],
   );
   useExportSource(exportSource);
   const [marks, setMarks] = useMarks(listKey, selectedId);
@@ -134,7 +138,7 @@ export function ListTable({
       (answer) => {
         if (!live) return;
         applied();
-        setList(answer);
+        setAnswered({ list: answer, query: query ?? "" });
       },
       (e: unknown) => live && onFail(e),
     );
@@ -142,6 +146,11 @@ export function ListTable({
       live = false;
     };
   }, [generation, rev, baselineRev, base, kind, query, onFail, measure]);
+
+  // Results of another query open at the top, not where the last ones were scrolled to.
+  useEffect(() => {
+    if (body.current) body.current.scrollTop = 0;
+  }, [shownQuery]);
 
   const visibleIds = useMemo(
     () => rows.slice(first, last).flatMap((r) => liveId(r) ?? []),
@@ -234,7 +243,7 @@ export function ListTable({
   return (
     <>
       {found && (
-        <p className="dim pad found">
+        <p className="dim pad found" role="status">
           {t("search.found", {
             count: found.count,
             items: formatCount(found.count, lang),
