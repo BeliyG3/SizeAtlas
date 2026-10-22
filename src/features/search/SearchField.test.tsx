@@ -29,11 +29,21 @@ function setup(value: string) {
     value: string;
     "aria-label": string;
     dir?: string;
+    maxLength?: number;
   };
   const clear = find(tree, (p) => p["aria-label"] === "search.clear")[0]?.props as
     { onClick: () => void } | undefined;
   const role = (tree.props as { role?: string }).role;
-  return { field, clear, input, onChange, onCommit, role, dir: (field as { dir?: string }).dir };
+  return {
+    field,
+    clear,
+    input,
+    onChange,
+    onCommit,
+    role,
+    dir: field.dir,
+    maxLength: field.maxLength,
+  };
 }
 
 const keyEvent = (key: string, extra: object = {}) => ({
@@ -91,6 +101,32 @@ describe("SearchField", () => {
 
   it("is a search landmark", () => {
     expect(setup("").role).toBe("search");
+  });
+
+  it("moves the focus into the results with the Down arrow", () => {
+    const grid = { focus: vi.fn() };
+    vi.stubGlobal("document", {
+      querySelector: (selector: string) => (selector === "[data-search-results]" ? grid : null),
+    });
+    const { field } = setup("abc");
+    const e = keyEvent("ArrowDown");
+    field.onKeyDown(e);
+    expect(grid.focus).toHaveBeenCalled();
+    expect(e.preventDefault).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("does nothing with the Down arrow when no results are shown", () => {
+    vi.stubGlobal("document", { querySelector: () => null });
+    const { field } = setup("abc");
+    const e = keyEvent("ArrowDown");
+    field.onKeyDown(e);
+    expect(e.preventDefault).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("holds as many characters as the search takes", () => {
+    expect(setup("").maxLength).toBe(256);
   });
 
   it("has a clear button that empties the field and keeps the focus there", () => {

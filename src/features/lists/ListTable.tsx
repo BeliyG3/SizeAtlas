@@ -246,7 +246,8 @@ export function ListTable({
   return (
     <>
       {found && (
-        <p className="dim pad found" role="status">
+        // Announced when the answer comes, not again at every refresh of a live scan.
+        <p className="dim pad found" role={summary.scanning ? undefined : "status"}>
           {t("search.found", {
             count: found.count,
             items: formatCount(found.count, lang),
@@ -263,6 +264,7 @@ export function ListTable({
         aria-colcount={layout.columns.length}
         aria-activedescendant={cursorShown ? `crow-${cursor}` : undefined}
         tabIndex={0}
+        data-search-results={kind === "search" ? "" : undefined}
         onScroll={onScroll}
         onKeyDown={(e) =>
           tableKeyDown(e, { cursor, viewport, count: rows.length }, actions, isRtl(lang))

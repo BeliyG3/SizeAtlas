@@ -106,12 +106,12 @@ const details = new Map();
 
 let shown: ReactElement | null = null;
 
-function render(query: string, leaves = true) {
+function render(query: string, leaves = true, of: Summary = summary) {
   for (let pass = 0; pass < 20; pass++) {
     rt.state.at = 0;
     rt.state.dirty = false;
     shown = ListTable({
-      summary,
+      summary: of,
       kind: "search",
       query,
       base: 1,
@@ -245,6 +245,26 @@ describe("ListTable for a search", () => {
     expect(scrolled.scrollTop).toBe(800);
     await settle("ab");
     expect(scrolled.scrollTop).toBe(0);
+  });
+
+  it("lists again with the same query after a change of the tree", async () => {
+    vi.mocked(api.getList).mockResolvedValue(answer({ count: 1, size: 1 }));
+    await settle("backup");
+    expect(api.getList).toHaveBeenCalledTimes(1);
+    render("backup", true, { ...summary, rev: summary.rev + 1 });
+    expect(api.getList).toHaveBeenCalledTimes(2);
+    expect(api.getList).toHaveBeenLastCalledWith(1, 1, "search", 1000, "backup");
+  });
+
+  it("does not announce the totals again on every refresh of a live scan", async () => {
+    vi.mocked(api.getList).mockResolvedValue(answer({ count: 2, size: 2 }));
+    const scanning = { ...summary, scanning: true };
+    render("a", true, scanning);
+    await Promise.resolve();
+    render("a", true, scanning);
+    const line = (shown!.props as { children: ReactElement[] }).children[0];
+    expect(textOf("found")).toHaveLength(1);
+    expect((line.props as { role?: string }).role).toBeUndefined();
   });
 
   it("announces the totals", async () => {

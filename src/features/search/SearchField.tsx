@@ -19,7 +19,14 @@ export function SearchField({ value, onChange, onCommit, inputRef }: Props) {
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     // Enter and Escape of an input method belong to its composition; WebKit ends it before the key (229).
     if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
-    if (e.key === "Escape") {
+    if (e.key === "ArrowDown" && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      // Into the results, if any: the table puts its cursor on the first row.
+      const results = document.querySelector<HTMLElement>("[data-search-results]");
+      if (results) {
+        e.preventDefault();
+        results.focus();
+      }
+    } else if (e.key === "Escape") {
       e.preventDefault();
       onChange("");
     } else if (e.key === "Enter") {
@@ -39,6 +46,8 @@ export function SearchField({ value, onChange, onCommit, inputRef }: Props) {
         aria-label={t("search.label")}
         spellCheck={false}
         autoComplete="off"
+        // The search takes this many characters (MAX_QUERY in src-tauri/src/state/lists.rs).
+        maxLength={256}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
       />
