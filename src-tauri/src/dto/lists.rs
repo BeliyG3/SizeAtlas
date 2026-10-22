@@ -3,13 +3,15 @@
 use std::path::MAIN_SEPARATOR_STR;
 
 use serde::Serialize;
+use sizeatlas_core::baseline::Baseline;
+use sizeatlas_core::categories::DIR_CATEGORY;
 use sizeatlas_core::tree::Tree;
 
-use super::ItemDto;
+use super::{ChangeDto, ItemDto};
 
 /// Folder of `id` relative to its ancestor `base`, its names joined with the OS separator;
 /// empty when `id` is directly inside `base`.
-pub fn folder_below(tree: &Tree, base: u32, id: u32) -> String {
+fn folder_below(tree: &Tree, base: u32, id: u32) -> String {
     let chain = tree.crumbs(id);
     let below = chain.iter().position(|&c| c == base).map_or(0, |p| p + 1);
     chain
@@ -31,6 +33,67 @@ pub struct ListItemDto {
     pub folder: String,
     /// The folder the item is in: selecting a file needs it.
     pub parent: u32,
+    /// A folder the baseline had and the tree has no more (only in `GrewMost`).
+    pub deleted: bool,
+}
+
+impl ListItemDto {
+    /// The live node `id` below `base`.
+    pub fn live(tree: &Tree, base: u32, id: u32, baseline: Option<&Baseline>) -> ListItemDto {
+        ListItemDto {
+            // Actions on the item need its whole path to be exact.
+            item: ItemDto {
+                lossy: tree.has_lossy_path(id),
+                ..ItemDto::of(tree, id, baseline)
+            },
+            folder: folder_below(tree, base, id),
+            parent: tree.node(id).parent,
+            deleted: false,
+        }
+    }
+
+    /// A deleted folder of `size` in the baseline, which was `name` inside `parent` (`base` or a
+    /// folder below it). `id` only tells rows apart: it is never a node.
+    pub fn deleted(
+        tree: &Tree,
+        base: u32,
+        id: u32,
+        (parent, name, size): (u32, &str, u64),
+        approx: bool,
+    ) -> ListItemDto {
+        let mut folder = folder_below(tree, base, parent);
+        if parent != base {
+            if !folder.is_empty() {
+                folder.push_str(MAIN_SEPARATOR_STR);
+            }
+            folder.push_str(tree.name(parent));
+        }
+        ListItemDto {
+            item: ItemDto {
+                id,
+                name: name.to_owned(),
+                size: 0,
+                len: 0,
+                files: 0,
+                dirs: 0,
+                folders: 0,
+                modified: 0,
+                is_dir: true,
+                category: DIR_CATEGORY,
+                access_error: false,
+                cloud: false,
+                lossy: tree.has_lossy_path(parent),
+                pending: false,
+                scanning: false,
+                before: Some(size),
+                change: Some(ChangeDto::Delta(super::delta(0, size))),
+                approx_change: approx,
+            },
+            folder,
+            parent,
+            deleted: true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -43,4 +106,7 @@ pub struct ListDto {
     /// More items matched than the limit allowed.
     pub truncated: bool,
     pub items: Vec<ListItemDto>,
+    /// As in [`super::Summary`].
+    pub baseline_at: Option<i64>,
+    pub baseline_rev: u64,
 }

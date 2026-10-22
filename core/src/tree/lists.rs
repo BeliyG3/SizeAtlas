@@ -34,6 +34,9 @@ pub enum ListKind {
     Unreadable,
     /// Files and folders by the length of their full path in characters, longest first.
     LongestPaths,
+    /// Folders by their change since the previous full scan. Built by the app, which has the
+    /// baseline; the tree lists nothing.
+    GrewMost,
 }
 
 /// A list and whether more items matched than the limit allowed.
@@ -63,10 +66,10 @@ enum Rank {
 }
 
 impl ListKind {
-    fn parts(self) -> (Items, Rank) {
+    fn parts(self) -> Option<(Items, Rank)> {
         use Items::{Both, Files, Folders};
         use ListKind as K;
-        match self {
+        Some(match self {
             K::LargestFiles => (Files, Rank::Size),
             K::LargestFolders => (Folders, Rank::Size),
             K::Largest => (Both, Rank::Size),
@@ -81,14 +84,20 @@ impl ListKind {
             K::Empty => (Both, Rank::Empty),
             K::Unreadable => (Folders, Rank::Unreadable),
             K::LongestPaths => (Both, Rank::Longest),
-        }
+            K::GrewMost => return None,
+        })
     }
 }
 
 impl Tree {
     /// Up to `limit` live nodes below `id` (not `id` itself) of `kind`, in its order.
     pub fn list(&self, id: u32, kind: ListKind, limit: usize) -> ListResult {
-        let (items, rank) = kind.parts();
+        let Some((items, rank)) = kind.parts() else {
+            return ListResult {
+                items: Vec::new(),
+                truncated: false,
+            };
+        };
         let wanted = |n: &Node| match items {
             Items::Files => !n.is_dir(),
             Items::Folders => n.is_dir(),

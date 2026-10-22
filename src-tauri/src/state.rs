@@ -10,7 +10,7 @@ use sizeatlas_core::baseline::Baseline;
 use sizeatlas_core::tree::{ListOrder, Tree};
 
 use crate::details::MAX_DETAILS;
-use crate::dto::{ChildrenDto, CrumbDto, ItemDto, RootsDto, Summary};
+use crate::dto::{CrumbDto, RootsDto, Summary};
 use crate::error::CmdError;
 use crate::queue::ScanQueue;
 
@@ -160,12 +160,15 @@ impl AppState {
         self.read_data()
             .roots
             .iter()
-            .map(|r| Summary::of(r.generation, &r.tree))
+            .map(|r| Summary::of(r.generation, &r.tree, r.baseline.as_deref(), r.baseline_rev))
             .collect()
     }
 
     pub fn summary(&self, generation: u64) -> Result<Summary, CmdError> {
-        self.with_tree(generation, |tree| Summary::of(generation, tree))
+        let (baseline, rev) = self.compared(generation);
+        self.with_tree(generation, |tree| {
+            Summary::of(generation, tree, baseline.as_deref(), rev)
+        })
     }
 
     /// The tree of the root with `generation`; the lock is held only to find it.
@@ -178,8 +181,8 @@ impl AppState {
             .ok_or(CmdError::StaleId)
     }
 
-    /// The baseline of the root with `generation`, if it has one.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no command reads it yet"))]
+    /// The baseline of the root with `generation`, if it has one. Indexed by the ids of that
+    /// generation, but a refresh adds ids it does not have until it is computed again.
     pub fn baseline(&self, generation: u64) -> Option<Arc<Baseline>> {
         self.read_data()
             .roots
@@ -189,7 +192,6 @@ impl AppState {
     }
 
     /// How often the baseline of the root with `generation` changed.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no command reads it yet"))]
     pub fn baseline_rev(&self, generation: u64) -> Option<u64> {
         self.read_data()
             .roots
@@ -220,40 +222,6 @@ impl AppState {
     ) -> Result<T, CmdError> {
         self.with_tree(generation, |tree| tree.get(id).map(|_| f(tree)))?
             .ok_or(CmdError::StaleId)
-    }
-
-    pub fn children(
-        &self,
-        generation: u64,
-        id: u32,
-        offset: u32,
-        limit: u32,
-        order: ListOrder,
-    ) -> Result<ChildrenDto, CmdError> {
-        self.with_live(generation, id, |tree| {
-            let page = tree.children_page(id, offset, limit, order);
-            ChildrenDto {
-                generation,
-                rev: tree.rev,
-                approximate: tree.approximate,
-                size: tree.node(id).size,
-                total: page.total,
-                rest_count: page.rest_count,
-                rest_size: page.rest_size,
-                items: page.items.iter().map(|&c| ItemDto::of(tree, c)).collect(),
-            }
-        })
-    }
-
-    /// Index of `id` in its parent's listing made with `order`; `None` for the root and for
-    /// files in a folders-only listing.
-    pub fn position(
-        &self,
-        generation: u64,
-        id: u32,
-        order: ListOrder,
-    ) -> Result<Option<u32>, CmdError> {
-        self.with_live(generation, id, |tree| tree.position(id, order))
     }
 
     /// Real paths of the first [`MAX_DETAILS`] ids; `None` for ids that are not live
@@ -298,6 +266,7 @@ impl AppState {
 
 mod change;
 mod charts;
+mod growth;
 mod lists;
 mod live;
 mod paths;

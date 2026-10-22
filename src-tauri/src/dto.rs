@@ -1,13 +1,18 @@
 //! Data sent to the UI (camelCase JSON).
 
 use serde::Serialize;
+use sizeatlas_core::baseline::Baseline;
 use sizeatlas_core::tree::{SizeMode, Tree, flags};
 
 use crate::error::CmdError;
 
+mod growth;
+
+pub use growth::{ChangeDto, Compared, delta};
+
 mod lists;
 
-pub use lists::{ListDto, ListItemDto, folder_below};
+pub use lists::{ListDto, ListItemDto};
 
 mod recycle;
 
@@ -36,6 +41,10 @@ pub struct Summary {
     pub approximate: bool,
     pub scanning: bool,
     pub volume: Option<VolumeDto>,
+    /// When the baseline was scanned (seconds since the Unix epoch); `None` without one.
+    pub baseline_at: Option<i64>,
+    /// Counts the changes of the baseline, which leave `rev` as it is.
+    pub baseline_rev: u64,
 }
 
 /// Space of the scanned volume, when the scan root is the root of a volume.
@@ -49,7 +58,12 @@ pub struct VolumeDto {
 }
 
 impl Summary {
-    pub fn of(generation: u64, tree: &Tree) -> Summary {
+    pub fn of(
+        generation: u64,
+        tree: &Tree,
+        baseline: Option<&Baseline>,
+        baseline_rev: u64,
+    ) -> Summary {
         let root = tree.node(0);
         Summary {
             generation,
@@ -70,6 +84,8 @@ impl Summary {
                 free: v.total.saturating_sub(v.used),
                 unaccounted: tree.unaccounted().unwrap_or(0),
             }),
+            baseline_at: baseline.map(|b| b.scanned_at),
+            baseline_rev,
         }
     }
 }
@@ -97,11 +113,17 @@ pub struct ItemDto {
     pub lossy: bool,
     pub pending: bool,
     pub scanning: bool,
+    /// Size on disk in the baseline; `None` without one and for new items.
+    pub before: Option<u64>,
+    /// `None` without a baseline.
+    pub change: Option<ChangeDto>,
+    pub approx_change: bool,
 }
 
 impl ItemDto {
-    pub fn of(tree: &Tree, id: u32) -> ItemDto {
+    pub fn of(tree: &Tree, id: u32, baseline: Option<&Baseline>) -> ItemDto {
         let n = tree.node(id);
+        let compared = Compared::of(tree, baseline, id);
         ItemDto {
             id,
             name: tree.name(id).to_owned(),
@@ -119,6 +141,9 @@ impl ItemDto {
             lossy: n.has(flags::LOSSY_NAME),
             pending: n.has(flags::PENDING),
             scanning: n.has(flags::SCANNING),
+            before: compared.before,
+            change: compared.change,
+            approx_change: compared.approx,
         }
     }
 }
@@ -135,6 +160,9 @@ pub struct ChildrenDto {
     pub rest_count: u32,
     pub rest_size: u64,
     pub items: Vec<ItemDto>,
+    /// As in [`Summary`].
+    pub baseline_at: Option<i64>,
+    pub baseline_rev: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]

@@ -40,6 +40,8 @@ fn summary_uses_camel_case_and_nests_the_volume() {
             free: 60,
             unaccounted: 30,
         }),
+        baseline_at: Some(4),
+        baseline_rev: 2,
     };
     assert_eq!(
         serde_json::to_value(summary).unwrap(),
@@ -47,7 +49,8 @@ fn summary_uses_camel_case_and_nests_the_volume() {
             "generation": 3, "rev": 0, "rootId": 0, "root": "C:\\", "total": 10, "files": 2,
             "len": 12, "dirs": 1,
             "scannedAt": 5, "sizeMode": "ClusterEstimate", "accessErrors": 1,
-            "approximate": false, "scanning": false, "volume": {"total": 100, "free": 60, "unaccounted": 30}
+            "approximate": false, "scanning": false, "volume": {"total": 100, "free": 60, "unaccounted": 30},
+            "baselineAt": 4, "baselineRev": 2
         })
     );
 }
@@ -95,13 +98,17 @@ fn items_details_and_orders_use_camel_case() {
         lossy: false,
         pending: false,
         scanning: false,
+        before: Some(4000),
+        change: Some(ChangeDto::Delta(96)),
+        approx_change: true,
     };
     assert_eq!(
         serde_json::to_value(item).unwrap(),
         json!({
             "id": 5, "name": "a", "size": 4096, "len": 10, "files": 1, "dirs": 0,
             "folders": 0, "modified": 1_700_000_000_000i64, "isDir": false, "category": 7,
-            "accessError": false, "cloud": false, "lossy": false, "pending": false, "scanning": false
+            "accessError": false, "cloud": false, "lossy": false, "pending": false, "scanning": false,
+            "before": 4000, "change": {"delta": 96}, "approxChange": true
         })
     );
     let detail = DetailDto {
@@ -127,6 +134,13 @@ fn items_details_and_orders_use_camel_case() {
         }
     );
     assert_eq!((millis(1_999_999), millis(-1)), (1, -1));
+    let change: SortKey = serde_json::from_value(json!("change")).unwrap();
+    assert_eq!(change, SortKey::Change);
+    let changes = [ChangeDto::Delta(-5), ChangeDto::New, ChangeDto::Unknown];
+    assert_eq!(
+        serde_json::to_value(changes).unwrap(),
+        json!([{"delta": -5}, "new", "unknown"])
+    );
 }
 
 #[test]
@@ -191,6 +205,7 @@ fn list_kinds_and_list_items_use_camel_case() {
         ("empty", ListKind::Empty),
         ("unreadable", ListKind::Unreadable),
         ("longestPaths", ListKind::LongestPaths),
+        ("grewMost", ListKind::GrewMost),
     ];
     for (name, kind) in kinds {
         assert_eq!(
@@ -220,15 +235,21 @@ fn list_kinds_and_list_items_use_camel_case() {
                 lossy: false,
                 pending: false,
                 scanning: false,
+                before: None,
+                change: None,
+                approx_change: false,
             },
             folder: "x".into(),
             parent: 3,
+            deleted: true,
         }],
+        baseline_at: None,
+        baseline_rev: 0,
     };
     let value = serde_json::to_value(list).unwrap();
     assert_eq!(
-        (&value["size"], &value["truncated"]),
-        (&json!(50), &json!(true))
+        (&value["size"], &value["truncated"], &value["baselineAt"]),
+        (&json!(50), &json!(true), &json!(null))
     );
     let item = &value["items"][0];
     assert_eq!(
@@ -236,9 +257,18 @@ fn list_kinds_and_list_items_use_camel_case() {
             &item["name"],
             &item["isDir"],
             &item["folder"],
-            &item["parent"]
+            &item["parent"],
+            &item["deleted"],
+            &item["change"]
         ),
-        (&json!("a"), &json!(false), &json!("x"), &json!(3))
+        (
+            &json!("a"),
+            &json!(false),
+            &json!("x"),
+            &json!(3),
+            &json!(true),
+            &json!(null)
+        )
     );
 }
 

@@ -87,6 +87,14 @@ fn largest_items_come_first_and_the_listed_folder_is_left_out() {
     // deep and c.dat take 50 each: the folder has the lower id.
     assert_eq!(names(&tree, below)[..3], ["b.pdf", "deep", "c.dat"]);
     assert!(tree.list(0, ListKind::Largest, 0).items.is_empty());
+    // Needs a baseline, which the app has: the tree lists nothing.
+    assert_eq!(
+        tree.list(0, ListKind::GrewMost, 10),
+        ListResult {
+            items: Vec::new(),
+            truncated: false
+        }
+    );
     assert_eq!(
         tree.list(0, ListKind::Largest, usize::MAX).items.len(),
         tree.len() - 1

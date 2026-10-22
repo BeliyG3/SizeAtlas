@@ -16,6 +16,9 @@ pub enum SortKey {
     Files,
     Dirs,
     Modified,
+    /// Change since the previous full scan. The tree does not know it: the app sorts by it, the
+    /// tree lists by name.
+    Change,
 }
 
 /// Sort key and direction of a listing, and whether it lists folders only.
@@ -59,6 +62,7 @@ impl Tree {
             SortKey::Files => x.files.cmp(&y.files),
             SortKey::Dirs => x.dirs.cmp(&y.dirs),
             SortKey::Modified => x.mtime.cmp(&y.mtime),
+            SortKey::Change => Ordering::Equal,
         };
         let primary = if order.descending {
             primary.reverse()

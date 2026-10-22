@@ -1,5 +1,7 @@
 //! Read queries for the desktop app: safe lookup, paged children, breadcrumbs.
 
+use std::cmp::Ordering;
+
 use super::{ListOrder, NO_PARENT, Node, Tree, flags};
 
 /// One page of a directory's live children in a requested order.
@@ -30,11 +32,24 @@ impl Tree {
         limit: u32,
         order: ListOrder,
     ) -> ChildrenPage {
+        self.children_page_by(id, offset, limit, order, |a, b| self.compare(a, b, order))
+    }
+
+    /// Like [`Tree::children_page`], sorted by `compare` instead of `order.key`: for a key the
+    /// tree does not know, such as the change since the previous scan.
+    pub fn children_page_by(
+        &self,
+        id: u32,
+        offset: u32,
+        limit: u32,
+        order: ListOrder,
+        compare: impl Fn(u32, u32) -> Ordering,
+    ) -> ChildrenPage {
         let mut ids: Vec<u32> = self
             .children(id)
             .filter(|&c| self.listed(c, order))
             .collect();
-        ids.sort_unstable_by(|&a, &b| self.compare(a, b, order));
+        ids.sort_unstable_by(|&a, &b| compare(a, b));
         let start = (offset as usize).min(ids.len());
         let end = start.saturating_add(limit as usize).min(ids.len());
         let rest = &ids[end..];
@@ -51,9 +66,19 @@ impl Tree {
     /// Index of `id` in its parent's listing made with `order`; `None` for the root
     /// and for a file in a folders-only listing.
     pub fn position(&self, id: u32, order: ListOrder) -> Option<u32> {
+        self.position_by(id, order, |a, b| self.compare(a, b, order))
+    }
+
+    /// Like [`Tree::position`] in a listing made by [`Tree::children_page_by`].
+    pub fn position_by(
+        &self,
+        id: u32,
+        order: ListOrder,
+        compare: impl Fn(u32, u32) -> Ordering,
+    ) -> Option<u32> {
         let parent = self.nodes[id as usize].parent;
         (parent != NO_PARENT && self.listed(id, order))
-            .then(|| self.count_before(parent, id, order))
+            .then(|| self.count_before(parent, id, order, compare))
     }
 
     /// Position of `id` among its sibling folders in tree order ([`ListOrder::FOLDERS`]:
@@ -69,7 +94,7 @@ impl Tree {
         if parent == NO_PARENT {
             return 0;
         }
-        self.count_before(parent, id, order)
+        self.count_before(parent, id, order, |a, b| self.compare(a, b, order))
     }
 
     /// Number of live folders directly inside `id`.
@@ -79,10 +104,17 @@ impl Tree {
             .count() as u32
     }
 
-    /// Live children of `parent` that a listing made with `order` puts before `id`.
-    fn count_before(&self, parent: u32, id: u32, order: ListOrder) -> u32 {
+    /// Live children of `parent` that a listing made with `order`, sorted by `compare`, puts
+    /// before `id`.
+    fn count_before(
+        &self,
+        parent: u32,
+        id: u32,
+        order: ListOrder,
+        compare: impl Fn(u32, u32) -> Ordering,
+    ) -> u32 {
         self.children(parent)
-            .filter(|&c| self.listed(c, order) && self.compare(c, id, order).is_lt())
+            .filter(|&c| self.listed(c, order) && compare(c, id).is_lt())
             .count() as u32
     }
 

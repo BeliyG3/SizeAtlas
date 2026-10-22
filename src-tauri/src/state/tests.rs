@@ -8,6 +8,7 @@ use sizeatlas_core::treemap;
 use tempfile::TempDir;
 
 use super::*;
+use crate::dto::ChildrenDto;
 
 fn scan_dir(path: &Path) -> Tree {
     let ScanOutcome::Done(tree) =

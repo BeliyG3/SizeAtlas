@@ -254,6 +254,8 @@ fn position_matches_the_listing_for_every_order() {
         SortKey::Files,
         SortKey::Dirs,
         SortKey::Modified,
+        // The tree does not know the change: by name, as ties are.
+        SortKey::Change,
     ];
     for key in keys {
         for descending in [false, true] {
