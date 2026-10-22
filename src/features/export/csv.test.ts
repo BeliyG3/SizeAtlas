@@ -16,6 +16,9 @@ const item = (over: Partial<Item> = {}): Item => ({
   accessError: false,
   cloud: false,
   lossy: false,
+  before: null,
+  change: null,
+  approxChange: false,
   ...over,
 });
 
@@ -94,8 +97,25 @@ describe("values", () => {
     expect(cellValue("attributes", item(), undefined, 0)).toBe("");
   });
 
+  it("writes the change and the size before in signed bytes, empty when unknown", () => {
+    const grown = item({ size: 300, before: 100, change: { delta: 200 } });
+    expect(cellValue("change", grown, undefined, 0)).toBe("+200");
+    expect(cellValue("before", grown, undefined, 0)).toBe("100");
+    const shrunk = item({ before: 100, change: { delta: -40 }, approxChange: true });
+    expect(cellValue("change", shrunk, undefined, 0)).toBe("-40");
+    expect(cellValue("change", item({ before: 7, change: { delta: 0 } }), undefined, 0)).toBe("0");
+    const added = item({ size: 4096, change: "new" });
+    expect(cellValue("change", added, undefined, 0)).toBe("+4096");
+    expect(cellValue("before", added, undefined, 0)).toBe("");
+    expect(cellValue("change", item({ before: 1, change: "unknown" }), undefined, 0)).toBe("");
+    expect(cellValue("change", item(), undefined, 0)).toBe("");
+    expect(cellValue("before", item(), undefined, 0)).toBe("");
+    const waiting = item({ isDir: true, pending: true, before: 1, change: { delta: 5 } });
+    expect(cellValue("change", waiting, undefined, 0)).toBe("");
+  });
+
   it("writes the folder of a list item as its path", () => {
-    const listed: ListItem = { ...item(), folder: "x\\y", parent: 5 };
+    const listed: ListItem = { ...item(), folder: "x\\y", parent: 5, deleted: false };
     expect(cellValue("path", listed, undefined, 0)).toBe("x\\y");
     expect(cellValue("path", item(), undefined, 0)).toBe("");
   });

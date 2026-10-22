@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ListItem } from "../../api/types";
+import type { Change, ListItem } from "../../api/types";
 import { nextListSort, sortRows } from "./rows";
 
 const item = (id: number, name: string, folder: string, size: number): ListItem => ({
@@ -18,6 +18,10 @@ const item = (id: number, name: string, folder: string, size: number): ListItem 
   accessError: false,
   cloud: false,
   lossy: false,
+  deleted: false,
+  before: null,
+  change: null,
+  approxChange: false,
 });
 
 const list = [item(1, "b", "x", 5), item(2, "a", "y", 9), item(3, "c", "x", 5)];
@@ -35,6 +39,31 @@ describe("list rows", () => {
     expect(ids(sortRows(list, { column: "path", descending: false }))).toEqual([1, 3, 2]);
     expect(ids(sortRows(list, { column: "path", descending: true }))).toEqual([2, 3, 1]);
     expect(ids(sortRows(list, { column: "owner", descending: true }))).toEqual([1, 2, 3]);
+  });
+
+  it("sort by change: a new item grows by its size, no change is 0, unknown goes last", () => {
+    const changed = (id: number, size: number, change: Change | null) => ({
+      ...item(id, String(id), "", size),
+      change,
+    });
+    const rows = [
+      changed(1, 50, { delta: -20 }),
+      changed(2, 30, "unknown"),
+      changed(3, 40, "new"),
+      changed(4, 70, { delta: 100 }),
+      changed(5, 10, null),
+    ];
+    expect(ids(sortRows(rows, { column: "change", descending: true }))).toEqual([4, 3, 5, 1, 2]);
+    expect(ids(sortRows(rows, { column: "change", descending: false }))).toEqual([1, 5, 3, 4, 2]);
+  });
+
+  it("sort by the size before, a new item counting as 0", () => {
+    const rows = [
+      { ...item(1, "a", "", 0), before: 5 },
+      { ...item(2, "b", "", 0), before: null },
+      { ...item(3, "c", "", 0), before: 9 },
+    ];
+    expect(ids(sortRows(rows, { column: "before", descending: true }))).toEqual([3, 1, 2]);
   });
 
   it("sort names naturally, ignoring case", () => {

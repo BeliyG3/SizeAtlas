@@ -1,4 +1,5 @@
 import { useCallback, useState, type KeyboardEvent } from "react";
+import { formatDate } from "../../format";
 import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import { ColumnDivider } from "../columns/ColumnDivider";
@@ -18,6 +19,8 @@ interface Props {
   canSort: (column: Column) => boolean;
   /** Tooltip of the size columns: how sizes on disk were measured. */
   sizeHint: string;
+  /** When the scan the Change column compares with was made, in seconds; null without one. */
+  baselineAt: number | null;
   /** A sortable header was clicked. */
   onSort: (column: Column) => void;
 }
@@ -32,13 +35,19 @@ const ariaSort = (c: Column, sort: HeaderSort | null, sortable: boolean) => {
  * Sticky header: a click sorts, dragging a cell moves its column, the borders resize, and the
  * context menu fits, shows, hides and resets columns.
  */
-export function TableHeader({ layout, sort, canSort, sizeHint, onSort }: Props) {
+export function TableHeader({ layout, sort, canSort, sizeHint, baselineAt, onSort }: Props) {
   const { t, lang } = useT();
   const { columns, widths, template, width } = layout;
   const [menu, setMenu] = useState<HeaderMenuTarget | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   // Name stays first: it is what identifies a row.
   const drag = useColumnDrag(layout.ids, layout.move, "name");
+  const title = (c: Column, label: string) => {
+    if (c.id === "size" || c.id === "percent") return sizeHint;
+    if (c.id === "change" && baselineAt !== null)
+      return t("col.changeHint", { date: formatDate(baselineAt * 1000, lang) });
+    return label;
+  };
 
   // Shift+F10 or the menu key in the header (or in its menu, a React child): this menu, never
   // the one of the cursor row.
@@ -72,7 +81,7 @@ export function TableHeader({ layout, sort, canSort, sizeHint, onSort }: Props) 
             data-col={c.id}
             className={classes.filter(Boolean).join(" ") || undefined}
             // A label cut short by a narrow column shows in full on hover.
-            title={c.id === "size" || c.id === "percent" ? sizeHint : label}
+            title={title(c, label)}
             onPointerDown={(e) => drag.start(c.id, e)}
             onClickCapture={drag.suppressClick}
             onContextMenu={(e) => {

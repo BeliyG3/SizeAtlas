@@ -133,6 +133,20 @@
   color: var(--text-dim);
 }
 
+.crow .change-up {
+  color: var(--change-up);
+}
+
+.crow .change-down {
+  color: var(--change-down);
+}
+
+/* On the highlighted cursor row the sign alone tells growth from shrinking. */
+.crow.cursor .change-up,
+.crow.cursor .change-down {
+  color: inherit;
+}
+
 .crow .percent {
   position: relative;
   text-align: end;

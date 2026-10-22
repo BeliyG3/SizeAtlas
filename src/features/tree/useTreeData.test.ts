@@ -89,6 +89,9 @@ const item = (id: number): Item => ({
   accessError: false,
   cloud: false,
   lossy: false,
+  before: null,
+  change: null,
+  approxChange: false,
 });
 const page = (rev: number, id = 5): ChildrenPage => ({
   generation: 1,
@@ -99,6 +102,8 @@ const page = (rev: number, id = 5): ChildrenPage => ({
   restCount: 0,
   restSize: 0,
   items: [item(id)],
+  baselineAt: null,
+  baselineRev: 0,
 });
 const roots = (rev: number): RootInfo[] => [
   {

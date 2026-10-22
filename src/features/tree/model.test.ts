@@ -34,6 +34,9 @@ const item = (id: number, size: number, isDir = false): Item => ({
   accessError: false,
   cloud: false,
   lossy: false,
+  before: null,
+  change: null,
+  approxChange: false,
 });
 
 const page = (items: Item[], rest: number, rev = 0): ChildrenPage => ({
@@ -45,6 +48,8 @@ const page = (items: Item[], rest: number, rev = 0): ChildrenPage => ({
   restCount: rest,
   restSize: rest * 10,
   items,
+  baselineAt: null,
+  baselineRev: 0,
 });
 
 const info = (root: string, generation: number | null, size = 120): RootInfo => ({

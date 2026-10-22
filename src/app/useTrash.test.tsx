@@ -66,6 +66,8 @@ const summary = (scanning: boolean): Summary => ({
   scannedAt: 1,
   sizeMode: "Allocated",
   volume: null,
+  baselineAt: null,
+  baselineRev: 0,
 });
 
 function useRenderTrash(roots: Roots, id = 7, onError = vi.fn(), push = vi.fn()) {

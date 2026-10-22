@@ -1,8 +1,8 @@
 import { memo, type MouseEvent, type ReactNode } from "react";
 import type { Detail, Item, ListItem } from "../../api/types";
-import { formatCount, formatDate, formatPercent } from "../../format";
+import { formatChange, formatCount, formatDate, formatPercent } from "../../format";
 import { useT } from "../../i18n/react";
-import { useSize } from "../../settings/react";
+import { useSettings, useSize } from "../../settings/react";
 import type { ColumnId } from "./columns";
 import { ItemIcon } from "./ItemIcon";
 import { markHow, type MarkHow } from "./marks";
@@ -56,6 +56,7 @@ export const ContentsRow = memo(function ContentsRow({
 }: Props) {
   const { t, lang } = useT();
   const size = useSize();
+  const { unit } = useSettings();
   const shared = {
     id: `crow-${index}`,
     "data-index": index,
@@ -99,7 +100,22 @@ export const ContentsRow = memo(function ContentsRow({
   const time = (value: number | null | undefined) =>
     detail ? formatDate(value ?? null, lang) : "";
   const count = (value: number) => (dir ? formatCount(value, lang) : "");
-  const cells: Record<ColumnId, [className: string | undefined, content: ReactNode]> = {
+  // The change of a size that is still being counted is not known yet.
+  const change = waiting ? null : item.change;
+  const delta = typeof change === "object" ? (change?.delta ?? 0) : 0;
+  const approx = delta !== 0 && item.approxChange;
+  const changeText =
+    change === "new"
+      ? t("change.new")
+      : change === "unknown"
+        ? "?"
+        : `${approx ? "≈ " : ""}${formatChange(delta, lang, unit)}`;
+  const changeClass = delta > 0 ? "num change-up" : delta < 0 ? "num change-down" : "num";
+  const coverage = change === "unknown" || approx ? t("change.coverage") : undefined;
+  const cells: Record<
+    ColumnId,
+    [className: string | undefined, content: ReactNode, title?: string]
+  > = {
     name: [
       "name",
       <>
@@ -114,7 +130,7 @@ export const ContentsRow = memo(function ContentsRow({
         {item.cloud && <span className="tag">{t("tree.cloud")}</span>}
       </>,
     ],
-    path: [undefined, "folder" in item ? item.folder : ""],
+    path: [undefined, "folder" in item ? item.folder : "", pathTitle(folderPath, item, lang)],
     len: ["num", item.pending ? "" : size(item.len)],
     size: [item.pending ? "num dim" : "num", waiting ? "" : size(item.size)],
     percent: [
@@ -124,6 +140,8 @@ export const ContentsRow = memo(function ContentsRow({
         <span className="num">{waiting ? "" : formatPercent(share, lang)}</span>
       </>,
     ],
+    before: ["num", item.before === null ? "" : size(item.before)],
+    change: [changeClass, changeText, coverage],
     files: ["num", waiting ? "" : count(item.files)],
     folders: ["num", item.pending ? "" : count(item.folders)],
     dirs: ["num", item.pending ? "" : count(item.dirs)],
@@ -150,7 +168,7 @@ export const ContentsRow = memo(function ContentsRow({
           data-col={id}
           dir={id === "path" ? "auto" : undefined}
           className={cells[id][0]}
-          title={id === "path" ? pathTitle(folderPath, item, lang) : undefined}
+          title={cells[id][2]}
         >
           {cells[id][1]}
         </span>

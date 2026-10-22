@@ -55,6 +55,12 @@ export function formatSize(bytes: number, lang: Lang, fixed: SizeUnit = "auto"):
   return `${number} ${units[unit]}`;
 }
 
+/** A change of size with its sign, "+12.4 GB" or "−3.1 GB" (U+2212); empty for no change. */
+export function formatChange(delta: number, lang: Lang, unit: SizeUnit): string {
+  if (delta === 0) return "";
+  return `${delta > 0 ? "+" : "−"}${formatSize(Math.abs(delta), lang, unit)}`;
+}
+
 function digitsFor(value: number, unit: number): number {
   return unit === 0 ? 0 : value < 10 ? 2 : value < 100 ? 1 : 0;
 }

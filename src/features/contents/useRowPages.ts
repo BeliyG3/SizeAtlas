@@ -20,19 +20,20 @@ export interface Listing {
 /**
  * Pages of the listing of `folder` in `order`, fetched on request. Answers that arrive after
  * the folder, the order or the revision of the tree changed are dropped, so the table never
- * mixes two listings. `previous` is the last listing of the same folder in another order or
+ * mixes two listings. A new baseline (`baselineRev`) lists again too. `previous` is the last listing of the same folder in another order or
  * revision, shown dimmed meanwhile.
  */
 export function useRowPages(
   generation: number,
   rev: number,
+  baselineRev: number,
   folder: number,
   order: ListOrder,
   onFail: (e: unknown) => void,
   liveScan = false,
 ) {
-  // A change of the tree (a refresh, a trash) makes a new listing too.
-  const key = `${folder}:${rev}:${order.key}:${order.descending}:${order.dirsOnly}`;
+  // A change of the tree (a refresh, a trash) or of its baseline makes a new listing too.
+  const key = `${folder}:${rev}.${baselineRev}:${order.key}:${order.descending}:${order.dirsOnly}`;
   const orderKey = `${folder}:${order.key}:${order.descending}:${order.dirsOnly}`;
   const [listing, setListing] = useState<Listing | null>(null);
   const measure = useBatchCost("tree", listing);

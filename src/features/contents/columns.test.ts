@@ -10,6 +10,7 @@ describe("columns", () => {
       "len",
       "size",
       "percent",
+      "change",
       "files",
       "dirs",
       "modified",
@@ -36,7 +37,7 @@ describe("columns", () => {
     expect(nextSort(DEFAULT_SORT, column("owner"))).toBe(DEFAULT_SORT);
   });
 
-  it("have the Path column in the flat lists only", () => {
-    expect(COLUMNS.filter((c) => c.listOnly).map((c) => c.id)).toEqual(["path"]);
+  it("have the Path and Before columns in the flat lists only", () => {
+    expect(COLUMNS.filter((c) => c.listOnly).map((c) => c.id)).toEqual(["path", "before"]);
   });
 });

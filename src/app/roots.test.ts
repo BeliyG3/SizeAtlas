@@ -24,6 +24,8 @@ const summary = (root: string, generation: number): Summary => ({
   accessErrors: 0,
   approximate: false,
   volume: null,
+  baselineAt: null,
+  baselineRev: 0,
 });
 
 describe("rootEntries", () => {

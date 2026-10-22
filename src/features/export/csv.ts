@@ -25,6 +25,14 @@ export function csvDate(ms: number | null): string {
   return `${day} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+/** A change in signed bytes ("+200", "-40", "0"); a new item grows by its size; empty if unknown. */
+function csvChange(item: Item | ListItem): string {
+  const { change } = item;
+  if (change === null || change === "unknown") return "";
+  const delta = change === "new" ? item.size : change.delta;
+  return delta > 0 ? `+${delta}` : String(delta);
+}
+
 /** The value of a table cell (see ContentsRow) without units or separators; empty if not applicable. */
 export function cellValue(
   column: ColumnId,
@@ -34,7 +42,7 @@ export function cellValue(
 ): string {
   if (item.pending) {
     if (["len", "folders", "dirs"].includes(column)) return "";
-    if (!item.scanning && ["size", "percent", "files"].includes(column)) return "";
+    if (!item.scanning && ["size", "percent", "change", "files"].includes(column)) return "";
   }
   const count = (n: number) => (item.isDir ? String(n) : "");
   switch (column) {
@@ -48,6 +56,10 @@ export function cellValue(
       return String(item.size);
     case "percent":
       return csvPercent(folderSize > 0 ? item.size / folderSize : 0);
+    case "before":
+      return item.before === null ? "" : String(item.before);
+    case "change":
+      return csvChange(item);
     case "files":
       return count(item.files);
     case "folders":

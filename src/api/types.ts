@@ -1,5 +1,5 @@
 /** `size` is the size on disk, `len` the logical length. */
-export type SortKey = "name" | "size" | "len" | "files" | "dirs" | "modified";
+export type SortKey = "name" | "size" | "len" | "files" | "dirs" | "modified" | "change";
 
 /** Order of a listing; ties go by name bytes, then by id. */
 export interface ListOrder {
@@ -49,6 +49,10 @@ export interface Summary {
   /** A first scan's provisional tree. Absent in older snapshots. */
   scanning?: boolean;
   volume: Volume | null;
+  /** When the baseline (the previous full scan) was scanned, in seconds; null without one. */
+  baselineAt: number | null;
+  /** Counts the changes of the baseline, which leave `rev` as it is: refetch rows when it changes. */
+  baselineRev: number;
 }
 
 /** Id of the root node in every tree (`Summary.rootId`). */
@@ -75,7 +79,16 @@ export interface Item {
   lossy: boolean;
   pending?: boolean;
   scanning?: boolean;
+  /** Size on disk in the baseline; null without a baseline and for new items. */
+  before: number | null;
+  /** Change of the size on disk since the baseline; null without a baseline. */
+  change: Change | null;
+  /** The delta is approximate: something below was unreadable in one scan, or a scan was approximate. */
+  approxChange: boolean;
 }
+
+/** Bytes gained (negative when lost); "new": not in the baseline; "unknown": readable in only one scan. */
+export type Change = { delta: number } | "new" | "unknown";
 
 export interface ChildrenPage {
   generation: number;
@@ -87,6 +100,9 @@ export interface ChildrenPage {
   restCount: number;
   restSize: number;
   items: Item[];
+  /** As in `Summary`. */
+  baselineAt: number | null;
+  baselineRev: number;
 }
 
 export interface Crumb {
@@ -181,13 +197,16 @@ export type ListKind =
   | "emptyFiles"
   | "empty"
   | "unreadable"
-  | "longestPaths";
+  | "longestPaths"
+  | "grewMost";
 
 export interface ListItem extends Item {
   /** Folder of the item relative to the listed folder; empty if it is directly inside. */
   folder: string;
   /** The folder the item is in. */
   parent: number;
+  /** A folder the baseline had and the tree has no more ("grewMost" only); its id is not a node. */
+  deleted: boolean;
 }
 
 export interface List {
@@ -198,6 +217,9 @@ export interface List {
   /** More items matched than the limit allowed. */
   truncated: boolean;
   items: ListItem[];
+  /** As in `Summary`. */
+  baselineAt: number | null;
+  baselineRev: number;
 }
 
 /** Details of one row read from disk; `null` fields are not available. Times in milliseconds. */

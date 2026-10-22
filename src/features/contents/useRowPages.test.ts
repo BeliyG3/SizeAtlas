@@ -38,13 +38,15 @@ function answer(rev: number, items: Item[]): ChildrenPage {
     restCount: 0,
     restSize: 0,
     items,
+    baselineAt: null,
+    baselineRev: 0,
   };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   state.listing = {
-    key: "0:3:size:true:false",
+    key: "0:3.0:size:true:false",
     orderKey: "0:size:true:false",
     total: 400,
     size: 300,
@@ -59,7 +61,7 @@ describe("useRowPages", () => {
     // revision 4 here would duplicate it and leave the displaced row missing.
     vi.mocked(api.getChildren).mockResolvedValue(answer(4, [first]));
     const onFail = vi.fn();
-    const { request } = useRowPages(1, 3, 0, order, onFail);
+    const { request } = useRowPages(1, 3, 0, 0, order, onFail);
     const held = state.listing;
 
     request([1]);
@@ -73,7 +75,7 @@ describe("useRowPages", () => {
   it("merges another page from the held revision without refreshing", async () => {
     vi.mocked(api.getChildren).mockResolvedValue(answer(3, [second]));
     const onFail = vi.fn();
-    const { request } = useRowPages(1, 3, 0, order, onFail);
+    const { request } = useRowPages(1, 3, 0, 0, order, onFail);
 
     request([1]);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -89,8 +91,8 @@ describe("useRowPages", () => {
       vi.mocked(api.getChildren).mockResolvedValue(answer(7, [second]));
       const onFail = vi.fn();
       const liveOrder = { ...order, key };
-      state.listing!.key = `0:3:${key}:true:false`;
-      const { request } = useRowPages(1, 3, 0, liveOrder, onFail, true);
+      state.listing!.key = `0:3.0:${key}:true:false`;
+      const { request } = useRowPages(1, 3, 0, 0, liveOrder, onFail, true);
 
       request([1]);
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -104,8 +106,8 @@ describe("useRowPages", () => {
   it("refreshes instead of merging a newer name-ordered page outside a live scan", async () => {
     vi.mocked(api.getChildren).mockResolvedValue(answer(4, [second]));
     const onFail = vi.fn();
-    state.listing!.key = "0:3:name:true:false";
-    const { request } = useRowPages(1, 3, 0, { ...order, key: "name" }, onFail);
+    state.listing!.key = "0:3.0:name:true:false";
+    const { request } = useRowPages(1, 3, 0, 0, { ...order, key: "name" }, onFail);
     const held = state.listing;
 
     request([1]);
@@ -116,10 +118,18 @@ describe("useRowPages", () => {
     expect(onFail).toHaveBeenCalledExactlyOnceWith({ code: "StaleId" });
   });
 
+  it("lists again, the old rows shown meanwhile, when the baseline changes", () => {
+    const held = state.listing;
+    const pages = useRowPages(1, 3, 1, 0, order, vi.fn());
+
+    expect(pages.listing).toBeNull();
+    expect(pages.previous).toBe(held);
+  });
+
   it("ignores a newer page after its listing scope was disposed", async () => {
     vi.mocked(api.getChildren).mockResolvedValue(answer(4, [first]));
     const onFail = vi.fn();
-    const { request } = useRowPages(1, 3, 0, order, onFail);
+    const { request } = useRowPages(1, 3, 0, 0, order, onFail);
     const held = state.listing;
 
     request([1]);

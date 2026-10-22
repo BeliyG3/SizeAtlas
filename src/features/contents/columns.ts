@@ -6,6 +6,8 @@ export type ColumnId =
   | "len"
   | "size"
   | "percent"
+  | "before"
+  | "change"
   | "files"
   | "folders"
   | "dirs"
@@ -28,13 +30,19 @@ export interface Column {
   listOnly?: true;
 }
 
-/** In display order. "len" is the logical size, "size" the size on disk; percent sorts like it. "path", the folder of a list item, exists in the flat lists only. */
+/**
+ * In display order. "len" is the logical size, "size" the size on disk; percent sorts like it.
+ * "path", the folder of a list item, and "before", its size on disk in the previous full scan,
+ * exist in the flat lists only. "change" is the change of the size on disk since that scan.
+ */
 export const COLUMNS: readonly Column[] = [
   { id: "name", sortKey: "name", width: 280, numeric: false },
   { id: "path", sortKey: null, width: 240, numeric: false, listOnly: true },
   { id: "len", sortKey: "len", width: 96, numeric: true },
   { id: "size", sortKey: "size", width: 96, numeric: true },
   { id: "percent", sortKey: "size", width: 120, numeric: true },
+  { id: "before", sortKey: null, width: 96, numeric: true, listOnly: true },
+  { id: "change", sortKey: "change", width: 104, numeric: true },
   { id: "files", sortKey: "files", width: 80, numeric: true },
   { id: "folders", sortKey: null, width: 72, numeric: true },
   { id: "dirs", sortKey: "dirs", width: 88, numeric: true },

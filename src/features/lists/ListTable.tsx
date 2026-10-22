@@ -73,7 +73,7 @@ export function ListTable({
   onFail,
 }: Props) {
   const { t, lang } = useT();
-  const { generation, rev } = summary;
+  const { generation, rev, baselineRev } = summary;
   const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
   const layout = useColumnLayout(body, true);
@@ -84,7 +84,7 @@ export function ListTable({
   // Hiding the sorted column brings back the list's own order.
   const sort = chosenSort && layout.view.hidden.includes(chosenSort.column) ? null : chosenSort;
   // The cursor and the marks belong to this order and revision of the list.
-  const listKey = `${summary.scanning ? "live" : rev}:${sort?.column ?? "list"}:${sort?.descending ?? false}`;
+  const listKey = `${summary.scanning ? "live" : `${rev}.${baselineRev}`}:${sort?.column ?? "list"}:${sort?.descending ?? false}`;
   const [cursorAt, setCursorAt] = useState<{ key: string; index: number } | null>(null);
   const cursor = cursorAt?.key === listKey ? cursorAt.index : null;
   const setCursor = (index: number) => setCursorAt({ key: listKey, index });
@@ -111,7 +111,7 @@ export function ListTable({
   useEffect(() => () => onMarks([]), [onMarks]);
   const { first, last } = visibleRange(scrollTop, viewport, rows.length);
 
-  // A change of the tree (`rev`) lists again; the old rows stay, dimmed, until the answer.
+  // A change of the tree (`rev`) or of its baseline lists again; the old rows stay, dimmed, until the answer.
   useEffect(() => {
     let live = true;
     const applied = measure();
@@ -126,7 +126,7 @@ export function ListTable({
     return () => {
       live = false;
     };
-  }, [generation, rev, base, kind, onFail, measure]);
+  }, [generation, rev, baselineRev, base, kind, onFail, measure]);
 
   const visibleIds = useMemo(() => rows.slice(first, last).map((r) => r.id), [rows, first, last]);
   useDetailsOnPause(
@@ -231,6 +231,7 @@ export function ListTable({
         sort={sort}
         canSort={canSort}
         sizeHint={t(`sizeMode.${summary.sizeMode}`)}
+        baselineAt={summary.baselineAt}
         onSort={(column) => setSort(nextListSort(sort, column.id))}
       />
       <div className="crows" style={{ height: rows.length * ROW_HEIGHT, width: layout.width }}>

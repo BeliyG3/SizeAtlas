@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Lang } from "./i18n/index";
-import { formatAgo, formatCount, formatDate, formatPercent, formatSize } from "./format";
+import {
+  formatAgo,
+  formatChange,
+  formatCount,
+  formatDate,
+  formatPercent,
+  formatSize,
+} from "./format";
 
 describe("formatSize", () => {
   it("uses base 1024 and localized units", () => {
@@ -81,5 +88,22 @@ describe("formatPercent and formatDate", () => {
 describe("Arabic numbers", () => {
   it("are formatted with Western digits", () => {
     expect(formatCount(1234, "ar" as Lang)).toMatch(/1.?234/);
+  });
+});
+
+describe("formatChange", () => {
+  it("signs growth with a plus and shrinking with a true minus", () => {
+    expect(formatChange(1.5 * 2 ** 30, "en", "auto")).toBe("+1.50 GB");
+    expect(formatChange(-1536, "en", "auto")).toBe("−1.50 KB");
+  });
+
+  it("is empty for no change", () => {
+    expect(formatChange(0, "en", "auto")).toBe("");
+  });
+
+  it("uses the decimal separator of the language and the chosen unit", () => {
+    expect(formatChange(-1536, "ru", "auto")).toBe("−1,50 КБ");
+    expect(formatChange(3 * 2 ** 20, "en", "KB")).toBe("+3,072.00 KB");
+    expect(formatChange(-5 * 2 ** 30, "ru", "GB")).toBe("−5,00 ГБ");
   });
 });

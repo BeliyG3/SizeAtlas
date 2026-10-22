@@ -17,6 +17,7 @@ export const row = (id: number, size: number): ListItem => ({
   size,
   parent: 0,
   folder: "",
+  deleted: false,
 });
 
 export const item = (id: number): Item => ({
@@ -33,6 +34,9 @@ export const item = (id: number): Item => ({
   accessError: false,
   cloud: false,
   lossy: false,
+  before: null,
+  change: null,
+  approxChange: false,
 });
 
 /** A folder of PAGE + 1 items: two pages; `revs` gives the revision of each call in turn. */

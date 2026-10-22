@@ -17,6 +17,9 @@
   --selection-active: #3b629e;
   --selection-text: #ffffff;
   --danger: #ff6b6b;
+  /* The Change column: growth and shrinking (an addition to the sign, never instead of it). */
+  --change-up: #f28b82;
+  --change-down: #81c995;
   --bar: #3d6fb8;
   --warn-bg: #3a2f1a;
   --warn-text: #f3d9a4;
@@ -55,6 +58,8 @@
   --selection-active: #b2cbf2;
   --selection-text: #1c1f26;
   --danger: #c93c3c;
+  --change-up: #c62828;
+  --change-down: #2e7d32;
   --bar: #6f9fe6;
   --warn-bg: #fff2d1;
   --warn-text: #6a4c0c;

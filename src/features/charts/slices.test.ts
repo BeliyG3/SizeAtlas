@@ -17,6 +17,9 @@ const item = (id: number, size: number, isDir = false): Item => ({
   accessError: false,
   cloud: false,
   lossy: false,
+  before: null,
+  change: null,
+  approxChange: false,
 });
 
 describe("buildSlices", () => {

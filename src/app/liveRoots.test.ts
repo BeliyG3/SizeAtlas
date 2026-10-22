@@ -18,6 +18,8 @@ const summary = (rev: number, scanning = true): Summary => ({
   approximate: false,
   volume: null,
   scanning,
+  baselineAt: null,
+  baselineRev: 0,
 });
 const snapshot = (rev: number, scanning = true): Roots => ({
   roots: [summary(rev, scanning)],

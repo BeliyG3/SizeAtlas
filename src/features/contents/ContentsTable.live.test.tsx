@@ -94,6 +94,8 @@ const summary = (rev: number, scanning: boolean): Summary => ({
   scannedAt: 1,
   sizeMode: "Allocated",
   volume: null,
+  baselineAt: null,
+  baselineRev: 0,
 });
 
 const page = (rev: number, items: Item[]): ChildrenPage => ({
@@ -105,6 +107,8 @@ const page = (rev: number, items: Item[]): ChildrenPage => ({
   restCount: 0,
   restSize: 0,
   items,
+  baselineAt: null,
+  baselineRev: 0,
 });
 
 let shown: ReactElement | null = null;

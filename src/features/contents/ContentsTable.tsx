@@ -66,7 +66,7 @@ export function ContentsTable({
   onFail,
 }: Props) {
   const { t, lang } = useT();
-  const { generation, rev, rootId } = summary;
+  const { generation, rev, rootId, baselineRev } = summary;
   const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
   const layout = useColumnLayout(body, false);
@@ -85,13 +85,14 @@ export function ContentsTable({
   const { listing, previous, request } = useRowPages(
     generation,
     rev,
+    baselineRev,
     folder,
     order,
     onFail,
     summary.scanning,
   );
   // Live ticks keep the cursor and range anchor attached to their item ids.
-  const listKey = `${folder}:${summary.scanning ? "live" : rev}:${sort.key}:${sort.descending}:${dirsOnly}`;
+  const listKey = `${folder}:${summary.scanning ? "live" : `${rev}.${baselineRev}`}:${sort.key}:${sort.descending}:${dirsOnly}`;
 
   const unaccounted = folder === rootId ? (summary.volume?.unaccounted ?? 0) : 0;
   const extra = unaccounted > 0 ? 1 : 0;
@@ -269,6 +270,7 @@ export function ContentsTable({
         sort={sort}
         canSort={hasSortKey}
         sizeHint={t(`sizeMode.${summary.sizeMode}`)}
+        baselineAt={summary.baselineAt}
         onSort={(column) => onSort(nextSort(sort, column))}
       />
       <div

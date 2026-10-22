@@ -12,16 +12,27 @@ export interface ListSort {
 
 const text = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
+/** The change a list sorts by: a new item grows by its whole size, none counts as 0; NaN if unknown. */
+function changeOf(item: ListItem): number {
+  const change = item.change;
+  if (change === "unknown") return Number.NaN;
+  return change === "new" ? item.size : (change?.delta ?? 0);
+}
+
+/** Values of the numeric columns; NaN (an unknown change) sorts last both ways. */
 const NUMBERS: Partial<Record<ColumnId, (item: ListItem) => number>> = {
   len: (i) => i.len,
   size: (i) => i.size,
   percent: (i) => i.size,
+  before: (i) => i.before ?? 0,
+  change: changeOf,
   files: (i) => i.files,
   folders: (i) => i.folders,
   dirs: (i) => i.dirs,
   modified: (i) => i.modified,
 };
 
+/** `a` before `b` (negative) in ascending order of `column`. */
 function compare(a: ListItem, b: ListItem, column: ColumnId): number {
   if (column === "name") return text.compare(a.name, b.name);
   if (column === "path") return text.compare(a.folder, b.folder) || text.compare(a.name, b.name);
@@ -33,7 +44,11 @@ function compare(a: ListItem, b: ListItem, column: ColumnId): number {
 export function sortRows(items: readonly ListItem[], sort: ListSort | null): readonly ListItem[] {
   if (!sort) return items;
   const sign = sort.descending ? -1 : 1;
-  return [...items].sort((a, b) => sign * compare(a, b, sort.column));
+  const value = NUMBERS[sort.column];
+  const unknown = (item: ListItem) => (value && Number.isNaN(value(item)) ? 1 : 0);
+  return [...items].sort(
+    (a, b) => unknown(a) - unknown(b) || sign * (compare(a, b, sort.column) || 0),
+  );
 }
 
 /** A header click: the same column flips; another starts descending, names and paths ascending. */

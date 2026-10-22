@@ -80,14 +80,19 @@ describe("column view", () => {
     const view = { order: moveColumn(ids, "owner", "len"), hidden: ["len", "files"] as ColumnId[] };
     const columns = visibleColumns(view, false);
     expect(columns.map((c) => c.id).slice(0, 3)).toEqual(["name", "owner", "size"]);
-    expect(columns).toHaveLength(ids.length - 3);
+    // Two hidden, and Path and Before exist in the flat lists only.
+    expect(columns).toHaveLength(ids.length - 4);
     const widths = { ...DEFAULT_WIDTHS, name: 300, owner: 100 };
     expect(gridTemplate(columns, widths).split(" ").slice(0, 2)).toEqual(["300px", "100px"]);
     expect(totalWidth(columns, widths)).toBe(columns.reduce((sum, c) => sum + widths[c.id], 0));
   });
 
-  it("shows the Path column in the flat lists only, after Name by default", () => {
+  it("shows the Path and Before columns in the flat lists only, Path after Name by default", () => {
     expect(visibleColumns(DEFAULT_VIEW, true)[1].id).toBe("path");
-    expect(visibleColumns(DEFAULT_VIEW, false).map((c) => c.id)).not.toContain("path");
+    expect(visibleColumns(DEFAULT_VIEW, true).map((c) => c.id)).toContain("before");
+    const contents = visibleColumns(DEFAULT_VIEW, false).map((c) => c.id);
+    expect(contents).not.toContain("path");
+    expect(contents).not.toContain("before");
+    expect(contents).toContain("change");
   });
 });
