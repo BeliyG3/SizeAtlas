@@ -37,6 +37,8 @@ pub enum ListKind {
     /// Folders by their change since the previous full scan. Built by the app, which has the
     /// baseline; the tree lists nothing.
     GrewMost,
+    /// Matches of a search text. Built by `Tree::search`; as a kind the tree lists nothing.
+    Search,
 }
 
 /// A list and whether more items matched than the limit allowed.
@@ -84,8 +86,55 @@ impl ListKind {
             K::Empty => (Both, Rank::Empty),
             K::Unreadable => (Folders, Rank::Unreadable),
             K::LongestPaths => (Both, Rank::Longest),
-            K::GrewMost => return None,
+            K::GrewMost | K::Search => return None,
         })
+    }
+}
+
+/// The `limit` best items by score, higher first, then lower id first, and how many were offered.
+pub(super) struct TopN {
+    /// Min-heap of the best items so far: its top is the first to drop (the lowest score, and
+    /// of equal scores the largest id).
+    heap: BinaryHeap<Reverse<(i128, Reverse<u32>)>>,
+    limit: usize,
+    offered: usize,
+}
+
+impl TopN {
+    /// `nodes` only sizes the allocation: a caller's huge `limit` must not overflow or
+    /// over-allocate.
+    pub(super) fn new(limit: usize, nodes: usize) -> Self {
+        TopN {
+            heap: BinaryHeap::with_capacity(limit.min(nodes)),
+            limit,
+            offered: 0,
+        }
+    }
+
+    pub(super) fn push(&mut self, score: i128, node: u32) {
+        self.offered += 1;
+        let entry = Reverse((score, Reverse(node)));
+        if self.heap.len() < self.limit {
+            self.heap.push(entry);
+        } else if let Some(mut worst) = self.heap.peek_mut() {
+            // A full heap only changes for an item that beats its worst one.
+            if entry < *worst {
+                *worst = entry;
+            }
+        }
+    }
+
+    pub(super) fn finish(self) -> ListResult {
+        // Ascending order of `Reverse(...)` is descending score, then ascending id.
+        ListResult {
+            items: self
+                .heap
+                .into_sorted_vec()
+                .into_iter()
+                .map(|Reverse((_, Reverse(node)))| node)
+                .collect(),
+            truncated: self.offered > self.limit,
+        }
     }
 }
 
@@ -123,10 +172,7 @@ impl Tree {
                 truncated: matched > limit,
             };
         }
-        // Min-heap of the best items so far: its top is the first to drop (the lowest score,
-        // and of equal scores the largest id). Capacity is only a hint; a caller's huge
-        // `limit` must not overflow or over-allocate.
-        let mut heap = BinaryHeap::with_capacity(limit.min(self.len()));
+        let mut top = TopN::new(limit, self.len());
         self.walk_below(id, matches!(rank, Rank::Longest), |node, n, chars| {
             if !wanted(n) {
                 return;
@@ -138,26 +184,9 @@ impl Tree {
                 Rank::Longest => chars as i128,
                 _ => return,
             };
-            matched += 1;
-            let entry = Reverse((score, Reverse(node)));
-            if heap.len() < limit {
-                heap.push(entry);
-            } else if let Some(mut worst) = heap.peek_mut() {
-                // A full heap only changes for an item that beats its worst one.
-                if entry < *worst {
-                    *worst = entry;
-                }
-            }
+            top.push(score, node);
         });
-        // Ascending order of `Reverse(...)` is descending score, then ascending id.
-        ListResult {
-            items: heap
-                .into_sorted_vec()
-                .into_iter()
-                .map(|Reverse((_, Reverse(node)))| node)
-                .collect(),
-            truncated: matched > limit,
-        }
+        top.finish()
     }
 
     /// A folder without live children (and not unreadable), or a file of length 0.

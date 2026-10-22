@@ -241,12 +241,14 @@ mod lists;
 mod live;
 mod order;
 mod query;
+mod search;
 mod stats;
 mod validate;
 
 pub use lists::{ListKind, ListResult};
 pub use order::{ListOrder, SortKey};
 pub use query::ChildrenPage;
+pub use search::{Found, Query};
 pub use stats::TypeStat;
 
 #[cfg(test)]
