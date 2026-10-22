@@ -30,7 +30,8 @@ pub fn scan_files(cache_dir: &Path, canonical_root: &Path) -> ScanFiles {
 
 /// Saves a finished full scan as `current` and `full`, and keeps the previous full scan as `base`.
 /// Both new files are fully written before any old one is renamed, so a failed write loses nothing.
-/// Without a `full` yet, an old `current` (written before this feature) becomes the `base`.
+/// With neither `full` nor `base` yet, an old `current` (written before this feature) becomes the `base`;
+/// a `base` without a `full` is a half-finished rotation and stays as it is.
 pub fn save_full_scan(tree: &Tree, files: &ScanFiles) -> Result<(), CacheError> {
     let current_tmp = tmp_path(&files.current);
     let full_tmp = tmp_path(&files.full);
@@ -51,7 +52,7 @@ fn write_both(tree: &Tree, current_tmp: &Path, full_tmp: &Path) -> Result<(), Ca
 fn rotate(files: &ScanFiles) -> Result<(), CacheError> {
     if files.full.exists() {
         rename_with_retry(&files.full, &files.base)?;
-    } else if files.current.exists() {
+    } else if !files.base.exists() && files.current.exists() {
         rename_with_retry(&files.current, &files.base)?;
     }
     rename_with_retry(&tmp_path(&files.current), &files.current)?;

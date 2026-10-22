@@ -64,6 +64,22 @@ fn rotation_migrates_an_old_bin() {
 }
 
 #[test]
+fn half_finished_rotation_keeps_the_baseline() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = files_in(dir.path());
+    save_full_scan(&tree_at(1), &files).unwrap();
+    save_full_scan(&tree_at(2), &files).unwrap();
+    // The state after `full -> base` succeeded and the new `full` never arrived,
+    // while `current` was edited since.
+    fs::remove_file(&files.full).unwrap();
+    save(&tree_at(9), &files.current).unwrap();
+    let base_before = fs::read(&files.base).unwrap();
+    save_full_scan(&tree_at(3), &files).unwrap();
+    assert_eq!(fs::read(&files.base).unwrap(), base_before);
+    assert_eq!(stamps(&files), [3, 3, 1]);
+}
+
+#[test]
 fn failed_write_keeps_old_files() {
     let dir = tempfile::tempdir().unwrap();
     let files = files_in(dir.path());
