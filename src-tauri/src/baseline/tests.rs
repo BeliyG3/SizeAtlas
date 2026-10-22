@@ -70,6 +70,12 @@ fn bytes(path: &PathBuf) -> Vec<u8> {
     fs::read(path).unwrap()
 }
 
+/// What `commands::roots::open_cached` runs after opening a saved scan.
+fn compare_later(state: &AppState, cache: &Path, root: &str) -> bool {
+    let job = refresh_later(state.clone(), cache.to_owned(), root.to_owned());
+    tauri::async_runtime::block_on(job)
+}
+
 /// Scans `dir` twice, so its root has a baseline; returns the generation of its tree.
 fn scanned_twice(state: &AppState, dir: &TempDir, cache: &Path) -> u64 {
     scan(state, dir, cache);
@@ -101,6 +107,7 @@ fn rescan_sets_baseline() {
         "a first scan has a baseline"
     );
     let opened = jobs::open_cached(&state, cache.path(), &root_of(&dir)).unwrap();
+    compare_later(&state, cache.path(), &root_of(&dir));
     assert!(
         state.baseline(opened.generation).is_some(),
         "an opened scan"
@@ -230,6 +237,7 @@ fn outdated_base_gives_no_baseline() {
 
     assert!(load_baseline(&files, &tree).is_none());
     let opened = jobs::open_cached(&state, cache.path(), &root).expect("no error");
+    compare_later(&state, cache.path(), &root);
     assert!(state.baseline(opened.generation).is_none());
 }
 

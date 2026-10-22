@@ -9,7 +9,6 @@ use sizeatlas_core::cache::{self, CacheError, ScanFiles, cache_path, scan_files}
 use sizeatlas_core::scanner::{self, FolderScan, ScanOutcome};
 use sizeatlas_core::tree::Tree;
 
-use crate::baseline;
 use crate::dto::Summary;
 use crate::error::CmdError;
 use crate::exit::RUNNING;
@@ -116,7 +115,8 @@ fn write_scan(
     Ok(())
 }
 
-/// Adds the saved scan of `root` as a root, or replaces the open one in place.
+/// Adds the saved scan of `root` as a root, or replaces the open one in place. Its baseline
+/// comes later (`baseline::refresh_later`): comparing reads another saved scan.
 // ponytail: not synchronized with `forget` of the same root, so a load that ends just after the
 // forget opens the root again (its file is gone); hold `begin_write` here if that matters.
 pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Summary, CmdError> {
@@ -130,9 +130,7 @@ pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Sum
     // Described before installing: a rescan may replace the tree right after.
     let mut summary = Summary::of(0, &tree, None, 0);
     summary.generation = state.install_cached(tree)?;
-    baseline::refresh(state, cache_dir, &summary.root);
-    // With its baseline, unless a rescan replaced the tree meanwhile.
-    Ok(state.summary(summary.generation).unwrap_or(summary))
+    Ok(summary)
 }
 
 /// Closes a root by its canonical path, stopping its scan first, so a scan that ends meanwhile

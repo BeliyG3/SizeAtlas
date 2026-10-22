@@ -2,7 +2,7 @@
 //! Computed without the data lock (reading the saved scan may take seconds) but while holding
 //! `busy`, as every other long work on an open tree, then given to the root.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use sizeatlas_core::baseline::{Baseline, compare, compatible};
@@ -32,6 +32,22 @@ pub fn load_baseline(files: &ScanFiles, current: &Tree) -> Option<Baseline> {
 pub fn refresh(state: &AppState, cache_dir: &Path, root: &str) -> bool {
     let files = scan_files(cache_dir, Path::new(root));
     give(state, root, |tree| load_baseline(&files, tree))
+}
+
+/// `refresh` in the background, for a saved scan just opened: waits for `busy`, which a trash,
+/// a saved scan being written and the end of a scan hold, so it runs between them. Returns
+/// whether the baseline changed; `false` once the app is closing.
+pub async fn refresh_later(state: AppState, cache_dir: PathBuf, root: String) -> bool {
+    let Ok(write) = state.begin_write().await else {
+        return false;
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let changed = refresh(&state, &cache_dir, &root);
+        drop(write);
+        changed
+    })
+    .await
+    .unwrap_or(false)
 }
 
 /// Gives the open root `root` the baseline `compute` makes of its tree; see `refresh`.

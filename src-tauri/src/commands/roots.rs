@@ -10,7 +10,7 @@ use crate::error::CmdError;
 use crate::queue::ScanJob;
 use crate::state::AppState;
 use crate::worker::{self, Notice, Notify};
-use crate::{jobs, recycle, sources};
+use crate::{baseline, jobs, recycle, sources};
 
 const ROOTS_CHANGED: &str = "roots-changed";
 
@@ -160,7 +160,8 @@ pub async fn cancel_scan(
     Ok(())
 }
 
-/// Adds a saved scan as a root, or replaces the open one in place. Does not wait for scans.
+/// Adds a saved scan as a root, or replaces the open one in place. Does not wait for scans nor
+/// for its baseline, which comes later with another `roots-changed`.
 #[tauri::command]
 pub async fn open_cached(
     app: AppHandle,
@@ -169,10 +170,17 @@ pub async fn open_cached(
 ) -> Result<Summary, CmdError> {
     let dir = cache_dir(&app)?;
     let state = state.inner().clone();
+    let (opening, open_dir) = (state.clone(), dir.clone());
     let summary =
-        tauri::async_runtime::spawn_blocking(move || jobs::open_cached(&state, &dir, &root))
+        tauri::async_runtime::spawn_blocking(move || jobs::open_cached(&opening, &open_dir, &root))
             .await??;
     changed(&app);
+    let (events, root) = (app.clone(), summary.root.clone());
+    tauri::async_runtime::spawn(async move {
+        if baseline::refresh_later(state, dir, root).await {
+            changed(&events);
+        }
+    });
     Ok(summary)
 }
 
