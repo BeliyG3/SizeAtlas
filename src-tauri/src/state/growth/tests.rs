@@ -169,7 +169,9 @@ fn ids_beyond_the_baseline_have_no_change() {
         .children(generation, a, 0, 10, ListOrder::DEFAULT)
         .unwrap();
     assert_eq!((page.items[0].before, page.items[0].change), (None, None));
-    let list = state.list(generation, 0, ListKind::GrewMost, 10).unwrap();
+    let list = state
+        .list(generation, 0, ListKind::GrewMost, 10, None)
+        .unwrap();
     assert_eq!(names(&list), ["a"], "the folder kept its id: +200");
 }
 
@@ -192,7 +194,7 @@ fn grew_most_picks_by_absolute_change() {
         }
     });
     let list = state
-        .list(generation, 0, ListKind::GrewMost, u32::MAX)
+        .list(generation, 0, ListKind::GrewMost, u32::MAX, None)
         .unwrap();
     assert_eq!((list.items.len(), list.truncated), (1000, true));
     let changes: Vec<i64> = list
@@ -214,7 +216,9 @@ fn grew_most_picks_by_absolute_change() {
 fn no_baseline_gives_empty_list() {
     let state = AppState::default();
     let generation = state.install_tree(build(vec![dir(1, 0, "b", 100), dir(2, 0, "a", 50)]));
-    let list = state.list(generation, 0, ListKind::GrewMost, 10).unwrap();
+    let list = state
+        .list(generation, 0, ListKind::GrewMost, 10, None)
+        .unwrap();
     assert!(list.items.is_empty() && !list.truncated);
     assert_eq!((list.baseline_at, list.baseline_rev), (None, 0));
 

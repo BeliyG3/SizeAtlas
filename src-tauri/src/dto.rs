@@ -12,7 +12,7 @@ pub use growth::{ChangeDto, Compared, delta};
 
 mod lists;
 
-pub use lists::{ListDto, ListItemDto};
+pub use lists::{FoundDto, ListDto, ListItemDto};
 
 mod recycle;
 

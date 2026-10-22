@@ -92,7 +92,8 @@ pub async fn get_type_stats(
         .map_err(CmdError::from)?
 }
 
-/// Up to `limit` (at most 1000) items below `id`, in the order of `kind`.
+/// Up to `limit` (at most 1000) items below `id`, in the order of `kind`. `query` only matters
+/// for `ListKind::Search`.
 #[tauri::command]
 pub async fn get_list(
     state: State<'_, AppState>,
@@ -100,11 +101,14 @@ pub async fn get_list(
     id: u32,
     kind: ListKind,
     limit: u32,
+    query: Option<String>,
 ) -> Result<ListDto, CmdError> {
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || state.list(generation, id, kind, limit))
-        .await
-        .map_err(CmdError::from)?
+    tauri::async_runtime::spawn_blocking(move || {
+        state.list(generation, id, kind, limit, query.as_deref())
+    })
+    .await
+    .map_err(CmdError::from)?
 }
 
 /// `id`, or its nearest live ancestor if a change removed it.

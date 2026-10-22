@@ -106,8 +106,20 @@ pub struct ListDto {
     /// More items matched than the limit allowed.
     pub truncated: bool,
     pub items: Vec<ListItemDto>,
+    /// Totals of a search; `None` for every other list.
+    pub found: Option<FoundDto>,
     /// As in [`super::Summary`].
     pub baseline_at: Option<i64>,
     pub baseline_rev: u64,
     pub baseline_pending: bool,
+}
+
+/// What a search found in all, not just in the `items` that fit the limit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FoundDto {
+    /// Every match, a folder and the items inside it each counted.
+    pub count: u64,
+    /// Size on disk of the matches, an item inside a matching folder not counted twice.
+    pub size: u64,
 }

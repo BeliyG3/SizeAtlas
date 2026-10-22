@@ -207,6 +207,7 @@ fn list_kinds_and_list_items_use_camel_case() {
         ("unreadable", ListKind::Unreadable),
         ("longestPaths", ListKind::LongestPaths),
         ("grewMost", ListKind::GrewMost),
+        ("search", ListKind::Search),
     ];
     for (name, kind) in kinds {
         assert_eq!(
@@ -244,6 +245,7 @@ fn list_kinds_and_list_items_use_camel_case() {
             parent: 3,
             deleted: true,
         }],
+        found: Some(FoundDto { count: 7, size: 90 }),
         baseline_at: None,
         baseline_rev: 0,
         baseline_pending: false,
@@ -253,6 +255,7 @@ fn list_kinds_and_list_items_use_camel_case() {
         (&value["size"], &value["truncated"], &value["baselineAt"]),
         (&json!(50), &json!(true), &json!(null))
     );
+    assert_eq!(value["found"], json!({ "count": 7, "size": 90 }));
     let item = &value["items"][0];
     assert_eq!(
         (

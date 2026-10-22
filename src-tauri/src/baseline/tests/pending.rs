@@ -10,7 +10,9 @@ use crate::state::Trashed;
 fn pending(state: &AppState, generation: u64) -> bool {
     let summary = state.summary(generation).unwrap().baseline_pending;
     let children = state.children(generation, 0, 0, 10, ListOrder::DEFAULT);
-    let list = state.list(generation, 0, ListKind::GrewMost, 10).unwrap();
+    let list = state
+        .list(generation, 0, ListKind::GrewMost, 10, None)
+        .unwrap();
     assert_eq!(children.unwrap().baseline_pending, summary);
     assert_eq!(list.baseline_pending, summary);
     summary

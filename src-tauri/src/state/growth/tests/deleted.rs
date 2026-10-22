@@ -26,7 +26,7 @@ fn grew_most_lists_topmost_deleted_folder() {
     });
     let rows = |base| {
         let list = state
-            .list(generation, base, ListKind::GrewMost, 10)
+            .list(generation, base, ListKind::GrewMost, 10, None)
             .unwrap();
         assert_eq!(list.baseline_at, Some(BASE_AT));
         list.items
@@ -38,7 +38,9 @@ fn grew_most_lists_topmost_deleted_folder() {
         (name.into(), folder.into(), Some(ChangeDto::Delta(delta)))
     };
 
-    let below_a = state.list(generation, a, ListKind::GrewMost, 10).unwrap();
+    let below_a = state
+        .list(generation, a, ListKind::GrewMost, 10, None)
+        .unwrap();
     let old = &below_a.items[0];
     assert_eq!(below_a.items.len(), 1);
     assert!(old.deleted && old.item.is_dir);
@@ -55,7 +57,7 @@ fn grew_most_lists_topmost_deleted_folder() {
         .unwrap();
     assert_eq!(rows(0), [row("a", "", -500), row("gone", "b", -7000)]);
     let ids: Vec<u32> = state
-        .list(generation, 0, ListKind::GrewMost, 10)
+        .list(generation, 0, ListKind::GrewMost, 10, None)
         .unwrap()
         .items
         .iter()
@@ -99,7 +101,9 @@ fn folders_found_again_by_a_refresh_are_not_deleted() {
             Some(())
         })
         .unwrap();
-    let list = state.list(generation, 0, ListKind::GrewMost, 10).unwrap();
+    let list = state
+        .list(generation, 0, ListKind::GrewMost, 10, None)
+        .unwrap();
     let deleted: Vec<&str> = list
         .items
         .iter()
@@ -127,7 +131,9 @@ fn an_empty_deleted_folder_has_no_row() {
             },
         ];
     });
-    let list = state.list(generation, 0, ListKind::GrewMost, 10).unwrap();
+    let list = state
+        .list(generation, 0, ListKind::GrewMost, 10, None)
+        .unwrap();
     let names: Vec<_> = list.items.iter().map(|i| i.item.name.as_str()).collect();
     assert_eq!(names, ["full"], "no change, no row, as for live folders");
     assert!(!list.truncated);
