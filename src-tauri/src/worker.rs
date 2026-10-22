@@ -209,11 +209,11 @@ fn apply_refresh(
     };
     notify(Notice::RootsChanged);
     let saved = jobs::save(&changed, cache_dir);
-    drop(changed);
     // New ids, maybe all of them renumbered by a compaction: the baseline is computed again,
     // under `write` (see `state::change::tree_mut`).
     let compared = baseline::refresh(state, cache_dir, &job.root);
     drop(write);
+    drop(changed);
     if compared {
         notify(Notice::RootsChanged);
     }
