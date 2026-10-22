@@ -69,8 +69,8 @@ export const api = {
   getTypeStats: (generation: number, id: number) =>
     invoke<TypeStats>("get_type_stats", { generation, id }),
   /** At most 1000 items below `id` in the order of `kind`; the folder itself is not listed. */
-  getList: (generation: number, id: number, kind: ListKind, limit: number) =>
-    invoke<List>("get_list", { generation, id, kind, limit }),
+  getList: (generation: number, id: number, kind: ListKind, limit: number, query?: string) =>
+    invoke<List>("get_list", { generation, id, kind, limit, query: query ?? null }),
   /** Raw bytes; decode with `parseTreemap`. */
   getTreemap: (generation: number, id: number, width: number, height: number) =>
     invoke<ArrayBuffer>("get_treemap", { generation, id, width, height }),

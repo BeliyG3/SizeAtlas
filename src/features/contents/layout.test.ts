@@ -124,6 +124,9 @@ describe("column view", () => {
     expect(listed(DEFAULT_VIEW, "largest")).not.toContain("change");
     expect(withDefaults(DEFAULT_VIEW, true, "largest").hidden).toEqual(["before", "change"]);
     expect(withDefaults(DEFAULT_VIEW, false, "largest").hidden).toEqual(["before", "change"]);
+    // Search results start like the largest files and folders.
+    expect(withDefaults(DEFAULT_VIEW, true, "search").hidden).toEqual(["before", "change"]);
+    expect(listed(DEFAULT_VIEW, "search")).toContain("path");
     expect(withDefaults(DEFAULT_VIEW, true, "grewMost")).toBe(DEFAULT_VIEW);
     expect(withDefaults(DEFAULT_VIEW, false, "grewMost")).toBe(DEFAULT_VIEW);
     // Shown in another list: it stays shown there.

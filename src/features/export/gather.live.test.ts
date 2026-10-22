@@ -112,7 +112,25 @@ describe("gather during a live first scan", () => {
       [1, 12],
     ]);
     expect(got.folderSize).toBe(30);
-    expect(getList).toHaveBeenCalledWith(1, 0, "largest", 2);
+    expect(getList).toHaveBeenCalledWith(1, 0, "largest", 2, undefined);
+  });
+
+  it("reads a search again with its query", async () => {
+    getSummary.mockResolvedValue(summary(4, true, 3));
+    getList.mockResolvedValue({ rev: 4, size: 3, items: [row(1, 2)] } as List);
+    await gather({
+      kind: "list",
+      generation: 1,
+      base: 0,
+      list: "search",
+      query: "*.mp4",
+      rows: [row(1, 2)],
+      rev: 3,
+      size: 3,
+      columns: ["name"],
+    });
+
+    expect(getList).toHaveBeenCalledWith(1, 0, "search", 1, "*.mp4");
   });
 
   it("refreshes all counts for live rows displaced from a capped list", async () => {

@@ -201,7 +201,8 @@ export type ListKind =
   | "empty"
   | "unreadable"
   | "longestPaths"
-  | "grewMost";
+  | "grewMost"
+  | "search";
 
 export interface ListItem extends Item {
   /** Folder of the item relative to the listed folder; empty if it is directly inside. */
@@ -220,6 +221,8 @@ export interface List {
   /** More items matched than the limit allowed. */
   truncated: boolean;
   items: ListItem[];
+  /** "search" only: every match, not just the listed ones, and their size on disk without double counting. */
+  found: { count: number; size: number } | null;
   /** As in `Summary`. */
   baselineAt: number | null;
   baselineRev: number;

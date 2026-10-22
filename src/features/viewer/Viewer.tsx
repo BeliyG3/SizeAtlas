@@ -9,7 +9,7 @@ import { ContentsTable } from "../contents/ContentsTable";
 import { useDetails } from "../contents/useDetails";
 import { useListBase } from "../lists/base";
 import { ListTable } from "../lists/ListTable";
-import { isListMode, type Mode } from "../lists/modes";
+import { listShown, type Mode } from "../lists/modes";
 import type { MenuTarget } from "../menu/ItemMenu";
 import { SplitPane } from "../shell/SplitPane";
 import { MIN_PANE } from "../shell/split";
@@ -29,6 +29,8 @@ interface Props {
   selection: { readonly id: number; readonly folder: number; readonly fallbackOf?: number };
   /** What the table shows, picked on the toolbar. */
   mode: Mode;
+  /** The words searched for: while they are not blank, the table shows the results over any mode. */
+  query: string;
   /** The table sort; kept by the parent, so it survives folder and root changes. */
   sort: SortState;
   onSort: (sort: SortState) => void;
@@ -47,6 +49,7 @@ export const Viewer = memo(function Viewer({
   summary,
   selection,
   mode,
+  query,
   sort,
   onSort,
   onSelect,
@@ -73,7 +76,8 @@ export const Viewer = memo(function Viewer({
   );
   const crumbs = useCrumbs(generation, summary.rev, selection.folder, onFail);
   const shownFolder = useDebounced(selection.folder, VIEW_DELAY_MS);
-  const listing = isListMode(mode);
+  const list = listShown(mode, query);
+  const listing = list !== null;
   const { base, pick, enter } = useListBase(selection, listing);
   // A change can remove the list's own folder: the list then goes to its nearest live ancestor.
   useEffect(() => {
@@ -119,11 +123,13 @@ export const Viewer = memo(function Viewer({
       label={t("split.charts")}
       collapse={showChart ? undefined : "second"}
       first={
-        isListMode(mode) ? (
+        list !== null ? (
           <ListTable
-            key={`${mode}:${base}`}
+            // One table for all queries: typing does not remount, the query refetches.
+            key={`${list}:${base}`}
             summary={summary}
-            kind={mode}
+            kind={list}
+            query={query}
             base={base}
             basePath={crumbsPath(crumbs.slice(0, baseAt + 1))}
             parent={baseParent}

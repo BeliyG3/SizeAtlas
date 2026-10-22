@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import en from "../../i18n/locales/en.json";
-import { MODE_MENU, MODES, isListMode, parseMode } from "./modes";
+import { MODE_MENU, MODES, isListMode, listShown, parseMode } from "./modes";
 
 describe("table modes", () => {
   it("restore the stored mode, the values of the old switch included", () => {
@@ -24,6 +24,21 @@ describe("table modes", () => {
     expect(isListMode("all")).toBe(false);
     expect(isListMode("folders")).toBe(false);
     expect(MODES.filter(isListMode)).toHaveLength(15);
+  });
+
+  it("never offer or restore search as a mode: a query shows it over any mode", () => {
+    expect(MODES as readonly string[]).not.toContain("search");
+    expect(JSON.stringify(MODE_MENU)).not.toContain("search");
+    expect(parseMode("search")).toBe("all");
+    expect(en).toHaveProperty(["mode.search"]);
+  });
+
+  it("show the search results over any mode while the query has words", () => {
+    expect(listShown("all", "backup")).toBe("search");
+    expect(listShown("largest", " *.mp4 ")).toBe("search");
+    expect(listShown("largest", "")).toBe("largest");
+    expect(listShown("folders", "   ")).toBeNull();
+    expect(listShown("all", "")).toBeNull();
   });
 
   it("end the group of the largest with Grew most", () => {

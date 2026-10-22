@@ -177,3 +177,10 @@
 .crow.deleted {
   opacity: 0.5;
 }
+
+/* The totals line above the rows of a search; it does not scroll with them. */
+.found {
+  flex: none;
+  background: var(--panel);
+  border-block-end: 1px solid var(--border);
+}

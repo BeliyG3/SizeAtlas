@@ -19,6 +19,8 @@ export type ExportSource =
       /** The folder whose subtree is listed. */
       base: number;
       list: ListKind;
+      /** The words of a "search" list; read again with them while a scan runs. */
+      query?: string;
       /** The rows in the table's order. */
       rows: readonly ListItem[];
       /** Revision of the tree the list was made from. */

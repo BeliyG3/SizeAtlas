@@ -174,6 +174,7 @@ export function Browser({
         summary={summary}
         selection={selection}
         mode={mode}
+        query=""
         sort={sort}
         onSort={setSort}
         onSelect={onSelectNode}

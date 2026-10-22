@@ -2,7 +2,7 @@ import { useBatchCost } from "../scan/useBatchCost";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "../../api/client";
 import type { Detail, List, ListItem, ListKind, Summary } from "../../api/types";
-import { formatCount } from "../../format";
+import { formatCount, formatSize } from "../../format";
 import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import type { Column } from "../contents/columns";
@@ -41,6 +41,8 @@ const canSort = (column: Column) => !column.detail;
 interface Props {
   summary: Summary;
   kind: ListKind;
+  /** The words of a "search" list. */
+  query?: string;
   /** The folder whose subtree is listed. */
   base: number;
   /** Full path of `base`; empty while unknown. */
@@ -69,6 +71,7 @@ interface Props {
 export function ListTable({
   summary,
   kind,
+  query,
   base,
   basePath,
   parent,
@@ -107,12 +110,13 @@ export function ListTable({
         generation,
         base,
         list: kind,
+        query,
         rows,
         rev: list.rev,
         size: list.size,
         columns: layout.ids,
       },
-    [list, generation, base, kind, rows, layout.ids],
+    [list, generation, base, kind, query, rows, layout.ids],
   );
   useExportSource(exportSource);
   const [marks, setMarks] = useMarks(listKey, selectedId);
@@ -126,7 +130,7 @@ export function ListTable({
   useEffect(() => {
     let live = true;
     const applied = measure();
-    api.getList(generation, base, kind, LIST_LIMIT).then(
+    api.getList(generation, base, kind, LIST_LIMIT, query).then(
       (answer) => {
         if (!live) return;
         applied();
@@ -137,7 +141,7 @@ export function ListTable({
     return () => {
       live = false;
     };
-  }, [generation, rev, baselineRev, base, kind, onFail, measure]);
+  }, [generation, rev, baselineRev, base, kind, query, onFail, measure]);
 
   const visibleIds = useMemo(
     () => rows.slice(first, last).flatMap((r) => liveId(r) ?? []),
@@ -224,41 +228,55 @@ export function ListTable({
   }
   const cursorShown = cursor !== null && cursor >= first && cursor < last;
 
+  // The count and size of all matches, not only of the rows shown; nothing found says so below.
+  const found = list?.found && list.found.count > 0 ? list.found : null;
+
   return (
-    <div
-      className="contents"
-      ref={body}
-      role="grid"
-      aria-label={t(`mode.${kind}`)}
-      aria-rowcount={rows.length + 1}
-      aria-colcount={layout.columns.length}
-      aria-activedescendant={cursorShown ? `crow-${cursor}` : undefined}
-      tabIndex={0}
-      onScroll={onScroll}
-      onKeyDown={(e) =>
-        tableKeyDown(e, { cursor, viewport, count: rows.length }, actions, isRtl(lang))
-      }
-      // Entering with Tab: put the cursor on the first row so the keys have something to act on.
-      onFocus={(e) => {
-        if (e.target === e.currentTarget && cursor === null && rows.length > 0) setCursor(0);
-      }}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      <TableHeader
-        layout={layout}
-        sort={sort}
-        canSort={canSort}
-        sizeHint={t(`sizeMode.${summary.sizeMode}`)}
-        baselineAt={summary.baselineAt}
-        onSort={(column) => setSort(nextListSort(sort, column.id))}
-      />
-      <div className="crows" style={{ height: rows.length * ROW_HEIGHT, width: layout.width }}>
-        {shown}
-      </div>
-      {list && rows.length === 0 && <p className="dim pad">{t(emptyListKey(kind, list))}</p>}
-      {list?.truncated && (
-        <p className="dim pad">{t("lists.capped", { count: formatCount(LIST_LIMIT, lang) })}</p>
+    <>
+      {found && (
+        <p className="dim pad found">
+          {t("search.found", {
+            count: found.count,
+            items: formatCount(found.count, lang),
+            size: formatSize(found.size, lang),
+          })}
+        </p>
       )}
-    </div>
+      <div
+        className="contents"
+        ref={body}
+        role="grid"
+        aria-label={t(`mode.${kind}`)}
+        aria-rowcount={rows.length + 1}
+        aria-colcount={layout.columns.length}
+        aria-activedescendant={cursorShown ? `crow-${cursor}` : undefined}
+        tabIndex={0}
+        onScroll={onScroll}
+        onKeyDown={(e) =>
+          tableKeyDown(e, { cursor, viewport, count: rows.length }, actions, isRtl(lang))
+        }
+        // Entering with Tab: put the cursor on the first row so the keys have something to act on.
+        onFocus={(e) => {
+          if (e.target === e.currentTarget && cursor === null && rows.length > 0) setCursor(0);
+        }}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <TableHeader
+          layout={layout}
+          sort={sort}
+          canSort={canSort}
+          sizeHint={t(`sizeMode.${summary.sizeMode}`)}
+          baselineAt={summary.baselineAt}
+          onSort={(column) => setSort(nextListSort(sort, column.id))}
+        />
+        <div className="crows" style={{ height: rows.length * ROW_HEIGHT, width: layout.width }}>
+          {shown}
+        </div>
+        {list && rows.length === 0 && <p className="dim pad">{t(emptyListKey(kind, list))}</p>}
+        {list?.truncated && (
+          <p className="dim pad">{t("lists.capped", { count: formatCount(LIST_LIMIT, lang) })}</p>
+        )}
+      </div>
+    </>
   );
 }

@@ -109,4 +109,9 @@ describe("a list without rows", () => {
     expect(emptyListKey("grewMost", list(5, false))).toBe("lists.empty");
     expect(emptyListKey("largestFiles", list(null, true))).toBe("lists.empty");
   });
+
+  it("says nothing was found for a search, whatever the baseline", () => {
+    expect(emptyListKey("search", list(null, false))).toBe("search.none");
+    expect(emptyListKey("search", list(5, false))).toBe("search.none");
+  });
 });

@@ -89,7 +89,8 @@ async function gatherOnce(source: ExportSource): Promise<Gathered | null> {
   } else {
     ({ rows: items, size: folderSize, rev } = source);
     if (scanning) {
-      const latest = await api.getList(generation, source.base, source.list, source.rows.length);
+      const { base, list, rows, query } = source;
+      const latest = await api.getList(generation, base, list, rows.length, query);
       const byId = new Map(latest.items.map((item) => [item.id, item]));
       const parents = new Map<number, Promise<{ rev: number; items: ReadonlyMap<number, Item> }>>();
       // Keep the table's selected order; refresh every field of rows displaced from a capped list.
