@@ -178,7 +178,7 @@
   "status.free": "{size} 사용 가능",
   "status.unaccounted": "미확인 {size}",
   "status.scanned": "마지막 스캔: {ago}",
-  "status.compared": "{ago} 스캔과 비교",
+  "status.compared": "비교 기준 스캔: {ago}",
   "status.scanning_other": "{root} 스캔 중: 파일 {files}개",
   "status.refreshing_other": "{folder} 새로 고침 중: 파일 {files}개",
   "split.left": "폴더 트리 너비",

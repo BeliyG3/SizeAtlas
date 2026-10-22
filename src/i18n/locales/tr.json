@@ -245,7 +245,7 @@
   "change.new": "yeni",
   "change.deleted": "silindi",
   "change.coverage": "Bu klasör iki taramadan yalnızca birinde okunabildi",
-  "change.approx": "Değişim yaklaşık",
+  "change.approx": "Değişim yaklaşık bir değerdir",
   "columns.menu": "Sütunlar",
   "columns.fit": "Sütunu sığacak şekilde boyutlandır",
   "columns.fitAll": "Tüm sütunları sığacak şekilde boyutlandır",

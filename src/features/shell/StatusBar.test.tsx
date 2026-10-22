@@ -42,7 +42,7 @@ describe("StatusBar", () => {
 
   it("adds the date of the scan the changes are compared with", () => {
     expect(render(summary(Date.now() / 1000 - 9 * DAY))).toContain(
-      "scanned 2 days ago · compared with the scan of 9 days ago",
+      "scanned 2 days ago · compared with the scan made 9 days ago",
     );
   });
 });

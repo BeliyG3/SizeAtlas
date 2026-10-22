@@ -178,7 +178,7 @@
   "status.free": "空き {size}",
   "status.unaccounted": "内訳不明 {size}",
   "status.scanned": "最終スキャン: {ago}",
-  "status.compared": "比較対象: {ago} のスキャン",
+  "status.compared": "比較対象のスキャン: {ago}",
   "status.scanning_other": "{root} をスキャン中: {files} 個のファイル",
   "status.refreshing_other": "{folder} を更新中: {files} 個のファイル",
   "split.left": "フォルダーツリーの幅",

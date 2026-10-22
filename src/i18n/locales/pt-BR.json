@@ -258,7 +258,7 @@
   "col.change": "Variação",
   "col.changeHint": "Variação do tamanho em disco desde a análise de {date}",
   "change.new": "novo",
-  "change.deleted": "excluído",
+  "change.deleted": "excluída",
   "change.coverage": "Esta pasta só pôde ser lida em uma das duas análises",
   "change.approx": "A variação é aproximada",
   "columns.menu": "Colunas",

@@ -178,7 +178,7 @@
   "status.free": "{size} kosong",
   "status.unaccounted": "{size} tidak tercatat",
   "status.scanned": "dipindai {ago}",
-  "status.compared": "dibandingkan dengan hasil pindai {ago}",
+  "status.compared": "dibandingkan dengan hasil pindai yang dibuat {ago}",
   "status.scanning_other": "Memindai {root}: {files} file",
   "status.refreshing_other": "Menyegarkan {folder}: {files} file",
   "split.left": "Lebar pohon folder",

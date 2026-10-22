@@ -191,7 +191,7 @@
   "status.free": "{size} उपलब्ध",
   "status.unaccounted": "न गिनी गई जगह: {size}",
   "status.scanned": "अंतिम स्कैन: {ago}",
-  "status.compared": "{ago} के स्कैन से तुलना",
+  "status.compared": "{ago} किए गए स्कैन से तुलना",
   "status.scanning_one": "{root} स्कैन हो रहा है: {files} फ़ाइल",
   "status.scanning_other": "{root} स्कैन हो रहा है: {files} फ़ाइलें",
   "status.refreshing_one": "{folder} रीफ़्रेश हो रहा है: {files} फ़ाइल",

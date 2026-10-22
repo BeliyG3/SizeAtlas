@@ -191,7 +191,7 @@
   "status.free": "{size} free",
   "status.unaccounted": "{size} unaccounted",
   "status.scanned": "scanned {ago}",
-  "status.compared": "compared with the scan of {ago}",
+  "status.compared": "compared with the scan made {ago}",
   "status.scanning_one": "Scanning {root}: {files} file",
   "status.scanning_other": "Scanning {root}: {files} files",
   "status.refreshing_one": "Refreshing {folder}: {files} file",
