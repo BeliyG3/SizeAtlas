@@ -245,6 +245,7 @@
   "change.new": "new",
   "change.deleted": "deleted",
   "change.coverage": "This folder was readable in only one of the two scans",
+  "change.approx": "The change is approximate",
   "columns.menu": "कॉलम",
   "columns.fit": "कॉलम की चौड़ाई सामग्री के अनुसार करें",
   "columns.fitAll": "सभी कॉलम की चौड़ाई सामग्री के अनुसार करें",

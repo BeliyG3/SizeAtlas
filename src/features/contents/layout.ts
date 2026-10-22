@@ -13,11 +13,19 @@ export interface ColumnView {
   /** Every column, hidden ones included, so a column shown again returns to its place. */
   order: readonly ColumnId[];
   hidden: readonly ColumnId[];
+  /** Shown by the user: such a column hidden by default (see `withDefaults`) is shown too. */
+  shown: readonly ColumnId[];
 }
 
 export const VIEW_KEY = "sizeatlas.columns.view";
 
-export const DEFAULT_VIEW: ColumnView = { order: COLUMNS.map((c) => c.id), hidden: [] };
+export const DEFAULT_VIEW: ColumnView = { order: COLUMNS.map((c) => c.id), hidden: [], shown: [] };
+
+/** The view in effect: Change is hidden by default while the root has no `baseline`. */
+export function withDefaults(view: ColumnView, baseline: boolean): ColumnView {
+  if (baseline || view.hidden.includes("change") || view.shown.includes("change")) return view;
+  return { ...view, hidden: [...view.hidden, "change"] };
+}
 
 /** A stored view; an unusable field gives its default, unknown or missing columns are repaired. */
 export function parseView(raw: string | null): ColumnView {
@@ -28,24 +36,29 @@ export function parseView(raw: string | null): ColumnView {
     // Garbage in storage: use the default.
   }
   if (stored === null || typeof stored !== "object") return DEFAULT_VIEW;
-  const { order, hidden } = stored as Record<string, unknown>;
+  const { order, hidden, shown } = stored as Record<string, unknown>;
   const hiddenIds: unknown[] = Array.isArray(hidden) ? hidden : [];
+  const shownIds: unknown[] = Array.isArray(shown) ? shown : [];
   return {
     // Columns of a newer version than the stored order go to the end; Name goes first.
     order: ["name", ...repairOrder(order, DEFAULT_VIEW.order).filter((id) => id !== "name")],
     hidden: DEFAULT_VIEW.order.filter((id) => id !== "name" && hiddenIds.includes(id)),
+    shown: DEFAULT_VIEW.order.filter((id) => id !== "name" && shownIds.includes(id)),
   };
 }
 
 export const serializeView = (view: ColumnView) => JSON.stringify(view);
 
-/** Shows a hidden column or hides a shown one; Name cannot be hidden. */
-export function toggleColumn(view: ColumnView, id: ColumnId): ColumnView {
+/**
+ * Shows a column hidden in the view in effect (`withDefaults` with `baseline`), or hides a shown
+ * one; Name cannot be hidden. The choice is kept in `view`, the stored one.
+ */
+export function toggleColumn(view: ColumnView, id: ColumnId, baseline: boolean): ColumnView {
   if (id === "name") return view;
-  const hidden = view.hidden.includes(id)
-    ? view.hidden.filter((c) => c !== id)
-    : [...view.hidden, id];
-  return { ...view, hidden };
+  const others = (ids: readonly ColumnId[]) => ids.filter((c) => c !== id);
+  return withDefaults(view, baseline).hidden.includes(id)
+    ? { ...view, hidden: others(view.hidden), shown: [...others(view.shown), id] }
+    : { ...view, hidden: [...others(view.hidden), id], shown: others(view.shown) };
 }
 
 const BY_ID = new Map(COLUMNS.map((c) => [c.id, c]));

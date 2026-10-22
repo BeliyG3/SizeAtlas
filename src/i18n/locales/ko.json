@@ -230,6 +230,7 @@
   "change.new": "new",
   "change.deleted": "deleted",
   "change.coverage": "This folder was readable in only one of the two scans",
+  "change.approx": "The change is approximate",
   "columns.menu": "열",
   "columns.fit": "열 크기 자동 조정",
   "columns.fitAll": "모든 열 크기 자동 조정",

@@ -76,7 +76,7 @@ export function ListTable({
   const { generation, rev, baselineRev } = summary;
   const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
-  const layout = useColumnLayout(body, true);
+  const layout = useColumnLayout(body, true, summary.baselineAt !== null);
   const [list, setList] = useState<List | null>(null);
   const measure = useBatchCost("tree", list);
   // Null: the order of the list itself.

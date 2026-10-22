@@ -260,6 +260,7 @@
   "change.new": "new",
   "change.deleted": "deleted",
   "change.coverage": "This folder was readable in only one of the two scans",
+  "change.approx": "The change is approximate",
   "columns.menu": "Colonne",
   "columns.fit": "Adatta colonna",
   "columns.fitAll": "Adatta tutte le colonne",

@@ -1,6 +1,6 @@
 import { memo, type MouseEvent, type ReactNode } from "react";
 import type { Detail, Item, ListItem } from "../../api/types";
-import { formatChange, formatCount, formatDate, formatPercent } from "../../format";
+import { changeParts, formatCount, formatDate, formatPercent } from "../../format";
 import { useT } from "../../i18n/react";
 import { useSettings, useSize } from "../../settings/react";
 import type { ColumnId } from "./columns";
@@ -104,14 +104,21 @@ export const ContentsRow = memo(function ContentsRow({
   const change = waiting ? null : item.change;
   const delta = typeof change === "object" ? (change?.delta ?? 0) : 0;
   const approx = delta !== 0 && item.approxChange;
+  const parts = changeParts(delta, lang, unit);
+  // The sign stays with the number in a right-to-left table; the unit goes as in Size.
   const changeText =
     change === "new"
       ? t("change.new")
       : change === "unknown"
         ? "?"
-        : `${approx ? "≈ " : ""}${formatChange(delta, lang, unit)}`;
+        : parts && (
+            <>
+              <bdi dir="ltr">{`${approx ? "≈ " : ""}${parts[0]}`}</bdi> {parts[1]}
+            </>
+          );
   const changeClass = delta > 0 ? "num change-up" : delta < 0 ? "num change-down" : "num";
-  const coverage = change === "unknown" || approx ? t("change.coverage") : undefined;
+  const changeHint =
+    change === "unknown" ? t("change.coverage") : approx ? t("change.approx") : undefined;
   const cells: Record<
     ColumnId,
     [className: string | undefined, content: ReactNode, title?: string]
@@ -141,7 +148,7 @@ export const ContentsRow = memo(function ContentsRow({
       </>,
     ],
     before: ["num", item.before === null ? "" : size(item.before)],
-    change: [changeClass, changeText, coverage],
+    change: [changeClass, changeText, changeHint],
     files: ["num", waiting ? "" : count(item.files)],
     folders: ["num", item.pending ? "" : count(item.folders)],
     dirs: ["num", item.pending ? "" : count(item.dirs)],

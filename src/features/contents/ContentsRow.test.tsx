@@ -37,9 +37,9 @@ const item: ListItem = {
 
 const none = () => {};
 
-/** Markup of the Change cell of `over` in English. */
-function changeCell(over: Partial<Item>) {
-  vi.stubGlobal("navigator", { languages: ["en"] });
+/** Markup of the Change cell of `over` in `lang`. */
+function changeCell(over: Partial<Item>, lang = "en") {
+  vi.stubGlobal("navigator", { languages: [lang] });
   const html = renderToStaticMarkup(
     <I18nProvider>
       <ContentsRow
@@ -63,6 +63,7 @@ function changeCell(over: Partial<Item>) {
 }
 
 const COVERAGE = "This folder was readable in only one of the two scans";
+const APPROX = "The change is approximate";
 
 describe("ContentsRow", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -95,10 +96,10 @@ describe("ContentsRow", () => {
 
   it("shows growth and shrinking with their sign and colour, nothing for no change", () => {
     expect(changeCell({ change: { delta: 1536 } })).toBe(
-      '<span role="gridcell" data-col="change" class="num change-up">+1.50 KB</span>',
+      '<span role="gridcell" data-col="change" class="num change-up"><bdi dir="ltr">+1.50</bdi> KB</span>',
     );
     expect(changeCell({ change: { delta: -1536 } })).toBe(
-      '<span role="gridcell" data-col="change" class="num change-down">−1.50 KB</span>',
+      '<span role="gridcell" data-col="change" class="num change-down"><bdi dir="ltr">−1.50</bdi> KB</span>',
     );
     expect(changeCell({ change: { delta: 0 } })).toBe(
       '<span role="gridcell" data-col="change" class="num"></span>',
@@ -116,7 +117,13 @@ describe("ContentsRow", () => {
       `<span role="gridcell" data-col="change" class="num" title="${COVERAGE}">?</span>`,
     );
     expect(changeCell({ change: { delta: -1536 }, approxChange: true })).toBe(
-      `<span role="gridcell" data-col="change" class="num change-down" title="${COVERAGE}">≈ −1.50 KB</span>`,
+      `<span role="gridcell" data-col="change" class="num change-down" title="${APPROX}"><bdi dir="ltr">≈ −1.50</bdi> KB</span>`,
+    );
+  });
+
+  it("keeps the sign and the approximate mark with the number in a right-to-left table", () => {
+    expect(changeCell({ change: { delta: 1536 }, approxChange: true }, "ar")).toMatch(
+      /class="num change-up" title="[^"]+"><bdi dir="ltr">≈ \+1\.50<\/bdi> كيلوبايت<\/span>$/,
     );
   });
 });

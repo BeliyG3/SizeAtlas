@@ -230,6 +230,7 @@
   "change.new": "new",
   "change.deleted": "deleted",
   "change.coverage": "This folder was readable in only one of the two scans",
+  "change.approx": "The change is approximate",
   "columns.menu": "คอลัมน์",
   "columns.fit": "ปรับขนาดคอลัมน์ให้พอดี",
   "columns.fitAll": "ปรับขนาดคอลัมน์ทั้งหมดให้พอดี",

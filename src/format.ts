@@ -31,11 +31,15 @@ const FIXED_POWER: Readonly<Record<Exclude<SizeUnit, "auto">, number>> = {
  */
 export function formatSize(bytes: number, lang: Lang, fixed: SizeUnit = "auto"): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  return sizeParts(bytes, lang, fixed).join(" ");
+}
+
+/** The number and the unit of `formatSize` for a valid size. */
+function sizeParts(bytes: number, lang: Lang, fixed: SizeUnit): [number: string, unit: string] {
   const units = translate(lang, "size.units").split(",");
   if (fixed !== "auto") {
     const power = FIXED_POWER[fixed];
-    const number = numberFormat(lang, power === 0 ? 0 : 2).format(bytes / 1024 ** power);
-    return `${number} ${units[power]}`;
+    return [numberFormat(lang, power === 0 ? 0 : 2).format(bytes / 1024 ** power), units[power]];
   }
   let value = bytes;
   let unit = 0;
@@ -51,14 +55,26 @@ export function formatSize(bytes: number, lang: Lang, fixed: SizeUnit = "auto"):
     rounded = roundTo(value, digitsFor(value, unit));
   }
   const digits = digitsFor(rounded, unit); // 9.999 rounds to 10.00 -> show "10.0"
-  const number = numberFormat(lang, digits).format(rounded);
-  return `${number} ${units[unit]}`;
+  return [numberFormat(lang, digits).format(rounded), units[unit]];
+}
+
+/**
+ * A change of size as its signed number and its unit, ["+12.4", "GB"] or ["−3.1", "GB"] (U+2212);
+ * null for no change. A right-to-left table keeps the sign with the number by isolating it.
+ */
+export function changeParts(
+  delta: number,
+  lang: Lang,
+  unit: SizeUnit,
+): [number: string, unit: string] | null {
+  if (delta === 0 || !Number.isFinite(delta)) return null;
+  const [number, name] = sizeParts(Math.abs(delta), lang, unit);
+  return [`${delta > 0 ? "+" : "−"}${number}`, name];
 }
 
 /** A change of size with its sign, "+12.4 GB" or "−3.1 GB" (U+2212); empty for no change. */
 export function formatChange(delta: number, lang: Lang, unit: SizeUnit): string {
-  if (delta === 0) return "";
-  return `${delta > 0 ? "+" : "−"}${formatSize(Math.abs(delta), lang, unit)}`;
+  return changeParts(delta, lang, unit)?.join(" ") ?? "";
 }
 
 function digitsFor(value: number, unit: number): number {

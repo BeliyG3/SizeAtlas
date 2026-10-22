@@ -245,6 +245,7 @@
   "change.new": "new",
   "change.deleted": "deleted",
   "change.coverage": "This folder was readable in only one of the two scans",
+  "change.approx": "The change is approximate",
   "columns.menu": "Columns",
   "columns.fit": "Size column to fit",
   "columns.fitAll": "Size all columns to fit",

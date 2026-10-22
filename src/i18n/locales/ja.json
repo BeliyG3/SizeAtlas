@@ -230,6 +230,7 @@
   "change.new": "new",
   "change.deleted": "deleted",
   "change.coverage": "This folder was readable in only one of the two scans",
+  "change.approx": "The change is approximate",
   "columns.menu": "列",
   "columns.fit": "列の幅を自動調整",
   "columns.fitAll": "すべての列の幅を自動調整",

@@ -230,6 +230,7 @@
   "change.new": "new",
   "change.deleted": "deleted",
   "change.coverage": "This folder was readable in only one of the two scans",
+  "change.approx": "The change is approximate",
   "columns.menu": "列",
   "columns.fit": "将此列调整为合适的大小",
   "columns.fitAll": "将所有列调整为合适的大小",

@@ -305,6 +305,7 @@
   "change.new": "new",
   "change.deleted": "deleted",
   "change.coverage": "This folder was readable in only one of the two scans",
+  "change.approx": "The change is approximate",
   "columns.menu": "الأعمدة",
   "columns.fit": "ضبط حجم العمود ليلائم المحتوى",
   "columns.fitAll": "ضبط حجم كل الأعمدة لتلائم المحتوى",

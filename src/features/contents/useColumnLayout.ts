@@ -14,6 +14,7 @@ import {
   toggleColumn,
   totalWidth,
   visibleColumns,
+  withDefaults,
 } from "./layout";
 
 /** The widths the user set, one per column id. */
@@ -24,15 +25,24 @@ const WIDTHS_KEY = "sizeatlas.columns.widths";
  */
 const LEGACY_WIDTHS_KEY = "sizeatlas.columns";
 
-/** Widths, order and visibility of the table's columns, all stored. `body` holds the cells; `lists`: a flat list, which also shows the Path column. */
-export function useColumnLayout(body: RefObject<HTMLElement | null>, lists: boolean) {
+/**
+ * Widths, order and visibility of the table's columns, all stored. `body` holds the cells;
+ * `lists`: a flat list, which also shows the Path column; `baseline`: the root has a previous
+ * scan to compare with (without one, Change is hidden unless the user showed it).
+ */
+export function useColumnLayout(
+  body: RefObject<HTMLElement | null>,
+  lists: boolean,
+  baseline: boolean,
+) {
   const { widths, stored, resize, store } = useColumnWidths(
     WIDTHS_KEY,
     DEFAULT_WIDTHS,
     useHeaderWidths(body),
     LEGACY_WIDTHS_KEY,
   );
-  const [view, setView] = useStored(VIEW_KEY, parseView, serializeView);
+  const [storedView, setView] = useStored(VIEW_KEY, parseView, serializeView);
+  const view = useMemo(() => withDefaults(storedView, baseline), [storedView, baseline]);
   const columns = useMemo(() => visibleColumns(view, lists), [view, lists]);
   // One array per view: the memoized rows render these cells.
   const ids = useMemo(() => columns.map((c) => c.id), [columns]);
@@ -56,9 +66,9 @@ export function useColumnLayout(body: RefObject<HTMLElement | null>, lists: bool
     resize,
     fit: (id: ColumnId) => fit([id]),
     fitAll: () => fit(ids),
-    toggle: (id: ColumnId) => setView(toggleColumn(view, id)),
+    toggle: (id: ColumnId) => setView(toggleColumn(storedView, id, baseline)),
     move: (id: ColumnId, before: ColumnId | null) =>
-      setView({ ...view, order: moveColumn(view.order, id, before, "name") }),
+      setView({ ...storedView, order: moveColumn(storedView.order, id, before, "name") }),
     reset: () => {
       // No width the user set: the defaults, fitted to the header labels, take over.
       store({});

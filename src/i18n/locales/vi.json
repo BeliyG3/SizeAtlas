@@ -230,6 +230,7 @@
   "change.new": "new",
   "change.deleted": "deleted",
   "change.coverage": "This folder was readable in only one of the two scans",
+  "change.approx": "The change is approximate",
   "columns.menu": "Cột",
   "columns.fit": "Đổi cỡ cột cho vừa",
   "columns.fitAll": "Đổi cỡ tất cả các cột cho vừa",

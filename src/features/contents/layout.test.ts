@@ -10,6 +10,7 @@ import {
   totalWidth,
   visibleColumns,
   visibleSort,
+  withDefaults,
 } from "./layout";
 
 const ids = COLUMNS.map((c) => c.id);
@@ -27,7 +28,11 @@ describe("column view", () => {
     for (const raw of [null, "not json", "[]", "7", '{"order": "name"}']) {
       expect(parseView(raw)).toEqual(DEFAULT_VIEW);
     }
-    const view = { order: ["name", "owner", ...ids.slice(1, -1)], hidden: ["files"] };
+    const view = {
+      order: ["name", "owner", ...ids.slice(1, -1)],
+      hidden: ["files"],
+      shown: ["change"],
+    };
     expect(parseView(serializeView(view as never))).toEqual(view);
   });
 
@@ -47,7 +52,11 @@ describe("column view", () => {
       hidden: ["owner"],
     });
     const order = moveColumn(ids, "owner", "len");
-    expect(parseView(JSON.stringify({ order, hidden: 3 }))).toEqual({ order, hidden: [] });
+    expect(parseView(JSON.stringify({ order, hidden: 3 }))).toEqual({
+      order,
+      hidden: [],
+      shown: [],
+    });
   });
 
   it("sorts by a shown column: the default, or Name when that is hidden too", () => {
@@ -70,14 +79,36 @@ describe("column view", () => {
   });
 
   it("hides and shows columns, never Name", () => {
-    const hidden = toggleColumn(DEFAULT_VIEW, "owner");
+    const hidden = toggleColumn(DEFAULT_VIEW, "owner", true);
     expect(hidden.hidden).toEqual(["owner"]);
-    expect(toggleColumn(hidden, "owner").hidden).toEqual([]);
-    expect(toggleColumn(DEFAULT_VIEW, "name")).toBe(DEFAULT_VIEW);
+    expect(toggleColumn(hidden, "owner", true).hidden).toEqual([]);
+    expect(toggleColumn(DEFAULT_VIEW, "name", true)).toBe(DEFAULT_VIEW);
+  });
+
+  it("hides Change by default without a baseline, unless the user showed it", () => {
+    expect(withDefaults(DEFAULT_VIEW, true)).toBe(DEFAULT_VIEW);
+    expect(withDefaults(DEFAULT_VIEW, false).hidden).toEqual(["change"]);
+    expect(visibleColumns(withDefaults(DEFAULT_VIEW, false), false).map((c) => c.id)).not.toContain(
+      "change",
+    );
+    // Shown from the menu while there is no baseline: the choice is stored and wins.
+    const shown = toggleColumn(DEFAULT_VIEW, "change", false);
+    expect(shown.shown).toEqual(["change"]);
+    expect(withDefaults(shown, false).hidden).toEqual([]);
+    const restored = parseView(serializeView(shown));
+    expect(withDefaults(restored, false).hidden).toEqual([]);
+    // Hidden by the user while there is a baseline: it stays hidden with one too.
+    const off = toggleColumn(DEFAULT_VIEW, "change", true);
+    expect(withDefaults(off, true).hidden).toEqual(["change"]);
+    expect(toggleColumn(off, "change", true)).toEqual({ ...DEFAULT_VIEW, shown: ["change"] });
   });
 
   it("lays out only the visible columns, in their order", () => {
-    const view = { order: moveColumn(ids, "owner", "len"), hidden: ["len", "files"] as ColumnId[] };
+    const view = {
+      order: moveColumn(ids, "owner", "len"),
+      hidden: ["len", "files"] as ColumnId[],
+      shown: [],
+    };
     const columns = visibleColumns(view, false);
     expect(columns.map((c) => c.id).slice(0, 3)).toEqual(["name", "owner", "size"]);
     // Two hidden, and Path and Before exist in the flat lists only.
