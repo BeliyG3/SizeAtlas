@@ -97,7 +97,7 @@ async fn scan_one(
 }
 
 /// Installs a walked tree unless its root was closed or its scan cancelled meanwhile, then
-/// saves it as the last full scan, releases `write` and computes the baseline. What went to the
+/// saves it as the last full scan, computes the baseline and releases `write`. What went to the
 /// trash during the walk is taken out first. Closing the app does not discard it: the exit waits.
 fn install_and_save(
     state: &AppState,
@@ -117,11 +117,13 @@ fn install_and_save(
     };
     notify(Notice::RootsChanged);
     let saved = jobs::save_full(&tree, cache_dir);
+    // Under `write`, as every long work on an open tree (see `state::change::tree_mut`).
+    let compared = saved.is_ok() && baseline::refresh(state, cache_dir, &job.root);
     drop(write);
     // After `busy` is released: dropping millions of nodes must not delay closing.
     drop(replaced);
     drop(tree);
-    if saved.is_ok() && baseline::refresh(state, cache_dir, &job.root) {
+    if compared {
         notify(Notice::RootsChanged);
     }
     saved
@@ -164,7 +166,7 @@ async fn refresh_one(
 /// Puts a walked folder into the tree of its scan, unless the job was cancelled, the root was
 /// rescanned or closed, or no live folder has the path any more (it or an ancestor went to the
 /// trash): then the result is dropped. After a compaction or a refresh of an ancestor the folder
-/// is found again by its path. Saves the tree, releases `write` and computes the baseline again.
+/// is found again by its path. Saves the tree, computes the baseline again and releases `write`.
 fn apply_refresh(
     state: &AppState,
     cache_dir: &Path,
@@ -204,10 +206,12 @@ fn apply_refresh(
     };
     notify(Notice::RootsChanged);
     let saved = jobs::save(&changed, cache_dir);
-    drop(write);
-    // New ids, maybe all of them renumbered by a compaction: the baseline is computed again.
     drop(changed);
-    if baseline::refresh(state, cache_dir, &job.root) {
+    // New ids, maybe all of them renumbered by a compaction: the baseline is computed again,
+    // under `write` (see `state::change::tree_mut`).
+    let compared = baseline::refresh(state, cache_dir, &job.root);
+    drop(write);
+    if compared {
         notify(Notice::RootsChanged);
     }
     saved

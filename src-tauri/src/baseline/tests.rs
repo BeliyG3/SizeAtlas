@@ -308,3 +308,5 @@ fn a_stale_baseline_is_not_installed_and_the_tree_keeps_its_revision() {
     assert_eq!(state.set_baseline(generation, rev, None), Some(false));
     assert_eq!(state.baseline_rev(generation), Some(2));
 }
+
+mod races;

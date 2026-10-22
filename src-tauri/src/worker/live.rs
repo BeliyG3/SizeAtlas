@@ -237,9 +237,11 @@ fn finish(
     };
     notify(Notice::RootsChanged);
     let saved = jobs::save_full(&tree, dir);
-    drop(write);
     drop(tree);
-    if saved.is_ok() && baseline::refresh(state, dir, &job.root) {
+    // Under `write` (see `state::change::tree_mut`).
+    let compared = saved.is_ok() && baseline::refresh(state, dir, &job.root);
+    drop(write);
+    if compared {
         notify(Notice::RootsChanged);
     }
     saved

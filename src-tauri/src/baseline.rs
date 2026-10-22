@@ -1,5 +1,6 @@
 //! The baseline of an open root: its tree compared with the full scan before the last one.
-//! Computed without any lock (reading the saved scan may take seconds), then given to the root.
+//! Computed without the data lock (reading the saved scan may take seconds) but while holding
+//! `busy`, as every other long work on an open tree, then given to the root.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -27,9 +28,14 @@ pub fn load_baseline(files: &ScanFiles, current: &Tree) -> Option<Baseline> {
 
 /// Computes the baseline of the open root `root` and gives it to the root, again if its tree
 /// changed meanwhile. A first scan still running gets none: its end computes it. Returns whether
-/// the root's baseline changed.
+/// the root's baseline changed. The caller holds `begin_write` (see `state::change::tree_mut`).
 pub fn refresh(state: &AppState, cache_dir: &Path, root: &str) -> bool {
     let files = scan_files(cache_dir, Path::new(root));
+    give(state, root, |tree| load_baseline(&files, tree))
+}
+
+/// Gives the open root `root` the baseline `compute` makes of its tree; see `refresh`.
+fn give(state: &AppState, root: &str, compute: impl Fn(&Tree) -> Option<Baseline>) -> bool {
     loop {
         let Some((generation, tree)) = state.root_tree(root) else {
             return false; // closed
@@ -38,7 +44,9 @@ pub fn refresh(state: &AppState, cache_dir: &Path, root: &str) -> bool {
             return false;
         }
         let rev = tree.rev;
-        let baseline = load_baseline(&files, &tree).map(Arc::new);
+        let baseline = compute(&tree).map(Arc::new);
+        // Let go before waiting for the write lock: a change holding it waits for this tree.
+        drop(tree);
         if let Some(changed) = state.set_baseline(generation, rev, baseline) {
             return changed;
         }

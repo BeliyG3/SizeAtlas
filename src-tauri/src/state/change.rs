@@ -137,10 +137,13 @@ impl AppState {
 }
 
 /// `&mut` to a shared tree without copying it: waits until no read holds it. The caller holds
-/// the write lock, so no new read can take the tree meanwhile.
+/// the write lock, so no new read can take the tree meanwhile, and every read waits: nobody may
+/// hold an `Arc<Tree>` for long outside `busy` (long work on a tree, such as computing its
+/// baseline, holds `busy`, which a trash and every saved scan also take).
 // ponytail: a read that took the data lock again while holding the tree would make this wait
-// forever; none does: reads take the lock only to clone the `Arc`. Keep it that way. After
-// READ_WARN the wait is reported on stderr.
+// forever; none does: reads take the lock only to clone the `Arc`, and `crate::baseline` drops
+// its tree before `set_baseline`. Keep it that way. After READ_WARN the wait is reported on
+// stderr.
 fn tree_mut(tree: &mut Arc<Tree>) -> &mut Tree {
     let start = Instant::now();
     let mut warned = false;
