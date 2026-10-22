@@ -23,13 +23,13 @@ export const VIEW_KEY = "sizeatlas.columns.view";
 export const DEFAULT_VIEW: ColumnView = { order: COLUMNS.map((c) => c.id), hidden: [], shown: [] };
 
 /**
- * Columns hidden until the user shows them: in "Grew most" none; elsewhere Change while the root
- * has no `baseline`, and in the other lists (`list`, null for a folder) Before too.
+ * Columns hidden until the user shows them: in "Grew most" none; in the other lists (`list`)
+ * Before and Change; in a folder (`list` null) Change while the root has no `baseline`.
  */
 function hiddenByDefault(baseline: boolean, list: ListKind | null): ColumnId[] {
   if (list === "grewMost") return [];
-  const ids: ColumnId[] = list === null ? [] : ["before"];
-  return baseline ? ids : [...ids, "change"];
+  if (list !== null) return ["before", "change"];
+  return baseline ? [] : ["change"];
 }
 
 /** The view in effect: the columns hidden by default (see `hiddenByDefault`) the user did not show. */

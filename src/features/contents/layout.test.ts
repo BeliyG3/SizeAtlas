@@ -110,11 +110,17 @@ describe("column view", () => {
       visibleColumns(withDefaults(view, true, list), true).map((c) => c.id);
     expect(listed(DEFAULT_VIEW, "grewMost")).toEqual(expect.arrayContaining(["before", "change"]));
     expect(listed(DEFAULT_VIEW, "largest")).not.toContain("before");
-    expect(listed(DEFAULT_VIEW, "largest")).toContain("change");
+    expect(listed(DEFAULT_VIEW, "largest")).not.toContain("change");
+    expect(withDefaults(DEFAULT_VIEW, true, "largest").hidden).toEqual(["before", "change"]);
     expect(withDefaults(DEFAULT_VIEW, false, "largest").hidden).toEqual(["before", "change"]);
+    expect(withDefaults(DEFAULT_VIEW, true, "grewMost")).toBe(DEFAULT_VIEW);
+    expect(withDefaults(DEFAULT_VIEW, false, "grewMost")).toBe(DEFAULT_VIEW);
     // Shown in another list: it stays shown there.
     const shown = toggleColumn(DEFAULT_VIEW, "before", true, "largest");
     expect(listed(shown, "largest")).toContain("before");
+    expect(listed(toggleColumn(DEFAULT_VIEW, "change", true, "largest"), "largest")).toContain(
+      "change",
+    );
     // Hidden in Grew most: it stays hidden there.
     const off = toggleColumn(DEFAULT_VIEW, "before", true, "grewMost");
     expect(listed(off, "grewMost")).not.toContain("before");
