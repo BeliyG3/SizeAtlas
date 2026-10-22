@@ -116,15 +116,27 @@ fn deleted_folder_only_topmost() {
         name: name.into(),
         size,
     };
-    let keep = at(&current, &["keep"]);
-    assert_eq!(
-        b.deleted,
-        [
-            deleted(0, "gone.txt", 2),
-            deleted(0, "old", 10),
-            deleted(keep, "f", 1),
-        ]
-    );
+    assert_eq!(b.deleted, [deleted(0, "old", 10)]);
+    // Deleted files are not listed; they only show in the parent's `before`.
+    assert_eq!(b.before[at(&current, &["keep"]) as usize], 1);
+    assert_eq!(b.before[0], 13);
+}
+
+#[test]
+fn unreadable_now_lists_nothing_as_deleted() {
+    let base = tree(vec![
+        dir(0, NO_PARENT, "/r", vec![]),
+        dir(1, 0, "a", vec![file("y", 1)]),
+        dir(2, 1, "x", vec![file("z", 4)]),
+    ]);
+    let current = tree(vec![
+        dir(0, NO_PARENT, "/r", vec![]),
+        locked(dir(1, 0, "a", vec![])),
+    ]);
+    let b = compare(&current, &base);
+    assert!(b.deleted.is_empty());
+    assert_eq!(b.marks[at(&current, &["a"]) as usize], mark::COVERAGE);
+    assert_eq!(b.marks[0], mark::APPROX);
 }
 
 #[test]
@@ -155,6 +167,7 @@ fn coverage_change_marks_node_and_ancestors() {
         dir(1, 0, "a", vec![]),
         dir(2, 1, "locked", vec![file("f", 9)]),
         locked(dir(3, 0, "b", vec![])),
+        dir(4, 2, "sub", vec![file("g", 1)]),
     ]);
     let b = compare(&current, &base);
     let marks = |path: &[&str]| b.marks[at(&current, path) as usize];
@@ -162,7 +175,15 @@ fn coverage_change_marks_node_and_ancestors() {
     assert_eq!(marks(&["a"]), mark::APPROX);
     assert_eq!(marks(&[]), mark::APPROX);
     assert_eq!(marks(&["b"]), 0);
-    assert_eq!(marks(&["a", "locked", "f"]), 0);
+    // What was unreadable before is unknown, not new: COVERAGE, `before` stays NEW.
+    for path in [
+        &["a", "locked", "f"][..],
+        &["a", "locked", "sub"],
+        &["a", "locked", "sub", "g"],
+    ] {
+        assert_eq!(marks(path), mark::COVERAGE, "{path:?}");
+        assert_eq!(b.before[at(&current, path) as usize], NEW, "{path:?}");
+    }
 }
 
 #[test]

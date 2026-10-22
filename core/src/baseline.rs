@@ -47,20 +47,21 @@ pub fn compare(current: &Tree, base: &Tree) -> Baseline {
     let mut before = vec![NEW; current.len()];
     let mut marks = vec![0u8; current.len()];
     let mut deleted = Vec::new();
-    let coverage = |c: u32, b: u32| {
-        let (c, b) = (current.node(c), base.node(b));
-        if c.has(flags::ACCESS_ERROR) != b.has(flags::ACCESS_ERROR) {
-            mark::COVERAGE
-        } else {
-            0
+    // Matched nodes whose ACCESS_ERROR differs between the scans.
+    let mut uncovered = Vec::new();
+    let mut matched = |c: u32, b: u32| {
+        before[c as usize] = base.node(b).size;
+        if current.node(c).has(flags::ACCESS_ERROR) != base.node(b).has(flags::ACCESS_ERROR) {
+            uncovered.push(c);
         }
     };
 
-    before[0] = base.node(0).size;
-    marks[0] = coverage(0, 0);
+    matched(0, 0);
     // Pairs of matched folders; children are merge-joined (both blocks are sorted by name bytes).
     let mut stack = vec![(0u32, 0u32)];
     while let Some((cur_dir, base_dir)) = stack.pop() {
+        // An unreadable folder lists nothing now: its old contents are unknown, not deleted.
+        let readable = !current.node(cur_dir).has(flags::ACCESS_ERROR);
         let mut cur = current.children(cur_dir).peekable();
         let mut old = base.children(base_dir).peekable();
         loop {
@@ -75,18 +76,20 @@ pub fn compare(current: &Tree, base: &Tree) -> Baseline {
                 Ordering::Less => {
                     cur.next();
                 }
+                // Deleted files only shrink the parent's `before`; folders are listed.
                 Ordering::Greater => {
                     let b = old.next().expect("peeked");
-                    deleted.push(Deleted {
-                        parent: cur_dir,
-                        name: base.name(b).into(),
-                        size: base.node(b).size,
-                    });
+                    if readable && base.node(b).is_dir() {
+                        deleted.push(Deleted {
+                            parent: cur_dir,
+                            name: base.name(b).into(),
+                            size: base.node(b).size,
+                        });
+                    }
                 }
                 Ordering::Equal => {
                     let (c, b) = (cur.next().expect("peeked"), old.next().expect("peeked"));
-                    before[c as usize] = base.node(b).size;
-                    marks[c as usize] = coverage(c, b);
+                    matched(c, b);
                     if current.node(c).is_dir() && base.node(b).is_dir() {
                         stack.push((c, b));
                     }
@@ -98,24 +101,47 @@ pub fn compare(current: &Tree, base: &Tree) -> Baseline {
     if current.approximate || base.approximate {
         marks.iter_mut().for_each(|m| *m |= mark::APPROX);
     } else {
-        for id in 0..marks.len() {
-            if marks[id] & mark::COVERAGE == 0 {
-                continue;
-            }
-            // Stops at the first ancestor already marked: everything above it is marked too.
-            let mut p = current.node(id as u32).parent;
-            while p != NO_PARENT && marks[p as usize] & mark::APPROX == 0 {
-                marks[p as usize] |= mark::APPROX;
-                p = current.node(p).parent;
-            }
-        }
+        mark_ancestors(current, &mut marks, &uncovered);
     }
+    mark_subtrees(current, &mut marks, &uncovered);
 
     Baseline {
         scanned_at: base.scanned_at,
         before,
         marks,
         deleted,
+    }
+}
+
+/// APPROX on every ancestor of `uncovered` nodes.
+fn mark_ancestors(current: &Tree, marks: &mut [u8], uncovered: &[u32]) {
+    for &id in uncovered {
+        // Stops at the first ancestor already marked: everything above it is marked too.
+        let mut p = current.node(id).parent;
+        while p != NO_PARENT && marks[p as usize] & mark::APPROX == 0 {
+            marks[p as usize] |= mark::APPROX;
+            p = current.node(p).parent;
+        }
+    }
+}
+
+/// COVERAGE on `uncovered` nodes and all their live descendants: what lies below a folder
+/// that was unreadable in one scan is unknown, not new.
+fn mark_subtrees(current: &Tree, marks: &mut [u8], uncovered: &[u32]) {
+    for &id in uncovered {
+        marks[id as usize] |= mark::COVERAGE;
+    }
+    for &id in uncovered {
+        let mut stack = vec![id];
+        while let Some(dir) = stack.pop() {
+            for c in current.children(dir) {
+                // Already marked: an `uncovered` node (walked on its own) or a walked subtree.
+                if marks[c as usize] & mark::COVERAGE == 0 {
+                    marks[c as usize] |= mark::COVERAGE;
+                    stack.push(c);
+                }
+            }
+        }
     }
 }
 
