@@ -50,6 +50,14 @@ pub async fn refresh_later(state: AppState, cache_dir: PathBuf, root: String) ->
     .unwrap_or(false)
 }
 
+/// Whether the root `root` has a previous full scan to compare with: `files.base`, or, for a full
+/// scan about to be saved (`saving`), a saved scan that its save turns into `base` (see
+/// `cache::save_full_scan`). Without one its baseline is not pending: nothing would come.
+pub fn comparable(cache_dir: &Path, root: &str, saving: bool) -> bool {
+    let files = scan_files(cache_dir, Path::new(root));
+    files.base.exists() || (saving && (files.full.exists() || files.current.exists()))
+}
+
 /// Like `refresh`, for a full scan whose save failed: `.base` is not the scan before it, so
 /// the root gets no baseline.
 pub fn forgo(state: &AppState, root: &str) -> bool {

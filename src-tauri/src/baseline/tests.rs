@@ -295,7 +295,7 @@ fn a_stale_baseline_is_not_installed_and_the_tree_keeps_its_revision() {
     let state = AppState::default();
     let generation = scan(&state, &dir, cache.path());
     let rev = state.tree(generation).unwrap().rev;
-    // The first scan ended without a baseline: once pending, once computed.
+    // The first scan ended without a baseline, and without waiting for one.
     let counted = state.baseline_rev(generation).unwrap();
     let some = || {
         Some(Arc::new(Baseline {

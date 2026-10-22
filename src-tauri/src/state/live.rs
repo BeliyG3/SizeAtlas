@@ -56,7 +56,8 @@ impl AppState {
     }
 
     /// Cache reads must not replace an active first scan. Hold the queue guard through install.
-    pub fn install_cached(&self, tree: Tree) -> Result<u64, CmdError> {
+    /// For `comparable` see `install_scan`.
+    pub fn install_cached(&self, tree: Tree, comparable: bool) -> Result<u64, CmdError> {
         let scans = self.scans();
         let root = tree.name(0);
         if scans.running_first_scan(root) || (scans.running_full_scan(root) && !self.has_root(root))
@@ -64,7 +65,11 @@ impl AppState {
             return Err(CmdError::Busy);
         }
         let (generation, old) = self
-            .install_scan(Arc::new(tree), &std::sync::atomic::AtomicBool::new(false))
+            .install_scan(
+                Arc::new(tree),
+                &std::sync::atomic::AtomicBool::new(false),
+                comparable,
+            )
             .expect("not discarded");
         drop(scans);
         if let Some(old) = old {

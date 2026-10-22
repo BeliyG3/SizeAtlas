@@ -110,7 +110,8 @@ fn install_and_save(
     // Under `write`: no trash runs meanwhile, every one that ran during the walk is noted.
     trashed::remove(&mut tree, &trashed::gone(job));
     let tree = Arc::new(tree);
-    let Some((_, replaced)) = state.install_scan(tree.clone(), &job.discard) else {
+    let comparable = baseline::comparable(cache_dir, &job.root, true);
+    let Some((_, replaced)) = state.install_scan(tree.clone(), &job.discard, comparable) else {
         // Released before the discarded tree is dropped, which may take a while.
         drop(write);
         return Ok(());

@@ -19,7 +19,9 @@ fn job_for(path: &Path) -> ScanJob {
 fn scan_now(state: &AppState, root: &Path, cache: &Path) -> Summary {
     let job = job_for(root);
     let tree = Arc::new(walk(&job).unwrap().expect("not cancelled"));
-    let (generation, _) = state.install_scan(tree.clone(), &job.discard).unwrap();
+    let (generation, _) = state
+        .install_scan(tree.clone(), &job.discard, true)
+        .unwrap();
     save(&tree, cache).unwrap();
     state.summary(generation).unwrap()
 }

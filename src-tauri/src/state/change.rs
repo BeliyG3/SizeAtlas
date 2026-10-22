@@ -26,26 +26,43 @@ impl AppState {
         generation: u64,
         change: impl FnOnce(&mut Tree) -> Option<()>,
     ) -> Option<Arc<Tree>> {
-        self.change_where(|r| r.generation == generation, |tree, _| change(tree))
+        self.change_where(
+            |r| r.generation == generation,
+            false,
+            |tree, _| change(tree),
+        )
     }
 
     /// Runs `change` on the tree of the scan `scan` (see `OpenRoot::scan`), in place, under the
     /// write lock; `change` also gets the generation the tree has now and returns `None` when it
     /// changed nothing. After a change, a tree with more dead nodes than live ones is compacted
     /// and gets a new generation. Returns the changed tree, to save; `None` when nothing changed
-    /// or the root was rescanned or closed. After a compaction, and after the change that ends a
-    /// first scan, the caller computes the baseline (`crate::baseline`): it is pending until then.
+    /// or the root was rescanned or closed. After a compaction of a root that has a baseline or
+    /// waits for one, the caller computes it again (`crate::baseline`): it is pending until then.
+    /// The change that ends a first scan goes through `end_scan`.
     pub fn change_scan(
         &self,
         scan: u64,
         change: impl FnOnce(&mut Tree, u64) -> Option<()>,
     ) -> Option<Arc<Tree>> {
-        self.change_where(|r| r.scan == scan, change)
+        self.change_where(|r| r.scan == scan, false, change)
+    }
+
+    /// `change_scan` for the change that ends a first scan. Its baseline is pending afterwards
+    /// only when `comparable` (see `crate::baseline::comparable`): the caller computes it.
+    pub fn end_scan(
+        &self,
+        scan: u64,
+        comparable: bool,
+        change: impl FnOnce(&mut Tree) -> Option<()>,
+    ) -> Option<Arc<Tree>> {
+        self.change_where(|r| r.scan == scan, comparable, |tree, _| change(tree))
     }
 
     fn change_where(
         &self,
         find: impl Fn(&OpenRoot) -> bool,
+        comparable: bool,
         change: impl FnOnce(&mut Tree, u64) -> Option<()>,
     ) -> Option<Arc<Tree>> {
         let (changed, old) = {
@@ -63,9 +80,15 @@ impl AppState {
                 data.generation += 1;
                 data.roots[at].generation = data.generation;
             }
-            // Indexed by the old ids, or none yet.
-            if old.is_some() || (was_scanning && !scanning) {
-                data.roots[at].compare_again();
+            // Indexed by the old ids, or none yet; with nothing to compare with, nothing comes.
+            let root = &mut data.roots[at];
+            let compare = if was_scanning && !scanning {
+                comparable
+            } else {
+                old.is_some() && (root.baseline.is_some() || root.baseline_pending)
+            };
+            if compare {
+                root.compare_again();
             }
             (data.roots[at].tree.clone(), old)
         };

@@ -97,7 +97,7 @@ impl AppState {
     #[cfg(test)]
     pub fn install_tree(&self, tree: Tree) -> u64 {
         let (generation, _replaced) = self
-            .install_scan(Arc::new(tree), &AtomicBool::new(false))
+            .install_scan(Arc::new(tree), &AtomicBool::new(false), true)
             .expect("not discarded");
         generation
     }
@@ -106,11 +106,13 @@ impl AppState {
     /// under the write lock, and closing a root sets it before removing the root, so a scan
     /// that ends meanwhile cannot bring a closed root back. Returns the replaced tree for the
     /// caller to drop outside any lock (dropping millions of nodes takes a while). The caller
-    /// then computes the baseline (`crate::baseline`), which is pending until then.
+    /// then computes the baseline (`crate::baseline`), which is pending until then if
+    /// `comparable` (see `crate::baseline::comparable`).
     pub fn install_scan(
         &self,
         tree: Arc<Tree>,
         discard: &AtomicBool,
+        comparable: bool,
     ) -> Option<(u64, Option<Arc<Tree>>)> {
         let mut data = self.write_data();
         if discard.load(Ordering::Relaxed) {
@@ -126,7 +128,7 @@ impl AppState {
             baseline: None,
             baseline_rev: 0,
             // The caller computes it (`crate::baseline`).
-            baseline_pending: true,
+            baseline_pending: comparable,
         };
         let replaced = match at {
             Some(i) => Some(mem::replace(&mut data.roots[i], root).tree),

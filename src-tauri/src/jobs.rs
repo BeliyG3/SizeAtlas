@@ -9,6 +9,7 @@ use sizeatlas_core::cache::{self, CacheError, ScanFiles, cache_path, scan_files}
 use sizeatlas_core::scanner::{self, FolderScan, ScanOutcome};
 use sizeatlas_core::tree::Tree;
 
+use crate::baseline;
 use crate::dto::Summary;
 use crate::error::CmdError;
 use crate::exit::RUNNING;
@@ -128,9 +129,10 @@ pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Sum
         CacheError::Io(err) => CmdError::io(&file, err),
     })?;
     // Described before installing: a rescan may replace the tree right after.
-    // Compared afterwards.
-    let mut summary = Summary::of(0, &tree, None, 0, true);
-    summary.generation = state.install_cached(tree)?;
+    // Compared afterwards, if there is anything to compare with.
+    let comparable = baseline::comparable(cache_dir, root, false);
+    let mut summary = Summary::of(0, &tree, None, 0, comparable);
+    summary.generation = state.install_cached(tree, comparable)?;
     Ok(summary)
 }
 

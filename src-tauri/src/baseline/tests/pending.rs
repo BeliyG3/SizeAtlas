@@ -24,7 +24,10 @@ fn an_opened_scan_is_pending_until_compared() {
     assert!(!pending(&state, first), "a scan ends compared");
     let root = root_of(&dir);
 
-    // Without a previous scan, too: it says so once compared.
+    let second = scan(&state, &dir, cache.path());
+    assert!(!pending(&state, second), "a rescan ends compared");
+    // Without a previous scan nothing is pending (see `without_a_previous_scan_nothing_is_pending`).
+    jobs::close_root(&state, &root);
     let opened = jobs::open_cached(&state, cache.path(), &root).unwrap();
     assert!(opened.baseline_pending);
     assert!(pending(&state, opened.generation));
@@ -32,14 +35,6 @@ fn an_opened_scan_is_pending_until_compared() {
         compare_later(&state, cache.path(), &root),
         "the UI hears of it"
     );
-    assert!(!pending(&state, opened.generation));
-    assert!(state.baseline(opened.generation).is_none());
-
-    let second = scan(&state, &dir, cache.path());
-    assert!(!pending(&state, second), "a rescan ends compared");
-    let opened = jobs::open_cached(&state, cache.path(), &root).unwrap();
-    assert!(pending(&state, opened.generation));
-    compare_later(&state, cache.path(), &root);
     assert!(!pending(&state, opened.generation));
     assert!(state.baseline(opened.generation).is_some());
 }
@@ -89,4 +84,61 @@ fn a_scan_whose_save_failed_is_not_pending() {
     let generation = scan(&state, &dir, cache.path());
     assert!(state.baseline(generation).is_none());
     assert!(!pending(&state, generation));
+}
+
+/// Scans `dir` as the worker does; returns whether its root's baseline was pending at each
+/// `roots-changed`, which is when the UI reads it.
+fn pending_seen(state: &AppState, dir: &TempDir, cache: &Path) -> Vec<bool> {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let (inspect, log) = (state.clone(), seen.clone());
+    let notify: Notify = Arc::new(move |notice| {
+        if matches!(notice, worker::Notice::RootsChanged) {
+            let summaries = inspect.summaries();
+            log.lock()
+                .unwrap()
+                .extend(summaries.iter().map(|s| s.baseline_pending));
+        }
+    });
+    let job = state
+        .enqueue(root_of(dir))
+        .unwrap()
+        .expect("nothing else runs");
+    tauri::async_runtime::block_on(worker::run(state.clone(), cache.to_owned(), job, notify));
+    seen.lock().unwrap().clone()
+}
+
+#[test]
+fn without_a_previous_scan_nothing_is_pending() {
+    let (dir, cache) = (folder(), tempfile::tempdir().unwrap());
+    let state = AppState::default();
+    let root = root_of(&dir);
+    let seen = pending_seen(&state, &dir, cache.path());
+    assert!(!seen.is_empty() && !seen.contains(&true), "{seen:?}");
+
+    // A compaction has nothing to compare again either.
+    let (sub, _) = item(&state, generation(&state), &dir, "sub");
+    let trashed = Trashed {
+        id: sub,
+        parent: 0,
+        parent_before: None,
+        parent_listed: None,
+        parent_after: None,
+    };
+    state
+        .remove_trashed(generation(&state), &[trashed], None)
+        .unwrap();
+    assert!(!pending(&state, generation(&state)));
+
+    // Nor a saved scan opened without `.base`.
+    jobs::close_root(&state, &root);
+    let opened = jobs::open_cached(&state, cache.path(), &root).unwrap();
+    assert!(!opened.baseline_pending);
+    assert!(!pending(&state, opened.generation));
+
+    // A scan whose save makes the last full scan `.base` is pending until compared.
+    jobs::close_root(&state, &root);
+    let seen = pending_seen(&state, &dir, cache.path());
+    assert!(seen.contains(&true), "{seen:?}");
+    assert_eq!(seen.last(), Some(&false));
+    assert!(state.baseline(generation(&state)).is_some());
 }

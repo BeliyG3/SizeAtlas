@@ -145,7 +145,9 @@ fn a_scan_that_ends_after_its_root_is_closed_does_not_reopen_it() {
     let tree = jobs::walk(&job).unwrap().expect("not cancelled yet");
     jobs::close_root(&state, &root_of(&a));
     assert!(
-        state.install_scan(Arc::new(tree), &job.discard).is_none(),
+        state
+            .install_scan(Arc::new(tree), &job.discard, true)
+            .is_none(),
         "a closed root is not installed again"
     );
     assert!(state.summaries().is_empty());

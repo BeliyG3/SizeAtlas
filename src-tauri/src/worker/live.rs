@@ -221,7 +221,8 @@ fn finish(
     // Items of the tree went straight out of it; those of an open root inside or around this
     // one may have been listed before they went.
     let gone = super::trashed::gone(job);
-    let changed = state.change_scan(scan, |tree, _| {
+    let comparable = baseline::comparable(dir, &job.root, true);
+    let changed = state.end_scan(scan, comparable, |tree| {
         if job.discard.load(Ordering::Relaxed) {
             return None;
         }
