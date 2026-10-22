@@ -213,7 +213,7 @@
   "lists.capped": "最初の {count} 件を表示しています。",
   "lists.noBaseline": "比較できる前回のスキャンがありません。変更点を確認するには再スキャンしてください。",
   "lists.baselinePending": "前回のスキャンと比較しています…",
-  "search.found_other": "{items} 個の項目が見つかりました ({size})",
+  "search.found_other": "{items} 個の項目が見つかりました（{size}）",
   "search.none": "見つかりませんでした。",
   "search.placeholder": "検索: 名前、*.mp4、.mkv .avi",
   "search.label": "検索",

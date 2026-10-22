@@ -213,7 +213,7 @@
   "lists.capped": "แสดง {count} รายการแรก",
   "lists.noBaseline": "ไม่มีการสแกนก่อนหน้าให้เปรียบเทียบ สแกนใหม่เพื่อดูสิ่งที่เปลี่ยนแปลง",
   "lists.baselinePending": "กำลังเปรียบเทียบกับการสแกนก่อนหน้า…",
-  "search.found_other": "พบ {items} รายการ, {size}",
+  "search.found_other": "พบ {items} รายการ ({size})",
   "search.none": "ไม่พบรายการ",
   "search.placeholder": "ค้นหา: ชื่อ, *.mp4, .mkv .avi",
   "search.label": "ค้นหา",
