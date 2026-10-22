@@ -108,3 +108,27 @@ fn folders_found_again_by_a_refresh_are_not_deleted() {
         .collect();
     assert_eq!(deleted, ["vanished"]);
 }
+
+#[test]
+fn an_empty_deleted_folder_has_no_row() {
+    let tree = build(vec![dir(1, 0, "a", 200)]);
+    let a = ids(&tree, 0)["a"];
+    let (state, generation) = open(tree, |_, base| {
+        base.deleted = vec![
+            Deleted {
+                parent: a,
+                name: "empty".into(),
+                size: 0,
+            },
+            Deleted {
+                parent: 0,
+                name: "full".into(),
+                size: 10,
+            },
+        ];
+    });
+    let list = state.list(generation, 0, ListKind::GrewMost, 10).unwrap();
+    let names: Vec<_> = list.items.iter().map(|i| i.item.name.as_str()).collect();
+    assert_eq!(names, ["full"], "no change, no row, as for live folders");
+    assert!(!list.truncated);
+}

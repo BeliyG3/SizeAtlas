@@ -147,7 +147,10 @@ pub(super) fn grew_most(
         }
     }
     for (i, &((_, _, size), _)) in gone.iter().enumerate() {
-        offer(delta(0, size), Row::Gone(i));
+        // An empty folder that is gone changed nothing: no row, as for a live folder.
+        if size != 0 {
+            offer(delta(0, size), Row::Gone(i));
+        }
     }
     let mut rows: Vec<(i64, Row)> = heap
         .into_iter()

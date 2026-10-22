@@ -76,6 +76,8 @@ export const api = {
     invoke<ArrayBuffer>("get_treemap", { generation, id, width, height }),
   /** One path per line. */
   copyPaths: (generation: number, ids: number[]) => invoke<void>("copy_paths", { generation, ids }),
+  /** `text` as it is, such as the path of a deleted folder, which the tree no longer has. */
+  copyText: (text: string) => invoke<void>("copy_text", { text }),
   reveal: (generation: number, id: number) => invoke<void>("reveal", { generation, id }),
   /** A file opens in its default program, a folder in the file manager. */
   openItem: (generation: number, id: number) => invoke<void>("open_item", { generation, id }),

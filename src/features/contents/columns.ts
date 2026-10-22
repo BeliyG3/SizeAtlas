@@ -42,7 +42,8 @@ export const COLUMNS: readonly Column[] = [
   { id: "size", sortKey: "size", width: 96, numeric: true },
   { id: "percent", sortKey: "size", width: 120, numeric: true },
   { id: "before", sortKey: null, width: 96, numeric: true, listOnly: true },
-  { id: "change", sortKey: "change", width: 104, numeric: true },
+  // Room for "≈ −733.3" and the longest unit name (Arabic).
+  { id: "change", sortKey: "change", width: 124, numeric: true },
   { id: "files", sortKey: "files", width: 80, numeric: true },
   { id: "folders", sortKey: null, width: 72, numeric: true },
   { id: "dirs", sortKey: "dirs", width: 88, numeric: true },

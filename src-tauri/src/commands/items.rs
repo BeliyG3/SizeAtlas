@@ -1,4 +1,5 @@
 //! Commands that act on one item of the tree on disk: open, show, copy its path, properties.
+//! Also copying a path the tree no longer has.
 //! Paths whose names were not valid Unicode are refused (`LossyName`), see `exact_path`.
 
 use std::path::{Path, PathBuf};
@@ -55,6 +56,15 @@ pub async fn copy_paths(
     })
     .await
     .map_err(CmdError::from)??;
+    app.clipboard()
+        .write_text(text)
+        .map_err(|e| io(Path::new(""), e))
+}
+
+/// Copies `text` as it is to the clipboard: the path of a deleted folder of "grew most", which
+/// the tree no longer has.
+#[tauri::command]
+pub async fn copy_text(app: AppHandle, text: String) -> Result<(), CmdError> {
     app.clipboard()
         .write_text(text)
         .map_err(|e| io(Path::new(""), e))

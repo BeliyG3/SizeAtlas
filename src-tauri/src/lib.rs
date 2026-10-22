@@ -60,6 +60,7 @@ pub fn run() {
             commands::get_treemap,
             commands::export::export_table,
             commands::items::copy_paths,
+            commands::items::copy_text,
             commands::items::reveal,
             commands::items::open_item,
             commands::items::item_path,

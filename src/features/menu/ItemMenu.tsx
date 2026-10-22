@@ -143,9 +143,8 @@ export function ItemMenu({
       ? groups.filter((group) => group !== false)
       : [
           [
-            item("copy", t("menu.copyPath"), () => {
-              navigator.clipboard.writeText(deletedPath).catch(onFail);
-            }),
+            // Not `navigator.clipboard`: WebKitGTK has none.
+            item("copy", t("menu.copyPath"), () => void api.copyText(deletedPath).catch(onFail)),
           ],
         ];
   return (
