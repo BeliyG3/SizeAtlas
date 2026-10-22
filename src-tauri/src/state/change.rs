@@ -1,5 +1,5 @@
-//! Changes to an open tree in place: a refreshed folder, items moved to the trash, a new
-//! baseline.
+//! Changes to an open tree in place: a refreshed folder, items moved to the trash. Also a new
+//! baseline, which leaves the tree as it is.
 
 use std::sync::Arc;
 use std::thread;
@@ -61,7 +61,9 @@ impl AppState {
                 data.generation += 1;
                 data.roots[at].generation = data.generation;
                 // Indexed by the old ids: the caller computes it again (`crate::baseline`).
-                data.roots[at].baseline = None;
+                if data.roots[at].baseline.take().is_some() {
+                    data.roots[at].baseline_rev += 1;
+                }
             }
             (data.roots[at].tree.clone(), old)
         };
@@ -72,23 +74,26 @@ impl AppState {
         Some(changed)
     }
 
-    /// Gives the root with `generation` the baseline computed from its tree at revision `rev`,
-    /// and a new revision so the UI fetches it. `false` when the tree changed meanwhile: the
-    /// baseline is computed again.
-    pub fn set_baseline(&self, generation: u64, rev: u64, baseline: Option<Arc<Baseline>>) -> bool {
+    /// Gives the root with `generation` the baseline computed from its tree at revision `rev`;
+    /// a changed baseline gets a new `baseline_rev`, the tree stays as it is. Returns whether it
+    /// changed, or `None` when the tree changed meanwhile: the baseline is computed again.
+    pub fn set_baseline(
+        &self,
+        generation: u64,
+        rev: u64,
+        baseline: Option<Arc<Baseline>>,
+    ) -> Option<bool> {
         let mut data = self.write_data();
-        let Some(root) = data
+        let root = data
             .roots
             .iter_mut()
-            .find(|r| r.generation == generation && r.tree.rev == rev)
-        else {
-            return false;
-        };
-        if root.baseline.is_some() || baseline.is_some() {
-            tree_mut(&mut root.tree).rev += 1;
+            .find(|r| r.generation == generation && r.tree.rev == rev)?;
+        let changed = root.baseline.is_some() || baseline.is_some();
+        if changed {
             root.baseline = baseline;
+            root.baseline_rev += 1;
         }
-        true
+        Some(changed)
     }
 
     /// The root of `id` and what to queue to refresh it: its folder (a file's own folder), or

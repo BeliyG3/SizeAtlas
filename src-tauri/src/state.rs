@@ -27,6 +27,8 @@ struct OpenRoot {
     /// The tree compared with the full scan before the last one, indexed by the ids of this
     /// generation; `None` until computed (see `crate::baseline`) or when there is none.
     baseline: Option<Arc<Baseline>>,
+    /// Counts the changes of `baseline`, so the UI fetches it again; the tree's `rev` stays.
+    baseline_rev: u64,
 }
 
 struct Data {
@@ -119,6 +121,7 @@ impl AppState {
             scan: generation,
             tree,
             baseline: None,
+            baseline_rev: 0,
         };
         let replaced = match at {
             Some(i) => Some(mem::replace(&mut data.roots[i], root).tree),
@@ -183,6 +186,16 @@ impl AppState {
             .iter()
             .find(|r| r.generation == generation)
             .and_then(|r| r.baseline.clone())
+    }
+
+    /// How often the baseline of the root with `generation` changed.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no command reads it yet"))]
+    pub fn baseline_rev(&self, generation: u64) -> Option<u64> {
+        self.read_data()
+            .roots
+            .iter()
+            .find(|r| r.generation == generation)
+            .map(|r| r.baseline_rev)
     }
 
     /// The generation and the tree of the open root with the canonical path `root`.

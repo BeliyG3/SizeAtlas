@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 use sizeatlas_core::baseline::NEW;
 use sizeatlas_core::cache::{FORMAT_VERSION, scan_files};
@@ -249,4 +251,60 @@ fn forget_removes_three_files() {
             .iter()
             .any(|f| f.exists())
     );
+}
+
+#[test]
+fn a_failed_full_save_gives_no_baseline_even_after_a_refresh() {
+    let (dir, cache) = (folder(), tempfile::tempdir().unwrap());
+    let state = AppState::default();
+    scanned_twice(&state, &dir, cache.path());
+    let files = files_of(&dir, cache.path());
+    // `scanned_at` counts seconds: the unsaved scan must not share it with the saved one.
+    thread::sleep(Duration::from_millis(1100));
+    // A directory where the temporary file of `full` belongs makes the full save fail.
+    let mut blocker = files.full.clone().into_os_string();
+    blocker.push(".tmp");
+    fs::create_dir(&blocker).unwrap();
+
+    let generation = scan(&state, &dir, cache.path());
+    assert!(state.baseline(generation).is_none(), "the full save failed");
+    let (sub, _) = item(&state, generation, &dir, "sub");
+    let (root, folder) = state.refresh_target(generation, sub).unwrap();
+    run_queue(
+        &state,
+        cache.path(),
+        state.enqueue_folder(root, folder).unwrap(),
+    );
+    assert!(
+        state.baseline(generation).is_none(),
+        "the base is two full scans back"
+    );
+}
+
+#[test]
+fn a_stale_baseline_is_not_installed_and_the_tree_keeps_its_revision() {
+    let (dir, cache) = (folder(), tempfile::tempdir().unwrap());
+    let state = AppState::default();
+    let generation = scan(&state, &dir, cache.path());
+    let rev = state.tree(generation).unwrap().rev;
+    let some = || {
+        Some(Arc::new(Baseline {
+            scanned_at: 0,
+            before: Vec::new(),
+            marks: Vec::new(),
+            deleted: Vec::new(),
+        }))
+    };
+    assert_eq!(state.set_baseline(generation + 1, rev, some()), None);
+    assert_eq!(state.set_baseline(generation, rev + 1, some()), None);
+    assert!(state.baseline(generation).is_none());
+    assert_eq!(state.baseline_rev(generation), Some(0));
+
+    assert_eq!(state.set_baseline(generation, rev, some()), Some(true));
+    assert!(state.baseline(generation).is_some());
+    assert_eq!(state.baseline_rev(generation), Some(1));
+    assert_eq!(state.tree(generation).unwrap().rev, rev);
+    assert_eq!(state.set_baseline(generation, rev, None), Some(true));
+    assert_eq!(state.set_baseline(generation, rev, None), Some(false));
+    assert_eq!(state.baseline_rev(generation), Some(2));
 }

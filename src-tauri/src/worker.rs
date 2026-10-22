@@ -121,8 +121,7 @@ fn install_and_save(
     // After `busy` is released: dropping millions of nodes must not delay closing.
     drop(replaced);
     drop(tree);
-    if saved.is_ok() {
-        baseline::refresh(state, cache_dir, &job.root);
+    if saved.is_ok() && baseline::refresh(state, cache_dir, &job.root) {
         notify(Notice::RootsChanged);
     }
     saved
@@ -208,8 +207,9 @@ fn apply_refresh(
     drop(write);
     // New ids, maybe all of them renumbered by a compaction: the baseline is computed again.
     drop(changed);
-    baseline::refresh(state, cache_dir, &job.root);
-    notify(Notice::RootsChanged);
+    if baseline::refresh(state, cache_dir, &job.root) {
+        notify(Notice::RootsChanged);
+    }
     saved
 }
 

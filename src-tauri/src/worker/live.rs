@@ -239,8 +239,7 @@ fn finish(
     let saved = jobs::save_full(&tree, dir);
     drop(write);
     drop(tree);
-    if saved.is_ok() {
-        baseline::refresh(state, dir, &job.root);
+    if saved.is_ok() && baseline::refresh(state, dir, &job.root) {
         notify(Notice::RootsChanged);
     }
     saved
