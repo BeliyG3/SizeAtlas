@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use sizeatlas_core::baseline::{Baseline, Deleted, NEW, mark};
+use sizeatlas_core::baseline::{Baseline, NEW, mark};
 use sizeatlas_core::tree::{
     DirRec, FileRec, ListKind, ListOrder, NO_PARENT, ScanMeta, SizeMode, SortKey, Tree,
 };
@@ -211,69 +211,6 @@ fn grew_most_picks_by_absolute_change() {
 }
 
 #[test]
-fn grew_most_lists_topmost_deleted_folder() {
-    let tree = build(vec![
-        dir(1, 0, "a", 200),
-        dir(2, 0, "b", 100),
-        dir(3, 1, "a1", 300),
-    ]);
-    let (a, b) = (ids(&tree, 0)["a"], ids(&tree, 0)["b"]);
-    let deleted = |parent, name: &str, size| Deleted {
-        parent,
-        name: name.into(),
-        size,
-    };
-    let (state, generation) = open(tree, |_, base| {
-        base.deleted = vec![deleted(a, "old", 5000), deleted(b, "gone", 7000)];
-    });
-    let rows = |base| {
-        let list = state
-            .list(generation, base, ListKind::GrewMost, 10)
-            .unwrap();
-        assert_eq!(list.baseline_at, Some(BASE_AT));
-        list.items
-            .into_iter()
-            .map(|i| (i.item.name, i.folder, i.item.change))
-            .collect::<Vec<_>>()
-    };
-    let row = |name: &str, folder: &str, delta| {
-        (name.into(), folder.into(), Some(ChangeDto::Delta(delta)))
-    };
-
-    let below_a = state.list(generation, a, ListKind::GrewMost, 10).unwrap();
-    let old = &below_a.items[0];
-    assert_eq!(below_a.items.len(), 1);
-    assert!(old.deleted && old.item.is_dir);
-    assert_eq!((old.item.id, old.parent, old.item.size), (u32::MAX, a, 0));
-    assert_eq!(old.item.before, Some(5000));
-    assert_eq!(rows(0), [row("old", "a", -5000), row("gone", "b", -7000)]);
-
-    // Moved to the trash while the baseline stays: `a` is deleted, not `a1` or `old` inside it.
-    state
-        .change_tree(generation, |tree| {
-            tree.remove(a);
-            Some(())
-        })
-        .unwrap();
-    assert_eq!(rows(0), [row("a", "", -500), row("gone", "b", -7000)]);
-    let ids: Vec<u32> = state
-        .list(generation, 0, ListKind::GrewMost, 10)
-        .unwrap()
-        .items
-        .iter()
-        .map(|i| i.item.id)
-        .collect();
-    assert_eq!(ids, [u32::MAX, u32::MAX - 1]);
-
-    // A baseline that already lists `a` as deleted does not list it twice.
-    let mut again = (*state.baseline(generation).unwrap()).clone();
-    again.deleted.push(deleted(0, "a", 500));
-    let rev = state.tree(generation).unwrap().rev;
-    state.set_baseline(generation, rev, Some(Arc::new(again)));
-    assert_eq!(rows(0), [row("a", "", -500), row("gone", "b", -7000)]);
-}
-
-#[test]
 fn no_baseline_gives_empty_list() {
     let state = AppState::default();
     let generation = state.install_tree(build(vec![dir(1, 0, "b", 100), dir(2, 0, "a", 50)]));
@@ -293,3 +230,5 @@ fn no_baseline_gives_empty_list() {
     assert_eq!(page.baseline_at, None);
     assert_eq!(state.summary(generation).unwrap().baseline_at, None);
 }
+
+mod deleted;

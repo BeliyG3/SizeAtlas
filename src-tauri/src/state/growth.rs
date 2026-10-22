@@ -192,6 +192,14 @@ fn deleted_below<'a>(tree: &'a Tree, baseline: &'a Baseline, base: u32) -> Vec<G
             }
         }
     }
+    // The list is about paths: a folder that a refresh found again (a new id, beyond the old
+    // baseline until it is computed again) or that was created again is not deleted.
+    let parents: HashSet<u32> = gone.iter().map(|&((p, _, _), _)| p).collect();
+    let alive: HashSet<(u32, &str)> = parents
+        .into_iter()
+        .flat_map(|p| tree.children(p).map(move |c| (p, tree.name(c))))
+        .collect();
+    gone.retain(|&((p, name, _), _)| !alive.contains(&(p, name)));
     gone
 }
 
