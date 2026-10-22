@@ -2,14 +2,14 @@
 //! close a root, forget a saved scan. Plus the queue methods of `AppState`.
 
 use std::fs;
-use std::io;
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
-use sizeatlas_core::cache::{self, CacheError, cache_path};
+use sizeatlas_core::cache::{self, CacheError, ScanFiles, cache_path, scan_files};
 use sizeatlas_core::scanner::{self, FolderScan, ScanOutcome};
 use sizeatlas_core::tree::Tree;
 
+use crate::baseline;
 use crate::dto::Summary;
 use crate::error::CmdError;
 use crate::exit::RUNNING;
@@ -89,14 +89,28 @@ pub fn walk_folder(job: &ScanJob, folder: &FolderTarget) -> Result<Option<Folder
 }
 
 /// Writes the saved scan of a tree without any lock; on failure removes the old file so a
-/// stale scan is never reopened.
+/// stale scan is never reopened. The last full scans stay as they are.
 pub fn save(tree: &Tree, cache_dir: &Path) -> Result<(), CmdError> {
-    let file = cache_path(cache_dir, Path::new(tree.name(0)));
+    write_scan(tree, cache_dir, |files| cache::save(tree, &files.current))
+}
+
+/// Like `save`, for a finished full scan: it also becomes the last full scan, and the one before
+/// it the baseline (see `cache::save_full_scan`).
+pub fn save_full(tree: &Tree, cache_dir: &Path) -> Result<(), CmdError> {
+    write_scan(tree, cache_dir, |files| cache::save_full_scan(tree, files))
+}
+
+fn write_scan(
+    tree: &Tree,
+    cache_dir: &Path,
+    write: impl FnOnce(&ScanFiles) -> Result<(), CacheError>,
+) -> Result<(), CmdError> {
+    let files = scan_files(cache_dir, Path::new(tree.name(0)));
     let saved = fs::create_dir_all(cache_dir)
         .map_err(CacheError::Io)
-        .and_then(|()| cache::save(tree, &file));
+        .and_then(|()| write(&files));
     if saved.is_err() {
-        let _ = fs::remove_file(&file);
+        let _ = fs::remove_file(&files.current);
         return Err(CmdError::CacheNotSaved);
     }
     Ok(())
@@ -116,6 +130,7 @@ pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Sum
     // Described before installing: a rescan may replace the tree right after.
     let mut summary = Summary::of(0, &tree);
     summary.generation = state.install_cached(tree)?;
+    baseline::refresh(state, cache_dir, &summary.root);
     Ok(summary)
 }
 
@@ -126,17 +141,13 @@ pub fn close_root(state: &AppState, root: &str) {
     state.close_path(root);
 }
 
-/// Deletes the saved scan of `root` and closes the root, stopping its scan first. The caller
+/// Deletes the saved scans of `root` and closes the root, stopping its scan first. The caller
 /// holds `begin_write`, so a scan of this root that is being saved is written before the
 /// file goes, and is not installed again afterwards.
 pub fn forget(state: &AppState, cache_dir: &Path, root: &str) -> Result<(), CmdError> {
     close_root(state, root);
-    let file = cache_path(cache_dir, Path::new(root));
-    match fs::remove_file(&file) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(CmdError::io(&file, e)),
-    }
+    let files = scan_files(cache_dir, Path::new(root));
+    cache::remove_all(&files).map_err(|e| CmdError::io(&files.current, e))
 }
 
 #[cfg(test)]

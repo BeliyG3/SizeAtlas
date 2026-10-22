@@ -37,6 +37,7 @@ impl AppState {
             generation,
             scan: generation,
             tree: Arc::new(tree),
+            baseline: None,
         };
         let old = if let Some(at) = data.find(installed.tree.name(0)) {
             Some(std::mem::replace(&mut data.roots[at], installed))

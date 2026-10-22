@@ -187,8 +187,8 @@ fn rescan_keeps_the_complete_tree_until_installation() {
     tauri::async_runtime::block_on(scan_one(&state, cache.path(), &job, &notify)).unwrap();
     assert_eq!(
         *notices.lock().unwrap(),
-        1,
-        "only completed installation is announced"
+        2,
+        "only completed installation is announced, then its baseline"
     );
     let summary = state.summaries()[0].clone();
     assert_eq!(summary.files, 2);

@@ -1,5 +1,6 @@
 //! SizeAtlas desktop app: wires plugins, state and commands into Tauri.
 
+mod baseline;
 mod commands;
 mod details;
 mod dto;

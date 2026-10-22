@@ -236,8 +236,13 @@ fn finish(
         return Ok(());
     };
     notify(Notice::RootsChanged);
-    let saved = jobs::save(&tree, dir);
+    let saved = jobs::save_full(&tree, dir);
     drop(write);
+    drop(tree);
+    if saved.is_ok() {
+        baseline::refresh(state, dir, &job.root);
+        notify(Notice::RootsChanged);
+    }
     saved
 }
 

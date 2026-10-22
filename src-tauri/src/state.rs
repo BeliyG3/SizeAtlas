@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+use sizeatlas_core::baseline::Baseline;
 use sizeatlas_core::tree::{ListOrder, Tree};
 
 use crate::details::MAX_DETAILS;
@@ -23,6 +24,9 @@ struct OpenRoot {
     // folder refresh, a trash) takes `&mut` under the write lock once no read holds the tree
     // (see `change::tree_mut`); the tree is never copied.
     tree: Arc<Tree>,
+    /// The tree compared with the full scan before the last one, indexed by the ids of this
+    /// generation; `None` until computed (see `crate::baseline`) or when there is none.
+    baseline: Option<Arc<Baseline>>,
 }
 
 struct Data {
@@ -114,6 +118,7 @@ impl AppState {
             generation,
             scan: generation,
             tree,
+            baseline: None,
         };
         let replaced = match at {
             Some(i) => Some(mem::replace(&mut data.roots[i], root).tree),
@@ -168,6 +173,23 @@ impl AppState {
             .find(|r| r.generation == generation)
             .map(|r| r.tree.clone())
             .ok_or(CmdError::StaleId)
+    }
+
+    /// The baseline of the root with `generation`, if it has one.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no command reads it yet"))]
+    pub fn baseline(&self, generation: u64) -> Option<Arc<Baseline>> {
+        self.read_data()
+            .roots
+            .iter()
+            .find(|r| r.generation == generation)
+            .and_then(|r| r.baseline.clone())
+    }
+
+    /// The generation and the tree of the open root with the canonical path `root`.
+    pub fn root_tree(&self, root: &str) -> Option<(u64, Arc<Tree>)> {
+        let data = self.read_data();
+        data.find(root)
+            .map(|i| (data.roots[i].generation, data.roots[i].tree.clone()))
     }
 
     /// Runs `f` on the tree of the root with `generation`.

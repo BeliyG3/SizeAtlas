@@ -9,6 +9,7 @@ use sizeatlas_core::scanner::FolderScan;
 use sizeatlas_core::tree::Tree;
 use tokio::sync::OwnedMutexGuard;
 
+use crate::baseline;
 use crate::dto::ProgressDto;
 use crate::error::CmdError;
 use crate::jobs;
@@ -96,8 +97,8 @@ async fn scan_one(
 }
 
 /// Installs a walked tree unless its root was closed or its scan cancelled meanwhile, then
-/// saves it and releases `write`. What went to the trash during the walk is taken out first.
-/// Closing the app does not discard it: the exit waits.
+/// saves it as the last full scan, releases `write` and computes the baseline. What went to the
+/// trash during the walk is taken out first. Closing the app does not discard it: the exit waits.
 fn install_and_save(
     state: &AppState,
     cache_dir: &Path,
@@ -115,10 +116,15 @@ fn install_and_save(
         return Ok(());
     };
     notify(Notice::RootsChanged);
-    let saved = jobs::save(&tree, cache_dir);
+    let saved = jobs::save_full(&tree, cache_dir);
     drop(write);
     // After `busy` is released: dropping millions of nodes must not delay closing.
     drop(replaced);
+    drop(tree);
+    if saved.is_ok() {
+        baseline::refresh(state, cache_dir, &job.root);
+        notify(Notice::RootsChanged);
+    }
     saved
 }
 
@@ -159,7 +165,7 @@ async fn refresh_one(
 /// Puts a walked folder into the tree of its scan, unless the job was cancelled, the root was
 /// rescanned or closed, or no live folder has the path any more (it or an ancestor went to the
 /// trash): then the result is dropped. After a compaction or a refresh of an ancestor the folder
-/// is found again by its path. Saves the tree and releases `write`.
+/// is found again by its path. Saves the tree, releases `write` and computes the baseline again.
 fn apply_refresh(
     state: &AppState,
     cache_dir: &Path,
@@ -200,6 +206,10 @@ fn apply_refresh(
     notify(Notice::RootsChanged);
     let saved = jobs::save(&changed, cache_dir);
     drop(write);
+    // New ids, maybe all of them renumbered by a compaction: the baseline is computed again.
+    drop(changed);
+    baseline::refresh(state, cache_dir, &job.root);
+    notify(Notice::RootsChanged);
     saved
 }
 

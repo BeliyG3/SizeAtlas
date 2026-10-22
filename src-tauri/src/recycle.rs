@@ -15,7 +15,7 @@ use crate::dto::{TrashDto, TrashFailureDto, TrashProgressDto};
 use crate::error::CmdError;
 use crate::queue::TrashedPath;
 use crate::state::{AppState, TrashItem, Trashed};
-use crate::{jobs, sources};
+use crate::{baseline, jobs, sources};
 
 /// Moves `ids` of the tree with `generation` (at revision `rev`) to the trash with `trash_one`:
 /// the OS trash, or a stand-in in tests. `allowed(path, size)` says whether the item would go to
@@ -122,7 +122,15 @@ pub fn run_reporting(
             // A first scan's tree is saved once it is complete (`worker::live::finish`): saved
             // now, it would replace a complete saved scan with a partial one.
             Some(tree) if tree.node(0).has(flags::SCANNING) => None,
-            Some(tree) => jobs::save(&tree, cache_dir).err(),
+            Some(tree) => {
+                let saved = jobs::save(&tree, cache_dir).err();
+                drop(tree);
+                // Compacted: its ids changed, so its baseline is computed again.
+                if state.tree(generation).is_err() {
+                    baseline::refresh(state, cache_dir, &plan.root);
+                }
+                saved
+            }
             // Closed or reopened meanwhile: its saved scan still lists what went.
             None => {
                 let _ = fs::remove_file(cache_path(cache_dir, Path::new(&plan.root)));

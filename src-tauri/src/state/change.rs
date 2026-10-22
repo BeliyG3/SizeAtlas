@@ -1,9 +1,11 @@
-//! Changes to an open tree in place: a refreshed folder, items moved to the trash.
+//! Changes to an open tree in place: a refreshed folder, items moved to the trash, a new
+//! baseline.
 
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use sizeatlas_core::baseline::Baseline;
 use sizeatlas_core::tree::Tree;
 
 use super::{AppState, OpenRoot};
@@ -58,6 +60,8 @@ impl AppState {
             if old.is_some() {
                 data.generation += 1;
                 data.roots[at].generation = data.generation;
+                // Indexed by the old ids: the caller computes it again (`crate::baseline`).
+                data.roots[at].baseline = None;
             }
             (data.roots[at].tree.clone(), old)
         };
@@ -66,6 +70,25 @@ impl AppState {
             thread::spawn(move || drop(old));
         }
         Some(changed)
+    }
+
+    /// Gives the root with `generation` the baseline computed from its tree at revision `rev`,
+    /// and a new revision so the UI fetches it. `false` when the tree changed meanwhile: the
+    /// baseline is computed again.
+    pub fn set_baseline(&self, generation: u64, rev: u64, baseline: Option<Arc<Baseline>>) -> bool {
+        let mut data = self.write_data();
+        let Some(root) = data
+            .roots
+            .iter_mut()
+            .find(|r| r.generation == generation && r.tree.rev == rev)
+        else {
+            return false;
+        };
+        if root.baseline.is_some() || baseline.is_some() {
+            tree_mut(&mut root.tree).rev += 1;
+            root.baseline = baseline;
+        }
+        true
     }
 
     /// The root of `id` and what to queue to refresh it: its folder (a file's own folder), or
