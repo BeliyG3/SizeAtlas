@@ -36,7 +36,7 @@ fn round_trip_restores_the_tree_and_header() {
     assert_eq!(header, CacheHeader::of(&tree));
     assert_eq!(header.root, "/root");
     assert_eq!((header.total, header.files), (572, 4));
-    assert!(!dir.path().join("scan.tmp").exists());
+    assert!(!dir.path().join("scan.bin.tmp").exists());
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn decodable_tree_with_broken_indices_is_invalid() {
     let mut tree = sample_tree();
     tree.nodes_mut_for_test()[0].child_count = 999;
     let path = dir.path().join("broken.bin");
-    write_file(&path, &CacheHeader::of(&tree), &tree).unwrap();
+    save(&tree, &path).unwrap();
     assert!(matches!(load(&path), Err(CacheError::Invalid(_))));
 }
 

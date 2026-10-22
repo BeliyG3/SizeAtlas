@@ -105,12 +105,24 @@ pub fn cache_path(cache_dir: &Path, canonical_root: &Path) -> PathBuf {
 /// a change compacts the tree once they outnumber the live ones, so the file grows at most ×2,
 /// and no copy of the tree is made.
 pub fn save(tree: &Tree, path: &Path) -> Result<(), CacheError> {
-    write_file(path, &CacheHeader::of(tree), tree)
+    let tmp = tmp_path(path);
+    fs::write(&tmp, encode(tree)?)?;
+    rename_with_retry(&tmp, path).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })?;
+    Ok(())
 }
 
-fn write_file(path: &Path, header: &CacheHeader, tree: &Tree) -> Result<(), CacheError> {
-    let header_bytes =
-        postcard::to_stdvec(header).map_err(|_| CacheError::Invalid("header encoding"))?;
+/// The temporary file of `path`: the full name plus `.tmp`, so `x.bin` and `x.full` never share one.
+fn tmp_path(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".tmp");
+    PathBuf::from(name)
+}
+
+fn encode(tree: &Tree) -> Result<Vec<u8>, CacheError> {
+    let header_bytes = postcard::to_stdvec(&CacheHeader::of(tree))
+        .map_err(|_| CacheError::Invalid("header encoding"))?;
     let mut out = Vec::with_capacity(PREFIX_LEN + header_bytes.len());
     out.extend_from_slice(MAGIC);
     out.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
@@ -118,14 +130,7 @@ fn write_file(path: &Path, header: &CacheHeader, tree: &Tree) -> Result<(), Cach
     out.extend_from_slice(&header_bytes);
     let mut encoder = zstd::Encoder::new(out, ZSTD_LEVEL)?;
     postcard::to_io(tree, &mut encoder).map_err(|_| CacheError::Invalid("tree encoding"))?;
-    let out = encoder.finish()?;
-
-    let tmp = path.with_extension("tmp");
-    fs::write(&tmp, &out)?;
-    rename_with_retry(&tmp, path).inspect_err(|_| {
-        let _ = fs::remove_file(&tmp);
-    })?;
-    Ok(())
+    Ok(encoder.finish()?)
 }
 
 fn rename_with_retry(from: &Path, to: &Path) -> io::Result<()> {
@@ -202,5 +207,10 @@ fn decode_header(version: u32, bytes: &[u8]) -> Result<CacheHeader, CacheError> 
     }
 }
 
+mod files;
+pub use files::{ScanFiles, remove_all, save_full_scan, scan_files};
+
+#[cfg(test)]
+mod files_tests;
 #[cfg(test)]
 mod tests;
