@@ -18,13 +18,17 @@ export interface MenuTarget {
   lossy: boolean;
   /** The marked items when the menu opened on one of several marked rows (`id` among them). */
   marked?: readonly number[];
+  /** A deleted folder of "Grew most": its full path. Its id is not a node: only the path is copied. */
+  deletedPath?: string;
   x: number;
   y: number;
 }
 
-/** The items a menu acts on: the marked rows it opened on, else its one item. */
-export const menuIds = (target: MenuTarget): readonly number[] =>
-  target.marked && target.marked.length > 1 ? target.marked : [target.id];
+/** The items a menu acts on: the marked rows it opened on, else its one item; none for a deleted folder. */
+export function menuIds(target: MenuTarget): readonly number[] {
+  if (target.deletedPath !== undefined) return [];
+  return target.marked && target.marked.length > 1 ? target.marked : [target.id];
+}
 
 interface Props {
   target: MenuTarget;
@@ -133,7 +137,17 @@ export function ItemMenu({
       ),
     ],
   ];
-  const shown = groups.filter((group) => group !== false);
+  const { deletedPath } = target;
+  const shown =
+    deletedPath === undefined
+      ? groups.filter((group) => group !== false)
+      : [
+          [
+            item("copy", t("menu.copyPath"), () => {
+              navigator.clipboard.writeText(deletedPath).catch(onFail);
+            }),
+          ],
+        ];
   return (
     <Menu x={target.x} y={target.y} onClose={onClose}>
       {shown.map((group, i) => (

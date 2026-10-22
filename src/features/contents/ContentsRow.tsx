@@ -66,7 +66,9 @@ export const ContentsRow = memo(function ContentsRow({
     style: { top: index * ROW_HEIGHT, width, gridTemplateColumns: template },
     onClick: (e: MouseEvent) => onClick(index, markHow(e)),
   };
-  const state = `${index % 2 ? " alt" : ""}${selected ? " selected" : ""}${cursor ? " cursor" : ""}${moving ? " moving" : ""}`;
+  // A folder of the previous scan that is gone ("Grew most"): dimmed and tagged.
+  const deleted = item !== undefined && "deleted" in item && item.deleted;
+  const state = `${index % 2 ? " alt" : ""}${selected ? " selected" : ""}${cursor ? " cursor" : ""}${moving ? " moving" : ""}${deleted ? " deleted" : ""}`;
   if (unaccounted > 0) {
     return (
       <div {...shared} className={`crow unaccounted${state}`} title={t("tree.unaccountedHint")}>
@@ -130,6 +132,7 @@ export const ContentsRow = memo(function ContentsRow({
         <span className="ellipsis" dir="auto">
           {item.name}
         </span>
+        {deleted && <span className="tag">{t("change.deleted")}</span>}
         {moving && <span className="tag">{t("trash.moving")}</span>}
         {item.scanning && <ScanMark status="scanning" files={undefined} />}
         {waiting && <span className="tag">{t("tree.pending")}</span>}

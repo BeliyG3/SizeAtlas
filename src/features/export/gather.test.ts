@@ -73,4 +73,22 @@ describe("gather", () => {
     ).rejects.toBeInstanceOf(TreeChanged);
     expect(getList).not.toHaveBeenCalled();
   });
+
+  it("reads no details of a deleted folder: its id is not a node", async () => {
+    getSummary.mockResolvedValue(summary(4));
+    const getDetails = vi.mocked(api.getDetails).mockResolvedValue({ generation: 1, items: [] });
+    const gone = { ...row(4294967295, 0), deleted: true };
+    const got = await gather({
+      kind: "list",
+      generation: 1,
+      base: 0,
+      list: "grewMost",
+      rows: [row(1, 2), gone],
+      rev: 4,
+      size: 2,
+      columns: ["name", "created"],
+    });
+    expect(got.items).toHaveLength(2);
+    expect(getDetails).toHaveBeenCalledWith(1, [1]);
+  });
 });

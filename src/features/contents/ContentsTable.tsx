@@ -69,7 +69,7 @@ export function ContentsTable({
   const { generation, rev, rootId, baselineRev } = summary;
   const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
-  const layout = useColumnLayout(body, false, summary.baselineAt !== null);
+  const layout = useColumnLayout(body, null, summary.baselineAt !== null);
   // Hiding the sorted column hands the order to a shown one.
   const sort = visibleSort(chosenSort, layout.view);
   const order = useMemo<ListOrder>(

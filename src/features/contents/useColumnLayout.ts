@@ -1,4 +1,5 @@
 import { useMemo, type RefObject } from "react";
+import type { ListKind } from "../../api/types";
 import { useStored } from "../../settings/storage";
 import { fitWidth, measureColumn } from "../columns/fit";
 import { moveColumn } from "../columns/order";
@@ -27,14 +28,16 @@ const LEGACY_WIDTHS_KEY = "sizeatlas.columns";
 
 /**
  * Widths, order and visibility of the table's columns, all stored. `body` holds the cells;
- * `lists`: a flat list, which also shows the Path column; `baseline`: the root has a previous
- * scan to compare with (without one, Change is hidden unless the user showed it).
+ * `list`: the flat list shown (null for a folder), which also has the list columns (Path,
+ * Before); `baseline`: the root has a previous scan to compare with. `withDefaults` says which
+ * columns stay hidden until the user shows them.
  */
 export function useColumnLayout(
   body: RefObject<HTMLElement | null>,
-  lists: boolean,
+  list: ListKind | null,
   baseline: boolean,
 ) {
+  const lists = list !== null;
   const { widths, stored, resize, store } = useColumnWidths(
     WIDTHS_KEY,
     DEFAULT_WIDTHS,
@@ -42,7 +45,10 @@ export function useColumnLayout(
     LEGACY_WIDTHS_KEY,
   );
   const [storedView, setView] = useStored(VIEW_KEY, parseView, serializeView);
-  const view = useMemo(() => withDefaults(storedView, baseline), [storedView, baseline]);
+  const view = useMemo(
+    () => withDefaults(storedView, baseline, list),
+    [storedView, baseline, list],
+  );
   const columns = useMemo(() => visibleColumns(view, lists), [view, lists]);
   // One array per view: the memoized rows render these cells.
   const ids = useMemo(() => columns.map((c) => c.id), [columns]);
@@ -66,7 +72,7 @@ export function useColumnLayout(
     resize,
     fit: (id: ColumnId) => fit([id]),
     fitAll: () => fit(ids),
-    toggle: (id: ColumnId) => setView(toggleColumn(storedView, id, baseline)),
+    toggle: (id: ColumnId) => setView(toggleColumn(storedView, id, baseline, list)),
     move: (id: ColumnId, before: ColumnId | null) =>
       setView({ ...storedView, order: moveColumn(storedView.order, id, before, "name") }),
     reset: () => {

@@ -22,11 +22,20 @@ interface Props {
   trash: ReactNode;
 }
 
-/** "Scanned 5 minutes ago", fixed when shown: render stays pure; a new scan remounts it. */
-function Ago({ at }: { at: number }) {
+/**
+ * "Scanned 5 minutes ago", and when the scan the changes are compared with was made
+ * (`baselineAt`), fixed when shown: render stays pure; a new scan remounts it.
+ */
+function Ago({ at, baselineAt }: { at: number; baselineAt: number | null }) {
   const { t, lang } = useT();
   const [now] = useState(Date.now);
-  return <span className="dim">{t("status.scanned", { ago: formatAgo(at, now, lang) })}</span>;
+  const ago = (secs: number) => formatAgo(secs, now, lang);
+  return (
+    <span className="dim">
+      {t("status.scanned", { ago: ago(at) })}
+      {baselineAt !== null && ` · ${t("status.compared", { ago: ago(baselineAt) })}`}
+    </span>
+  );
 }
 
 /** The running job, on the right: its root or folder, the files so far, the path and the progress. */
@@ -73,7 +82,7 @@ export function StatusBar({ summary, scan, trash }: Props) {
               </span>
             </span>
           )}
-          <Ago key={summary.generation} at={summary.scannedAt} />
+          <Ago key={summary.generation} at={summary.scannedAt} baselineAt={summary.baselineAt} />
         </>
       )}
       {scan && <ScanStatus {...scan} />}

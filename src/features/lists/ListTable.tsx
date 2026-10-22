@@ -22,7 +22,8 @@ import { useMarks } from "../contents/useMarks";
 import { useExportSource, type ExportSource } from "../export/source";
 import type { MenuTarget } from "../menu/ItemMenu";
 import { useMovingIds } from "../trash/moving";
-import { LIST_LIMIT, nextListSort, sortRows, type ListSort } from "./rows";
+import { itemPath } from "../export/names";
+import { LIST_LIMIT, defaultListSort, liveId, nextListSort, sortRows, type ListSort } from "./rows";
 import "../contents/contents.css";
 
 /** Details are read from disk for the rows on screen only, so their columns cannot sort a list. */
@@ -76,11 +77,11 @@ export function ListTable({
   const { generation, rev, baselineRev } = summary;
   const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
-  const layout = useColumnLayout(body, true, summary.baselineAt !== null);
+  const layout = useColumnLayout(body, kind, summary.baselineAt !== null);
   const [list, setList] = useState<List | null>(null);
   const measure = useBatchCost("tree", list);
   // Null: the order of the list itself.
-  const [chosenSort, setSort] = useState<ListSort | null>(null);
+  const [chosenSort, setSort] = useState<ListSort | null>(() => defaultListSort(kind));
   // Hiding the sorted column brings back the list's own order.
   const sort = chosenSort && layout.view.hidden.includes(chosenSort.column) ? null : chosenSort;
   // The cursor and the marks belong to this order and revision of the list.
@@ -106,7 +107,8 @@ export function ListTable({
   );
   useExportSource(exportSource);
   const [marks, setMarks] = useMarks(listKey, selectedId);
-  const idAt = (index: number) => rows[index]?.id;
+  // A deleted folder is not a node: it cannot be marked, so no action takes it to the backend.
+  const idAt = (index: number) => liveId(rows[index]);
   useEffect(() => onMarks([...marks.ids]), [marks.ids, onMarks]);
   useEffect(() => () => onMarks([]), [onMarks]);
   const { first, last } = visibleRange(scrollTop, viewport, rows.length);
@@ -128,7 +130,10 @@ export function ListTable({
     };
   }, [generation, rev, baselineRev, base, kind, onFail, measure]);
 
-  const visibleIds = useMemo(() => rows.slice(first, last).map((r) => r.id), [rows, first, last]);
+  const visibleIds = useMemo(
+    () => rows.slice(first, last).flatMap((r) => liveId(r) ?? []),
+    [rows, first, last],
+  );
   useDetailsOnPause(
     layout.columns.some((c) => c.detail),
     visibleIds,
@@ -147,21 +152,25 @@ export function ListTable({
     if (body.current) scrollToRow(body.current, next);
     const key = how === "one" ? marksKey(listKey, rows[next].id) : marks.key;
     setMarks({ ...mark(marks, how, next, idAt, cursor ?? next), key });
-    if (how === "one") onPick(rows[next]);
+    if (how === "one" && !rows[next].deleted) onPick(rows[next]);
   };
   const open = (index: number) => {
     const item = rows[index];
+    if (item?.deleted) return;
     if (item?.isDir) onEnter(item.id, item.parent);
     else if (item) void api.openItem(generation, item.id).catch(onFail);
   };
   const menuAt = (index: number, x: number, y: number) => {
     const item = rows[index];
-    if (!item) return;
+    // A deleted folder offers only Copy path: of its full path, once the list's own is known.
+    if (!item || (item.deleted && !basePath)) return;
     setCursor(index);
     // A right click on a row that is not marked marks it alone, as in a file manager.
     const shown = marks.ids.has(item.id) ? marks : mark(marks, "one", index, idAt);
     setMarks(shown);
-    onMenu({ id: item.id, isDir: item.isDir, lossy: item.lossy, marked: [...shown.ids], x, y });
+    const deletedPath = item.deleted ? itemPath(basePath, item) : undefined;
+    const { isDir, lossy } = item;
+    onMenu({ id: item.id, isDir, lossy, marked: [...shown.ids], deletedPath, x, y });
   };
   // Up: the list of the parent of the listed folder (nothing at the root).
   const up = () => {
@@ -237,7 +246,11 @@ export function ListTable({
       <div className="crows" style={{ height: rows.length * ROW_HEIGHT, width: layout.width }}>
         {shown}
       </div>
-      {list && rows.length === 0 && <p className="dim pad">{t("lists.empty")}</p>}
+      {list && rows.length === 0 && (
+        <p className="dim pad">
+          {t(kind === "grewMost" && list.baselineAt === null ? "lists.noBaseline" : "lists.empty")}
+        </p>
+      )}
       {list?.truncated && (
         <p className="dim pad">{t("lists.capped", { count: formatCount(LIST_LIMIT, lang) })}</p>
       )}

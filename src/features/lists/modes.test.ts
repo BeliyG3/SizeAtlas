@@ -12,7 +12,7 @@ describe("table modes", () => {
   });
 
   it("offer every mode once, each with a label", () => {
-    expect(MODES).toHaveLength(16);
+    expect(MODES).toHaveLength(17);
     expect(new Set(MODES).size).toBe(MODES.length);
     for (const mode of MODES) expect(en).toHaveProperty([`mode.${mode}`]);
     for (const entry of MODE_MENU) {
@@ -23,6 +23,17 @@ describe("table modes", () => {
   it("tell the flat lists from the folder views", () => {
     expect(isListMode("all")).toBe(false);
     expect(isListMode("folders")).toBe(false);
-    expect(MODES.filter(isListMode)).toHaveLength(14);
+    expect(MODES.filter(isListMode)).toHaveLength(15);
+  });
+
+  it("end the group of the largest with Grew most", () => {
+    const at = MODE_MENU.indexOf("largestFiles");
+    expect(MODE_MENU.slice(at, at + 5)).toEqual([
+      "largestFiles",
+      "largestFolders",
+      "largest",
+      "grewMost",
+      "-",
+    ]);
   });
 });

@@ -1,4 +1,4 @@
-import type { ListItem } from "../../api/types";
+import type { ListItem, ListKind } from "../../api/types";
 import type { ColumnId } from "../contents/columns";
 
 /** The backend returns at most this many items of a list. */
@@ -50,6 +50,17 @@ export function sortRows(items: readonly ListItem[], sort: ListSort | null): rea
     (a, b) => unknown(a) - unknown(b) || sign * (compare(a, b, sort.column) || 0),
   );
 }
+
+/** The sort a list starts with: Grew most by the change, the largest growth first; else as it came. */
+export const defaultListSort = (kind: ListKind): ListSort | null =>
+  kind === "grewMost" ? { column: "change", descending: true } : null;
+
+/**
+ * Id of a row for what reaches the tree (selection, marks, details); none for a deleted folder,
+ * whose id is not a node.
+ */
+export const liveId = (item: ListItem | undefined): number | undefined =>
+  item && !item.deleted ? item.id : undefined;
 
 /** A header click: the same column flips; another starts descending, names and paths ascending. */
 export function nextListSort(current: ListSort | null, column: ColumnId): ListSort {

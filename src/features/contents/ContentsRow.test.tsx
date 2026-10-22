@@ -126,4 +126,28 @@ describe("ContentsRow", () => {
       /class="num change-up" title="[^"]+"><bdi dir="ltr">≈ \+1\.50<\/bdi> كيلوبايت<\/span>$/,
     );
   });
+
+  it("dims a deleted folder and says it is deleted after its name", () => {
+    const html = renderToStaticMarkup(
+      <I18nProvider>
+        <ContentsRow
+          index={0}
+          item={{ ...item, name: "gone", isDir: true, deleted: true }}
+          unaccounted={0}
+          folderSize={10}
+          detail={undefined}
+          columns={["name"]}
+          template=""
+          width={0}
+          selected={false}
+          cursor={false}
+          onClick={none}
+          onOpen={none}
+          onMenu={none}
+        />
+      </I18nProvider>,
+    );
+    expect(html).toMatch(/class="crow deleted"/);
+    expect(html).toMatch(/>gone<\/span><span class="tag">deleted<\/span>/);
+  });
 });

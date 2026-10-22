@@ -6,6 +6,7 @@ import {
   type SortState,
   type Widths,
 } from "./columns";
+import type { ListKind } from "../../api/types";
 import { repairOrder } from "../columns/order";
 
 /** Which columns the table shows, and in what order. Name is always first and visible. */
@@ -21,10 +22,26 @@ export const VIEW_KEY = "sizeatlas.columns.view";
 
 export const DEFAULT_VIEW: ColumnView = { order: COLUMNS.map((c) => c.id), hidden: [], shown: [] };
 
-/** The view in effect: Change is hidden by default while the root has no `baseline`. */
-export function withDefaults(view: ColumnView, baseline: boolean): ColumnView {
-  if (baseline || view.hidden.includes("change") || view.shown.includes("change")) return view;
-  return { ...view, hidden: [...view.hidden, "change"] };
+/**
+ * Columns hidden until the user shows them: in "Grew most" none; elsewhere Change while the root
+ * has no `baseline`, and in the other lists (`list`, null for a folder) Before too.
+ */
+function hiddenByDefault(baseline: boolean, list: ListKind | null): ColumnId[] {
+  if (list === "grewMost") return [];
+  const ids: ColumnId[] = list === null ? [] : ["before"];
+  return baseline ? ids : [...ids, "change"];
+}
+
+/** The view in effect: the columns hidden by default (see `hiddenByDefault`) the user did not show. */
+export function withDefaults(
+  view: ColumnView,
+  baseline: boolean,
+  list: ListKind | null = null,
+): ColumnView {
+  const add = hiddenByDefault(baseline, list).filter(
+    (id) => !view.hidden.includes(id) && !view.shown.includes(id),
+  );
+  return add.length === 0 ? view : { ...view, hidden: [...view.hidden, ...add] };
 }
 
 /** A stored view; an unusable field gives its default, unknown or missing columns are repaired. */
@@ -50,13 +67,18 @@ export function parseView(raw: string | null): ColumnView {
 export const serializeView = (view: ColumnView) => JSON.stringify(view);
 
 /**
- * Shows a column hidden in the view in effect (`withDefaults` with `baseline`), or hides a shown
- * one; Name cannot be hidden. The choice is kept in `view`, the stored one.
+ * Shows a column hidden in the view in effect (`withDefaults` with `baseline` and `list`), or
+ * hides a shown one; Name cannot be hidden. The choice is kept in `view`, the stored one.
  */
-export function toggleColumn(view: ColumnView, id: ColumnId, baseline: boolean): ColumnView {
+export function toggleColumn(
+  view: ColumnView,
+  id: ColumnId,
+  baseline: boolean,
+  list: ListKind | null = null,
+): ColumnView {
   if (id === "name") return view;
   const others = (ids: readonly ColumnId[]) => ids.filter((c) => c !== id);
-  return withDefaults(view, baseline).hidden.includes(id)
+  return withDefaults(view, baseline, list).hidden.includes(id)
     ? { ...view, hidden: others(view.hidden), shown: [...others(view.shown), id] }
     : { ...view, hidden: [...others(view.hidden), id], shown: others(view.shown) };
 }

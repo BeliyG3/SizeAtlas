@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import type { ListKind } from "../../api/types";
 import { moveColumn as moveAny } from "../columns/order";
 import { COLUMNS, DEFAULT_SORT, DEFAULT_WIDTHS, type ColumnId } from "./columns";
 import {
   DEFAULT_VIEW,
   gridTemplate,
+  type ColumnView,
   parseView,
   serializeView,
   toggleColumn,
@@ -101,6 +103,21 @@ describe("column view", () => {
     const off = toggleColumn(DEFAULT_VIEW, "change", true);
     expect(withDefaults(off, true).hidden).toEqual(["change"]);
     expect(toggleColumn(off, "change", true)).toEqual({ ...DEFAULT_VIEW, shown: ["change"] });
+  });
+
+  it("show Before and Change by default in Grew most only, the user's choice winning", () => {
+    const listed = (view: ColumnView, list: ListKind) =>
+      visibleColumns(withDefaults(view, true, list), true).map((c) => c.id);
+    expect(listed(DEFAULT_VIEW, "grewMost")).toEqual(expect.arrayContaining(["before", "change"]));
+    expect(listed(DEFAULT_VIEW, "largest")).not.toContain("before");
+    expect(listed(DEFAULT_VIEW, "largest")).toContain("change");
+    expect(withDefaults(DEFAULT_VIEW, false, "largest").hidden).toEqual(["before", "change"]);
+    // Shown in another list: it stays shown there.
+    const shown = toggleColumn(DEFAULT_VIEW, "before", true, "largest");
+    expect(listed(shown, "largest")).toContain("before");
+    // Hidden in Grew most: it stays hidden there.
+    const off = toggleColumn(DEFAULT_VIEW, "before", true, "grewMost");
+    expect(listed(off, "grewMost")).not.toContain("before");
   });
 
   it("lays out only the visible columns, in their order", () => {

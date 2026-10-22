@@ -20,6 +20,7 @@ export const MODE_MENU: readonly ModeEntry[] = [
   "largestFiles",
   "largestFolders",
   "largest",
+  "grewMost",
   "-",
   { submenu: "oldest", modes: ["oldestFiles", "oldestFolders", "oldest"] },
   { submenu: "newest", modes: ["newestFiles", "newestFolders", "newest"] },

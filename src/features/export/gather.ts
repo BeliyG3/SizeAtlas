@@ -126,8 +126,10 @@ async function gatherOnce(source: ExportSource): Promise<Gathered | null> {
 
   const details = new Map<number, Detail>();
   if (source.columns.some((c) => DETAIL_COLUMNS.has(c))) {
-    for (let i = 0; i < items.length; i += DETAILS_BATCH) {
-      const ids = items.slice(i, i + DETAILS_BATCH).map((item) => item.id);
+    // A deleted folder of "Grew most" is not a node: it has no details to read.
+    const live = items.filter((item) => !("deleted" in item && item.deleted));
+    for (let i = 0; i < live.length; i += DETAILS_BATCH) {
+      const ids = live.slice(i, i + DETAILS_BATCH).map((item) => item.id);
       for (const d of (await api.getDetails(generation, ids)).items) details.set(d.id, d);
     }
   }

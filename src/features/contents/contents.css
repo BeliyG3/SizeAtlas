@@ -172,7 +172,8 @@
   font-style: italic;
 }
 
-/* Being moved to the trash: dimmed until the request ends. */
-.crow.moving {
+/* Being moved to the trash: dimmed until the request ends. A deleted folder of "Grew most" too. */
+.crow.moving,
+.crow.deleted {
   opacity: 0.5;
 }

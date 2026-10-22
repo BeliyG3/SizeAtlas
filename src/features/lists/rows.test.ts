@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Change, ListItem } from "../../api/types";
-import { nextListSort, sortRows } from "./rows";
+import { defaultListSort, liveId, nextListSort, sortRows } from "./rows";
 
 const item = (id: number, name: string, folder: string, size: number): ListItem => ({
   id,
@@ -82,5 +82,17 @@ describe("list rows", () => {
       column: "modified",
       descending: true,
     });
+  });
+
+  it("start Grew most sorted by the change, the largest growth first; other lists as they came", () => {
+    expect(defaultListSort("grewMost")).toEqual({ column: "change", descending: true });
+    expect(defaultListSort("largest")).toBeNull();
+  });
+
+  it("give no id of a deleted folder to what reaches the tree: it is not a node", () => {
+    const gone = { ...item(4294967295, "gone", "x", 0), deleted: true };
+    expect(liveId(gone)).toBeUndefined();
+    expect(liveId(list[0])).toBe(1);
+    expect(liveId(undefined)).toBeUndefined();
   });
 });
