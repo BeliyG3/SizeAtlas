@@ -68,6 +68,12 @@ export function FiltersPanel({
   const { words, filters } = parseFilters(text);
   const bad = conflicts(filters);
   const unitOf = (field: NumberField) => filters[field]?.unit ?? units[field];
+  /** The number an age unit follows: the one shown in the box, else a plural (5) for none. */
+  const countOf = (field: NumberField) => {
+    const shown = drafts[field] ?? filters[field]?.value;
+    const n = shown === undefined || shown === "" ? NaN : Number(shown);
+    return Number.isFinite(n) ? n : 5;
+  };
 
   /** Writes the filters into the text unless it would outgrow what the search takes. */
   const apply = (next: UiFilters): boolean => {
@@ -134,7 +140,7 @@ export function FiltersPanel({
       >
         {unitList.map((unit) => (
           <option key={unit} value={unit}>
-            {age ? t(`filters.age.${unit}`) : unit}
+            {age ? t(`filters.age.${unit}`, { count: countOf(field) }) : unit}
           </option>
         ))}
       </select>

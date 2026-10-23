@@ -101,6 +101,30 @@ describe("FiltersPanel shows the conditions of the text", () => {
   });
 });
 
+describe("FiltersPanel age units agree with the number", () => {
+  /** The labels of the options of the unit box `name`, in order. */
+  const labels = (tree: ReactNode, name: string) => {
+    const select = find(tree, (p) => p.name === name)[0];
+    return find(select, (p) => typeof p.value === "string" && p.children !== undefined)
+      .slice(1)
+      .map((o) => (o.props as { children: string }).children);
+  };
+
+  it("picks the form by the number in the box", () => {
+    expect(labels(setup("older:1y").tree, "olderThanUnit")[3]).toBe('filters.age.y{"count":1}');
+    expect(labels(setup("older:2y").tree, "olderThanUnit")[3]).toBe('filters.age.y{"count":2}');
+    expect(labels(setup("newer:30d").tree, "newerThanUnit")[0]).toBe('filters.age.d{"count":30}');
+  });
+
+  it("follows what is typed in a box that is no condition yet, and uses a plural for none", () => {
+    const draft = setup("", DEFAULT_UNITS, { olderThan: "1.5" });
+    expect(labels(draft.tree, "olderThanUnit")[3]).toBe('filters.age.y{"count":1.5}');
+    expect(labels(setup("").tree, "olderThanUnit")[3]).toBe('filters.age.y{"count":5}');
+    const bad = setup("", DEFAULT_UNITS, { newerThan: "abc" });
+    expect(labels(bad.tree, "newerThanUnit")[3]).toBe('filters.age.y{"count":5}');
+  });
+});
+
 describe("FiltersPanel writes the text", () => {
   it("sets a size and keeps the names and the other conditions", () => {
     const { named, onText } = setup("photo type:video >1GB");

@@ -125,6 +125,19 @@ describe("translate", () => {
     expect(translate("ru", "status.dirs", { count: 2, dirs: "2" })).toBe("2 папки");
   });
 
+  it("names the filter age units in the form of the number", () => {
+    const unit = (lang: "en" | "pl", key: string, n: number) =>
+      translate(lang, `filters.age.${key}`, { count: n });
+    expect(unit("en", "d", 1)).toBe("day");
+    expect(unit("en", "d", 2)).toBe("days");
+    expect(unit("pl", "y", 1)).toBe("rok");
+    expect(unit("pl", "y", 2)).toBe("lata");
+    expect(unit("pl", "y", 5)).toBe("lat");
+    expect(unit("pl", "y", 22)).toBe("lata");
+    expect(unit("pl", "y", 1.5)).toBe("roku");
+    expect(unit("pl", "m", 2)).toBe("miesiące");
+  });
+
   it("substitutes parameters", () => {
     expect(translate("en", "error.Io", { path: "C:\\x", osMessage: "boom" })).toBe("C:\\x: boom");
   });
