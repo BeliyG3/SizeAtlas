@@ -1,6 +1,6 @@
 [package]
 name = "sizeatlas-core"
-version = "2026.10.3"
+version = "2026.10.4"
 edition = "2024"
 license = "MIT"
 description = "Disk usage scanner, size tree and scan cache for SizeAtlas"
