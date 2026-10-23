@@ -11,13 +11,14 @@ use sizeatlas_core::scanner::{Progress, ScanOutcome, scan};
 use sizeatlas_core::tree::{ListKind, Tree};
 
 use crate::dto::{InfoDto, InfoKind, ListDto};
+use crate::recycle::fixture::settle;
 use crate::state::AppState;
 
 const DAY: i64 = 86_400;
 const HOME: &str = "Users/u";
-const LOCAL: &str = "Users/u/AppData/Local";
-pub(super) const TEMP: &str = "Users/u/AppData/Local/Temp";
-pub(super) const CHROME: &str = "Users/u/AppData/Local/Google/Chrome/User Data/Default";
+pub(crate) const LOCAL: &str = "Users/u/AppData/Local";
+pub(crate) const TEMP: &str = "Users/u/AppData/Local/Temp";
+pub(crate) const CHROME: &str = "Users/u/AppData/Local/Google/Chrome/User Data/Default";
 
 /// The known folders, all inside the scanned folder `root`.
 fn known(root: &Path) -> Known {
@@ -39,12 +40,12 @@ fn known(root: &Path) -> Known {
 
 /// A scanned "drive" with rows of both modes, an installed program and a pagefile, scanned a
 /// month ago as far as the ages go.
-pub(super) struct Machine {
+pub(crate) struct Machine {
     _dir: tempfile::TempDir,
-    pub(super) state: AppState,
-    pub(super) generation: u64,
+    pub(crate) state: AppState,
+    pub(crate) generation: u64,
     /// Executables the injected context reports as running.
-    pub(super) running: Arc<Mutex<Vec<&'static str>>>,
+    pub(crate) running: Arc<Mutex<Vec<&'static str>>>,
     /// How often the context was built.
     pub(super) calls: Arc<AtomicUsize>,
 }
@@ -55,7 +56,19 @@ fn put(root: &Path, rel: &str, len: usize) {
     fs::write(path, vec![1u8; len]).unwrap();
 }
 
-pub(super) fn machine() -> Machine {
+/// Waits until the listings show the times every item below `root` has, as a scan of a settled
+/// disk would see them: the tests of deleting check those times.
+fn settle_all(root: &Path) {
+    for entry in fs::read_dir(root).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            settle_all(&path);
+        }
+        settle(&path);
+    }
+}
+
+pub(crate) fn machine() -> Machine {
     let dir = tempfile::tempdir().unwrap();
     let root = dunce::canonicalize(dir.path()).unwrap();
     put(&root, &format!("{TEMP}/old/a.bin"), 32_768);
@@ -70,6 +83,7 @@ pub(super) fn machine() -> Machine {
     put(&root, "Program Files/App/package.json", 10);
     put(&root, "Program Files/App/node_modules/x.js", 40_960);
     put(&root, "pagefile.sys", 4_096);
+    settle_all(&root);
     let ScanOutcome::Done(mut tree) =
         scan(&root, &AtomicBool::new(false), &Progress::default()).unwrap()
     else {
@@ -110,11 +124,11 @@ pub(super) fn machine() -> Machine {
 
 impl Machine {
     /// Fetched for each use: a held tree would keep a change from running.
-    pub(super) fn tree(&self) -> Arc<Tree> {
+    pub(crate) fn tree(&self) -> Arc<Tree> {
         self.state.tree(self.generation).unwrap()
     }
 
-    pub(super) fn id(&self, rel: &str) -> u32 {
+    pub(crate) fn id(&self, rel: &str) -> u32 {
         let tree = self.tree();
         rel.split('/').fold(0, |at, name| {
             tree.children(at)
@@ -123,7 +137,7 @@ impl Machine {
         })
     }
 
-    pub(super) fn size(&self, rel: &str) -> u64 {
+    pub(crate) fn size(&self, rel: &str) -> u64 {
         self.tree().node(self.id(rel)).size
     }
 

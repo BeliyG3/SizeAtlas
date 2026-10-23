@@ -303,7 +303,10 @@ mod live;
 mod paths;
 mod trash;
 
-pub use self::trash::{TrashItem, Trashed, settle_parent};
+/// The scanned "drive" of the clean-up tests, shared with the tests of deleting rows.
+#[cfg(test)]
+pub(crate) use self::lists::cleanup_tests;
+pub use self::trash::{TrashItem, TrashPlan, Trashed, settle_parent};
 
 #[cfg(test)]
 mod tests;

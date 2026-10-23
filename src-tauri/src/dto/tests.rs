@@ -350,6 +350,21 @@ fn trash_results_use_camel_case() {
         json!({"removed": 1, "failed": [{"path": "C:\\x", "error": {"code": "NoTrash"}}],
             "warning": {"code": "CacheNotSaved"}, "stopped": true})
     );
+    let preview = TrashPreviewDto {
+        count: 1,
+        size: 2,
+        scanned_at: 3,
+        paths: vec![],
+        bin_free: None,
+    };
+    assert_eq!(
+        serde_json::to_value(preview).unwrap(),
+        json!({"count": 1, "size": 2, "scannedAt": 3, "paths": [], "binFree": null})
+    );
+    assert_eq!(
+        serde_json::to_value(CmdError::Protected).unwrap(),
+        json!({"code": "Protected"})
+    );
     let progress = TrashProgressDto {
         done: 2,
         total: 5,

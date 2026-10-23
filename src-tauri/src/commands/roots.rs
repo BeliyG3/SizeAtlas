@@ -8,7 +8,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::dto::{RootsDto, ScanErrorDto, SourcesDto, Summary, TrashDto, TrashProgressDto};
 use crate::error::CmdError;
 use crate::queue::ScanJob;
-use crate::state::AppState;
+use crate::recycle::membership;
+use crate::state::{AppState, TrashItem};
 use crate::worker::{self, Notice, Notify};
 use crate::{baseline, jobs, recycle, sources};
 
@@ -104,8 +105,10 @@ pub async fn refresh_folder(
 }
 
 /// Moves items of one tree to the trash after checking them against the disk (see
-/// `recycle::run_reporting`); refused while a running scan still lists one of them. Reports
-/// `trash-progress` meanwhile; `cancel_trash` stops it before the next item.
+/// `recycle::run_reporting`); refused while a running scan still lists one of them. With
+/// `cleanup: true` (from the clean-up modes) the items must be clean-up rows and each is walked
+/// again before it goes (see `recycle::membership::run_rows`). Reports `trash-progress`
+/// meanwhile; `cancel_trash` stops it before the next item.
 #[tauri::command]
 pub async fn trash(
     app: AppHandle,
@@ -113,30 +116,75 @@ pub async fn trash(
     generation: u64,
     rev: u64,
     ids: Vec<u32>,
+    cleanup: Option<bool>,
+) -> Result<TrashDto, CmdError> {
+    removing(&app, &state, move |state, dir, report| {
+        let bin = sizeatlas_core::can_recycle;
+        if cleanup == Some(true) {
+            let trash_one = recycle::move_to_trash;
+            membership::run_rows(
+                state,
+                dir,
+                generation,
+                rev,
+                &ids,
+                Some(&bin),
+                trash_one,
+                report,
+            )
+        } else {
+            let allowed = |item: &TrashItem| recycle::bin_takes(item, bin);
+            let trash_one = recycle::move_to_trash;
+            recycle::run_reporting(
+                state, dir, generation, rev, &ids, allowed, trash_one, report,
+            )
+        }
+    })
+    .await
+}
+
+/// Deletes clean-up rows of one tree for good (`recycle::purge::delete`), with the checks of
+/// `trash` with `cleanup: true` but no trash check. An id that is no clean-up row refuses the
+/// whole request (`Protected`). Progress and `cancel_trash` as `trash`.
+#[tauri::command]
+pub async fn delete_for_good(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    generation: u64,
+    rev: u64,
+    ids: Vec<u32>,
+) -> Result<TrashDto, CmdError> {
+    removing(&app, &state, move |state, dir, report| {
+        let delete = recycle::purge::delete;
+        membership::run_rows(state, dir, generation, rev, &ids, None, delete, report)
+    })
+    .await
+}
+
+/// Runs a trash or delete request `run` with `begin_write` held, its progress as
+/// `trash-progress` events.
+async fn removing(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    run: impl FnOnce(&AppState, &Path, &dyn Fn(TrashProgressDto)) -> Result<TrashDto, CmdError>
+    + Send
+    + 'static,
 ) -> Result<TrashDto, CmdError> {
     state.reset_trash_stop();
     let write = state.begin_write().await?;
-    let dir = cache_dir(&app)?;
+    let dir = cache_dir(app)?;
     let state = state.inner().clone();
     let events = app.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let result = recycle::run_reporting(
-            &state,
-            &dir,
-            generation,
-            rev,
-            &ids,
-            sizeatlas_core::can_recycle,
-            recycle::move_to_trash,
-            |progress: TrashProgressDto| {
-                let _ = events.emit("trash-progress", progress);
-            },
-        );
+        let report = |progress: TrashProgressDto| {
+            let _ = events.emit("trash-progress", progress);
+        };
+        let result = run(&state, &dir, &report);
         drop(write);
         result
     })
     .await?;
-    changed(&app);
+    changed(app);
     result
 }
 

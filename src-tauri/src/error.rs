@@ -26,6 +26,11 @@ pub enum CmdError {
     /// The item would be deleted for good instead of moved to the trash (no Recycle Bin on its
     /// drive, the bin turned off or too small), so it was left where it is.
     NoTrash,
+    /// A clean-up delete refused the item: it holds something SizeAtlas never deletes (a never
+    /// place or name, cloud content, a reparse point that is no link, a mount point, a work
+    /// marker in an old Temp item), or it is no longer a row of either clean-up mode (its app
+    /// runs now, a restart is pending, or it never was one).
+    Protected,
     /// The user declined the system prompt (the UAC prompt of a restart as administrator).
     Cancelled,
     Io {

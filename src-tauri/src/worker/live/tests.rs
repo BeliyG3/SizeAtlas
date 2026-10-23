@@ -148,7 +148,7 @@ fn live_root_refuses_refresh_subfolder_scans_and_trash_of_unfinished_folders() {
                 summary.generation,
                 summary.rev,
                 &[sub],
-                |_, _| panic!("no trash check"),
+                |_| panic!("no trash check"),
                 |_| panic!("no trash")
             ),
             Err(CmdError::Busy)

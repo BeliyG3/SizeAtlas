@@ -127,7 +127,7 @@ fn queued_rescan_allows_old_tree_actions_and_running_rescan_allows_only_trash() 
         summary.generation,
         summary.rev,
         &[1],
-        |_, _| false,
+        |_| Err(CmdError::NoTrash),
         |_| panic!("no real trash"),
     );
     assert!(result.is_ok());

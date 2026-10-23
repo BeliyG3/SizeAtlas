@@ -145,7 +145,7 @@ fn cleanup_rows(
 }
 
 #[cfg(test)]
-mod cleanup_tests;
+pub(crate) mod cleanup_tests;
 #[cfg(test)]
 mod cleanup_walk_tests;
 #[cfg(test)]

@@ -12,7 +12,8 @@ use sizeatlas_core::tree::ListOrder;
 use tempfile::TempDir;
 
 use super::{listed_mtime, modified};
-use crate::state::AppState;
+use crate::error::CmdError;
+use crate::state::{AppState, TrashItem};
 
 /// root/top.bin and root/sub/{x.bin, y.bin}, scanned and open; returns the folder and the
 /// generation of its tree.
@@ -77,9 +78,9 @@ pub fn real(dir: &TempDir, names: &[&str]) -> PathBuf {
     names.iter().fold(canonical, |path, name| path.join(name))
 }
 
-/// Every item may go to the trash (the system check is `sizeatlas_core::can_recycle`).
-pub fn anywhere(_: &Path, _: u64) -> bool {
-    true
+/// Every item may go (the system's trash check is `bin_takes` with `sizeatlas_core::can_recycle`).
+pub fn anywhere(_: &TrashItem) -> Result<(), CmdError> {
+    Ok(())
 }
 
 /// A stand-in for the OS trash: deletes for good and records what it got.
@@ -93,4 +94,18 @@ pub fn deleting(log: &Mutex<Vec<PathBuf>>) -> impl Fn(&Path) -> Result<(), Strin
         };
         removed.map_err(|e| e.to_string())
     }
+}
+
+/// A directory link at `link` to `target`: a junction on Windows, a symlink on Unix. `false`
+/// when the system does not allow it here.
+pub fn link(target: &Path, link: &Path) -> bool {
+    #[cfg(windows)]
+    return std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(link)
+        .arg(target)
+        .output()
+        .is_ok_and(|out| out.status.success());
+    #[cfg(unix)]
+    return std::os::unix::fs::symlink(target, link).is_ok();
 }

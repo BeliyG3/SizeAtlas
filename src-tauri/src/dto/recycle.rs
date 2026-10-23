@@ -16,10 +16,15 @@ pub struct TrashPreviewDto {
     pub scanned_at: i64,
     /// Full paths of the first few.
     pub paths: Vec<String>,
+    /// Room left in the recycle bin of the root's volume, in bytes; `None` where it cannot be
+    /// read (no bin, settings unreadable, macOS and Linux).
+    pub bin_free: Option<u64>,
 }
 
 /// An item that stayed: `NoTrash` (it would be deleted for good), `Changed` (changed on disk
-/// since the scan), `NoAccess` (it could not be read) or `Io` (the OS refused, with its message).
+/// since the scan), `Protected` (a clean-up delete found something it never deletes, or the item
+/// is no longer a clean-up row), `NoAccess` (it could not be read) or `Io` (the OS refused, with
+/// its message).
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashFailureDto {

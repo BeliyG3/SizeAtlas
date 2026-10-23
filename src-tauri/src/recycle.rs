@@ -14,23 +14,24 @@ use sizeatlas_core::tree::flags;
 use crate::dto::{TrashDto, TrashFailureDto, TrashProgressDto};
 use crate::error::CmdError;
 use crate::queue::TrashedPath;
-use crate::state::{AppState, TrashItem, Trashed};
+use crate::state::{AppState, TrashItem, TrashPlan, Trashed};
 use crate::{baseline, jobs, sources};
 
 /// Moves `ids` of the tree with `generation` (at revision `rev`) to the trash with `trash_one`:
-/// the OS trash, or a stand-in in tests. `allowed(path, size)` says whether the item would go to
-/// the trash rather than be deleted for good (`sizeatlas_core::can_recycle`); `size` is the larger
-/// of its size on disk and its length. The caller holds `begin_write`, so no refresh changes the
-/// tree meanwhile and closing the app waits for the saved scan.
+/// the OS trash, a permanent delete (`purge::delete`) or a stand-in in tests. `allowed(item)`
+/// says whether the item may go: [`bin_takes`] for the trash (it would go to the trash rather
+/// than be deleted for good), plus the clean-up re-check for clean-up rows (see
+/// `membership::run_rows`). The caller holds `begin_write`, so no refresh changes the tree
+/// meanwhile and closing the app waits for the saved scan.
 ///
 /// Nothing moves when a running scan still lists an item (`Busy`, see
 /// `AppState::trash_refused`) or when an item changed on disk since the scan (`Changed`). A
 /// running full scan of a root that holds the items is told which went
 /// (`ScanQueue::note_trashed`). After that every item is checked again right before it goes;
-/// one that changed (`Changed`), cannot be read (`NoAccess`, `Io`), would be deleted for good
-/// (`NoTrash`) or that the OS refuses (`Io`) is reported and stays, the others go. Once the app
-/// starts closing, or `AppState::stop_trash` asks for it (`stopped`), the items left stay where
-/// they are. A first scan's tree is not saved here.
+/// one that `allowed` refuses (`NoTrash`, `Protected`, ...), that changed (`Changed`), cannot be
+/// read (`NoAccess`, `Io`) or that the OS refuses (`Io`) is reported and stays, the others go.
+/// Once the app starts closing, or `AppState::stop_trash` asks for it (`stopped`), the items
+/// left stay where they are. A first scan's tree is not saved here.
 ///
 /// `report` gets the progress before each item (paced, see `Pacer`) and once at the end.
 #[allow(clippy::too_many_arguments)]
@@ -40,11 +41,26 @@ pub fn run_reporting(
     generation: u64,
     rev: u64,
     ids: &[u32],
-    allowed: impl Fn(&Path, u64) -> bool,
+    allowed: impl Fn(&TrashItem) -> Result<(), CmdError>,
+    trash_one: impl Fn(&Path) -> Result<(), String>,
+    report: impl FnMut(TrashProgressDto),
+) -> Result<TrashDto, CmdError> {
+    let plan = state.trash_plan(generation, rev, ids)?;
+    run_plan(
+        state, cache_dir, generation, plan, allowed, trash_one, report,
+    )
+}
+
+/// [`run_reporting`] for a request already planned with `AppState::trash_plan`.
+pub fn run_plan(
+    state: &AppState,
+    cache_dir: &Path,
+    generation: u64,
+    plan: TrashPlan,
+    allowed: impl Fn(&TrashItem) -> Result<(), CmdError>,
     trash_one: impl Fn(&Path) -> Result<(), String>,
     mut report: impl FnMut(TrashProgressDto),
 ) -> Result<TrashDto, CmdError> {
-    let plan = state.trash_plan(generation, rev, ids)?;
     for item in &plan.items {
         check(item)?;
     }
@@ -70,11 +86,17 @@ pub fn run_reporting(
             });
         }
         let path = item.path.display().to_string();
-        if !allowed(&item.path, item.size.max(item.len)) {
-            failed.push(TrashFailureDto {
-                path,
-                error: CmdError::NoTrash,
-            });
+        if let Err(error) = allowed(item) {
+            // The re-check of a clean-up row gives up once a stop is asked: the item was not
+            // tried, so it is no failure.
+            if state.closing() {
+                break;
+            }
+            if state.trash_stopped() {
+                stopped = true;
+                break;
+            }
+            failed.push(TrashFailureDto { path, error });
             continue;
         }
         // Again right before it goes: the items before it may have taken a while.
@@ -154,13 +176,26 @@ pub fn run(
     generation: u64,
     rev: u64,
     ids: &[u32],
-    allowed: impl Fn(&Path, u64) -> bool,
+    allowed: impl Fn(&TrashItem) -> Result<(), CmdError>,
     trash_one: impl Fn(&Path) -> Result<(), String>,
 ) -> Result<TrashDto, CmdError> {
     let ignore = |_| ();
     run_reporting(
         state, cache_dir, generation, rev, ids, allowed, trash_one, ignore,
     )
+}
+
+/// `NoTrash` unless `can_recycle` (`sizeatlas_core::can_recycle`) says the item goes to the trash
+/// rather than being deleted for good, judged by the larger of its size on disk and its length.
+pub fn bin_takes(
+    item: &TrashItem,
+    can_recycle: impl Fn(&Path, u64) -> bool,
+) -> Result<(), CmdError> {
+    if can_recycle(&item.path, item.size.max(item.len)) {
+        Ok(())
+    } else {
+        Err(CmdError::NoTrash)
+    }
 }
 
 /// The progress of a trash request at most this often: thousands of small items must not flood
@@ -239,10 +274,15 @@ pub fn move_to_trash(path: &Path) -> Result<(), String> {
     .unwrap_or_else(|_| Err("the trash of the system failed".to_owned()))
 }
 
+pub mod membership;
+pub mod purge;
+
 #[cfg(test)]
 mod during_tests;
 #[cfg(test)]
 pub(crate) mod fixture;
+#[cfg(test)]
+mod membership_tests;
 #[cfg(test)]
 mod progress_tests;
 #[cfg(test)]

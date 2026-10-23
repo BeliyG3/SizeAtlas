@@ -1,11 +1,12 @@
 //! What a trash request names, checked against the tree, and the tree once the items are gone.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use sizeatlas_core::tree::{Tree, VolumeUsage, flags};
+use sizeatlas_core::{bin_free, bin_space};
 
 use super::AppState;
 use crate::dto::TrashPreviewDto;
@@ -126,7 +127,7 @@ impl AppState {
         Ok(plan)
     }
 
-    /// What a trash request would move, for its confirmation.
+    /// What a trash request would move, for its confirmation, and the room left in the bin.
     pub fn trash_preview(
         &self,
         generation: u64,
@@ -144,6 +145,7 @@ impl AppState {
                 .take(PREVIEW_PATHS)
                 .map(|i| i.path.display().to_string())
                 .collect(),
+            bin_free: bin_space(Path::new(&plan.root)).map(bin_free),
         })
     }
 

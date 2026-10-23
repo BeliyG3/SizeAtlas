@@ -12,10 +12,11 @@ use sizeatlas_core::scanner::mtime_of;
 use sizeatlas_core::tree::{DirRec, FileRec, NO_PARENT, flags};
 
 use super::fixture::{anywhere, deleting, id, open, real, rev, settle};
-use super::run;
+use super::{bin_takes, run};
 use crate::error::CmdError;
 use crate::exit::ExitDecision;
 use crate::jobs;
+use crate::state::TrashItem;
 
 #[test]
 fn closing_the_window_waits_for_the_moving_item_and_the_saved_scan() {
@@ -115,7 +116,7 @@ fn an_item_without_room_in_the_trash_stays_and_the_others_go() {
         generation,
         0,
         &ids,
-        no_bin_for_x,
+        |item: &TrashItem| bin_takes(item, no_bin_for_x),
         deleting(&log),
     )
     .unwrap();
@@ -242,7 +243,7 @@ fn the_trash_limit_takes_the_length_of_an_item_small_on_disk() {
         generation,
         now,
         &[placeholder],
-        bin_of_10_gib,
+        |item: &TrashItem| bin_takes(item, bin_of_10_gib),
         deleting(&log),
     )
     .unwrap();
