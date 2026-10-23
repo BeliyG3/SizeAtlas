@@ -7,7 +7,7 @@ use std::path::Path;
 /// trash. Links are never followed: a link itself (`path`, or one inside the folder: a symbolic
 /// link, a junction) is removed, its target stays (`remove_dir_all` works so since Rust 1.58.1).
 /// A folder deleted only in part is an error of this item; what is left stays on disk.
-pub fn delete(path: &Path) -> Result<(), String> {
+pub(super) fn delete(path: &Path) -> Result<(), String> {
     let meta = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     let removed = if meta.is_dir() {
         fs::remove_dir_all(path)

@@ -91,7 +91,7 @@ fn a_protected_name_added_after_the_scan_is_refused_right_before_deleting() {
 }
 
 /// Files made by a test are young by their change time, which cannot be set back; the core's
-/// `a_temp_row_is_as_young_as_the_newest_of_three_times` checks each of the three times.
+/// `each_of_the_three_times_can_make_a_temp_row_young` checks each of the three times.
 #[test]
 fn a_temp_row_young_on_disk_has_changed() {
     let m = machine();

@@ -279,7 +279,7 @@ pub fn move_to_trash(path: &Path) -> Result<(), String> {
 }
 
 pub mod membership;
-pub mod purge;
+mod purge;
 
 #[cfg(test)]
 mod during_tests;
