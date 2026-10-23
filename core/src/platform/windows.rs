@@ -18,6 +18,8 @@ mod reboot;
 mod recycle_bin;
 mod registry;
 
+#[cfg(test)]
+pub use item::tag_for_test;
 pub use item::{change_time, device, is_cloud, reparse, volume_mount};
 pub use reboot::reboot_pending;
 pub use recycle_bin::{bin_space, can_recycle};

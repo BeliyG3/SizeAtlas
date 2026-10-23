@@ -120,6 +120,57 @@ fn filetime_ns(ticks: i64) -> i64 {
     ns.max(0)
 }
 
+/// Puts a reparse point with a third-party tag, which no filter driver serves, on the empty
+/// folder `dir`: an entry of the kind [`Reparse::Other`] for tests. `false` if it is refused.
+#[cfg(test)]
+pub fn tag_for_test(dir: &Path) -> bool {
+    use windows_sys::Win32::Foundation::GENERIC_WRITE;
+    use windows_sys::Win32::System::IO::DeviceIoControl;
+    const FSCTL_SET_REPARSE_POINT: u32 = 0x0009_00A4;
+    const TAG: u32 = 0x0000_0123;
+    // REPARSE_GUID_DATA_BUFFER: tag, data length, reserved, a GUID, then the data.
+    let data = [0u8; 4];
+    let mut buffer = Vec::with_capacity(24 + data.len());
+    buffer.extend(TAG.to_le_bytes());
+    buffer.extend((data.len() as u16).to_le_bytes());
+    buffer.extend(0u16.to_le_bytes());
+    buffer.extend([0x5A; 16]);
+    buffer.extend(data);
+    let wide = wide_long(dir);
+    // SAFETY: `wide` is NUL-terminated; no security attributes and no template are passed.
+    let handle = unsafe {
+        CreateFileW(
+            wide.as_ptr(),
+            GENERIC_WRITE,
+            0,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+            std::ptr::null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return false;
+    }
+    let mut returned = 0u32;
+    // SAFETY: `handle` is open; `buffer` is valid for its length; no output, no overlap.
+    let set = unsafe {
+        DeviceIoControl(
+            handle,
+            FSCTL_SET_REPARSE_POINT,
+            buffer.as_ptr().cast(),
+            buffer.len() as u32,
+            std::ptr::null_mut(),
+            0,
+            &mut returned,
+            std::ptr::null_mut(),
+        )
+    };
+    // SAFETY: `handle` was opened above and is closed once.
+    unsafe { CloseHandle(handle) };
+    set != 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

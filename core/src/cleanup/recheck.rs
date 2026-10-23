@@ -83,12 +83,9 @@ pub fn recheck(
             let name = entry.file_name();
             let name = name.to_string_lossy();
             let trail = guard.enter(&trail, &name).ok_or(Refusal::Protected)?;
-            let kind = reparse(&meta, &path);
-            if kind == Reparse::Other {
-                return Err(Refusal::Protected);
-            }
+            let enter = enters(reparse(&meta, &path), meta.is_dir())?;
             check.entry(&path, &name, &meta, false)?;
-            if meta.is_dir() && kind == Reparse::Plain {
+            if enter {
                 stack.push((path, trail));
             }
         }
@@ -111,6 +108,16 @@ fn no_link_above(path: &Path) -> Result<(), Refusal> {
         }
     }
     Ok(())
+}
+
+/// Whether the walk enters an entry of this kind: only plain folders. A link is a leaf; a
+/// reparse point that is no link is refused.
+pub(super) fn enters(kind: Reparse, is_dir: bool) -> Result<bool, Refusal> {
+    match kind {
+        Reparse::Plain => Ok(is_dir),
+        Reparse::Link => Ok(false),
+        Reparse::Other => Err(Refusal::Protected),
+    }
 }
 
 fn denied(path: &Path, error: io::Error) -> Refusal {

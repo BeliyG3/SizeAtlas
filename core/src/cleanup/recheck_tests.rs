@@ -259,3 +259,38 @@ fn a_long_flat_folder_can_be_stopped() {
         Err(Refusal::Stopped)
     ));
 }
+
+#[test]
+fn the_walk_enters_only_plain_folders_and_refuses_other_reparse_points() {
+    use super::recheck::enters;
+    use crate::platform::Reparse;
+    assert!(matches!(enters(Reparse::Plain, true), Ok(true)));
+    assert!(matches!(enters(Reparse::Plain, false), Ok(false)));
+    assert!(matches!(enters(Reparse::Link, true), Ok(false)));
+    assert!(matches!(enters(Reparse::Link, false), Ok(false)));
+    for is_dir in [true, false] {
+        assert!(matches!(
+            enters(Reparse::Other, is_dir),
+            Err(Refusal::Protected)
+        ));
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn a_reparse_folder_that_is_no_link_refuses_its_row() {
+    let (_dir, root) = temp();
+    let row = root.join("node_modules");
+    file(&row.join("pkg").join("index.js"));
+    let tagged = row.join("pkg").join("virtual");
+    fs::create_dir(&tagged).unwrap();
+    assert!(matches!(check(&row, Reason::NodeModules, now()), Ok(())));
+    if !crate::platform::tag_for_test(&tagged) {
+        fs::remove_dir(&tagged).unwrap();
+        eprintln!("skipped: cannot set a reparse tag");
+        return;
+    }
+    let result = check(&row, Reason::NodeModules, now());
+    fs::remove_dir(&tagged).unwrap();
+    assert!(matches!(result, Err(Refusal::Protected)), "{result:?}");
+}
