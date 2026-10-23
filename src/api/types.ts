@@ -21,6 +21,7 @@ export type CmdError =
         | "CacheNotSaved"
         | "LossyName"
         | "NoTrash"
+        | "Protected"
         | "Cancelled";
     }
   | { code: "NoAccess"; path: string }
@@ -202,7 +203,65 @@ export type ListKind =
   | "unreadable"
   | "longestPaths"
   | "grewMost"
+  | "cleanup"
+  | "review"
   | "search";
+
+/** Why a clean-up row is listed (the core's `Reason`). */
+export type ReasonKind =
+  | "tempOld"
+  | "tempLarge"
+  | "tempWork"
+  | "crashDump"
+  | "crashDumpRecent"
+  | "errorReport"
+  | "windowsCache"
+  | "shaderCache"
+  | "browserCache"
+  | "appCache"
+  | "packageCache"
+  | "pythonBytecode"
+  | "nodeModules"
+  | "pythonVenv"
+  | "gradleCache"
+  | "discordCache"
+  | "xcodeDerived";
+
+/** The reason of a row of "cleanup" and "review". */
+export interface ReasonDto {
+  reason: ReasonKind;
+  /** The tool's own clean-up command, for the user to run. */
+  command: string | null;
+  /** `node_modules` and venvs: whether a lock file lies next to them; null for other rows. */
+  restorable: boolean | null;
+}
+
+/** A fact shown under the total of the clean-up modes: not a row, never deleted. */
+export type InfoKind =
+  | "pagefile"
+  | "hiberfil"
+  | "previousWindows"
+  | "windowsUpdate"
+  | "deliveryOptimization"
+  | "toolStore"
+  | "noAccess"
+  | "appRunning";
+
+/** Which fields are set depends on `kind`; the others are null. */
+export interface InfoDto {
+  kind: InfoKind;
+  path: string | null;
+  /** Size on disk. */
+  size: number | null;
+  app: string | null;
+  command: string | null;
+}
+
+export interface CleanupDto {
+  info: InfoDto[];
+  /** Something was read in part: the total is a lower bound. */
+  approximate: boolean;
+}
 
 export interface ListItem extends Item {
   /** Folder of the item relative to the listed folder; empty if it is directly inside. */
@@ -211,6 +270,8 @@ export interface ListItem extends Item {
   parent: number;
   /** A folder the baseline had and the tree has no more ("grewMost" only); its id is not a node. */
   deleted: boolean;
+  /** "cleanup" and "review" only; null in the other lists. */
+  reason: ReasonDto | null;
 }
 
 export interface List {
@@ -221,8 +282,10 @@ export interface List {
   /** More items matched than the limit allowed. */
   truncated: boolean;
   items: ListItem[];
-  /** "search" only: every match, not just the listed ones, and their size on disk without double counting. */
+  /** "search", "cleanup" and "review" only: every match, not just the listed ones, and their size on disk without double counting. */
   found: { count: number; size: number } | null;
+  /** "cleanup" and "review" only: the facts under the total. */
+  cleanup: CleanupDto | null;
   /** As in `Summary`. */
   baselineAt: number | null;
   baselineRev: number;
@@ -253,6 +316,8 @@ export interface TrashPreview {
   scannedAt: number;
   /** Full paths of the first few. */
   paths: string[];
+  /** Bytes the Recycle Bin of the root's drive can still take before it drops old files; null where unknown. */
+  binFree: number | null;
 }
 
 /** What a trash request did. */

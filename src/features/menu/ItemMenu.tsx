@@ -20,6 +20,10 @@ export interface MenuTarget {
   marked?: readonly number[];
   /** A deleted folder of "Grew most": its full path. Its id is not a node: only the path is copied. */
   deletedPath?: string;
+  /** The row is one of "Can be cleaned" or "Check before deleting". */
+  cleanup?: boolean;
+  /** The clean-up command of the tool that owns the row (a package manager's own cache clean). */
+  command?: string;
   x: number;
   y: number;
 }
@@ -67,6 +71,7 @@ export function ItemMenu({
   onFail,
 }: Props) {
   const { t, lang } = useT();
+  const { command } = target;
   const ids = menuIds(target);
   const many = ids.length > 1;
   const one = !many;
@@ -83,7 +88,7 @@ export function ItemMenu({
     note: string | null = null,
   ) => (
     <button
-      key={icon}
+      key={label}
       role="menuitem"
       disabled={blocked || !enabled}
       title={blocked ? t("menu.lossy") : (note ?? undefined)}
@@ -124,6 +129,16 @@ export function ItemMenu({
       item("copy", t(many ? "menu.copyPaths" : "menu.copyPath"), () => {
         void api.copyPaths(generation, [...ids]).catch(onFail);
       }),
+      // The command deletes at once, without the trash: the user runs it, SizeAtlas only copies it.
+      one &&
+        command !== undefined &&
+        item(
+          "copy",
+          t("cleanup.copyCommand"),
+          () => void api.copyText(command).catch(onFail),
+          true,
+          t("cleanup.commandNote"),
+        ),
     ],
     [
       item(

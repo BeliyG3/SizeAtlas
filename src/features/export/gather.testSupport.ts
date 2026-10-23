@@ -18,6 +18,7 @@ export const row = (id: number, size: number): ListItem => ({
   parent: 0,
   folder: "",
   deleted: false,
+  reason: null,
 });
 
 export const item = (id: number): Item => ({

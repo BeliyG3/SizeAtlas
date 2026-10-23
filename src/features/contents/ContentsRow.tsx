@@ -4,6 +4,7 @@ import { changeParts, formatCount, formatDate, formatPercent } from "../../forma
 import { useT } from "../../i18n/react";
 import { useSettings, useSize } from "../../settings/react";
 import type { ColumnId } from "./columns";
+import { reasonText } from "../cleanup/reason";
 import { ItemIcon } from "./ItemIcon";
 import { markHow, type MarkHow } from "./marks";
 import { pathTitle } from "./pathTitle";
@@ -121,6 +122,12 @@ export const ContentsRow = memo(function ContentsRow({
   const changeClass = delta > 0 ? "num change-up" : delta < 0 ? "num change-down" : "num";
   const changeHint =
     change === "unknown" ? t("change.coverage") : approx ? t("change.approx") : undefined;
+  // Why a clean-up list offers the row, and the command of its tool, if it has one.
+  const why = "reason" in item ? item.reason : null;
+  const whyText = why ? reasonText(why, t) : "";
+  const whyHint = why?.command
+    ? `${whyText}\n${why.command}\n${t("cleanup.commandNote")}`
+    : whyText;
   const cells: Record<
     ColumnId,
     [className: string | undefined, content: ReactNode, title?: string]
@@ -149,6 +156,20 @@ export const ContentsRow = memo(function ContentsRow({
         <span className="share-bar" style={{ width: `${Math.min(100, 100 * share)}%` }} />
         <span className="num">{waiting ? "" : formatPercent(share, lang)}</span>
       </>,
+    ],
+    reason: [
+      undefined,
+      why && (
+        <>
+          {whyText}
+          {why.command && (
+            <code dir="ltr" title={t("cleanup.commandNote")}>
+              {why.command}
+            </code>
+          )}
+        </>
+      ),
+      why ? whyHint : undefined,
     ],
     before: ["num", item.before === null ? "" : size(item.before)],
     change: [changeClass, changeText, changeHint],

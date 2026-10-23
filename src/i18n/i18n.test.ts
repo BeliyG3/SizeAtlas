@@ -90,6 +90,7 @@ describe("locales", () => {
       "CacheNotSaved",
       "LossyName",
       "NoTrash",
+      "Protected",
       "Cancelled",
       "Io",
     ])

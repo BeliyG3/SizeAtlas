@@ -1,0 +1,30 @@
+/* The facts under the total of a clean-up list: a few lines, scrolling when there are many so
+   they never push the rows out of view. */
+.cleanup-notes {
+  max-block-size: 9em;
+  overflow-y: auto;
+}
+
+.cleanup-info {
+  margin: 0;
+  padding-block: 2px 6px;
+  padding-inline: 24px 12px;
+  color: var(--text-dim);
+  list-style: disc;
+}
+
+.cleanup-info li {
+  margin-block: 2px;
+}
+
+.cleanup-info code {
+  padding-inline: 4px;
+  background: var(--row-alt);
+  border-radius: 3px;
+  user-select: all;
+}
+
+.crow [data-col="reason"] code {
+  margin-inline-start: 6px;
+  color: var(--text-dim);
+}

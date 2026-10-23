@@ -37,7 +37,13 @@ describe("columns", () => {
     expect(nextSort(DEFAULT_SORT, column("owner"))).toBe(DEFAULT_SORT);
   });
 
-  it("have the Path and Before columns in the flat lists only", () => {
-    expect(COLUMNS.filter((c) => c.listOnly).map((c) => c.id)).toEqual(["path", "before"]);
+  it("have the Path, Why and Before columns in the flat lists only", () => {
+    expect(COLUMNS.filter((c) => c.listOnly).map((c) => c.id)).toEqual([
+      "path",
+      "reason",
+      "before",
+    ]);
+    // The reason of a row is not sortable: it is text of a fixed set.
+    expect(column("reason").sortKey).toBeNull();
   });
 });

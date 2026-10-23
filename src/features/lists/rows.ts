@@ -1,12 +1,18 @@
 import type { List, ListItem, ListKind } from "../../api/types";
+import type { MenuTarget } from "../menu/ItemMenu";
 import type { ColumnId } from "../contents/columns";
+import { isCleanupMode } from "./modes";
 
 /** The backend returns at most this many items of a list. */
 export const LIST_LIMIT = 1000;
 
-/** The message of a list without rows: "grew most" says why it has none; a search says it found nothing. */
+/**
+ * The message of a list without rows: "grew most" says why it has none; a search says it found
+ * nothing; a clean-up list that there is nothing to clean.
+ */
 export function emptyListKey(kind: ListKind, list: Pick<List, "baselineAt" | "baselinePending">) {
   if (kind === "search") return "search.none";
+  if (isCleanupMode(kind)) return "cleanup.none";
   if (kind !== "grewMost" || list.baselineAt !== null) return "lists.empty";
   return list.baselinePending ? "lists.baselinePending" : "lists.noBaseline";
 }
@@ -74,3 +80,21 @@ export function nextListSort(current: ListSort | null, column: ColumnId): ListSo
   if (current?.column === column) return { column, descending: !current.descending };
   return { column, descending: column !== "name" && column !== "path" };
 }
+
+const DAY_SECONDS = 24 * 60 * 60;
+
+/** A scan (`scannedAt` in seconds) made more than a day before `nowMs`: its clean-up list may be out of date. */
+export const staleScan = (scannedAt: number, nowMs: number): boolean =>
+  scannedAt > 0 && nowMs / 1000 - scannedAt > DAY_SECONDS;
+
+/**
+ * What a context menu needs to know of a row of a clean-up list: that it is one (the trash
+ * dialogs differ) and the command of its tool, if any. Rows of other lists are plain.
+ */
+export const menuCleanup = (
+  item: ListItem,
+  kind: ListKind,
+): Pick<MenuTarget, "cleanup" | "command"> =>
+  isCleanupMode(kind)
+    ? { cleanup: true, ...(item.reason?.command ? { command: item.reason.command } : {}) }
+    : {};

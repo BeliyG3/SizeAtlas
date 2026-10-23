@@ -6,6 +6,7 @@ export type ColumnId =
   | "len"
   | "size"
   | "percent"
+  | "reason"
   | "before"
   | "change"
   | "files"
@@ -32,8 +33,8 @@ export interface Column {
 
 /**
  * In display order. "len" is the logical size, "size" the size on disk; percent sorts like it.
- * "path", the folder of a list item, and "before", its size on disk in the previous full scan,
- * exist in the flat lists only. "change" is the change of the size on disk since that scan.
+ * "path", the folder of a list item, "reason", why a clean-up list offers it, and "before", its
+ * size on disk in the previous full scan, exist in the flat lists only. "change" is the change of the size on disk since that scan.
  */
 export const COLUMNS: readonly Column[] = [
   { id: "name", sortKey: "name", width: 280, numeric: false },
@@ -41,6 +42,8 @@ export const COLUMNS: readonly Column[] = [
   { id: "len", sortKey: "len", width: 96, numeric: true },
   { id: "size", sortKey: "size", width: 96, numeric: true },
   { id: "percent", sortKey: "size", width: 120, numeric: true },
+  // Room for the longest reason and, under it, a clean-up command.
+  { id: "reason", sortKey: null, width: 360, numeric: false, listOnly: true },
   { id: "before", sortKey: null, width: 96, numeric: true, listOnly: true },
   // Room for "≈ −733.3" and the longest unit name (Arabic).
   { id: "change", sortKey: "change", width: 124, numeric: true },

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, isCmdError } from "../../api/client";
 import { formatCount } from "../../format";
 import { useT } from "../../i18n/react";
+import { useElevated } from "./elevation";
 import { platform } from "./platform";
 
 /** How to get access to unreadable folders on each platform. */
@@ -10,27 +11,6 @@ const HINT = {
   mac: "banner.hintMac",
   other: "banner.hintOther",
 } as const;
-
-// Asked once per app instance: the rights of a process do not change while it runs.
-let elevation: Promise<boolean> | null = null;
-
-/** Whether the app runs as administrator; null until known. */
-function useElevated(ask: boolean): boolean | null {
-  const [elevated, setElevated] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (!ask) return;
-    let live = true;
-    // Unknown counts as elevated: no button is better than one that cannot work.
-    elevation ??= api.isElevated().catch(() => true);
-    void elevation.then((value) => {
-      if (live) setElevated(value);
-    });
-    return () => {
-      live = false;
-    };
-  }, [ask]);
-  return elevated;
-}
 
 /** Whether the app has Full Disk Access on macOS, asked once per mount; null until known. */
 function useFullDiskAccess(ask: boolean): boolean | null {

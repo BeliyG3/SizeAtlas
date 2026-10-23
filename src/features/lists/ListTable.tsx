@@ -1,10 +1,10 @@
-import { useBatchCost } from "../scan/useBatchCost";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "../../api/client";
-import type { Detail, List, ListItem, ListKind, Summary } from "../../api/types";
+import type { Detail, ListItem, ListKind, Summary } from "../../api/types";
 import { formatCount, formatSize } from "../../format";
 import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
+import { CleanupNotes } from "../cleanup/CleanupNotes";
 import type { Column } from "../contents/columns";
 import { ContentsRow } from "../contents/ContentsRow";
 import { mark, markAll, marksKey, targets, type MarkHow } from "../contents/marks";
@@ -29,10 +29,13 @@ import {
   defaultListSort,
   emptyListKey,
   liveId,
+  menuCleanup,
   nextListSort,
   sortRows,
   type ListSort,
 } from "./rows";
+import { isCleanupMode } from "./modes";
+import { useListAnswer } from "./useListAnswer";
 import "../contents/contents.css";
 
 /** Details are read from disk for the rows on screen only, so their columns cannot sort a list. */
@@ -93,12 +96,15 @@ export function ListTable({
   const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
   const layout = useColumnLayout(body, kind, comparedByDefault(summary));
-  // The answer on screen and the query it answers: the old rows stay until the new answer, and
-  // their marks and cursor with them.
-  const [answered, setAnswered] = useState<{ list: List; query: string } | null>(null);
-  const list = answered?.list ?? null;
-  const shownQuery = answered?.query ?? "";
-  const measure = useBatchCost("tree", list);
+  const { list, shownQuery } = useListAnswer({
+    generation,
+    rev,
+    baselineRev,
+    base,
+    kind,
+    query,
+    onFail,
+  });
   // Null: the order of the list itself.
   const [chosenSort, setSort] = useState<ListSort | null>(() => defaultListSort(kind));
   // Hiding the sorted column brings back the list's own order.
@@ -132,23 +138,6 @@ export function ListTable({
   useEffect(() => onMarks([...marks.ids]), [marks.ids, onMarks]);
   useEffect(() => () => onMarks([]), [onMarks]);
   const { first, last } = visibleRange(scrollTop, viewport, rows.length);
-
-  // A change of the tree (`rev`) or of its baseline lists again; the old rows stay, dimmed, until the answer.
-  useEffect(() => {
-    let live = true;
-    const applied = measure();
-    api.getList(generation, base, kind, LIST_LIMIT, query).then(
-      (answer) => {
-        if (!live) return;
-        applied();
-        setAnswered({ list: answer, query: query ?? "" });
-      },
-      (e: unknown) => live && onFail(e),
-    );
-    return () => {
-      live = false;
-    };
-  }, [generation, rev, baselineRev, base, kind, query, onFail, measure]);
 
   // Results of another query open at the top, not where the last ones were scrolled to.
   useEffect(() => {
@@ -195,7 +184,8 @@ export function ListTable({
     setMarks(shown);
     const deletedPath = item.deleted ? itemPath(basePath, item) : undefined;
     const { isDir, lossy } = item;
-    onMenu({ id: item.id, isDir, lossy, marked: [...shown.ids], deletedPath, x, y });
+    const cleanup = menuCleanup(item, kind);
+    onMenu({ id: item.id, isDir, lossy, marked: [...shown.ids], deletedPath, ...cleanup, x, y });
   };
   // Up: the list of the parent of the listed folder (nothing at the root).
   const up = () => {
@@ -241,7 +231,7 @@ export function ListTable({
   const cursorShown = cursor !== null && cursor >= first && cursor < last;
 
   // The count and size of all matches, not only of the rows shown; nothing found says so below.
-  const found = list?.found && list.found.count > 0 ? list.found : null;
+  const found = kind === "search" && list?.found && list.found.count > 0 ? list.found : null;
 
   return (
     <>
@@ -254,6 +244,9 @@ export function ListTable({
             size: formatSize(found.size, lang),
           })}
         </p>
+      )}
+      {list && isCleanupMode(kind) && (
+        <CleanupNotes list={list} summary={summary} onFail={onFail} />
       )}
       <div
         className="contents"

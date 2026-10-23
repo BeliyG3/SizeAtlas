@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement, ReactNode } from "react";
 import { api } from "../../api/client";
-import type { List, ListItem, Summary } from "../../api/types";
+import type { List, ListItem, ListKind, Summary } from "../../api/types";
+import { CleanupNotes } from "../cleanup/CleanupNotes";
 import { ListTable } from "./ListTable";
 
 // The same minimal hook runtime as ContentsTable.live.test.tsx: state, memos and effects survive
@@ -91,6 +92,7 @@ const answer = (found: List["found"], items: ListItem[] = []): List => ({
   truncated: false,
   items,
   found,
+  cleanup: null,
   baselineAt: null,
   baselineRev: 0,
   baselinePending: false,
@@ -102,17 +104,18 @@ const onTrash = vi.fn();
 const onMarks = vi.fn();
 const onEnter = vi.fn();
 const onOpenFolder = vi.fn();
+const onMenu = vi.fn();
 const details = new Map();
 
 let shown: ReactElement | null = null;
 
-function render(query: string, leaves = true, of: Summary = summary) {
+function render(query: string, leaves = true, of: Summary = summary, kind: ListKind = "search") {
   for (let pass = 0; pass < 20; pass++) {
     rt.state.at = 0;
     rt.state.dirty = false;
     shown = ListTable({
       summary: of,
-      kind: "search",
+      kind,
       query,
       base: 1,
       basePath: "/root",
@@ -123,7 +126,7 @@ function render(query: string, leaves = true, of: Summary = summary) {
       onPick: none,
       onEnter,
       onOpenFolder: leaves ? onOpenFolder : undefined,
-      onMenu: none,
+      onMenu,
       onTrash,
       onMarks,
       onFail: none,
@@ -170,6 +173,7 @@ beforeEach(() => {
   onMarks.mockReset();
   onEnter.mockReset();
   onOpenFolder.mockReset();
+  onMenu.mockReset();
 });
 
 describe("ListTable for a search", () => {
@@ -305,5 +309,104 @@ describe("ListTable for a search", () => {
       press({ key: "Enter", repeat: false });
       expect(onEnter).toHaveBeenCalledWith(7, 3);
     });
+  });
+});
+
+type MenuAt = (index: number, x: number, y: number) => void;
+
+describe("ListTable for the clean-up lists", () => {
+  const cache = {
+    id: 5,
+    name: "_cacache",
+    isDir: true,
+    deleted: false,
+    reason: { reason: "packageCache", command: "npm cache clean --force", restorable: null },
+  } as ListItem;
+  const plain = { ...cache, id: 6, reason: { ...cache.reason!, command: null } } as ListItem;
+  const withCleanup = (items: ListItem[] = []): List => ({
+    ...answer({ count: items.length, size: 9 }, items),
+    cleanup: { info: [], approximate: false },
+  });
+
+  /** The elements of the shown tree that `match`. */
+  const find = (match: (e: ReactElement) => boolean): ReactElement[] => {
+    const hits: ReactElement[] = [];
+    const visit = (node: ReactNode) => {
+      if (Array.isArray(node)) node.forEach(visit);
+      else if (node && typeof node === "object" && "props" in node) {
+        if (match(node as ReactElement)) hits.push(node as ReactElement);
+        visit((node.props as { children?: ReactNode }).children);
+      }
+    };
+    visit(shown);
+    return hits;
+  };
+  const rowsOf = () =>
+    find((e) => "item" in (e.props as object) && "onMenu" in (e.props as object));
+  const menuOf = (row: ReactElement) => (row.props as { onMenu: MenuAt }).onMenu;
+
+  async function settleKind(kind: ListKind, query = "") {
+    render(query, true, summary, kind);
+    await Promise.resolve();
+    render(query, true, summary, kind);
+  }
+
+  it.each(["cleanup", "review"] as const)(
+    "asks for the %s list of the folder, without a query",
+    async (kind) => {
+      vi.mocked(api.getList).mockResolvedValue(withCleanup());
+      await settleKind(kind);
+      expect(api.getList).toHaveBeenLastCalledWith(1, 1, kind, 1000, "");
+    },
+  );
+
+  it("shows the notes of the list instead of the totals of a search", async () => {
+    vi.mocked(api.getList).mockResolvedValue(withCleanup([cache]));
+    await settleKind("cleanup");
+    expect(find((e) => e.type === CleanupNotes)).toHaveLength(1);
+    expect(textOf("found")).toEqual([]);
+    expect(JSON.stringify(shown)).not.toContain("search.found");
+  });
+
+  it("shows no notes in a search or another list", async () => {
+    vi.mocked(api.getList).mockResolvedValue(answer({ count: 1, size: 1 }, [cache]));
+    await settleKind("search", "a");
+    expect(find((e) => e.type === CleanupNotes)).toHaveLength(0);
+    await settleKind("largest");
+    expect(find((e) => e.type === CleanupNotes)).toHaveLength(0);
+  });
+
+  it("says there is nothing to clean when the list is empty", async () => {
+    vi.mocked(api.getList).mockResolvedValue(withCleanup());
+    await settleKind("cleanup");
+    expect(JSON.stringify(shown)).toContain("cleanup.none");
+  });
+
+  it("tells the menu that a row is a clean-up row, with the command of its tool", async () => {
+    vi.mocked(api.getList).mockResolvedValue(withCleanup([cache, plain]));
+    await settleKind("review");
+    const [first, second] = rowsOf();
+    menuOf(first)(0, 3, 4);
+    expect(onMenu).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: 5,
+        cleanup: true,
+        command: "npm cache clean --force",
+        x: 3,
+        y: 4,
+      }),
+    );
+    menuOf(second)(1, 1, 2);
+    const target = onMenu.mock.calls.at(-1)![0] as object;
+    expect(target).toMatchObject({ id: 6, cleanup: true });
+    expect(target).not.toHaveProperty("command");
+  });
+
+  it("gives the menu of a search row no clean-up facts", async () => {
+    vi.mocked(api.getList).mockResolvedValue(answer({ count: 1, size: 1 }, [cache]));
+    await settleKind("search", "a");
+    menuOf(rowsOf()[0])(0, 1, 1);
+    expect(onMenu.mock.calls.at(-1)![0]).not.toHaveProperty("cleanup");
+    expect(onMenu.mock.calls.at(-1)![0]).not.toHaveProperty("command");
   });
 });

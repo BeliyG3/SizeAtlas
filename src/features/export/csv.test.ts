@@ -114,8 +114,25 @@ describe("values", () => {
     expect(cellValue("change", waiting, undefined, 0)).toBe("");
   });
 
+  it("writes the reason of a clean-up row as its words, or its code without a translation", () => {
+    const row = (reason: ListItem["reason"]): ListItem => ({
+      ...item(),
+      folder: "",
+      parent: 0,
+      deleted: false,
+      reason,
+    });
+    const why = { reason: "browserCache" as const, command: null, restorable: null };
+    expect(cellValue("reason", row(why), undefined, 0)).toBe("browserCache");
+    expect(cellValue("reason", row(why), undefined, 0, (r) => `words of ${r.reason}`)).toBe(
+      "words of browserCache",
+    );
+    expect(cellValue("reason", row(null), undefined, 0, () => "x")).toBe("");
+    expect(cellValue("reason", item(), undefined, 0, () => "x")).toBe("");
+  });
+
   it("writes the folder of a list item as its path", () => {
-    const listed: ListItem = { ...item(), folder: "x\\y", parent: 5, deleted: false };
+    const listed: ListItem = { ...item(), folder: "x\\y", parent: 5, deleted: false, reason: null };
     expect(cellValue("path", listed, undefined, 0)).toBe("x\\y");
     expect(cellValue("path", item(), undefined, 0)).toBe("");
   });

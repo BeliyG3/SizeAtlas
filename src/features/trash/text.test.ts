@@ -12,7 +12,7 @@ const errorText = (e: unknown) => `error ${JSON.stringify(e)}`;
 describe("trashMessage", () => {
   it("lists the paths it got and counts the rest", () => {
     const paths = Array.from({ length: 10 }, (_, i) => `C:\\a\\${i}`);
-    const preview: TrashPreview = { count: 1200, size: 300, scannedAt: 5, paths };
+    const preview: TrashPreview = { count: 1200, size: 300, scannedAt: 5, paths, binFree: null };
     expect(trashMessage(preview, t, size, date, count).split("\n")).toEqual([
       "Move 1,200 items to the trash?",
       ...paths,
@@ -22,7 +22,13 @@ describe("trashMessage", () => {
   });
 
   it("asks about one item without counting the rest", () => {
-    const preview: TrashPreview = { count: 1, size: 7, scannedAt: 1, paths: ["/a/b"] };
+    const preview: TrashPreview = {
+      count: 1,
+      size: 7,
+      scannedAt: 1,
+      paths: ["/a/b"],
+      binFree: null,
+    };
     expect(trashMessage(preview, t, size, date, count).split("\n")).toEqual([
       "Move 1 item to the trash?",
       "/a/b",
@@ -32,7 +38,7 @@ describe("trashMessage", () => {
 
   it("speaks Russian", () => {
     const ru = (key: string, params?: Params) => translate("ru", key, params);
-    const preview: TrashPreview = { count: 5, size: 1, scannedAt: 1, paths: ["/a"] };
+    const preview: TrashPreview = { count: 5, size: 1, scannedAt: 1, paths: ["/a"], binFree: null };
     const message = trashMessage(preview, ru, size, date, count);
     expect(message).toContain("Переместить в корзину 5 объектов?");
     expect(message).toContain("…и ещё 4");
@@ -49,6 +55,7 @@ describe("trashReport", () => {
     size: 1200,
     scannedAt: 1,
     paths: Array.from({ length: Math.min(n, 10) }, (_, i) => `C:\\a\\f${i}`),
+    binFree: null,
   });
   const done = (removed: number, more: Partial<TrashResult> = {}): TrashResult => ({
     removed,
@@ -65,6 +72,16 @@ describe("trashReport", () => {
     expect(report(done(2, { failed, warning: { code: "CacheNotSaved" } }), 6)).toEqual([
       'Moved 2 of 6 to the trash. Could not move: a: in use; b: error {"code":"NoTrash"}; c: in use; …',
       'error {"code":"CacheNotSaved"}',
+    ]);
+  });
+
+  it("says why a protected item stayed, in the words of the language", () => {
+    const protectedRow = { path: "/data/a", error: { code: "Protected" as const } };
+    const shown = (e: unknown) => t(`error.${(e as { code: string }).code}`);
+    expect(
+      trashReport(done(0, { failed: [protectedRow] }), preview(1), t, shown, count, size),
+    ).toEqual([
+      "Could not move to the trash: /data/a: It holds something SizeAtlas never deletes, or it is no longer a clean-up item.",
     ]);
   });
 

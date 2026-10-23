@@ -1,8 +1,10 @@
 import { useCallback, useRef } from "react";
 import { api } from "../../api/client";
+import type { ReasonDto } from "../../api/types";
 import { formatCount } from "../../format";
 import { useT } from "../../i18n/react";
 import { useStored } from "../../settings/storage";
+import { reasonText } from "../cleanup/reason";
 import { parseSeparator, tableCsv, type Separator } from "./csv";
 import { gather, TreeChanged } from "./gather";
 import { exportFileName } from "./names";
@@ -42,7 +44,10 @@ export function useExport(push: (text: string) => void, onError: (e: unknown) =>
     try {
       const table = await gather(shown);
       const header = [t("export.fullPath"), ...shown.columns.map((id) => t(`col.${id}`))];
-      const text = tableCsv({ ...table, header, columns: shown.columns }, chosen);
+      // The command of a tool goes after the words, as in the table.
+      const reasonWords = (r: ReasonDto) =>
+        r.command ? `${reasonText(r, t)} — ${r.command}` : reasonText(r, t);
+      const text = tableCsv({ ...table, header, columns: shown.columns, reasonWords }, chosen);
       const name = shown.kind === "folder" ? table.folderName : t(`mode.${shown.list}`);
       const saved = await api.exportTable(exportFileName(name, new Date()), text);
       if (saved !== null) {

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { Change, ListItem } from "../../api/types";
-import { defaultListSort, emptyListKey, liveId, nextListSort, sortRows } from "./rows";
+import {
+  defaultListSort,
+  emptyListKey,
+  liveId,
+  nextListSort,
+  menuCleanup,
+  sortRows,
+  staleScan,
+} from "./rows";
 
 const item = (id: number, name: string, folder: string, size: number): ListItem => ({
   id,
@@ -19,6 +27,7 @@ const item = (id: number, name: string, folder: string, size: number): ListItem 
   cloud: false,
   lossy: false,
   deleted: false,
+  reason: null,
   before: null,
   change: null,
   approxChange: false,
@@ -110,8 +119,51 @@ describe("a list without rows", () => {
     expect(emptyListKey("largestFiles", list(null, true))).toBe("lists.empty");
   });
 
+  it("says there is nothing to clean in the two clean-up lists, whatever the baseline", () => {
+    expect(emptyListKey("cleanup", list(null, false))).toBe("cleanup.none");
+    expect(emptyListKey("review", list(5, true))).toBe("cleanup.none");
+  });
+
   it("says nothing was found for a search, whatever the baseline", () => {
     expect(emptyListKey("search", list(null, false))).toBe("search.none");
     expect(emptyListKey("search", list(5, false))).toBe("search.none");
+  });
+});
+
+describe("a stale scan", () => {
+  const DAY = 24 * 60 * 60;
+  const now = 1_000 * DAY * 1000;
+  const at = (ago: number) => 1_000 * DAY - ago;
+
+  it("is one made more than a day ago", () => {
+    expect(staleScan(at(DAY - 1), now)).toBe(false);
+    expect(staleScan(at(DAY + 1), now)).toBe(true);
+    expect(staleScan(at(30 * DAY), now)).toBe(true);
+  });
+
+  it("is not one with an unknown time or in the future", () => {
+    expect(staleScan(0, now)).toBe(false);
+    expect(staleScan(at(-5 * DAY), now)).toBe(false);
+  });
+});
+
+describe("the menu of a clean-up row", () => {
+  const row = (command: string | null): ListItem => ({
+    ...list[0],
+    reason: { reason: "packageCache", command, restorable: null },
+  });
+
+  it("knows it comes from a clean-up list, and the command of its tool", () => {
+    expect(menuCleanup(row("npm cache clean --force"), "cleanup")).toEqual({
+      cleanup: true,
+      command: "npm cache clean --force",
+    });
+    expect(menuCleanup(row(null), "review")).toEqual({ cleanup: true });
+  });
+
+  it("knows nothing about the rows of other lists, whatever they carry", () => {
+    expect(menuCleanup(row("npm cache clean --force"), "largest")).toEqual({});
+    expect(menuCleanup(row("x"), "search")).toEqual({});
+    expect(menuCleanup(list[0], "cleanup")).toEqual({ cleanup: true });
   });
 });

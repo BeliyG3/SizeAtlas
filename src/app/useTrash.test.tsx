@@ -94,6 +94,7 @@ beforeEach(() => {
     size: 10,
     scannedAt: 1,
     paths: ["/root/file"],
+    binFree: null,
   });
 });
 
@@ -231,7 +232,13 @@ describe("useTrash while it moves items", () => {
   it("shows a window with Stop for more than 20 items, and no Stop in the status bar", async () => {
     const roots: Roots = { roots: [summary(false)], queue: [] };
     vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
-    vi.mocked(api.trashPreview).mockResolvedValue({ count: 21, size: 1, scannedAt: 1, paths: [] });
+    vi.mocked(api.trashPreview).mockResolvedValue({
+      count: 21,
+      size: 1,
+      scannedAt: 1,
+      paths: [],
+      binFree: null,
+    });
     useRenderTrash(roots).onTrash(1, [7]);
     await flush();
     (useRenderTrash(roots).dialog as ReactElement<{ onConfirm: () => void }>).props.onConfirm();

@@ -8,6 +8,7 @@ import {
 } from "./columns";
 import type { ListKind, Summary } from "../../api/types";
 import { repairOrder } from "../columns/order";
+import { isCleanupMode } from "../lists/modes";
 
 /** Which columns the table shows, and in what order. Name is always first and visible. */
 export interface ColumnView {
@@ -23,12 +24,14 @@ export const VIEW_KEY = "sizeatlas.columns.view";
 export const DEFAULT_VIEW: ColumnView = { order: COLUMNS.map((c) => c.id), hidden: [], shown: [] };
 
 /**
- * Columns hidden until the user shows them: in "Grew most" none; in the other lists (`list`)
- * Before and Change; in a folder (`list` null) Change while the root has no `baseline`.
+ * Columns hidden until the user shows them: Why everywhere but in the two clean-up lists; in
+ * "Grew most" nothing else; in the other lists (`list`) also Before and Change; in a folder
+ * (`list` null) Change while the root has no `baseline`.
  */
 function hiddenByDefault(baseline: boolean, list: ListKind | null): ColumnId[] {
-  if (list === "grewMost") return [];
-  if (list !== null) return ["before", "change"];
+  if (list === "grewMost") return ["reason"];
+  if (list !== null)
+    return isCleanupMode(list) ? ["before", "change"] : ["before", "change", "reason"];
   return baseline ? [] : ["change"];
 }
 

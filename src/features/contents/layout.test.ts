@@ -122,13 +122,25 @@ describe("column view", () => {
     expect(listed(DEFAULT_VIEW, "grewMost")).toEqual(expect.arrayContaining(["before", "change"]));
     expect(listed(DEFAULT_VIEW, "largest")).not.toContain("before");
     expect(listed(DEFAULT_VIEW, "largest")).not.toContain("change");
-    expect(withDefaults(DEFAULT_VIEW, true, "largest").hidden).toEqual(["before", "change"]);
-    expect(withDefaults(DEFAULT_VIEW, false, "largest").hidden).toEqual(["before", "change"]);
+    expect(withDefaults(DEFAULT_VIEW, true, "largest").hidden).toEqual([
+      "before",
+      "change",
+      "reason",
+    ]);
+    expect(withDefaults(DEFAULT_VIEW, false, "largest").hidden).toEqual([
+      "before",
+      "change",
+      "reason",
+    ]);
     // Search results start like the largest files and folders.
-    expect(withDefaults(DEFAULT_VIEW, true, "search").hidden).toEqual(["before", "change"]);
+    expect(withDefaults(DEFAULT_VIEW, true, "search").hidden).toEqual([
+      "before",
+      "change",
+      "reason",
+    ]);
     expect(listed(DEFAULT_VIEW, "search")).toContain("path");
-    expect(withDefaults(DEFAULT_VIEW, true, "grewMost")).toBe(DEFAULT_VIEW);
-    expect(withDefaults(DEFAULT_VIEW, false, "grewMost")).toBe(DEFAULT_VIEW);
+    expect(withDefaults(DEFAULT_VIEW, true, "grewMost").hidden).toEqual(["reason"]);
+    expect(withDefaults(DEFAULT_VIEW, false, "grewMost").hidden).toEqual(["reason"]);
     // Shown in another list: it stays shown there.
     const shown = toggleColumn(DEFAULT_VIEW, "before", true, "largest");
     expect(listed(shown, "largest")).toContain("before");
@@ -140,6 +152,24 @@ describe("column view", () => {
     expect(listed(off, "grewMost")).not.toContain("before");
   });
 
+  it("show Why by default in the two clean-up lists only, the user's choice winning", () => {
+    const listed = (view: ColumnView, list: ListKind) =>
+      visibleColumns(withDefaults(view, true, list), true).map((c) => c.id);
+    for (const list of ["cleanup", "review"] as const) {
+      expect(listed(DEFAULT_VIEW, list)).toContain("reason");
+      // Before and Change are of the comparison with the previous scan: not here.
+      expect(withDefaults(DEFAULT_VIEW, true, list).hidden).toEqual(["before", "change"]);
+      const off = toggleColumn(DEFAULT_VIEW, "reason", true, list);
+      expect(listed(off, list)).not.toContain("reason");
+    }
+    for (const list of ["largest", "grewMost", "search", "oldestFiles"] as const)
+      expect(listed(DEFAULT_VIEW, list)).not.toContain("reason");
+    // Shown in another list by the user: it stays shown there.
+    const shown = toggleColumn(DEFAULT_VIEW, "reason", true, "largest");
+    expect(listed(shown, "largest")).toContain("reason");
+    expect(visibleColumns(DEFAULT_VIEW, false).map((c) => c.id)).not.toContain("reason");
+  });
+
   it("lays out only the visible columns, in their order", () => {
     const view = {
       order: moveColumn(ids, "owner", "len"),
@@ -148,8 +178,8 @@ describe("column view", () => {
     };
     const columns = visibleColumns(view, false);
     expect(columns.map((c) => c.id).slice(0, 3)).toEqual(["name", "owner", "size"]);
-    // Two hidden, and Path and Before exist in the flat lists only.
-    expect(columns).toHaveLength(ids.length - 4);
+    // Two hidden, and Path, Why and Before exist in the flat lists only.
+    expect(columns).toHaveLength(ids.length - 5);
     const widths = { ...DEFAULT_WIDTHS, name: 300, owner: 100 };
     expect(gridTemplate(columns, widths).split(" ").slice(0, 2)).toEqual(["300px", "100px"]);
     expect(totalWidth(columns, widths)).toBe(columns.reduce((sum, c) => sum + widths[c.id], 0));

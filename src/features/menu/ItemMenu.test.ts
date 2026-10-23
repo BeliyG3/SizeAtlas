@@ -6,11 +6,13 @@ import { ItemMenu, menuIds } from "./ItemMenu";
 vi.mock("../../api/client", () => ({ api: { copyText: vi.fn(() => Promise.resolve()) } }));
 vi.mock("../../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
 
+type MenuItem = ReactElement<{ onClick: () => void; title?: string; children: ReactNode[] }>;
+
 /** The menu items of a rendered menu, depth first. */
-function menuItems(node: ReactNode): ReactElement<{ onClick: () => void }>[] {
+function menuItems(node: ReactNode): MenuItem[] {
   if (Array.isArray(node)) return node.flatMap(menuItems);
   if (!isValidElement<{ role?: string; children?: ReactNode }>(node)) return [];
-  if (node.props.role === "menuitem") return [node as ReactElement<{ onClick: () => void }>];
+  if (node.props.role === "menuitem") return [node as MenuItem];
   return menuItems(node.props.children);
 }
 
@@ -32,6 +34,48 @@ describe("item menu", () => {
       y: 0,
     };
     expect(menuIds(gone)).toEqual([]);
+  });
+
+  describe("Copy clean-up command", () => {
+    const menuOf = (target: Partial<Parameters<typeof ItemMenu>[0]["target"]>) =>
+      menuItems(
+        ItemMenu({
+          target: { id: 5, isDir: true, lossy: false, x: 0, y: 0, ...target },
+          generation: 1,
+          canTrash: true,
+          trashNote: null,
+          canScan: true,
+          canRefresh: true,
+          onRefresh: vi.fn(),
+          onScanFolder: vi.fn(),
+          onTrash: vi.fn(),
+          onClose: vi.fn(),
+          onFail: vi.fn(),
+        }),
+      );
+    const labels = (items: MenuItem[]) => items.map((i) => i.props.children[1]);
+
+    it("is offered for a clean-up row with a command, and copies it through the backend", () => {
+      const items = menuOf({ cleanup: true, command: "npm cache clean --force" });
+      expect(labels(items)).toContain("cleanup.copyCommand");
+      const at = labels(items).indexOf("cleanup.copyCommand");
+      items[at].props.onClick();
+      expect(api.copyText).toHaveBeenLastCalledWith("npm cache clean --force");
+    });
+
+    it("says on the item that the command deletes at once", () => {
+      const item = menuOf({ cleanup: true, command: "x" }).find(
+        (i) => i.props.children[1] === "cleanup.copyCommand",
+      );
+      expect(item!.props.title).toBe("cleanup.commandNote");
+    });
+
+    it("is not offered without a command, nor for several marked rows", () => {
+      expect(labels(menuOf({ cleanup: true }))).not.toContain("cleanup.copyCommand");
+      expect(labels(menuOf({}))).not.toContain("cleanup.copyCommand");
+      const several = menuOf({ cleanup: true, command: "x", marked: [5, 6] });
+      expect(labels(several)).not.toContain("cleanup.copyCommand");
+    });
   });
 
   it("copies the path of a deleted folder through the backend, then closes", () => {

@@ -25,6 +25,9 @@ export const MODE_MENU: readonly ModeEntry[] = [
   "largest",
   "grewMost",
   "-",
+  "cleanup",
+  "review",
+  "-",
   { submenu: "oldest", modes: ["oldestFiles", "oldestFolders", "oldest"] },
   { submenu: "newest", modes: ["newestFiles", "newestFolders", "newest"] },
   { submenu: "empty", modes: ["emptyFolders", "emptyFiles", "empty"] },
@@ -38,6 +41,10 @@ export const MODES: readonly Mode[] = MODE_MENU.flatMap<Mode>((entry) =>
 );
 
 export const parseMode = (raw: string | null): Mode => MODES.find((m) => m === raw) ?? "all";
+
+/** The two lists of what can be deleted to free space (they carry a reason per row and a total). */
+export const isCleanupMode = (mode: Mode | "search"): mode is "cleanup" | "review" =>
+  mode === "cleanup" || mode === "review";
 
 export const isListMode = (mode: Mode): mode is ListMode => mode !== "all" && mode !== "folders";
 

@@ -1,4 +1,4 @@
-import type { Detail, Item, ListItem } from "../../api/types";
+import type { Detail, Item, ListItem, ReasonDto } from "../../api/types";
 import type { ColumnId } from "../contents/columns";
 
 /** "," for CSV, ";" for Excel with Russian or other European regional settings. */
@@ -33,12 +33,16 @@ function csvChange(item: Item | ListItem): string {
   return delta > 0 ? `+${delta}` : String(delta);
 }
 
+/** The words of a reason in the language of the app; without them the CSV carries the code of the reason. */
+export type ReasonWords = (reason: ReasonDto) => string;
+
 /** The value of a table cell (see ContentsRow) without units or separators; empty if not applicable. */
 export function cellValue(
   column: ColumnId,
   item: Item | ListItem,
   detail: Detail | undefined,
   folderSize: number,
+  reasonWords: ReasonWords = (reason) => reason.reason,
 ): string {
   if (item.pending) {
     if (["len", "folders", "dirs"].includes(column)) return "";
@@ -56,6 +60,10 @@ export function cellValue(
       return String(item.size);
     case "percent":
       return csvPercent(folderSize > 0 ? item.size / folderSize : 0);
+    case "reason": {
+      const reason = "reason" in item ? item.reason : null;
+      return reason ? reasonWords(reason) : "";
+    }
     case "before":
       return item.before === null ? "" : String(item.before);
     case "change":
@@ -88,6 +96,8 @@ export interface CsvTable {
   /** Size on disk of the listed folder: the base of the percentages. */
   folderSize: number;
   pathOf: (item: Item | ListItem) => string;
+  /** The words of the "reason" column; see `ReasonWords`. */
+  reasonWords?: ReasonWords;
 }
 
 /** The table as CSV: the header, then a line per item with its full path first; CRLF line ends. */
@@ -97,7 +107,9 @@ export function tableCsv(table: CsvTable, separator: Separator): string {
   const lines = [line(table.header)];
   for (const item of table.items) {
     const detail = table.details.get(item.id);
-    const cells = table.columns.map((c) => cellValue(c, item, detail, table.folderSize));
+    const cells = table.columns.map((c) =>
+      cellValue(c, item, detail, table.folderSize, table.reasonWords),
+    );
     lines.push(line([table.pathOf(item), ...cells]));
   }
   return lines.join("");
