@@ -3,11 +3,10 @@
 
 use std::sync::LazyLock;
 
-use super::Os;
 use super::names::Names;
-use super::paths::{At, Hit, Known, Pattern, add};
-
-type Entry = (At, &'static [&'static str]);
+use super::paths::{At, Known};
+use super::pattern::{Entry, Hit, Pattern, add};
+use super::{Context, Os};
 
 const COMMON: &[Entry] = &[
     (At::ProgramFiles, &[]),
@@ -67,3 +66,14 @@ pub(crate) fn add_zones<'a>(out: &mut Vec<Pattern<'a>>, os: Os, known: &'a Known
 }
 
 pub(crate) static ZONE_NAMES: LazyLock<Names> = LazyLock::new(|| Names::new(NAMES, true));
+
+/// "Anywhere" rules need a recycle bin and, on Windows, every place that holds installed
+/// programs or other users' files: without one of them they list nothing (fail closed).
+pub(crate) fn anywhere_allowed(ctx: &Context) -> bool {
+    let places = [At::SystemRoot, At::ProgramData, At::ProgramFiles, At::Users];
+    ctx.recyclable
+        && (ctx.os != Os::Windows
+            || places
+                .iter()
+                .all(|at| !at.bases(ctx.os, &ctx.known).is_empty()))
+}

@@ -20,17 +20,18 @@ impl Walk<'_> {
             if found.busy || found.cloud || found.blocked {
                 continue;
             }
-            if found.unreadable {
-                out.info.push(no_access(found.id));
-                continue;
-            }
             let rule = &self.rules[found.rule];
             if rule.reboot_blocks && self.ctx.reboot_pending {
                 continue;
             }
+            // A young Temp item is listed nowhere, readable or not.
             let Some((mode, reason)) = self.classify(found, rule) else {
                 continue;
             };
+            if found.unreadable {
+                out.info.push(no_access(found.id));
+                continue;
+            }
             if let Some(app) = rule.app.filter(|app| self.is_running(app)) {
                 let size = self.tree.node(found.id).size;
                 match running.iter_mut().find(|(a, _)| a.name == app.name) {
@@ -79,14 +80,19 @@ impl Walk<'_> {
     /// Whether a name next to `id` fits one of `masks`.
     fn beside(&self, id: u32, masks: &[&str]) -> bool {
         let tree = self.tree;
-        tree.children(tree.node(id).parent)
-            .any(|c| masks.iter().any(|m| fits(m, tree.name(c), self.fold)))
+        tree.children(tree.node(id).parent).any(|c| {
+            masks
+                .iter()
+                .any(|m| fits(m, tree.name(c), self.ctx.os.folds()))
+        })
     }
 
     fn is_running(&self, app: &App) -> bool {
         self.ctx.running.iter().any(|r| {
             app.exes.iter().any(|m| fits(m, &r.exe, true))
-                && app.cmd.is_none_or(|cmd| r.cmd.contains(cmd))
+                && app
+                    .cmd
+                    .is_none_or(|cmd| r.cmd.to_lowercase().contains(&cmd.to_lowercase()))
         })
     }
 }

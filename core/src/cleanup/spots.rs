@@ -2,11 +2,11 @@
 //! hide them.
 
 use super::paths::{components, fits};
-use super::{Context, Info, Os, Spot, SpotKind};
+use super::{Context, Info, Spot, SpotKind};
 use crate::tree::{NO_PARENT, Tree, flags};
 
 pub(crate) fn find(tree: &Tree, ctx: &Context, spots: &[Spot]) -> Vec<Info> {
-    let fold = ctx.os == Os::Windows;
+    let fold = ctx.os.folds();
     let root = components(ctx.os, tree.name(0));
     let mut out = Vec::new();
     for spot in spots {

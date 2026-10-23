@@ -7,9 +7,8 @@ use std::sync::LazyLock;
 
 use super::Os;
 use super::names::Names;
-use super::paths::{At, Hit, Known, Pattern, add, components, is_never, step};
-
-type Entry = (At, &'static [&'static str]);
+use super::paths::{At, Known, components};
+use super::pattern::{Entry, Hit, Pattern, State, add, is_never, start, step};
 
 /// Names that block any folder holding them, compared ignoring case on every OS.
 const ANYWHERE: &[&str] = &[
@@ -23,6 +22,11 @@ const ANYWHERE: &[&str] = &[
     "*.ost",
     "*.vhd",
     "*.vhdx",
+    "*.avhd",
+    "*.avhdx",
+    "*.vmdk",
+    "*.vdi",
+    "*.qcow2",
     "*.gguf",
     "*.safetensors",
     "*.ckpt",
@@ -232,11 +236,17 @@ pub(crate) fn add_never<'a>(out: &mut Vec<Pattern<'a>>, os: Os, known: &'a Known
     }
 }
 
-/// The never check for one path at a time, for the re-check right before deleting.
+/// The never check for the re-check right before deleting: [`Guard::blocks`] for one path, or
+/// [`Guard::start`] / [`Guard::enter`] to carry the check down a walk at the cost of one step per
+/// entry.
 pub struct Guard<'a> {
     os: Os,
     patterns: Vec<Pattern<'a>>,
 }
+
+/// Where a walk checked by a [`Guard`] stands: the never places that may still lie below.
+#[derive(Clone, Debug)]
+pub struct Trail(State);
 
 impl<'a> Guard<'a> {
     pub fn new(os: Os, known: &'a Known) -> Guard<'a> {
@@ -245,16 +255,25 @@ impl<'a> Guard<'a> {
         Guard { os, patterns }
     }
 
+    /// The trail of `path`, or `None` when it lies at or below a never place or has an anywhere
+    /// name on its way.
+    pub fn start(&self, path: &str) -> Option<Trail> {
+        let mut trail = Trail(start(&self.patterns));
+        for name in components(self.os, path) {
+            trail = self.enter(&trail, name)?;
+        }
+        Some(trail)
+    }
+
+    /// The trail of the entry `name` inside the folder of `at`, or `None` when it is never
+    /// touched.
+    pub fn enter(&self, at: &Trail, name: &str) -> Option<Trail> {
+        let state = step(&self.patterns, &at.0, name);
+        (!is_never(&self.patterns, &state) && !is_protected_name(name)).then_some(Trail(state))
+    }
+
     /// Whether `path` lies at or below a never place, or has an anywhere name on its way.
     pub fn blocks(&self, path: &str) -> bool {
-        let fold = self.os == Os::Windows;
-        let mut state: Vec<(u32, u8)> = (0..self.patterns.len() as u32).map(|p| (p, 0)).collect();
-        for name in components(self.os, path) {
-            state = step(&self.patterns, &state, name, fold);
-            if is_never(&self.patterns, &state) || is_protected_name(name) {
-                return true;
-            }
-        }
-        false
+        self.start(path).is_none()
     }
 }

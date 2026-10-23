@@ -169,3 +169,47 @@ fn spots_are_found_by_path_even_inside_never_places() {
         ]
     );
 }
+
+#[test]
+fn virtual_machine_images_are_protected() {
+    for name in [
+        "disk.vmdk",
+        "a.VDI",
+        "b.qcow2",
+        "c.avhdx",
+        "d.vhd",
+        "e.VHDX",
+    ] {
+        assert!(is_protected_name(name), "{name}");
+    }
+}
+
+#[test]
+fn mac_never_places_ignore_case_and_linux_ones_do_not() {
+    let known = Known {
+        home: "/Users/u".into(),
+        ..Known::default()
+    };
+    let mac = Guard::new(Os::Mac, &known);
+    assert!(mac.blocks("/Users/u/library/APPLICATION SUPPORT/x"));
+    assert!(mac.blocks("/users/U/Library/Caches/COM.APPLE.Safari/x"));
+    assert!(!mac.blocks("/Users/u/Library/Caches/pip/x"));
+    let linux = Guard::new(Os::Linux, &known);
+    assert!(linux.blocks("/etc/x"));
+    assert!(!linux.blocks("/ETC/x"));
+}
+
+#[test]
+fn a_guard_trail_checks_a_walk_one_entry_at_a_time() {
+    let ctx = win();
+    let guard = Guard::new(Os::Windows, &ctx.known);
+    let temp = guard.start(r"C:\Users\u\AppData\Local\Temp").unwrap();
+    assert!(guard.enter(&temp, "claude").is_none());
+    let old = guard.enter(&temp, "old").unwrap();
+    assert!(guard.enter(&old, "notes.txt").is_some());
+    assert!(guard.enter(&old, "model.GGUF").is_none());
+    assert!(guard.start(r"C:\Windows\System32").is_none());
+    let windows = guard.start(r"C:\Windows").unwrap();
+    assert!(guard.enter(&windows, "Temp").is_some());
+    assert!(guard.enter(&windows, "WinSxS").is_none());
+}

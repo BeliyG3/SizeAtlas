@@ -5,9 +5,10 @@
 use super::markers::WORK_NAMES;
 use super::names::{Names, lower};
 use super::never::{PROTECTED, add_never};
-use super::paths::{Hit, Pattern, State, add, components, ended, fits, is_never, step};
-use super::zones::{ZONE_NAMES, add_zones};
-use super::{Cleanup, Context, Marker, Os, Place, Rule, Target};
+use super::paths::{components, fits};
+use super::pattern::{Hit, Pattern, State, add, ended, is_never, start, step};
+use super::zones::{ZONE_NAMES, add_zones, anywhere_allowed};
+use super::{Cleanup, Context, Marker, Place, Rule, Spot, Target};
 use crate::tree::{Tree, flags};
 
 /// A matched item and what its subtree holds.
@@ -26,14 +27,12 @@ pub(super) struct Walk<'a> {
     pub ctx: &'a Context,
     pub rules: &'a [Rule],
     patterns: Vec<Pattern<'a>>,
-    /// The "anywhere" rules with their target masks.
+    /// The "anywhere" rules with their target masks; empty when such rules are off.
     anywhere: Vec<(usize, Names)>,
-    pub fold: bool,
     pub found: Vec<Found>,
-    /// Unreadable folders on the way to a rule's place.
+    /// Unreadable folders on the way to a rule's place, the first one per rule.
     pub unreadable: Vec<u32>,
-    /// The lower-cased name of the node being visited.
-    buf: String,
+    reported: Vec<bool>,
 }
 
 /// A node to visit: the partial matches of its parent, whether "anywhere" rules are off there,
@@ -45,35 +44,45 @@ struct Visit {
     inside: Option<usize>,
 }
 
-pub(crate) fn run(tree: &Tree, ctx: &Context, rules: &[Rule]) -> Cleanup {
+pub(crate) fn run(tree: &Tree, ctx: &Context, rules: &[Rule], spots: &[Spot]) -> Cleanup {
+    let (os, known) = (ctx.os, &ctx.known);
     let mut patterns = Vec::new();
     let mut anywhere = Vec::new();
     for (i, rule) in rules.iter().enumerate() {
+        let mask = target_mask(rule.target);
         match rule.place {
             Place::At(at, path) => add(
                 &mut patterns,
-                (ctx.os, &ctx.known),
-                (at, path, Some(target_mask(rule.target))),
+                (os, known),
+                (at, path, Some(mask)),
                 Hit::Rule(i as u32),
             ),
-            Place::Anywhere => {
-                let fold = ctx.os == Os::Windows;
-                anywhere.push((i, Names::new(&[target_mask(rule.target)], fold)));
-            }
+            Place::Anywhere => anywhere.push((i, Names::new(&[mask], os.folds()))),
         }
     }
-    add_never(&mut patterns, ctx.os, &ctx.known);
-    add_zones(&mut patterns, ctx.os, &ctx.known);
+    if !anywhere_allowed(ctx) {
+        anywhere.clear();
+    }
+    add_never(&mut patterns, os, known);
+    add_zones(&mut patterns, os, known);
+    // Info places are never inside a row.
+    for spot in spots {
+        add(
+            &mut patterns,
+            (os, known),
+            (spot.at, spot.path, None),
+            Hit::Never,
+        );
+    }
     let mut walk = Walk {
         tree,
         ctx,
         rules,
         patterns,
         anywhere,
-        fold: ctx.os == Os::Windows,
         found: Vec::new(),
         unreadable: Vec::new(),
-        buf: String::new(),
+        reported: vec![false; rules.len()],
     };
     walk.walk();
     walk.finish()
@@ -93,12 +102,13 @@ impl Walk<'_> {
         }
         // The root's name is a whole path: feed it component by component. A never place, a
         // protected name or a match on the way means the whole tree lies inside one.
-        let mut state: State = (0..self.patterns.len() as u32).map(|p| (p, 0)).collect();
+        let mut buf = String::new();
+        let mut state = start(&self.patterns);
         let mut zone = false;
         for name in components(self.ctx.os, self.tree.name(0)) {
-            state = step(&self.patterns, &state, name, self.fold);
+            state = step(&self.patterns, &state, name);
             let (here_zone, rules) = self.hits(&state);
-            let low = lower(name, &mut self.buf);
+            let low = lower(name, &mut buf);
             if is_never(&self.patterns, &state) || PROTECTED.has(low) || !rules.is_empty() {
                 return;
             }
@@ -109,19 +119,19 @@ impl Walk<'_> {
         let mut stack: Vec<Visit> = Vec::new();
         self.push_children(&mut stack, 0, &state, zone, None);
         while let Some(visit) = stack.pop() {
-            self.visit(visit, &mut stack);
+            self.visit(visit, &mut stack, &mut buf);
         }
     }
 
-    fn visit(&mut self, visit: Visit, stack: &mut Vec<Visit>) {
+    /// `buf` is reused for the lower-cased name of each node.
+    fn visit(&mut self, visit: Visit, stack: &mut Vec<Visit>, buf: &mut String) {
         let (id, tree) = (visit.id, self.tree);
         let (node, name) = (tree.node(id), tree.name(id));
-        let state = step(&self.patterns, &visit.state, name, self.fold);
-        let low = lower(name, &mut self.buf);
-        let (protected, zone_name) = (PROTECTED.has(low), ZONE_NAMES.has(low));
-        let never = is_never(&self.patterns, &state) || protected;
+        let state = step(&self.patterns, &visit.state, name);
+        let low = lower(name, buf);
+        let never = is_never(&self.patterns, &state) || PROTECTED.has(low);
         if let Some(at) = visit.inside {
-            self.note(at, id, never);
+            self.note(at, id, low, never);
             self.push_children(stack, id, &state, true, Some(at));
             return;
         }
@@ -129,8 +139,9 @@ impl Walk<'_> {
             return;
         }
         let (here_zone, hits) = self.hits(&state);
-        let zone = visit.zone || here_zone || zone_name || node.has(flags::CLOUD);
-        if let Some(rule) = self.pick(id, hits, zone) {
+        let zone = visit.zone || here_zone || ZONE_NAMES.has(low) || node.has(flags::CLOUD);
+        let target = if self.ctx.os.folds() { low } else { name };
+        if let Some(rule) = self.pick(id, target, hits, zone) {
             self.found.push(Found {
                 id,
                 rule,
@@ -140,24 +151,23 @@ impl Walk<'_> {
                 blocked: false,
                 work: false,
             });
-            let at = self.found.len() - 1;
-            self.note(at, id, false);
-            self.push_children(stack, id, &state, true, Some(at));
+            self.note(self.found.len() - 1, id, low, false);
+            self.push_children(stack, id, &state, true, Some(self.found.len() - 1));
             return;
         }
         self.report_unreadable(id, &state);
         self.push_children(stack, id, &state, zone, None);
     }
 
-    /// Records what node `id` adds to the matched item `at`; `self.buf` holds its lower name.
-    fn note(&mut self, at: usize, id: u32, never: bool) {
+    /// Records what node `id`, lower-cased name `low`, adds to the matched item `at`.
+    fn note(&mut self, at: usize, id: u32, low: &str, never: bool) {
         let node = self.tree.node(id);
         let found = &mut self.found[at];
         found.blocked |= never;
         found.busy |= node.has(flags::PENDING | flags::SCANNING);
         found.unreadable |= node.has(flags::ACCESS_ERROR);
         found.cloud |= node.has(flags::CLOUD);
-        found.work |= WORK_NAMES.has(&self.buf);
+        found.work |= WORK_NAMES.has(low);
     }
 
     fn push_children(
@@ -198,16 +208,10 @@ impl Walk<'_> {
         (zone && !open, rules)
     }
 
-    /// The first rule, in table order, that node `id` fits with its marker; `self.buf` holds
-    /// its lower name.
-    fn pick(&self, id: u32, hits: Vec<usize>, zone: bool) -> Option<usize> {
-        let name = if self.fold {
-            &self.buf
-        } else {
-            self.tree.name(id)
-        };
-        let mut rules = hits;
-        if !zone && self.ctx.recyclable {
+    /// The first rule, in table order, that node `id` fits with its marker. `name` is compared
+    /// with the targets of "anywhere" rules (lower-cased where the OS folds case).
+    fn pick(&self, id: u32, name: &str, mut rules: Vec<usize>, zone: bool) -> Option<usize> {
+        if !zone {
             let fit = self.anywhere.iter().filter(|(_, target)| target.has(name));
             rules.extend(fit.map(|&(i, _)| i));
         }
@@ -219,17 +223,14 @@ impl Walk<'_> {
     }
 
     fn fits_rule(&self, id: u32, rule: &Rule) -> bool {
-        let tree = self.tree;
+        let (tree, fold) = (self.tree, self.ctx.os.folds());
         let is_dir = tree.node(id).is_dir();
         let kind = match rule.target {
             Target::Dir(_) => is_dir,
             Target::File(_) => !is_dir,
             Target::Any(_) => true,
         };
-        let has = |at: u32, name: &str| {
-            tree.children(at)
-                .any(|c| fits(name, tree.name(c), self.fold))
-        };
+        let has = |at: u32, name: &str| tree.children(at).any(|c| fits(name, tree.name(c), fold));
         kind && match rule.marker {
             None => true,
             Some(Marker::Sibling(name)) => has(tree.node(id).parent, name),
@@ -237,20 +238,30 @@ impl Walk<'_> {
             Some(Marker::Only(masks)) => {
                 is_dir
                     && tree.children(id).all(|c| {
-                        !tree.node(c).is_dir()
-                            && masks.iter().any(|m| fits(m, tree.name(c), self.fold))
+                        !tree.node(c).is_dir() && masks.iter().any(|m| fits(m, tree.name(c), fold))
                     })
             }
         }
     }
 
-    /// An unreadable folder on the way to a rule's place: the place itself may be missing.
+    /// An unreadable folder on the way to a rule's place, which may be missing because of it.
+    /// Reported once per rule, at the first such folder.
     fn report_unreadable(&mut self, id: u32, state: &State) {
-        let on_way = state.iter().any(|&(p, m)| {
+        if !self.tree.node(id).has(flags::ACCESS_ERROR) {
+            return;
+        }
+        let mut new = false;
+        for &(p, m) in state {
             let pattern = &self.patterns[p as usize];
-            matches!(pattern.hit, Hit::Rule(_)) && pattern.comps.len() > m as usize
-        });
-        if on_way && self.tree.node(id).has(flags::ACCESS_ERROR) {
+            if let Hit::Rule(i) = pattern.hit
+                && pattern.comps.len() > m as usize
+                && !self.reported[i as usize]
+            {
+                self.reported[i as usize] = true;
+                new = true;
+            }
+        }
+        if new {
             self.unreadable.push(id);
         }
     }

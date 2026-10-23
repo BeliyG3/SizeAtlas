@@ -116,3 +116,47 @@ fn a_scan_root_below_a_known_folder_still_matches() {
     let tree = build(r"\\?\C:\Users\u\AppData\Local\Temp\old", vec![it("a")]);
     assert_eq!(run(&tree, &win()), Cleanup::default());
 }
+
+#[test]
+fn without_a_users_folder_the_parent_of_home_is_one() {
+    let mut ctx = win();
+    ctx.known.users = None;
+    let mut items = project(r"Users\other\src\app");
+    items.push(it(
+        r"Users\other\AppData\Local\Programs\Python\Lib\__pycache__\a.pyc",
+    ));
+    items.extend(project(r"Users\u\src\app"));
+    let tree = build(r"C:\", items);
+    let out = run(&tree, &ctx);
+    assert_eq!(
+        listed(&tree, &out),
+        (vec![], vec![r"Users\u\src\app\node_modules".into()])
+    );
+}
+
+#[test]
+fn on_windows_an_unknown_system_place_turns_anywhere_rules_off() {
+    let blank: [fn(&mut Known); 4] = [
+        |k| k.system_root.clear(),
+        |k| k.program_data.clear(),
+        |k| k.program_files.clear(),
+        |k| {
+            k.users = None;
+            k.home.clear();
+        },
+    ];
+    let mut items = project(r"src\p");
+    items.push(it(r"Users\u\AppData\Local\Temp\old\a"));
+    let tree = build(r"C:\", items);
+    for (n, blank) in blank.iter().enumerate() {
+        let mut ctx = win();
+        blank(&mut ctx.known);
+        let (cleanup, review) = listed(&tree, &run(&tree, &ctx));
+        assert!(review.is_empty(), "case {n}");
+        assert_eq!(cleanup, [r"Users\u\AppData\Local\Temp\old"], "case {n}");
+    }
+    assert_eq!(
+        listed(&tree, &run(&tree, &win())).1,
+        [r"src\p\node_modules"]
+    );
+}

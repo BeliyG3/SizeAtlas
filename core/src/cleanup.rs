@@ -13,13 +13,14 @@ mod markers;
 mod names;
 mod never;
 mod paths;
+mod pattern;
 mod report;
 mod spots;
 mod walk;
 mod zones;
 
 pub use age::{is_old, newest_mtime};
-pub use never::{Guard, is_protected_name};
+pub use never::{Guard, Trail, is_protected_name};
 pub use paths::{At, Known, Overrides};
 
 /// Which rule and never tables apply. Chosen by value, not by `cfg`, so every table can be tested
@@ -28,12 +29,19 @@ pub use paths::{At, Known, Overrides};
 pub enum Os {
     /// Paths split on `\` and `/`, names compared ignoring case.
     Windows,
-    /// Paths split on `/`, names compared by case.
+    /// Paths split on `/`; rule places compared by case, never places and zones ignoring case
+    /// (APFS is case-insensitive by default).
     Mac,
+    /// Paths split on `/`, names compared by case.
     Linux,
 }
 
 impl Os {
+    /// Whether rule places and targets compare names ignoring case.
+    pub(crate) fn folds(self) -> bool {
+        self == Os::Windows
+    }
+
     pub fn current() -> Os {
         if cfg!(windows) {
             Os::Windows
@@ -162,7 +170,7 @@ pub enum Place {
     Anywhere,
 }
 
-/// What the matched item must be: a name or mask (`*`, `*.crate`, `thumbcache_*`).
+/// What the matched item must be: a name or mask (`*`, `*.crate`, `discord*`).
 #[derive(Clone, Copy, Debug)]
 pub enum Target {
     Dir(&'static str),
@@ -269,7 +277,7 @@ impl Tree {
     }
 
     pub(crate) fn cleanup_with(&self, ctx: &Context, rules: &[Rule], spots: &[Spot]) -> Cleanup {
-        let mut out = walk::run(self, ctx, rules);
+        let mut out = walk::run(self, ctx, rules, spots);
         out.info.extend(spots::find(self, ctx, spots));
         out.approximate |= self.approximate;
         out
@@ -282,6 +290,8 @@ mod tests;
 mod tests_never;
 #[cfg(test)]
 mod tests_paths;
+#[cfg(test)]
+mod tests_report;
 #[cfg(test)]
 mod tests_rules;
 #[cfg(test)]
