@@ -51,7 +51,7 @@
   "error.CacheNotSaved": "L’analyse est affichée, mais elle n’a pas pu être enregistrée.",
   "error.LossyName": "Ce nom n’a pas pu être lu correctement, le chemin d’accès n’est donc pas disponible.",
   "error.NoTrash": "serait supprimé définitivement, car son lecteur n’a pas de corbeille, ou la corbeille est désactivée ou trop petite. L’élément reste à sa place.",
-  "error.Protected": "Il contient quelque chose que SizeAtlas ne supprime jamais, ou ce n’est plus un élément de nettoyage.",
+  "error.Protected": "Non supprimé : cela contient quelque chose que SizeAtlas ne supprime jamais, ou ce n’est plus un élément de nettoyage. Actualisez la liste.",
   "error.Cancelled": "Annulé.",
   "error.Io": "{path} : {osMessage}",
   "banner.access_one": "{folders} dossier n’a pas pu être lu.",

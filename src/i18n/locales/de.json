@@ -48,7 +48,7 @@
   "error.CacheNotSaved": "Der Scan wird angezeigt, konnte aber nicht gespeichert werden.",
   "error.LossyName": "Dieser Name konnte nicht genau gelesen werden, daher ist der Pfad nicht verfügbar.",
   "error.NoTrash": "würde endgültig gelöscht, weil das Laufwerk keinen Papierkorb hat oder der Papierkorb deaktiviert oder zu klein ist. Das Element bleibt, wo es ist.",
-  "error.Protected": "Es enthält etwas, das SizeAtlas nie löscht, oder es ist kein Bereinigungselement mehr.",
+  "error.Protected": "Nicht gelöscht: Das enthält etwas, das SizeAtlas nie löscht, oder es ist kein Bereinigungselement mehr. Aktualisieren Sie die Liste.",
   "error.Cancelled": "Abgebrochen.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "{folders} Ordner konnte nicht gelesen werden.",

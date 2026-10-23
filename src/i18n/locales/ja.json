@@ -45,7 +45,7 @@
   "error.CacheNotSaved": "スキャン結果は表示されていますが、保存できませんでした。",
   "error.LossyName": "この名前を正確に読み取れなかったため、パスを使用できません。",
   "error.NoTrash": "ドライブにごみ箱がないか、ごみ箱が無効または容量不足のため、移動すると完全に削除されます。元の場所に残しています。",
-  "error.Protected": "SizeAtlas が削除しないものが含まれているか、すでにクリーンアップ対象ではありません。",
+  "error.Protected": "削除されませんでした: SizeAtlas が削除しないものが含まれているか、すでにクリーンアップ対象ではありません。一覧を更新してください。",
   "error.Cancelled": "キャンセルしました。",
   "error.Io": "{path}: {osMessage}",
   "banner.access_other": "{folders} 個のフォルダーを読み取れませんでした。",

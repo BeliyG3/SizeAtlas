@@ -81,12 +81,6 @@ export function nextListSort(current: ListSort | null, column: ColumnId): ListSo
   return { column, descending: column !== "name" && column !== "path" };
 }
 
-const DAY_SECONDS = 24 * 60 * 60;
-
-/** A scan (`scannedAt` in seconds) made more than a day before `nowMs`: its clean-up list may be out of date. */
-export const staleScan = (scannedAt: number, nowMs: number): boolean =>
-  scannedAt > 0 && nowMs / 1000 - scannedAt > DAY_SECONDS;
-
 /**
  * What a context menu needs to know of a row of a clean-up list: that it is one (the trash
  * dialogs differ) and the command of its tool, if any. Rows of other lists are plain.

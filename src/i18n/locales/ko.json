@@ -45,7 +45,7 @@
   "error.CacheNotSaved": "스캔 결과는 표시되지만 저장하지 못했습니다.",
   "error.LossyName": "이 이름을 정확하게 읽을 수 없어서 경로를 사용할 수 없습니다.",
   "error.NoTrash": "드라이브에 휴지통이 없거나 휴지통이 꺼져 있거나 너무 작아서, 이동하면 영구적으로 삭제됩니다. 원래 위치에 그대로 두었습니다.",
-  "error.Protected": "SizeAtlas가 삭제하지 않는 항목이 들어 있거나 더 이상 정리 대상이 아닙니다.",
+  "error.Protected": "삭제되지 않음: SizeAtlas가 삭제하지 않는 항목이 들어 있거나 더 이상 정리 대상이 아닙니다. 목록을 새로 고치세요.",
   "error.Cancelled": "취소되었습니다.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_other": "폴더 {folders}개를 읽을 수 없습니다.",

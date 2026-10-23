@@ -38,8 +38,11 @@ import { isCleanupMode } from "./modes";
 import { useListAnswer } from "./useListAnswer";
 import "../contents/contents.css";
 
-/** Details are read from disk for the rows on screen only, so their columns cannot sort a list. */
-const canSort = (column: Column) => !column.detail;
+/**
+ * Details are read from disk for the rows on screen only, so their columns cannot sort a list;
+ * Why is a text of a fixed set with no order of its own.
+ */
+const canSort = (column: Column) => !column.detail && column.id !== "reason";
 
 interface Props {
   summary: Summary;
@@ -103,6 +106,7 @@ export function ListTable({
     base,
     kind,
     query,
+    liveScan: summary.scanning ?? false,
     onFail,
   });
   // Null: the order of the list itself.

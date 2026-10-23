@@ -42,7 +42,7 @@ export const COLUMNS: readonly Column[] = [
   { id: "len", sortKey: "len", width: 96, numeric: true },
   { id: "size", sortKey: "size", width: 96, numeric: true },
   { id: "percent", sortKey: "size", width: 120, numeric: true },
-  // Room for the longest reason and, under it, a clean-up command.
+  // Room for a clean-up command and the start of the reason after it (the cell is one line).
   { id: "reason", sortKey: null, width: 360, numeric: false, listOnly: true },
   { id: "before", sortKey: null, width: 96, numeric: true, listOnly: true },
   // Room for "≈ −733.3" and the longest unit name (Arabic).

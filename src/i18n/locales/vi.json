@@ -45,7 +45,7 @@
   "error.CacheNotSaved": "Bản quét được hiển thị nhưng không lưu được.",
   "error.LossyName": "Không đọc chính xác được tên này nên không thể dùng đường dẫn.",
   "error.NoTrash": "sẽ bị xóa vĩnh viễn vì ổ đĩa không có thùng rác, hoặc thùng rác đã tắt hay quá nhỏ. Mục này vẫn ở nguyên chỗ cũ.",
-  "error.Protected": "Có thứ mà SizeAtlas không bao giờ xóa, hoặc không còn là mục để dọn dẹp.",
+  "error.Protected": "Chưa xóa: mục này có thứ mà SizeAtlas không bao giờ xóa, hoặc không còn là mục để dọn dẹp. Hãy làm mới danh sách.",
   "error.Cancelled": "Đã hủy.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_other": "Không đọc được {folders} thư mục.",

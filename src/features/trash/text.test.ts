@@ -81,7 +81,7 @@ describe("trashReport", () => {
     expect(
       trashReport(done(0, { failed: [protectedRow] }), preview(1), t, shown, count, size),
     ).toEqual([
-      "Could not move to the trash: /data/a: It holds something SizeAtlas never deletes, or it is no longer a clean-up item.",
+      "Could not move to the trash: /data/a: Not deleted: this holds something SizeAtlas never deletes, or it is no longer a clean-up item. Refresh the list.",
     ]);
   });
 

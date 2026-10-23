@@ -51,7 +51,7 @@
   "error.CacheNotSaved": "A análise está sendo exibida, mas não pôde ser salva.",
   "error.LossyName": "Não foi possível ler este nome com exatidão, por isso o caminho não está disponível.",
   "error.NoTrash": "seria excluído permanentemente porque a unidade não tem lixeira, ou a lixeira está desativada ou é pequena demais. O item continua onde está.",
-  "error.Protected": "Contém algo que o SizeAtlas nunca exclui, ou já não é um item de limpeza.",
+  "error.Protected": "Não excluído: isto contém algo que o SizeAtlas nunca exclui, ou já não é um item de limpeza. Atualize a lista.",
   "error.Cancelled": "Cancelado.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "Não foi possível ler {folders} pasta.",

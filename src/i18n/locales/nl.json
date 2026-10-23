@@ -48,7 +48,7 @@
   "error.CacheNotSaved": "De scan wordt getoond, maar kon niet worden opgeslagen.",
   "error.LossyName": "Deze naam kon niet exact worden gelezen, dus het pad is niet beschikbaar.",
   "error.NoTrash": "zou definitief worden verwijderd, omdat het station geen prullenbak heeft of de prullenbak uitgeschakeld of te klein is. Het blijft waar het is.",
-  "error.Protected": "Het bevat iets wat SizeAtlas nooit verwijdert, of het is geen opschoonitem meer.",
+  "error.Protected": "Niet verwijderd: dit bevat iets wat SizeAtlas nooit verwijdert, of het is geen opschoonitem meer. Vernieuw de lijst.",
   "error.Cancelled": "Geannuleerd.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "{folders} map kon niet worden gelezen.",

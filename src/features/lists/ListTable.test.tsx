@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement, ReactNode } from "react";
 import { api } from "../../api/client";
 import type { List, ListItem, ListKind, Summary } from "../../api/types";
 import { CleanupNotes } from "../cleanup/CleanupNotes";
+import { COLUMNS, type Column, type ColumnId } from "../contents/columns";
+import { TableHeader } from "../contents/TableHeader";
 import { ListTable } from "./ListTable";
 
 // The same minimal hook runtime as ContentsTable.live.test.tsx: state, memos and effects survive
@@ -408,5 +410,76 @@ describe("ListTable for the clean-up lists", () => {
     menuOf(rowsOf()[0])(0, 1, 1);
     expect(onMenu.mock.calls.at(-1)![0]).not.toHaveProperty("cleanup");
     expect(onMenu.mock.calls.at(-1)![0]).not.toHaveProperty("command");
+  });
+});
+
+describe("the header of a clean-up list", () => {
+  const header = () => {
+    const found: ReactElement[] = [];
+    const visit = (node: ReactNode) => {
+      if (Array.isArray(node)) node.forEach(visit);
+      else if (node && typeof node === "object" && "props" in node) {
+        if ((node as ReactElement).type === TableHeader) found.push(node as ReactElement);
+        visit((node.props as { children?: ReactNode }).children);
+      }
+    };
+    visit(shown);
+    return found[0].props as { canSort: (column: Column) => boolean };
+  };
+  const column = (id: ColumnId) => COLUMNS.find((c) => c.id === id)!;
+
+  it("has no sort on Why: no arrow, no click, no reset of the marks", async () => {
+    vi.mocked(api.getList).mockResolvedValue({
+      ...answer({ count: 0, size: 0 }),
+      cleanup: { info: [], approximate: false },
+    });
+    render("", true, summary, "cleanup");
+    await Promise.resolve();
+    render("", true, summary, "cleanup");
+    expect(header().canSort(column("reason"))).toBe(false);
+    // The columns of the rows still sort, and the details read from disk still do not.
+    expect(header().canSort(column("size"))).toBe(true);
+    expect(header().canSort(column("path"))).toBe(true);
+    expect(header().canSort(column("created"))).toBe(false);
+  });
+});
+
+describe("a clean-up list during a live scan", () => {
+  const live = (rev: number): Summary => ({ ...summary, scanning: true, rev });
+  const fresh: List = {
+    ...answer({ count: 0, size: 0 }),
+    cleanup: { info: [], approximate: false },
+  };
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("is listed once for several revisions inside the window of the charts", async () => {
+    vi.mocked(api.getList).mockResolvedValue(fresh);
+    render("", true, live(1), "cleanup");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.getList).toHaveBeenCalledTimes(1);
+    for (const rev of [2, 3, 4, 5]) {
+      render("", true, live(rev), "cleanup");
+      await vi.advanceTimersByTimeAsync(500);
+    }
+    expect(api.getList).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5000);
+    render("", true, live(5), "cleanup");
+    expect(api.getList).toHaveBeenCalledTimes(2);
+  });
+
+  it("is listed at once for a tree that is not scanning", async () => {
+    vi.mocked(api.getList).mockResolvedValue(fresh);
+    render("", true, { ...summary, rev: 1 }, "cleanup");
+    render("", true, { ...summary, rev: 2 }, "cleanup");
+    expect(api.getList).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a search on the cadence of the tree: its revision is not held back", async () => {
+    vi.mocked(api.getList).mockResolvedValue(answer({ count: 0, size: 0 }));
+    render("a", true, live(1), "search");
+    render("a", true, live(2), "search");
+    expect(api.getList).toHaveBeenCalledTimes(2);
   });
 });

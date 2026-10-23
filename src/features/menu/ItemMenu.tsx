@@ -86,21 +86,28 @@ export function ItemMenu({
     run: () => void,
     enabled = true,
     note: string | null = null,
-  ) => (
-    <button
-      key={label}
-      role="menuitem"
-      disabled={blocked || !enabled}
-      title={blocked ? t("menu.lossy") : (note ?? undefined)}
-      onClick={() => {
-        run();
-        onClose();
-      }}
-    >
-      <Icon name={icon} />
-      {label}
-    </button>
-  );
+    /** Shown under the label; it does not depend on the path, so a lossy name does not block it. */
+    sub: string | null = null,
+  ) => {
+    // The one item with a line under it, the clean-up command, does not depend on the path.
+    const needsPath = blocked && sub === null;
+    return (
+      <button
+        key={label}
+        role="menuitem"
+        disabled={needsPath || !enabled}
+        title={needsPath ? t("menu.lossy") : (note ?? undefined)}
+        onClick={() => {
+          run();
+          onClose();
+        }}
+      >
+        <Icon name={icon} />
+        {label}
+        {sub !== null && <small className="menu-sub">{sub}</small>}
+      </button>
+    );
+  };
   // Groups of items, set apart by separators; a group without items leaves no separator.
   const groups: (ReactNode[] | false)[] = [
     one && [
@@ -137,6 +144,7 @@ export function ItemMenu({
           t("cleanup.copyCommand"),
           () => void api.copyText(command).catch(onFail),
           true,
+          null,
           t("cleanup.commandNote"),
         ),
     ],

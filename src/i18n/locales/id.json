@@ -45,7 +45,7 @@
   "error.CacheNotSaved": "Hasil pindai ditampilkan, tetapi tidak dapat disimpan.",
   "error.LossyName": "Nama ini tidak dapat dibaca dengan tepat, sehingga jalurnya tidak tersedia.",
   "error.NoTrash": "akan terhapus permanen karena drive-nya tidak memiliki tempat sampah, atau tempat sampah dinonaktifkan atau terlalu kecil. Item tetap berada di tempatnya.",
-  "error.Protected": "Berisi sesuatu yang tidak pernah dihapus SizeAtlas, atau bukan lagi item pembersihan.",
+  "error.Protected": "Tidak dihapus: ini berisi sesuatu yang tidak pernah dihapus SizeAtlas, atau bukan lagi item pembersihan. Segarkan daftar.",
   "error.Cancelled": "Dibatalkan.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_other": "{folders} folder tidak dapat dibaca.",

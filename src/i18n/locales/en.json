@@ -48,7 +48,7 @@
   "error.CacheNotSaved": "The scan is shown, but it could not be saved.",
   "error.LossyName": "This name could not be read exactly, so the path is not available.",
   "error.NoTrash": "would be deleted for good because its drive has no trash, or the trash is turned off or too small. It stays where it is.",
-  "error.Protected": "It holds something SizeAtlas never deletes, or it is no longer a clean-up item.",
+  "error.Protected": "Not deleted: this holds something SizeAtlas never deletes, or it is no longer a clean-up item. Refresh the list.",
   "error.Cancelled": "Cancelled.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "{folders} folder could not be read.",

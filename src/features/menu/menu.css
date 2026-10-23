@@ -131,3 +131,11 @@
 .menu button:focus-visible .key {
   color: inherit;
 }
+
+/* A line under the label of an item: a warning that has to be seen, not found by hovering. */
+.menu .menu-sub {
+  display: block;
+  font-size: 12px;
+  white-space: normal;
+  opacity: 0.75;
+}

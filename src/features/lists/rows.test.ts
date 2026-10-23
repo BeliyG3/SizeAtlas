@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Change, ListItem } from "../../api/types";
-import {
-  defaultListSort,
-  emptyListKey,
-  liveId,
-  nextListSort,
-  menuCleanup,
-  sortRows,
-  staleScan,
-} from "./rows";
+import { defaultListSort, emptyListKey, liveId, nextListSort, menuCleanup, sortRows } from "./rows";
 
 const item = (id: number, name: string, folder: string, size: number): ListItem => ({
   id,
@@ -127,23 +119,6 @@ describe("a list without rows", () => {
   it("says nothing was found for a search, whatever the baseline", () => {
     expect(emptyListKey("search", list(null, false))).toBe("search.none");
     expect(emptyListKey("search", list(5, false))).toBe("search.none");
-  });
-});
-
-describe("a stale scan", () => {
-  const DAY = 24 * 60 * 60;
-  const now = 1_000 * DAY * 1000;
-  const at = (ago: number) => 1_000 * DAY - ago;
-
-  it("is one made more than a day ago", () => {
-    expect(staleScan(at(DAY - 1), now)).toBe(false);
-    expect(staleScan(at(DAY + 1), now)).toBe(true);
-    expect(staleScan(at(30 * DAY), now)).toBe(true);
-  });
-
-  it("is not one with an unknown time or in the future", () => {
-    expect(staleScan(0, now)).toBe(false);
-    expect(staleScan(at(-5 * DAY), now)).toBe(false);
   });
 });
 

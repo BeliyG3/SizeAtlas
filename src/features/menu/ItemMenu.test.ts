@@ -6,7 +6,12 @@ import { ItemMenu, menuIds } from "./ItemMenu";
 vi.mock("../../api/client", () => ({ api: { copyText: vi.fn(() => Promise.resolve()) } }));
 vi.mock("../../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
 
-type MenuItem = ReactElement<{ onClick: () => void; title?: string; children: ReactNode[] }>;
+type MenuItem = ReactElement<{
+  onClick: () => void;
+  title?: string;
+  disabled?: boolean;
+  children: ReactNode[];
+}>;
 
 /** The menu items of a rendered menu, depth first. */
 function menuItems(node: ReactNode): MenuItem[] {
@@ -63,11 +68,20 @@ describe("item menu", () => {
       expect(api.copyText).toHaveBeenLastCalledWith("npm cache clean --force");
     });
 
-    it("says on the item that the command deletes at once", () => {
+    it("says under the item, in plain sight, that the command deletes at once", () => {
       const item = menuOf({ cleanup: true, command: "x" }).find(
         (i) => i.props.children[1] === "cleanup.copyCommand",
       );
-      expect(item!.props.title).toBe("cleanup.commandNote");
+      const note = item!.props.children[2] as ReactElement<{ children: string }>;
+      expect(note.props.children).toBe("cleanup.commandNote");
+    });
+
+    it("is offered for a row whose name could not be read exactly: the command needs no path", () => {
+      const items = menuOf({ cleanup: true, command: "x", lossy: true });
+      const item = items.find((i) => i.props.children[1] === "cleanup.copyCommand")!;
+      expect((item.props as { disabled?: boolean }).disabled).toBe(false);
+      const copy = items.find((i) => i.props.children[1] === "menu.copyPath")!;
+      expect((copy.props as { disabled?: boolean }).disabled).toBe(true);
     });
 
     it("is not offered without a command, nor for several marked rows", () => {

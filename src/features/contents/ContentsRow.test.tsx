@@ -164,6 +164,15 @@ describe("ContentsRow", () => {
       expect(cell).toContain("Can be restored: a lock file is next to it");
     });
 
+    it("puts the command before the words, so a narrow column cuts the words, not the command", () => {
+      const cell = reasonCell({
+        reason: "packageCache",
+        command: "npm cache clean --force",
+        restorable: null,
+      })!;
+      expect(cell).toMatch(/<code[^>]*>npm cache clean --force<\/code>Package manager cache/);
+    });
+
     it("shows the clean-up command of a tool, left to right, saying it deletes at once", () => {
       const cell = reasonCell({
         reason: "packageCache",

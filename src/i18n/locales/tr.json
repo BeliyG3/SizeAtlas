@@ -48,7 +48,7 @@
   "error.CacheNotSaved": "Tarama gösteriliyor ancak kaydedilemedi.",
   "error.LossyName": "Bu ad tam olarak okunamadığı için yol kullanılamıyor.",
   "error.NoTrash": "bulunduğu sürücüde çöp kutusu olmadığı ya da çöp kutusu kapalı veya çok küçük olduğu için kalıcı olarak silinirdi. Yerinde bırakıldı.",
-  "error.Protected": "SizeAtlas’ın hiçbir zaman silmediği bir şey içeriyor ya da artık bir temizleme öğesi değil.",
+  "error.Protected": "Silinmedi: bunda SizeAtlas’ın hiçbir zaman silmediği bir şey var ya da artık bir temizleme öğesi değil. Listeyi yenileyin.",
   "error.Cancelled": "İptal edildi.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "{folders} klasör okunamadı.",

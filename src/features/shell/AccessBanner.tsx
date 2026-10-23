@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api, isCmdError } from "../../api/client";
 import { formatCount } from "../../format";
 import { useT } from "../../i18n/react";
-import { useElevated } from "./elevation";
+import { useElevated, useRestartElevated } from "./elevation";
 import { platform } from "./platform";
 
 /** How to get access to unreadable folders on each platform. */
@@ -47,27 +47,10 @@ export function AccessBanner({ count, root, push, errorText, onShow }: Props) {
   const os = platform();
   const elevated = useElevated(os === "windows");
   const fullDiskAccess = useFullDiskAccess(os === "mac");
-  const [busy, setBusy] = useState(false);
-  // The banner can go away while the restart waits for the UAC prompt.
-  const live = useRef(true);
-  useEffect(() => {
-    live.current = true;
-    return () => {
-      live.current = false;
-    };
-  }, []);
+  const restart = useRestartElevated(root, push, errorText);
 
   /** The message of the system alone: the path of an `Io` error means nothing here. */
   const osText = (e: unknown) => (isCmdError(e) && e.code === "Io" ? e.osMessage : errorText(e));
-  // On success the window closes; the button stays off meanwhile.
-  const restart = () => {
-    setBusy(true);
-    api.restartElevated([root]).catch((e: unknown) => {
-      if (live.current) setBusy(false);
-      if (isCmdError(e) && e.code === "Cancelled") push(t("banner.restartCancelled"));
-      else push(t("banner.restartFailed", { message: osText(e) }));
-    });
-  };
   const openPrivacy = () => void api.openPrivacySettings().catch((e) => push(osText(e)));
   const canRestart = os === "windows" && elevated === false;
   // An administrator, or a Mac app with Full Disk Access, has nothing left to try: what stays
@@ -85,7 +68,7 @@ export function AccessBanner({ count, root, push, errorText, onShow }: Props) {
         {t("banner.access", { count, folders: formatCount(count, lang) })} {t(hint)}
       </span>
       {canRestart && (
-        <button disabled={busy} onClick={restart}>
+        <button disabled={restart.busy} onClick={restart.run}>
           {t("banner.restartElevated")}
         </button>
       )}

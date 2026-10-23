@@ -161,12 +161,12 @@ export const ContentsRow = memo(function ContentsRow({
       undefined,
       why && (
         <>
-          {whyText}
           {why.command && (
             <code dir="ltr" title={t("cleanup.commandNote")}>
               {why.command}
             </code>
           )}
+          {whyText}
         </>
       ),
       why ? whyHint : undefined,

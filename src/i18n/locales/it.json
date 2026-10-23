@@ -51,7 +51,7 @@
   "error.CacheNotSaved": "La scansione è visualizzata, ma non è stato possibile salvarla.",
   "error.LossyName": "Non è stato possibile leggere questo nome con esattezza, quindi il percorso non è disponibile.",
   "error.NoTrash": "verrebbe eliminato definitivamente perché la sua unità non ha un cestino, oppure il cestino è disattivato o troppo piccolo. Resta dov’è.",
-  "error.Protected": "Contiene qualcosa che SizeAtlas non elimina mai, oppure non è più un elemento da pulire.",
+  "error.Protected": "Non eliminato: contiene qualcosa che SizeAtlas non elimina mai, oppure non è più un elemento da pulire. Aggiorna l’elenco.",
   "error.Cancelled": "Annullato.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "Impossibile leggere {folders} cartella.",

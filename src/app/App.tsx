@@ -9,6 +9,7 @@ import { chooseFolder } from "../features/shell/chooseFolder";
 import { StatusBar } from "../features/shell/StatusBar";
 import { Toolbar } from "../features/shell/Toolbar";
 import { expectedBytes, forgettable, savedScan } from "../features/shell/source";
+import { NoticeContext } from "../features/toasts/notices";
 import { Toasts, useToasts } from "../features/toasts/Toasts";
 import { MovingContext } from "../features/trash/moving";
 import { UpdateBanner } from "../features/update/UpdateBanner";
@@ -29,6 +30,7 @@ import { useSelection } from "./useSelection";
 export function App() {
   const { t, lang } = useT();
   const { toasts, push, pushError, errorText } = useToasts();
+  const notices = useMemo(() => ({ push, errorText }), [push, errorText]);
   const onSkipped = useCallback(
     (count: number) => push(t("restore.skipped", { count, roots: formatCount(count, lang) })),
     [push, t, lang],
@@ -214,35 +216,37 @@ export function App() {
       )}
       <main className="workspace">
         <ExportContext value={exporter.register}>
-          <MovingContext value={trash.moving}>
-            <Browser
-              entries={entries}
-              selection={selection}
-              mode={mode}
-              query={committed}
-              onLeaveSearch={endSearch}
-              sources={sources}
-              progress={progress}
-              onSelectNode={selectNode}
-              onSelectRoot={selectRoot}
-              onRescan={(root) => void roots.scan(root)}
-              onRefresh={refreshFolder}
-              onScanFolder={scanItem}
-              onTrash={trash.onTrash}
-              onMarks={trash.onMarks}
-              busyRoots={busy}
-              job={trash.job}
-              fullScans={fullScans}
-              trashing={trash.busy}
-              trashingRoot={trash.root}
-              onCloseRoot={roots.closeRoot}
-              onForget={roots.forget}
-              onCancelScan={(root) => roots.cancel(root)}
-              onOpenDrive={openSource}
-              onScanDrive={scanPath}
-              onFail={fail}
-            />
-          </MovingContext>
+          <NoticeContext value={notices}>
+            <MovingContext value={trash.moving}>
+              <Browser
+                entries={entries}
+                selection={selection}
+                mode={mode}
+                query={committed}
+                onLeaveSearch={endSearch}
+                sources={sources}
+                progress={progress}
+                onSelectNode={selectNode}
+                onSelectRoot={selectRoot}
+                onRescan={(root) => void roots.scan(root)}
+                onRefresh={refreshFolder}
+                onScanFolder={scanItem}
+                onTrash={trash.onTrash}
+                onMarks={trash.onMarks}
+                busyRoots={busy}
+                job={trash.job}
+                fullScans={fullScans}
+                trashing={trash.busy}
+                trashingRoot={trash.root}
+                onCloseRoot={roots.closeRoot}
+                onForget={roots.forget}
+                onCancelScan={(root) => roots.cancel(root)}
+                onOpenDrive={openSource}
+                onScanDrive={scanPath}
+                onFail={fail}
+              />
+            </MovingContext>
+          </NoticeContext>
         </ExportContext>
       </main>
       <StatusBar

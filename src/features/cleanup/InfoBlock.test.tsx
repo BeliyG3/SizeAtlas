@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { InfoDto, InfoKind } from "../../api/types";
+import type { InfoDto, InfoKind } from "../../api/cleanup";
 import { I18nProvider } from "../../i18n/react";
 import { InfoBlock } from "./InfoBlock";
 

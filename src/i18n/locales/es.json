@@ -51,7 +51,7 @@
   "error.CacheNotSaved": "El análisis se muestra, pero no se pudo guardar.",
   "error.LossyName": "No se pudo leer este nombre con exactitud, así que la ruta no está disponible.",
   "error.NoTrash": "se eliminaría de forma permanente porque su unidad no tiene papelera, o la papelera está desactivada o es demasiado pequeña. Se queda donde está.",
-  "error.Protected": "Contiene algo que SizeAtlas nunca elimina, o ya no es un elemento de limpieza.",
+  "error.Protected": "No se eliminó: esto contiene algo que SizeAtlas nunca elimina, o ya no es un elemento de limpieza. Actualiza la lista.",
   "error.Cancelled": "Cancelado.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "No se pudo leer {folders} carpeta.",

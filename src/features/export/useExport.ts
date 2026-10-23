@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
 import { api } from "../../api/client";
-import type { ReasonDto } from "../../api/types";
+import type { ReasonDto } from "../../api/cleanup";
 import { formatCount } from "../../format";
 import { useT } from "../../i18n/react";
 import { useStored } from "../../settings/storage";

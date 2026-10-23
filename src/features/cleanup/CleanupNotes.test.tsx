@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { CleanupDto, List } from "../../api/types";
+import type { List } from "../../api/types";
+import type { CleanupDto } from "../../api/cleanup";
 import { I18nProvider } from "../../i18n/react";
 import { CleanupNotes } from "./CleanupNotes";
 
@@ -24,7 +25,11 @@ const render = (
 ) =>
   renderToStaticMarkup(
     <I18nProvider>
-      <CleanupNotes list={list} summary={{ root: "C:\\", ...summary }} onFail={() => {}} />
+      <CleanupNotes
+        list={list}
+        summary={{ root: "C:\\", accessErrors: 0, ...summary }}
+        onFail={() => {}}
+      />
     </I18nProvider>,
   );
 

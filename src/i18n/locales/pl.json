@@ -54,7 +54,7 @@
   "error.CacheNotSaved": "Skan jest wyświetlany, ale nie udało się go zapisać.",
   "error.LossyName": "Nie udało się dokładnie odczytać tej nazwy, więc ścieżka jest niedostępna.",
   "error.NoTrash": "zostałby usunięty na stałe, bo dysk nie ma kosza albo kosz jest wyłączony lub za mały. Pozostaje na miejscu.",
-  "error.Protected": "Zawiera coś, czego SizeAtlas nigdy nie usuwa, albo nie jest już elementem do wyczyszczenia.",
+  "error.Protected": "Nie usunięto: to zawiera coś, czego SizeAtlas nigdy nie usuwa, albo nie jest już elementem do wyczyszczenia. Odśwież listę.",
   "error.Cancelled": "Anulowano.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "Nie udało się odczytać {folders} folderu.",

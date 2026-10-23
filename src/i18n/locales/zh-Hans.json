@@ -45,7 +45,7 @@
   "error.CacheNotSaved": "已显示扫描结果，但无法保存。",
   "error.LossyName": "无法准确读取此名称，因此无法使用其路径。",
   "error.NoTrash": "所在驱动器没有回收站，或回收站已关闭或空间不足，移动会将其永久删除。已保留在原位置。",
-  "error.Protected": "其中有 SizeAtlas 从不删除的内容，或它已不再是清理项目。",
+  "error.Protected": "未删除：其中有 SizeAtlas 从不删除的内容，或它已不再是清理项目。请刷新列表。",
   "error.Cancelled": "已取消。",
   "error.Io": "{path}：{osMessage}",
   "banner.access_other": "有 {folders} 个文件夹无法读取。",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ReasonDto, ReasonKind } from "../../api/types";
+import type { ReasonDto, ReasonKind } from "../../api/cleanup";
 import { LANGUAGES, translate } from "../../i18n";
 import { reasonText } from "./reason";
 

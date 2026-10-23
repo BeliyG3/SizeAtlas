@@ -1,4 +1,5 @@
-import type { Detail, Item, ListItem, ReasonDto } from "../../api/types";
+import type { Detail, Item, ListItem } from "../../api/types";
+import type { ReasonDto } from "../../api/cleanup";
 import type { ColumnId } from "../contents/columns";
 
 /** "," for CSV, ";" for Excel with Russian or other European regional settings. */

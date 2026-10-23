@@ -1,4 +1,4 @@
-import type { InfoDto } from "../../api/types";
+import type { InfoDto } from "../../api/cleanup";
 import { useT } from "../../i18n/react";
 import { useSize } from "../../settings/react";
 

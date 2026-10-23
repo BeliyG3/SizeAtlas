@@ -1,4 +1,4 @@
-import type { ReasonDto } from "../../api/types";
+import type { ReasonDto } from "../../api/cleanup";
 import type { Params } from "../../i18n";
 
 type Translate = (key: string, params?: Params) => string;

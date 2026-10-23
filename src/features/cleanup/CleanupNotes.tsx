@@ -1,18 +1,24 @@
-import { useState } from "react";
+import { useContext } from "react";
 import { api } from "../../api/client";
 import type { List, Summary } from "../../api/types";
 import { formatAgo, formatCount } from "../../format";
 import { useT } from "../../i18n/react";
 import { useSize } from "../../settings/react";
-import { staleScan } from "../lists/rows";
-import { useElevated } from "../shell/elevation";
+import { useElevated, useRestartElevated } from "../shell/elevation";
 import { platform } from "../shell/platform";
+import { NoticeContext } from "../toasts/notices";
+import { restartOffered, visibleInfo } from "./access";
 import { InfoBlock } from "./InfoBlock";
+import { staleScan } from "./stale";
+import { useNow } from "./useNow";
 import "./cleanup.css";
+
+/** How often the age of the scan is looked at again. */
+const NOW_PERIOD_MS = 5 * 60 * 1000;
 
 interface Props {
   list: Pick<List, "found" | "cleanup">;
-  summary: Pick<Summary, "root" | "scannedAt" | "scanning">;
+  summary: Pick<Summary, "root" | "scannedAt" | "scanning" | "accessErrors">;
   onFail: (e: unknown) => void;
 }
 
@@ -23,28 +29,16 @@ interface Props {
 export function CleanupNotes({ list, summary, onFail }: Props) {
   const { t, lang } = useT();
   const size = useSize();
-  const [now] = useState(Date.now);
-  const windows = platform() === "windows";
-  const elevated = useElevated(windows);
-  const [busy, setBusy] = useState(false);
+  const now = useNow(NOW_PERIOD_MS);
+  const { push, errorText } = useContext(NoticeContext);
+  const os = platform();
+  const elevated = useElevated(os === "windows");
+  const restart = useRestartElevated(summary.root, push, errorText);
   const found = list.found && list.found.count > 0 ? list.found : null;
-  const info = list.cleanup?.info ?? [];
+  const info = visibleInfo(list.cleanup?.info ?? [], os, elevated);
   const stale = !summary.scanning && staleScan(summary.scannedAt, now);
   if (!found && !stale && info.length === 0) return null;
 
-  const restart =
-    windows && elevated === false
-      ? {
-          busy,
-          run: () => {
-            setBusy(true);
-            api.restartElevated([summary.root]).catch((e: unknown) => {
-              setBusy(false);
-              onFail(e);
-            });
-          },
-        }
-      : null;
   return (
     <div className="found cleanup-notes">
       {found && (
@@ -64,7 +58,7 @@ export function CleanupNotes({ list, summary, onFail }: Props) {
       )}
       <InfoBlock
         info={info}
-        restart={restart}
+        restart={restartOffered(os, elevated, summary.accessErrors) ? restart : null}
         onCopy={(command) => void api.copyText(command).catch(onFail)}
       />
     </div>
