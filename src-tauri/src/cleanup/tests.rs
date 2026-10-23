@@ -129,3 +129,23 @@ fn a_cloud_folder_made_after_launch_is_known_at_the_next_context() {
     };
     assert_eq!(others, at_launch, "only the cloud folders are read again");
 }
+
+#[test]
+fn a_cloud_folder_known_at_launch_stays_known_when_it_cannot_be_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = folder(dir.path()).unwrap();
+    fs::create_dir(dir.path().join("Dropbox")).unwrap();
+    let map = HashMap::from([("USERPROFILE", home.clone()), ("HOME", home)]);
+    let var = |name: &str| map.get(name).cloned();
+    let env = Env {
+        var: &var,
+        dir: &folder,
+    };
+    let at_launch = known(Os::current(), &env);
+    let dropbox = folder(&dir.path().join("Dropbox")).unwrap();
+    assert_eq!(at_launch.cloud, std::slice::from_ref(&dropbox));
+    // Offline, renamed or unreadable now: still a place never to touch.
+    fs::remove_dir(dir.path().join("Dropbox")).unwrap();
+    let now = with_clouds(&at_launch, Os::current(), &env);
+    assert_eq!(now.cloud, [dropbox]);
+}

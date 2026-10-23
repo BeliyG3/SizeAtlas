@@ -178,10 +178,17 @@ fn known(os: Os, env: &Env) -> Known {
     }
 }
 
-/// `known` with the cloud sync folders `env` has now.
+/// `known` with the cloud sync folders `env` has now, added to those of `known`: a folder that
+/// cannot be read at the moment (offline, renamed) stays a place never to touch.
 fn with_clouds(known: &Known, os: Os, env: &Env) -> Known {
+    let mut cloud = known.cloud.clone();
+    for path in env.clouds(os, &known.home) {
+        if !cloud.contains(&path) {
+            cloud.push(path);
+        }
+    }
     Known {
-        cloud: env.clouds(os, &known.home),
+        cloud,
         ..known.clone()
     }
 }
