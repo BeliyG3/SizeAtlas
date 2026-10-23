@@ -9,13 +9,17 @@ use serde::Serialize;
 use crate::tree::Tree;
 
 mod age;
+mod caches;
 mod markers;
 mod names;
 mod never;
 mod paths;
 mod pattern;
 mod report;
+mod rules;
 mod spots;
+mod temp;
+mod unix_rules;
 mod walk;
 mod zones;
 
@@ -165,6 +169,9 @@ pub enum Place {
     /// Below a known folder. Each component is a name or a mask with `*` (`Opera*`), compared
     /// by the case rule of the OS; the target is matched one level below the last component.
     At(At, &'static [&'static str]),
+    /// The known folder itself, for caches an override may move (`NUGET_HTTP_CACHE_PATH`); the
+    /// target gives only the kind.
+    Is(At),
     /// Anywhere outside the zones of "anywhere" rules (installed programs, other users, AppData,
     /// home dot-folders, cloud folders, volumes without a recycle bin, ...).
     Anywhere,
@@ -195,10 +202,12 @@ pub enum Marker {
 pub struct App {
     /// Shown in "Close {app}".
     pub name: &'static str,
-    /// Lower-case masks of executable file names (`chrome.exe`, `discord*.exe`).
+    /// Lower-case masks of executable file names, with any command line (`chrome.exe`,
+    /// `discord*.exe`).
     pub exes: &'static [&'static str],
-    /// Must appear in the lower-case command line (`npm-cli.js` for `node.exe`).
-    pub cmd: Option<&'static str>,
+    /// An executable mask and a text its command line must hold, compared ignoring case
+    /// (`node.exe` running `npm-cli.js`): tools whose runtime also runs other programs.
+    pub cmds: &'static [(&'static str, &'static str)],
 }
 
 /// An age split: items whose newest time is older than `days` keep the rule's mode and reason.
@@ -264,9 +273,13 @@ pub enum SpotKind {
     ToolStore(&'static str),
 }
 
-/// The rule and spot tables of `os`; empty until the tables are written.
-fn tables(_os: Os) -> (&'static [Rule], &'static [Spot]) {
-    (&[], &[])
+/// The rule and spot tables of `os`.
+fn tables(os: Os) -> (&'static [Rule], &'static [Spot]) {
+    match os {
+        Os::Windows => (&rules::WINDOWS, rules::SPOTS),
+        Os::Mac => (&unix_rules::MAC, &[]),
+        Os::Linux => (&unix_rules::LINUX, &[]),
+    }
 }
 
 impl Tree {
@@ -278,8 +291,13 @@ impl Tree {
 
     pub(crate) fn cleanup_with(&self, ctx: &Context, rules: &[Rule], spots: &[Spot]) -> Cleanup {
         let mut out = walk::run(self, ctx, rules, spots);
-        out.info.extend(spots::find(self, ctx, spots));
-        out.approximate |= self.approximate;
+        for info in spots::find(self, ctx, spots) {
+            if !out.info.contains(&info) {
+                out.info.push(info);
+            }
+        }
+        let no_access = |i: &Info| matches!(i, Info::NoAccess { .. });
+        out.approximate = self.approximate || out.info.iter().any(no_access);
         out
     }
 }
@@ -289,10 +307,18 @@ mod tests;
 #[cfg(test)]
 mod tests_never;
 #[cfg(test)]
+mod tests_packages;
+#[cfg(test)]
 mod tests_paths;
 #[cfg(test)]
 mod tests_report;
 #[cfg(test)]
 mod tests_rules;
+#[cfg(test)]
+mod tests_temp;
+#[cfg(test)]
+mod tests_unix;
+#[cfg(test)]
+mod tests_windows;
 #[cfg(test)]
 mod tests_zones;

@@ -57,6 +57,12 @@ pub(crate) fn run(tree: &Tree, ctx: &Context, rules: &[Rule], spots: &[Spot]) ->
                 (at, path, Some(mask)),
                 Hit::Rule(i as u32),
             ),
+            Place::Is(at) => add(
+                &mut patterns,
+                (os, known),
+                (at, &[], None),
+                Hit::Rule(i as u32),
+            ),
             Place::Anywhere => anywhere.push((i, Names::new(&[mask], os.folds()))),
         }
     }

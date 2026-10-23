@@ -156,12 +156,12 @@ pub(super) fn win() -> Context {
 pub(super) const DISCORD: App = App {
     name: "Discord",
     exes: &["discord*.exe"],
-    cmd: None,
+    cmds: &[],
 };
 pub(super) const NPM: App = App {
     name: "npm",
-    exes: &["node.exe"],
-    cmd: Some("npm-cli.js"),
+    exes: &[],
+    cmds: &[("node.exe", "npm-cli.js")],
 };
 
 const TEMP_AGE: Option<Age> = Some(Age {

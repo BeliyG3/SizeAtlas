@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 use super::names::Names;
 use super::paths::{At, Known, components};
 use super::pattern::{Entry, Hit, Pattern, State, add, is_never, start, step};
-use super::{Os, Spot};
+use super::{Os, Spot, temp};
 
 /// Names that block any folder holding them, compared ignoring case on every OS.
 const ANYWHERE: &[&str] = &[
@@ -77,10 +77,7 @@ const COMMON: &[Entry] = &[
 ];
 
 const WINDOWS: &[Entry] = &[
-    // Work in progress and recovery.
-    (At::Temp, &["claude*"]),
-    (At::Temp, &["codex*"]),
-    (At::Temp, &["Low"]),
+    // Work in progress and recovery (and `temp::EXCLUDED`).
     (
         At::Local,
         &["Microsoft", "Windows", "INetCache", "Content.Outlook"],
@@ -230,6 +227,11 @@ pub(crate) fn add_never<'a>(out: &mut Vec<Pattern<'a>>, os: Os, known: &'a Known
         }
     }
     if os == Os::Windows {
+        for (at, path) in temp::PLACES {
+            for &name in temp::EXCLUDED {
+                add(out, (os, known), (at, path, Some(name)), Hit::Never);
+            }
+        }
         for &(at, root) in BROWSER_ROOTS {
             for &name in BROWSER_DATA {
                 add(out, (os, known), (at, root, Some(name)), Hit::Never);

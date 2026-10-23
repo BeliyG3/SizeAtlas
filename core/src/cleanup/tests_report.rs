@@ -76,8 +76,8 @@ fn unreadable_places_are_reported_once_and_not_for_young_items() {
 fn an_app_command_line_matches_ignoring_case() {
     const GRADLE: App = App {
         name: "Gradle",
-        exes: &["java.exe"],
-        cmd: Some("GradleDaemon"),
+        exes: &[],
+        cmds: &[("java.exe", "GradleDaemon")],
     };
     let rule = Rule {
         app: Some(&GRADLE),

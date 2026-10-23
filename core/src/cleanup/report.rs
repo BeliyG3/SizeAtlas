@@ -90,9 +90,9 @@ impl Walk<'_> {
     fn is_running(&self, app: &App) -> bool {
         self.ctx.running.iter().any(|r| {
             app.exes.iter().any(|m| fits(m, &r.exe, true))
-                && app
-                    .cmd
-                    .is_none_or(|cmd| r.cmd.to_lowercase().contains(&cmd.to_lowercase()))
+                || app.cmds.iter().any(|(m, cmd)| {
+                    fits(m, &r.exe, true) && r.cmd.to_lowercase().contains(&cmd.to_lowercase())
+                })
         })
     }
 }
