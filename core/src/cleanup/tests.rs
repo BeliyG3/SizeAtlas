@@ -129,6 +129,37 @@ pub(super) fn listed(tree: &Tree, out: &Cleanup) -> (Vec<String>, Vec<String>) {
     (paths(&out.cleanup), paths(&out.review))
 }
 
+/// Paths of the Cleanup and Review rows of a tree holding `items`, with the real tables: below
+/// `C:\` joined with `\` on Windows, below `/` joined with `/` elsewhere; sorted.
+pub(super) fn rows(items: Vec<Item>, ctx: &Context) -> (Vec<String>, Vec<String>) {
+    let win = ctx.os == Os::Windows;
+    let tree = build(if win { r"C:\" } else { "/" }, items);
+    let (cleanup, review) = listed(&tree, &tree.cleanup(ctx));
+    let fix = |v: Vec<String>| {
+        if win {
+            return v;
+        }
+        sorted(&v.iter().map(|p| p.replace('\\', "/")).collect::<Vec<_>>())
+    };
+    (fix(cleanup), fix(review))
+}
+
+pub(super) fn sorted<S: AsRef<str>>(paths: &[S]) -> Vec<String> {
+    let mut v: Vec<String> = paths.iter().map(|p| p.as_ref().to_owned()).collect();
+    v.sort();
+    v
+}
+
+/// `rest` below `%LOCALAPPDATA%` of [`win`], relative to the root.
+pub(super) fn local(rest: &str) -> String {
+    format!(r"Users\u\AppData\Local\{rest}")
+}
+
+/// `rest` below `%APPDATA%` of [`win`], relative to the root.
+pub(super) fn roaming(rest: &str) -> String {
+    format!(r"Users\u\AppData\Roaming\{rest}")
+}
+
 pub(super) fn win() -> Context {
     let s = |s: &str| s.to_owned();
     Context {

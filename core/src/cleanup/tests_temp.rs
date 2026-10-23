@@ -1,16 +1,11 @@
 //! The Temp rules (1, 1b) with the real tables: age, work markers, size, exclusions.
 
-use super::tests::{Item, ago, build, it, listed, rel, win};
+use super::tests::{Item, ago, build, it, listed, rel, rows, win};
 use super::*;
 use crate::tree::flags;
 
 fn temp(rest: &str) -> String {
     format!(r"Users\u\AppData\Local\Temp\{rest}")
-}
-
-fn rows(items: Vec<Item>, ctx: &Context) -> (Vec<String>, Vec<String>) {
-    let tree = build(r"C:\", items);
-    listed(&tree, &tree.cleanup(ctx))
 }
 
 #[test]

@@ -9,6 +9,7 @@ use serde::Serialize;
 use crate::tree::Tree;
 
 mod age;
+mod build;
 mod caches;
 mod markers;
 mod names;
@@ -169,8 +170,8 @@ pub enum Place {
     /// Below a known folder. Each component is a name or a mask with `*` (`Opera*`), compared
     /// by the case rule of the OS; the target is matched one level below the last component.
     At(At, &'static [&'static str]),
-    /// The known folder itself, for caches an override may move (`NUGET_HTTP_CACHE_PATH`); the
-    /// target gives only the kind.
+    /// The known folder itself, for caches an override may move (`GOCACHE`); the target gives
+    /// only the kind. Give such a rule a marker, so an odd override offers nothing.
     Is(At),
     /// Anywhere outside the zones of "anywhere" rules (installed programs, other users, AppData,
     /// home dot-folders, cloud folders, volumes without a recycle bin, ...).

@@ -1,126 +1,36 @@
 //! The Windows tables: crash dumps and error reports (rules 2–3), package caches (8), the
 //! "anywhere" rules (9 and "Check before deleting") and the info spots. Temp is in `temp`, the
-//! caches of Windows, drivers, browsers and apps (4–7) in `caches`; the package rules shared
-//! with macOS and Linux are here too.
+//! caches of Windows, drivers, browsers and apps (4–7) in `caches`.
 
 use std::sync::LazyLock;
 
+use super::build::{app, go, package, shared};
 use super::paths::At;
 use super::{Age, App, Marker, Mode, Place, Reason, Rule, Spot, SpotKind, Target, caches, temp};
 
-/// Folders below one place: (app that must be closed, known folder, path, names, reason).
-pub(crate) type Dirs = (
-    Option<&'static App>,
-    At,
-    &'static [&'static str],
-    &'static [&'static str],
-    Reason,
-);
-
-/// One Cleanup rule per folder name of each group.
-pub(crate) fn dirs(groups: &'static [Dirs]) -> impl Iterator<Item = Rule> {
-    groups.iter().flat_map(|&(app, at, path, names, reason)| {
-        names.iter().map(move |&name| Rule {
-            app,
-            ..Rule::new(
-                Place::At(at, path),
-                Target::Dir(name),
-                Mode::Cleanup,
-                reason,
-            )
-        })
-    })
-}
-
-/// A package cache, offered while its tool is closed, with the tool's own clean-up command.
-pub(crate) const fn package(
-    app: &'static App,
-    place: Place,
-    target: Target,
-    command: Option<&'static str>,
-) -> Rule {
-    Rule {
-        app: Some(app),
-        command,
-        ..Rule::new(place, target, Mode::Cleanup, Reason::PackageCache)
-    }
-}
-
-/// npm's content cache (never `_npx`: packages of running npx tools), pip's HTTP and wheel
-/// caches (by name, so an odd `PIP_CACHE_DIR` offers nothing else), Cargo's downloaded
-/// `.crate` archives (never `registry/src`, `git`, `bin`).
-pub(crate) fn shared(npm: &'static App, pip: &'static App, cargo: &'static App) -> [Rule; 5] {
-    let purge = Some("pip cache purge");
-    let pip_dir = |name| package(pip, Place::At(At::PipCache, &[]), Target::Dir(name), purge);
-    [
-        package(
-            npm,
-            Place::At(At::NpmCache, &[]),
-            Target::Dir("_cacache"),
-            Some("npm cache clean --force"),
-        ),
-        pip_dir("http"),
-        pip_dir("http-v2"),
-        pip_dir("wheels"),
-        package(
-            cargo,
-            Place::At(At::CargoHome, &["registry", "cache", "*"]),
-            Target::File("*.crate"),
-            None,
-        ),
-    ]
-}
-
-/// The Go build cache (`GOCACHE` or the default), recognised by the `README` Go writes into it.
-pub(crate) const fn go(app: &'static App) -> Rule {
-    Rule {
-        marker: Some(Marker::Inside("README")),
-        ..package(
-            app,
-            Place::Is(At::GoCache),
-            Target::Dir("*"),
-            Some("go clean -cache"),
-        )
-    }
-}
-
 // Tools: npm, pip and Gradle by command line, as `node.exe`, `python.exe` and `java.exe` also
 // run other programs all the time (Claude Code, MCP servers, IDEs).
-const NPM: App = App {
-    name: "npm",
-    exes: &[],
-    cmds: &[("node.exe", "npm-cli.js"), ("node.exe", "npx-cli.js")],
-};
-const YARN: App = App {
-    name: "Yarn",
-    exes: &[],
-    cmds: &[("node.exe", "yarn.js")],
-};
-const PIP: App = App {
-    name: "pip",
-    exes: &["pip*.exe"],
-    cmds: &[("python*.exe", "-m pip")],
-};
-const NUGET: App = App {
-    name: "NuGet",
-    exes: &["nuget.exe"],
-    cmds: &[],
-};
-const CARGO: App = App {
-    name: "Cargo",
-    exes: &["cargo.exe"],
-    cmds: &[],
-};
-const GO: App = App {
-    name: "Go",
-    exes: &["go.exe"],
-    cmds: &[],
-};
-const GRADLE: App = App {
-    name: "Gradle",
-    exes: &[],
-    cmds: &[("java.exe", "org.gradle")],
-};
+const NPM: App = app(
+    "npm",
+    &[],
+    &[("node.exe", "npm-cli.js"), ("node.exe", "npx-cli.js")],
+);
+const YARN: App = app("Yarn", &[], &[("node.exe", "yarn.js")]);
+const PIP: App = app("pip", &["pip*.exe"], &[("python*.exe", "-m pip")]);
+/// `dotnet restore`/`build` fill the HTTP cache too; other `dotnet.exe` (language servers)
+/// do not hide it.
+const NUGET: App = app(
+    "NuGet",
+    &["nuget.exe"],
+    &[
+        ("dotnet.exe", "restore"),
+        ("dotnet.exe", "build"),
+        ("dotnet.exe", "nuget"),
+    ],
+);
+const CARGO: App = app("Cargo", &["cargo.exe"], &[]);
+const GO: App = app("Go", &["go.exe"], &[]);
+const GRADLE: App = app("Gradle", &[], &[("java.exe", "org.gradle")]);
 
 /// Dumps per file: older than 14 days in Cleanup, younger ones in Review.
 const DUMPS: &[(At, &[&str], &str)] = &[
@@ -219,11 +129,12 @@ pub(crate) static WINDOWS: LazyLock<Vec<Rule>> = LazyLock::new(|| {
     rules.extend(caches::windows());
     rules.extend(shared(&NPM, &PIP, &CARGO));
     rules.extend([
-        // `NUGET_HTTP_CACHE_PATH` or the default; never `.nuget\packages`.
+        // Feed folders (`<sha1>$<source>`) of `NUGET_HTTP_CACHE_PATH` or the default, so an
+        // odd override offers nothing else; never `.nuget\packages`.
         package(
             &NUGET,
-            Place::Is(At::NugetHttp),
-            Target::Dir("*"),
+            Place::At(At::NugetHttp, &[]),
+            Target::Dir("*$*"),
             Some("dotnet nuget locals http-cache --clear"),
         ),
         // Yarn Classic only: Berry's cache (`Yarn\Berry`) may be the only copy (a spot).

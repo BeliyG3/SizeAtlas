@@ -1,5 +1,6 @@
 //! Info spots, found by path from the root rather than by the walk, so a never place does not
-//! hide them. An unreadable folder on the way to a spot is reported as `NoAccess`.
+//! hide them. A spot that could not be found or read for lack of access is reported as
+//! `NoAccess`.
 
 use super::paths::{components, fits};
 use super::{Context, Info, Spot, SpotKind};
@@ -18,18 +19,31 @@ pub(crate) fn find(tree: &Tree, ctx: &Context, spots: &[Spot]) -> Vec<Info> {
             {
                 continue;
             }
-            let mut level = vec![0u32];
+            let no_access = |ids: &[u32]| -> Vec<u32> {
+                let id = ids.iter().copied();
+                id.filter(|&at| tree.node(at).has(flags::ACCESS_ERROR))
+                    .collect()
+            };
+            let (mut level, mut on_the_way) = (vec![0u32], Vec::new());
             for mask in &comps[root.len()..] {
-                for &at in &level {
-                    if tree.node(at).has(flags::ACCESS_ERROR) && !unreadable.contains(&at) {
-                        unreadable.push(at);
-                    }
-                }
+                on_the_way.extend(no_access(&level));
                 level = level
                     .iter()
                     .flat_map(|&at| tree.children(at))
                     .filter(|&c| fits(mask, tree.name(c), fold))
                     .collect();
+            }
+            // Not found: an unreadable folder on the way may hide it. Found: only a spot that
+            // could not be read itself.
+            let hidden = if level.is_empty() {
+                on_the_way
+            } else {
+                no_access(&level)
+            };
+            for at in hidden {
+                if !unreadable.contains(&at) {
+                    unreadable.push(at);
+                }
             }
             out.extend(
                 level

@@ -1,28 +1,8 @@
 //! The Windows tables: dumps, error reports, caches (rules 2–7) and the info spots.
 
-use super::tests::{Item, ago, build, it, listed, win};
+use super::tests::{ago, build, it, listed, local, roaming, rows, sorted, win};
 use super::*;
 use crate::tree::flags;
-
-fn local(rest: &str) -> String {
-    format!(r"Users\u\AppData\Local\{rest}")
-}
-
-fn roaming(rest: &str) -> String {
-    format!(r"Users\u\AppData\Roaming\{rest}")
-}
-
-/// Paths of the Cleanup and Review rows of a tree below `C:\`, with the real tables.
-fn rows(items: Vec<Item>, ctx: &Context) -> (Vec<String>, Vec<String>) {
-    let tree = build(r"C:\", items);
-    listed(&tree, &tree.cleanup(ctx))
-}
-
-fn sorted<S: AsRef<str>>(paths: &[S]) -> Vec<String> {
-    let mut v: Vec<String> = paths.iter().map(|p| p.as_ref().to_owned()).collect();
-    v.sort();
-    v
-}
 
 #[test]
 fn a_browser_profile_cache_matches_only_next_to_preferences() {
@@ -189,6 +169,8 @@ fn system_files_update_folders_and_tool_stores_are_info_only() {
             it("hiberfil.sys"),
             it(r"Windows.old\Windows\f"),
             it(r"$WINDOWS.~BT\f"),
+            it(r"$WINDOWS.~WS\f"),
+            it(r"$WinREAgent\f"),
             it(r"Windows\SoftwareDistribution\Download\a\f"),
             it(delivery),
             it(local(r"uv\cache\archive-v0\f")),
@@ -217,6 +199,8 @@ fn system_files_update_folders_and_tool_stores_are_info_only() {
         "pnpm store prune",
         "previous",
         "previous",
+        "previous",
+        "previous",
         "update",
         "uv cache clean",
         "yarn cache clean",
@@ -241,5 +225,78 @@ fn an_unreadable_update_folder_is_reported() {
         })
         .collect();
     assert_eq!(paths, [r"C:\Windows\SoftwareDistribution"]);
+    assert!(out.approximate);
+}
+
+#[test]
+fn every_cache_row_of_the_tables_is_offered() {
+    let profile = |vendor: &str| local(&format!(r"{vendor}\User Data\Default"));
+    let vendors = [
+        r"Yandex\YandexBrowser",
+        r"BraveSoftware\Brave-Browser",
+        "Vivaldi",
+        r"Google\Chrome",
+    ];
+    let expected = [
+        roaming(r"Slack\Cache"),
+        roaming(r"Slack\Code Cache"),
+        roaming(r"Slack\GPUCache"),
+        roaming(r"Code\Cache"),
+        roaming(r"Code\CachedData"),
+        roaming(r"Code\Code Cache"),
+        roaming(r"Code\GPUCache"),
+        profile(vendors[0]) + r"\Cache",
+        profile(vendors[1]) + r"\Code Cache",
+        profile(vendors[2]) + r"\GPUCache",
+        profile(vendors[3]) + r"\DawnWebGPUCache",
+        profile(vendors[3]) + r"\DawnGraphiteCache",
+        local(r"Google\Chrome\User Data\GraphiteDawnCache"),
+        local(r"Steam\htmlcache\Cache"),
+        local(r"Steam\htmlcache\GPUCache"),
+        local(r"AMD\GLCache"),
+        local(r"NVIDIA\GLCache"),
+        r"Users\u\AppData\LocalLow\NVIDIA\PerDriverVersion\DXCache".into(),
+    ];
+    let mut items: Vec<_> = expected.iter().map(|r| it(format!(r"{r}\f"))).collect();
+    items.extend(vendors.map(|v| it(profile(v) + r"\Preferences")));
+    items.push(it(local(r"Google\Chrome\User Data\Local State")));
+    items.push(it(roaming(r"Code\User\settings.json")));
+    items.push(it(roaming(r"Code\Backups\1\f")));
+    assert_eq!(rows(items, &win()), (sorted(&expected), vec![]));
+}
+
+#[test]
+fn a_spot_is_reported_unreadable_only_when_it_cannot_be_read() {
+    let store = local(r"pnpm\store");
+    let found = build(
+        r"C:\",
+        vec![
+            it(local(r"pnpm\")).flags(flags::ACCESS_ERROR),
+            it(format!(r"{store}\v3\f")),
+        ],
+    );
+    let out = found.cleanup(&win());
+    assert!(
+        matches!(&out.info[..], [Info::ToolStore { .. }]),
+        "{:?}",
+        out.info
+    );
+    assert!(!out.approximate);
+
+    let unreadable = build(
+        r"C:\",
+        vec![it(format!(r"{store}\")).flags(flags::ACCESS_ERROR)],
+    );
+    let out = unreadable.cleanup(&win());
+    let no_access: Vec<&str> = out
+        .info
+        .iter()
+        .filter_map(|i| match i {
+            Info::NoAccess { path } => Some(path.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(no_access.len(), 1);
+    assert!(no_access[0].ends_with("store"), "{no_access:?}");
     assert!(out.approximate);
 }

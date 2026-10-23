@@ -1,23 +1,8 @@
 //! The Windows package rules (8), the "anywhere" rules (9, "Check before deleting") and the
 //! tools that count as running by their command line.
 
-use super::tests::{Item, build, it, listed, rel, win};
+use super::tests::{build, it, listed, local, rel, rows, sorted, win};
 use super::*;
-
-fn local(rest: &str) -> String {
-    format!(r"Users\u\AppData\Local\{rest}")
-}
-
-fn rows(items: Vec<Item>, ctx: &Context) -> (Vec<String>, Vec<String>) {
-    let tree = build(r"C:\", items);
-    listed(&tree, &tree.cleanup(ctx))
-}
-
-fn sorted<S: AsRef<str>>(paths: &[S]) -> Vec<String> {
-    let mut v: Vec<String> = paths.iter().map(|p| p.as_ref().to_owned()).collect();
-    v.sort();
-    v
-}
 
 #[test]
 fn npm_offers_its_content_cache_but_never_npx() {
@@ -32,28 +17,101 @@ fn npm_offers_its_content_cache_but_never_npx() {
     assert_eq!(cleanup, [local(r"npm-cache\_cacache")]);
 }
 
+/// A NuGet HTTP-cache feed folder, named `<sha1>$<source>`.
+const FEED: &str = r"670c1461c29885f9aa22c281d8b7da90845b38e4$ps_api.nuget.org_v3_index.json";
+
 #[test]
-fn a_nuget_cache_override_wins_over_the_default_place() {
+fn nuget_offers_its_feed_folders_where_an_override_puts_them() {
     let items = || {
         vec![
-            it(r"caches\nuget-http\a\f"),
-            it(local(r"NuGet\v3-cache\a\f")),
+            it(format!(r"caches\nuget-http\{FEED}\list_a.dat")),
+            it(local(&format!(r"NuGet\v3-cache\{FEED}\list_a.dat"))),
+            it(local(r"NuGet\v3-cache\notes\f")),
         ]
     };
-    assert_eq!(rows(items(), &win()).0, [local(r"NuGet\v3-cache")]);
+    assert_eq!(
+        rows(items(), &win()).0,
+        [local(&format!(r"NuGet\v3-cache\{FEED}"))]
+    );
     let mut ctx = win();
     ctx.known.env.nuget_http = Some(r"C:\caches\nuget-http".into());
-    assert_eq!(rows(items(), &ctx).0, [r"caches\nuget-http"]);
+    assert_eq!(
+        rows(items(), &ctx).0,
+        [format!(r"caches\nuget-http\{FEED}")]
+    );
 }
 
 #[test]
-fn a_go_cache_is_recognised_by_its_readme() {
+fn a_go_cache_is_recognised_by_its_trim_file() {
     let mut ctx = win();
     ctx.known.env.go_cache = Some(r"C:\work\gocache".into());
-    let without = vec![it(r"work\gocache\00\f"), it(local(r"go-build\README"))];
+    let without = vec![it(r"work\gocache\00\f"), it(r"work\gocache\README")];
     assert_eq!(rows(without, &ctx), (vec![], vec![]));
-    let with = vec![it(r"work\gocache\00\f"), it(r"work\gocache\README")];
+    let with = vec![it(r"work\gocache\00\f"), it(r"work\gocache\trim.txt")];
     assert_eq!(rows(with, &ctx).0, [r"work\gocache"]);
+}
+
+#[test]
+fn an_override_naming_a_broad_folder_offers_nothing_of_it() {
+    let mut ctx = win();
+    let dev = || Some(r"C:\Dev".to_string());
+    let env = &mut ctx.known.env;
+    (env.nuget_http, env.go_cache, env.pip_cache) = (dev(), dev(), dev());
+    let items = vec![
+        it(r"Dev\.git\HEAD"),
+        it(r"Dev\README"),
+        it(r"Dev\proj\src\Program.cs"),
+        it(r"Dev\proj\bin\Debug\app.dll"),
+        it(local(r"npm-cache\_cacache\f")),
+    ];
+    assert_eq!(
+        rows(items, &ctx),
+        (vec![local(r"npm-cache\_cacache")], vec![])
+    );
+}
+
+#[test]
+fn place_overrides_win_over_the_default_places() {
+    type Set = fn(&mut Overrides, String);
+    let cases: [(Set, &str, &str); 4] = [
+        (
+            |e, p| e.pip_cache = Some(p),
+            r"o\pip\wheels\f",
+            r"o\pip\wheels",
+        ),
+        (
+            |e, p| e.npm_cache = Some(p),
+            r"o\npm\_cacache\f",
+            r"o\npm\_cacache",
+        ),
+        (
+            |e, p| e.cargo_home = Some(p),
+            r"o\cargo\registry\cache\i\a.crate",
+            r"o\cargo\registry\cache\i\a.crate",
+        ),
+        (
+            |e, p| e.gradle_home = Some(p),
+            r"o\gradle\caches\f",
+            r"o\gradle\caches",
+        ),
+    ];
+    for (set, item, row) in cases {
+        let mut ctx = win();
+        let base = item.split('\\').take(2).collect::<Vec<_>>().join("\\");
+        set(&mut ctx.known.env, format!(r"C:\{base}"));
+        // The default places of all four tools: only the overridden one moves away.
+        let items = vec![
+            it(item),
+            it(local(r"pip\Cache\wheels\f")),
+            it(local(r"npm-cache\_cacache\f")),
+            it(r"Users\u\.cargo\registry\cache\i\b.crate"),
+            it(r"Users\u\.gradle\caches\f"),
+        ];
+        let (cleanup, review) = rows(items, &ctx);
+        let all = [cleanup, review].concat();
+        assert_eq!(all.len(), 4, "{item}: {all:?}");
+        assert!(all.iter().any(|r| r == row), "{item}: {all:?}");
+    }
 }
 
 #[test]
@@ -65,7 +123,7 @@ fn package_caches_offer_only_what_the_tool_rebuilds() {
         it(r"Users\u\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde\lib.rs"),
         it(r"Users\u\.cargo\bin\cargo.exe"),
         it(local(r"Yarn\Cache\v6\npm-a\f")),
-        it(local(r"go-build\README")),
+        it(local(r"go-build\trim.txt")),
         it(local(r"go-build\00\f")),
         it(r"Users\u\.gradle\caches\modules-2\f"),
         it(r"Users\u\.gradle\wrapper\dists\f"),
@@ -170,4 +228,31 @@ fn tools_count_as_running_by_their_command_line() {
     assert_eq!(busy.0, 0);
     assert_eq!(busy.1.len(), 3);
     assert_eq!(run(&[("pip3.exe", "pip3 download x")]).0, 2);
+}
+
+#[test]
+fn dotnet_restoring_counts_as_nuget_running() {
+    let tree = build(
+        r"C:\",
+        vec![it(local(&format!(r"NuGet\v3-cache\{FEED}\f")))],
+    );
+    let run = |cmd: &str| {
+        let mut ctx = win();
+        ctx.running = vec![Running {
+            exe: "dotnet.exe".into(),
+            cmd: cmd.into(),
+        }];
+        tree.cleanup(&ctx).cleanup.len()
+    };
+    assert_eq!(
+        run(r"dotnet c:\ls\microsoft.codeanalysis.languageserver.dll"),
+        1
+    );
+    for cmd in [
+        "dotnet restore",
+        "dotnet build -c release",
+        "dotnet nuget push x.nupkg",
+    ] {
+        assert_eq!(run(cmd), 0, "{cmd}");
+    }
 }

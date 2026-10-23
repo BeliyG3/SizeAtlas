@@ -7,17 +7,9 @@
 
 use std::sync::LazyLock;
 
+use super::build::{Dirs, app, dirs, go, package, shared};
 use super::paths::At;
-use super::rules::{Dirs, dirs, go, package, shared};
 use super::{Age, App, Mode, Place, Reason, Rule, Target};
-
-const fn app(
-    name: &'static str,
-    exes: &'static [&'static str],
-    cmds: &'static [(&'static str, &'static str)],
-) -> App {
-    App { name, exes, cmds }
-}
 
 const NPM: App = app(
     "npm",

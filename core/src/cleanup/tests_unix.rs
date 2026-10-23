@@ -1,6 +1,6 @@
 //! The macOS and Linux tables.
 
-use super::tests::{ago, build, it, listed};
+use super::tests::{ago, build, it, rows};
 use super::*;
 
 fn ctx(os: Os, home: &str) -> Context {
@@ -16,25 +16,13 @@ fn ctx(os: Os, home: &str) -> Context {
     }
 }
 
-/// Paths of the Cleanup and Review rows of a tree below `/` holding `items`, joined with `/`.
-fn rows(items: Vec<tests::Item>, ctx: &Context) -> (Vec<String>, Vec<String>) {
-    let tree = build("/", items);
-    let (cleanup, review) = listed(&tree, &tree.cleanup(ctx));
-    let slash = |v: Vec<String>| {
-        let mut v: Vec<String> = v.into_iter().map(|p| p.replace('\\', "/")).collect();
-        v.sort();
-        v
-    };
-    (slash(cleanup), slash(review))
-}
-
 #[test]
 fn macos_offers_only_its_listed_caches() {
     let lib = |rest: &str| format!("Users/u/Library/{rest}");
     let items = vec![
         it(lib("Caches/pip/http-v2/a/f")),
         it(lib("Caches/Homebrew/downloads/f")),
-        it(lib("Caches/go-build/README")),
+        it(lib("Caches/go-build/trim.txt")),
         it(lib("Caches/com.microsoft.VSCode.ShipIt/f")),
         it(lib("Caches/Google/Chrome/Default/Cache/f")),
         it(lib("Caches/Google/Chrome/Default/Code Cache/f")),
@@ -74,8 +62,13 @@ fn macos_never_offers_apple_caches_or_other_apps() {
     let items = vec![
         it("Users/u/Library/Caches/com.apple.x/f"),
         it("Users/u/Library/Caches/com.other.y/f"),
+        it("Users/u/Library/Caches/pip/http/f"),
     ];
-    assert_eq!(rows(items, &ctx(Os::Mac, "/Users/u")), (vec![], vec![]));
+    let control = "Users/u/Library/Caches/pip/http";
+    assert_eq!(
+        rows(items, &ctx(Os::Mac, "/Users/u")),
+        (vec![control.into()], vec![])
+    );
 }
 
 #[test]

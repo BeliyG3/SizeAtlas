@@ -2,29 +2,21 @@
 //! browser caches and the caches of Electron apps and Steam. Browsers and apps are offered only
 //! while they are closed.
 
+use super::build::{Dirs, app, dirs};
 use super::paths::At;
-use super::rules::{Dirs, dirs};
 use super::{App, Marker, Mode, Place, Reason, Rule, Target};
 
-const fn app(name: &'static str, exes: &'static [&'static str]) -> App {
-    App {
-        name,
-        exes,
-        cmds: &[],
-    }
-}
-
-const CHROME: App = app("Google Chrome", &["chrome.exe"]);
-const EDGE: App = app("Microsoft Edge", &["msedge.exe"]);
-const YANDEX: App = app("Yandex Browser", &["browser.exe"]);
-const BRAVE: App = app("Brave", &["brave.exe"]);
-const VIVALDI: App = app("Vivaldi", &["vivaldi.exe"]);
-const OPERA: App = app("Opera", &["opera*.exe"]);
-const FIREFOX: App = app("Firefox", &["firefox.exe"]);
-const DISCORD: App = app("Discord", &["discord*.exe"]);
-const SLACK: App = app("Slack", &["slack.exe"]);
-const STEAM: App = app("Steam", &["steam.exe", "steamwebhelper.exe"]);
-const VSCODE: App = app("Visual Studio Code", &["code.exe"]);
+const CHROME: App = app("Google Chrome", &["chrome.exe"], &[]);
+const EDGE: App = app("Microsoft Edge", &["msedge.exe"], &[]);
+const YANDEX: App = app("Yandex Browser", &["browser.exe"], &[]);
+const BRAVE: App = app("Brave", &["brave.exe"], &[]);
+const VIVALDI: App = app("Vivaldi", &["vivaldi.exe"], &[]);
+const OPERA: App = app("Opera", &["opera*.exe"], &[]);
+const FIREFOX: App = app("Firefox", &["firefox.exe"], &[]);
+const DISCORD: App = app("Discord", &["discord*.exe"], &[]);
+const SLACK: App = app("Slack", &["slack.exe"], &[]);
+const STEAM: App = app("Steam", &["steam.exe", "steamwebhelper.exe"], &[]);
+const VSCODE: App = app("Visual Studio Code", &["code.exe"], &[]);
 
 /// Profiles of Chromium browsers below `%LOCALAPPDATA%`: `...\User Data\<profile>`.
 const CHROMIUM: &[(&App, &[&str])] = &[
