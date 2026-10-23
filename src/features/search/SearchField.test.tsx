@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { FiltersButton } from "./FiltersButton";
 import { SearchField } from "./SearchField";
 
 vi.mock("../../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
@@ -34,6 +35,9 @@ function setup(value: string) {
   const clear = find(tree, (p) => p["aria-label"] === "search.clear")[0]?.props as
     { onClick: () => void } | undefined;
   const role = (tree.props as { role?: string }).role;
+  const filters = find(tree, (p) => p.value === value && p.onChange === onChange).find(
+    (e) => e.type === FiltersButton,
+  );
   return {
     field,
     clear,
@@ -41,6 +45,7 @@ function setup(value: string) {
     onChange,
     onCommit,
     role,
+    filters,
     dir: field.dir,
     maxLength: field.maxLength,
   };
@@ -138,5 +143,10 @@ describe("SearchField", () => {
 
   it("has no clear button while the field is empty", () => {
     expect(setup("").clear).toBeUndefined();
+  });
+
+  it("has the filters button, reading and writing the same text", () => {
+    const { filters, onChange } = setup("abc type:video");
+    expect(filters?.props).toEqual({ value: "abc type:video", onChange });
   });
 });

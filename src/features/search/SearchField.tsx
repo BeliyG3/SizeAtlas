@@ -1,6 +1,7 @@
 import type { KeyboardEvent, RefObject } from "react";
 import { useT } from "../../i18n/react";
 import { Icon } from "../icons/Icon";
+import { FiltersButton } from "./FiltersButton";
 import "./search.css";
 
 interface Props {
@@ -13,7 +14,7 @@ interface Props {
   inputRef: RefObject<HTMLInputElement | null>;
 }
 
-/** The toolbar's search field: a magnifier, the text and a button that clears it. */
+/** The toolbar's search field: a magnifier, the text, a button that clears it and one for the filters. */
 export function SearchField({ value, onChange, onCommit, inputRef }: Props) {
   const { t } = useT();
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -64,6 +65,7 @@ export function SearchField({ value, onChange, onCommit, inputRef }: Props) {
           <Icon name="cancel" />
         </button>
       )}
+      <FiltersButton value={value} onChange={onChange} />
     </div>
   );
 }
