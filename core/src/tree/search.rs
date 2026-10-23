@@ -54,11 +54,16 @@ impl Query {
         let mut words = Vec::new();
         let mut alternatives = Vec::new();
         let mut filters = Filters::default();
-        for word in text.split_whitespace() {
-            let lower = word.to_lowercase();
-            if filters.take(&lower) {
+        let lowered: Vec<String> = text.split_whitespace().map(str::to_lowercase).collect();
+        let mut at = 0;
+        while at < lowered.len() {
+            let lower = lowered[at].clone();
+            let taken = filters.take(&lower, lowered.get(at + 1).map(String::as_str));
+            if taken > 0 {
+                at += taken;
                 continue;
             }
+            at += 1;
             if lower.contains(['*', '?']) {
                 alternatives.push(Alternative::Mask(Mask {
                     ascii: lower.is_ascii().then(|| lower.as_bytes().to_vec()),
@@ -222,6 +227,6 @@ impl Tree {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
-mod tests_filtered;
-#[cfg(test)]
 mod tests_filters;
+#[cfg(test)]
+mod tests_matching;

@@ -40,15 +40,24 @@ enum Condition {
 }
 
 impl Filters {
-    /// Takes the word in if it is a condition (`lower` is lowercase), `false` if not.
-    pub(super) fn take(&mut self, lower: &str) -> bool {
-        let Some(conditions) = parse_word(lower) else {
-            return false;
+    /// Takes the word in if it is a condition (`lower` is lowercase) and says how many words
+    /// that took: 0 for none, 2 when the word is a size without a unit and `next` is the
+    /// unit (`>1 GB`).
+    pub(super) fn take(&mut self, lower: &str, next: Option<&str>) -> usize {
+        let spaced = next
+            .filter(|n| UNITS.iter().any(|(u, _)| u == n))
+            .and_then(|unit| parse_word(&format!("{lower}{unit}")));
+        let (conditions, taken) = match spaced {
+            Some(conditions) => (conditions, 2),
+            None => match parse_word(lower) {
+                Some(conditions) => (conditions, 1),
+                None => return 0,
+            },
         };
         for condition in conditions {
             self.add(condition);
         }
-        true
+        taken
     }
 
     /// Repeated conditions of one kind tighten each other, types add up, the last of
@@ -130,14 +139,20 @@ fn parse_word(word: &str) -> Option<Vec<Condition>> {
         return Some(vec![Condition::Max(size(rest)?.checked_sub(1)?)]);
     }
     let (from, to) = word.split_once("..")?;
-    let (from, to) = (size(from)?, size(to)?);
-    (from <= to).then(|| vec![Condition::Min(from), Condition::Max(to)])
+    let ((from, from_unit), (to, to_unit)) = (sized(from)?, sized(to)?);
+    // Two bare numbers (`2019..2020`) are more likely a name than a range of bytes.
+    (from <= to && (from_unit || to_unit)).then(|| vec![Condition::Min(from), Condition::Max(to)])
 }
 
 /// `30d`, `2w`, `6m` (30 days), `1y` (365 days) as days.
 fn days(text: &str) -> Option<u32> {
     let unit = text.chars().last()?;
-    let count: u32 = text[..text.len() - unit.len_utf8()].parse().ok()?;
+    let count = &text[..text.len() - unit.len_utf8()];
+    // `parse` alone would take a leading `+`.
+    if count.is_empty() || !count.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let count: u32 = count.parse().ok()?;
     let per = match unit {
         'd' => 1,
         'w' => 7,
@@ -162,20 +177,36 @@ fn category(text: &str) -> Option<Category> {
     })
 }
 
-/// Bytes of `1`, `1.5GB`, `1,5гб`: a number with a `.` or `,` fraction and an optional unit
-/// (base 1024, Latin or Russian). Rounded down, capped at `u64::MAX`.
+/// Unit words (lowercase) and what they are worth: base 1024, Latin or Russian.
+const UNITS: [(&str, u128); 10] = [
+    ("b", 1),
+    ("б", 1),
+    ("kb", 1 << 10),
+    ("кб", 1 << 10),
+    ("mb", 1 << 20),
+    ("мб", 1 << 20),
+    ("gb", 1 << 30),
+    ("гб", 1 << 30),
+    ("tb", 1 << 40),
+    ("тб", 1 << 40),
+];
+
 fn size(text: &str) -> Option<u64> {
+    sized(text).map(|(bytes, _)| bytes)
+}
+
+/// Bytes of `1`, `1.5GB`, `1,5гб`: a number with a `.` or `,` fraction and an optional unit,
+/// and whether there was a unit. Rounded down, capped at `u64::MAX`; only a number of 39 or
+/// so digits is no size at all.
+fn sized(text: &str) -> Option<(u64, bool)> {
     let end = text
         .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == ','))
         .unwrap_or(text.len());
     let (number, unit) = text.split_at(end);
-    let per: u128 = match unit {
-        "" | "b" | "б" => 1,
-        "kb" | "кб" => 1 << 10,
-        "mb" | "мб" => 1 << 20,
-        "gb" | "гб" => 1 << 30,
-        "tb" | "тб" => 1 << 40,
-        _ => return None,
+    let per = match UNITS.iter().find(|(u, _)| *u == unit) {
+        Some(&(_, per)) => per,
+        None if unit.is_empty() => 1,
+        None => return None,
     };
     let (whole, fraction) = number.split_once(['.', ',']).unwrap_or((number, ""));
     let digits = |s: &str| s.bytes().all(|b| b.is_ascii_digit());
@@ -187,12 +218,12 @@ fn size(text: &str) -> Option<u64> {
     {
         return None;
     }
-    let mut bytes = whole.parse::<u128>().ok()?.checked_mul(per)?;
+    let mut bytes = whole.parse::<u128>().ok()?.saturating_mul(per);
     // 18 digits of the fraction are plenty for a size.
     let fraction = &fraction[..fraction.len().min(18)];
     if !fraction.is_empty() {
         let scale = 10u128.pow(fraction.len() as u32);
-        bytes += fraction.parse::<u128>().ok()? * per / scale;
+        bytes = bytes.saturating_add(fraction.parse::<u128>().ok()? * per / scale);
     }
-    Some(u64::try_from(bytes).unwrap_or(u64::MAX))
+    Some((u64::try_from(bytes).unwrap_or(u64::MAX), !unit.is_empty()))
 }

@@ -1,4 +1,4 @@
-//! Condition words: how they parse and how they filter a built tree.
+//! Condition words: how they parse (`tests_matching` has them filter a built tree).
 
 use super::*;
 use crate::categories::Category;
@@ -74,8 +74,82 @@ fn a_huge_size_is_capped_not_wrapped() {
     assert_eq!(filters(">=99999999999999TB").min_size, Some(u64::MAX));
     assert_eq!(filters("<=18446744073709551616").max_size, Some(u64::MAX));
     assert_eq!(filters(">18446744073709551615").min_size, Some(u64::MAX));
-    // Too many digits even for the arithmetic: a name word.
+    // The same cap with any unit, however many digits (29 overflow a u128 times 2^40).
+    for unit in ["", "KB", "GB", "TB", "тб"] {
+        let text = format!(">={}{unit}", "9".repeat(29));
+        assert_eq!(filters(&text).min_size, Some(u64::MAX), "{text}");
+        let text = format!(">={}.5{unit}", "9".repeat(38));
+        assert_eq!(filters(&text).min_size, Some(u64::MAX), "{text}");
+    }
+    // Only a number too long for any arithmetic is no size.
     is_name_word(&format!(">{}", "9".repeat(50)));
+    is_name_word(&format!(">{}TB", "9".repeat(50)));
+}
+
+#[test]
+fn a_unit_may_stand_one_space_after_the_number() {
+    let f = filters(">1 GB");
+    assert_eq!(f.min_size, Some(GB + 1));
+    assert_eq!(filters(">=1,5 ГБ").min_size, Some(GB + GB / 2));
+    assert_eq!(filters("<=500 Mb").max_size, Some(500 * MB));
+    assert_eq!(filters(">1 kb").min_size, Some(KB + 1));
+    assert_eq!(filters(">10 b").min_size, Some(11));
+    let f = filters("100MB..1 GB");
+    assert_eq!((f.min_size, f.max_size), (Some(100 * MB), Some(GB)));
+    let f = filters("100..1 gb");
+    assert_eq!((f.min_size, f.max_size), (Some(100), Some(GB)));
+    // Both words are the condition: no name word is left, and the other words stay.
+    let query = Query::parse("photo >1 GB type:video").unwrap();
+    assert_eq!(query.words, ["photo"]);
+    assert_eq!(query.filters().min_size, Some(GB + 1));
+    assert_eq!(query.filters().types, [Category::Video]);
+    assert!(Query::parse(">1 GB").unwrap().words.is_empty());
+}
+
+#[test]
+fn only_a_bare_number_takes_the_next_word_as_its_unit() {
+    let split = |text: &str| {
+        let query = Query::parse(text).unwrap();
+        (query.filters().min_size, query.words.clone())
+    };
+    // Not a unit: a name word next to `>1` bytes.
+    assert_eq!(split(">1 gbx"), (Some(2), vec!["gbx".to_owned()]));
+    assert_eq!(split(">1 photo"), (Some(2), vec!["photo".to_owned()]));
+    // A size with a unit already keeps the next word.
+    assert_eq!(split(">1GB gb"), (Some(GB + 1), vec!["gb".to_owned()]));
+    // The space goes after the number, not after the operator, and `100 MB..1GB` is not one.
+    for text in ["> 1GB", "> 1 GB", "< 10 MB"] {
+        let query = Query::parse(text).unwrap();
+        assert_eq!(query.filters(), &Filters::default(), "{text}");
+    }
+    let query = Query::parse("100 MB..1GB").unwrap();
+    assert_eq!(query.filters().max_size, None);
+    assert_eq!(query.words, ["100", "mb..1gb"]);
+    // Only sizes: a day count or a type is not a number to give a unit to.
+    let query = Query::parse("older:1 b").unwrap();
+    assert_eq!(query.words, ["older:1", "b"]);
+    // A lone unit is a name word.
+    assert_eq!(Query::parse("gb").unwrap().words, ["gb"]);
+}
+
+#[test]
+fn a_range_needs_a_unit_on_one_side() {
+    for text in [
+        "100MB..1GB",
+        "100..1GB",
+        "100KB..1000000",
+        "5b..9",
+        "0..1KB",
+    ] {
+        let f = filters(text);
+        assert!(f.min_size.is_some() && f.max_size.is_some(), "{text}");
+    }
+    // Two bare numbers are a name (a year range, a version), as they were.
+    for text in ["2019..2020", "1..2", "0..0", "1,5..2,5", "1.5..2"] {
+        is_name_word(text);
+    }
+    // A unit given after a space is a unit.
+    assert!(filters("1..2 mb").min_size.is_some());
 }
 
 #[test]
@@ -142,11 +216,18 @@ fn repeated_conditions_tighten_each_other() {
 
 #[test]
 fn a_half_typed_or_wrong_condition_is_a_name_word() {
+    // Inputs that start with a dot (`..`, `..1GB`) are extensions, not name words, and skip
+    // the check of `words` below.
     for text in [
         ">",
         "<",
         ">=",
         "<=",
+        ">+5",
+        ">+1GB",
+        "older:+5d",
+        "newer:+1y",
+        "older:++5d",
         ">1.",
         ">.5",
         ">1.2.3",
@@ -186,7 +267,6 @@ fn a_half_typed_or_wrong_condition_is_a_name_word() {
         "File",
         "files:",
         "folders1",
-        ">=",
     ] {
         let query = Query::parse(text).unwrap();
         assert_eq!(query.filters(), &Filters::default(), "{text}");
