@@ -180,13 +180,41 @@ describe("ContentsRow", () => {
         restorable: null,
       });
       expect(cell).toContain(
-        '<code dir="ltr" title="Deletes at once, without the Recycle Bin">npm cache clean --force</code>',
+        '<code dir="ltr" title="Deletes at once, without the trash">npm cache clean --force</code>',
       );
     });
 
     it("is empty for a row of another list", () => {
       expect(reasonCell(null)).toBe('<span role="gridcell" data-col="reason"></span>');
     });
+  });
+
+  it.each([
+    ["trash", "moving…"],
+    ["purge", "deleting…"],
+  ] as const)("dims a row that goes (%s) and says how after its name", (moving, tag) => {
+    const html = renderToStaticMarkup(
+      <I18nProvider>
+        <ContentsRow
+          index={0}
+          item={{ ...item, name: "old" }}
+          unaccounted={0}
+          folderSize={10}
+          detail={undefined}
+          columns={["name"]}
+          template=""
+          width={0}
+          selected={false}
+          cursor={false}
+          moving={moving}
+          onClick={none}
+          onOpen={none}
+          onMenu={none}
+        />
+      </I18nProvider>,
+    );
+    expect(html).toMatch(/class="crow moving"/);
+    expect(html).toContain(`>old</span><span class="tag">${tag}</span>`);
   });
 
   it("dims a deleted folder and says it is deleted after its name", () => {

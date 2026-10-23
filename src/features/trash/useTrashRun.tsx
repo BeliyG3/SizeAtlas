@@ -38,7 +38,7 @@ export function useTrashRun(onError: (e: unknown) => void) {
   const start = (next: TrashRun) => {
     setProgress(null);
     setRun({ ...next, stopping: false });
-    setMoving({ generation: next.generation, ids: new Set(next.ids) });
+    setMoving({ generation: next.generation, ids: new Set(next.ids), purge: next.purge });
   };
   const end = () => {
     setRun(null);

@@ -29,8 +29,8 @@ interface Props {
   folderPath?: string;
   selected: boolean;
   cursor: boolean;
-  /** It is being moved to the trash: dimmed, with a tag. */
-  moving?: boolean;
+  /** It is being moved to the trash, or deleted for good: dimmed, with a tag that says which. */
+  moving?: "trash" | "purge";
   /** `how`: what Ctrl and Shift make of the click (see `markHow`). */
   onClick: (index: number, how: MarkHow) => void;
   onOpen: (index: number) => void;
@@ -50,7 +50,7 @@ export const ContentsRow = memo(function ContentsRow({
   folderPath = "",
   selected,
   cursor,
-  moving = false,
+  moving,
   onClick,
   onOpen,
   onMenu,
@@ -140,7 +140,9 @@ export const ContentsRow = memo(function ContentsRow({
           {item.name}
         </span>
         {deleted && <span className="tag">{t("change.deleted")}</span>}
-        {moving && <span className="tag">{t("trash.moving")}</span>}
+        {moving && (
+          <span className="tag">{t(moving === "purge" ? "purge.deleting" : "trash.moving")}</span>
+        )}
         {item.scanning && <ScanMark status="scanning" files={undefined} />}
         {waiting && <span className="tag">{t("tree.pending")}</span>}
         {item.accessError && <span className="tag">{t("tree.noAccess")}</span>}

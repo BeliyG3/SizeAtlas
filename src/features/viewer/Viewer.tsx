@@ -45,8 +45,11 @@ interface Props {
   onTrash: (generation: number, ids: readonly number[], cleanup?: boolean) => void;
   /** Shift+Delete in a clean-up list: asks to delete `ids` for good. */
   onPurge: (generation: number, ids: readonly number[]) => void;
-  /** The marked rows of the table, whenever they change; `cleanup`: of a clean-up list. */
-  onMarks: (ids: readonly number[], cleanup?: boolean) => void;
+  /**
+   * The marked rows of the table, whenever they change; `cleanup`: of a clean-up list, whose
+   * `selectedRow` is the selected item when it is one of its rows.
+   */
+  onMarks: (ids: readonly number[], cleanup?: boolean, selectedRow?: number | null) => void;
   /** Stable handler for failed requests. */
   onFail: (e: unknown) => void;
 }

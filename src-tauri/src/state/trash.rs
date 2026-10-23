@@ -138,6 +138,7 @@ impl AppState {
         Ok(TrashPreviewDto {
             count: plan.items.len() as u32,
             size: plan.items.iter().map(|i| i.size).sum(),
+            bin_size: plan.items.iter().map(|i| i.size.max(i.len)).sum(),
             scanned_at: plan.scanned_at,
             paths: plan
                 .items

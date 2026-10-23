@@ -264,6 +264,8 @@ export interface TrashPreview {
   paths: string[];
   /** Bytes the Recycle Bin of the root's drive can still take before it drops old files; null where unknown. */
   binFree: number | null;
+  /** What the Recycle Bin counts for the items: per item the larger of the size on disk and the length. */
+  binSize: number;
 }
 
 /** What a trash request did. */

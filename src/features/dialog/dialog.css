@@ -52,3 +52,8 @@
 .confirm button.danger:hover:not(:disabled) {
   filter: brightness(1.1);
 }
+
+/* Not yet pressable (the second question waits a moment for a fresh click). */
+.confirm button.danger:disabled {
+  opacity: 0.5;
+}

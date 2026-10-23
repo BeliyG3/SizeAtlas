@@ -9,6 +9,8 @@ export interface DialogAction {
   danger?: boolean;
   /** The dialog stays open: `run` puts the next question in it. */
   keepOpen?: boolean;
+  /** Not yet: the button is disabled, and a press does nothing (the dialog stays open). */
+  disabled?: boolean;
 }
 
 interface Props {
@@ -19,11 +21,13 @@ interface Props {
    * `focusCancel`), Enter presses it.
    */
   actions: readonly DialogAction[];
-  /**
-   * The focus starts on Cancel: for a question whose main action is hard to take back. It goes
-   * back there when the dialog asks its next question (another main action).
-   */
+  /** The focus starts on Cancel: for a question whose main action is hard to take back. */
   focusCancel?: boolean;
+  /**
+   * Which question the dialog asks, for a dialog that asks several in turn: at each new one the
+   * focus goes back to Cancel (with `focusCancel`).
+   */
+  question?: number;
   /** A key held down (Enter, Space) presses no button: it may still be down from the question before. */
   ignoreHeldKeys?: boolean;
   /** Label of the last button, which only closes the dialog (default: Cancel). */
@@ -43,6 +47,7 @@ export function ConfirmDialog({
   actions,
   cancelLabel,
   focusCancel,
+  question,
   ignoreHeldKeys,
   onClose,
   icon,
@@ -69,12 +74,12 @@ export function ConfirmDialog({
     };
   }, [previous]);
   // After `showModal`, which focused the main button; again for each new question.
-  const main = actions[0]?.label;
   useLayoutEffect(() => {
     if (focusCancel) cancel.current?.focus();
-  }, [focusCancel, main]);
+  }, [focusCancel, question]);
 
   const press = (action?: DialogAction) => {
+    if (action?.disabled) return;
     action?.run();
     if (!action?.keepOpen) onClose();
   };
@@ -103,6 +108,7 @@ export function ConfirmDialog({
           <button
             key={a.label}
             className={a.danger ? "danger" : i === 0 ? "primary" : undefined}
+            disabled={a.disabled}
             onClick={() => press(a)}
           >
             {a.label}

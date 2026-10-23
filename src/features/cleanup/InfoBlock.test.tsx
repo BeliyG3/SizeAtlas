@@ -51,7 +51,7 @@ describe("the facts under the total", () => {
     const html = render(lines);
     expect(html).toContain("<code");
     expect(html).toContain("uv cache clean");
-    expect(html).toContain("Deletes at once, without the Recycle Bin");
+    expect(html).toContain("Deletes at once, without the trash");
     expect(html).toContain("Copy clean-up command");
   });
 

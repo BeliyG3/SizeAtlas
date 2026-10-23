@@ -4,10 +4,10 @@ import type { TrashPreview } from "../../api/types";
 import { ConfirmDialog } from "../dialog/ConfirmDialog";
 import { PurgeDialog } from "./PurgeDialog";
 
-// A minimal hook runtime: state and refs survive explicit renders, layout effects run when their
-// dependencies change, without a DOM.
+// A minimal hook runtime: state and refs survive explicit renders, effects run (after the cleanup
+// of their last run) when their dependencies change, without a DOM.
 const rt = vi.hoisted(() => {
-  type Slot = { value?: unknown; deps?: readonly unknown[] };
+  type Slot = { value?: unknown; deps?: readonly unknown[]; cleanup?: unknown };
   const state = { slots: [] as Slot[], at: 0, queue: [] as (() => void)[] };
   const slot = (): Slot => (state.slots[state.at++] ??= {});
   const changed = (a?: readonly unknown[], b?: readonly unknown[]) =>
@@ -26,23 +26,34 @@ const rt = vi.hoisted(() => {
         return s.value;
       },
       useId: () => "id",
-      useLayoutEffect: (run: () => void, deps?: readonly unknown[]) => {
-        const s = slot();
-        if (!changed(s.deps, deps)) return;
-        s.deps = deps;
-        state.queue.push(run);
-      },
+      useLayoutEffect: (run: () => unknown, deps?: readonly unknown[]) => effect(run, deps),
+      useEffect: (run: () => unknown, deps?: readonly unknown[]) => effect(run, deps),
     },
   };
+  function effect(run: () => unknown, deps?: readonly unknown[]) {
+    const s = slot();
+    if (!changed(s.deps, deps)) return;
+    s.deps = deps;
+    state.queue.push(() => {
+      if (typeof s.cleanup === "function") (s.cleanup as () => void)();
+      s.cleanup = run();
+    });
+  }
 });
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
   ...rt.hooks,
 }));
+/** A language may give both red buttons the same words. */
+const words = vi.hoisted(() => ({ same: false }));
 vi.mock("../../i18n/react", () => ({
   useT: () => ({
     t: (key: string, params?: Record<string, unknown>) =>
-      params ? `${key} ${JSON.stringify(params)}` : key,
+      params
+        ? `${key} ${JSON.stringify(params)}`
+        : words.same && key === "purge.confirmAgain"
+          ? "purge.confirm"
+          : key,
     lang: "en",
   }),
 }));
@@ -52,6 +63,7 @@ type Dialog = ReactElement<Parameters<typeof ConfirmDialog>[0]>;
 type Button = ReactElement<{
   onClick: () => void;
   className?: string;
+  disabled?: boolean;
   children: ReactNode;
   ref?: unknown;
 }>;
@@ -61,8 +73,11 @@ const preview: TrashPreview = {
   size: 300,
   scannedAt: 1,
   paths: ["/c/a", "/c/b"],
+  binSize: 0,
   binFree: null,
 };
+/** Past the time the second red button waits for (the system's double-click time). */
+const ARMED_MS = 600;
 const onConfirm = vi.fn();
 const onClose = vi.fn();
 const focus = vi.fn();
@@ -98,6 +113,8 @@ const click = (button: Button) => button.props.onClick();
 const escape = (box: ReactElement) => (box.props as { onClose: () => void }).onClose();
 
 beforeEach(() => {
+  words.same = false;
+  vi.useFakeTimers();
   vi.stubGlobal("document", { activeElement: null });
   rt.state.slots = [];
   onConfirm.mockReset();
@@ -105,7 +122,10 @@ beforeEach(() => {
   focus.mockReset();
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe("PurgeDialog", () => {
   it("asks first with the paths, the total and that it cannot be undone, in red", () => {
@@ -123,15 +143,43 @@ describe("PurgeDialog", () => {
     expect(onConfirm).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
 
-    const { dialog, main } = render();
+    const { dialog } = render();
     expect(String(dialog.props.message)).toBe(
       'purge.askAgain {"count":2,"items":"2","size":"300 B"}',
     );
+    vi.advanceTimersByTime(ARMED_MS);
+    const { main } = render();
     expect(main.props.children).toBe("purge.confirmAgain");
     expect(main.props.className).toBe("danger");
     click(main);
     expect(onConfirm).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("takes no click on the second red button right after it appears: a double click is one answer", () => {
+    click(render().main);
+    render();
+    vi.advanceTimersByTime(100);
+    const early = render();
+    expect(early.main.props.disabled).toBe(true);
+    click(early.main);
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(500);
+    const later = render();
+    expect(later.main.props.disabled).toBeFalsy();
+    click(later.main);
+    expect(onConfirm).toHaveBeenCalledOnce();
+  });
+
+  it("lets Cancel close the second question at once", () => {
+    click(render().main);
+    render();
+    vi.advanceTimersByTime(100);
+    click(render().cancel);
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 
   it("deletes nothing on Cancel or Escape at either question", () => {
@@ -151,6 +199,14 @@ describe("PurgeDialog", () => {
     click(first.main);
     const second = render();
     expect(second.dialog.props.focusCancel).toBe(true);
+    expect(focus).toHaveBeenCalledTimes(2);
+  });
+
+  it("puts the focus on Cancel at the second question even when both buttons read the same", () => {
+    words.same = true;
+    click(render().main);
+    expect(focus).toHaveBeenCalledOnce();
+    render();
     expect(focus).toHaveBeenCalledTimes(2);
   });
 

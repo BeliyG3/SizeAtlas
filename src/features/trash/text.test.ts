@@ -19,7 +19,14 @@ const errorText = (e: unknown) => `error ${JSON.stringify(e)}`;
 describe("trashMessage", () => {
   it("lists the paths it got and counts the rest", () => {
     const paths = Array.from({ length: 10 }, (_, i) => `C:\\a\\${i}`);
-    const preview: TrashPreview = { count: 1200, size: 300, scannedAt: 5, paths, binFree: null };
+    const preview: TrashPreview = {
+      count: 1200,
+      size: 300,
+      scannedAt: 5,
+      paths,
+      binSize: 0,
+      binFree: null,
+    };
     expect(trashMessage(preview, t, size, date, count).split("\n")).toEqual([
       "Move 1,200 items to the trash?",
       ...paths,
@@ -34,6 +41,7 @@ describe("trashMessage", () => {
       size: 7,
       scannedAt: 1,
       paths: ["/a/b"],
+      binSize: 0,
       binFree: null,
     };
     expect(trashMessage(preview, t, size, date, count).split("\n")).toEqual([
@@ -44,14 +52,29 @@ describe("trashMessage", () => {
   });
 
   it("says in the clean-up lists that the space comes back only with an empty bin", () => {
-    const preview: TrashPreview = { count: 1, size: 7, scannedAt: 1, paths: ["/a"], binFree: 100 };
+    const preview: TrashPreview = {
+      count: 1,
+      size: 7,
+      scannedAt: 1,
+      paths: ["/a"],
+      binSize: 7,
+      binFree: 100,
+    };
     const lines = trashMessage(preview, t, size, date, count, true).split("\n");
-    expect(lines.at(-1)).toBe("Space is freed only when you empty the Recycle Bin.");
-    expect(trashMessage(preview, t, size, date, count)).not.toContain("Recycle Bin");
+    // In the words of every system: the Recycle Bin is named only where Windows is meant.
+    expect(lines.at(-1)).toBe("Space is freed only when you empty the trash.");
+    expect(trashMessage(preview, t, size, date, count)).not.toContain("empty the trash");
   });
 
   it("warns that the bin will drop its oldest files when the items do not fit in its free space", () => {
-    const over: TrashPreview = { count: 2, size: 300, scannedAt: 1, paths: [], binFree: 200 };
+    const over: TrashPreview = {
+      count: 2,
+      size: 300,
+      scannedAt: 1,
+      paths: [],
+      binSize: 300,
+      binFree: 200,
+    };
     const warning =
       "The Recycle Bin can take 200 B more. Windows will delete its oldest files for good.";
     expect(trashMessage(over, t, size, date, count, true).split("\n").at(-1)).toBe(warning);
@@ -60,13 +83,23 @@ describe("trashMessage", () => {
       expect(trashMessage({ ...over, binFree }, t, size, date, count, true)).not.toContain(
         "oldest",
       );
+    // The bin counts the larger of the size on disk and the length (compressed files in full).
+    const compressed = { ...over, size: 100, binSize: 300 };
+    expect(trashMessage(compressed, t, size, date, count, true)).toContain("oldest");
     // Not outside the clean-up lists.
     expect(trashMessage(over, t, size, date, count)).not.toContain("oldest");
   });
 
   it("speaks Russian", () => {
     const ru = (key: string, params?: Params) => translate("ru", key, params);
-    const preview: TrashPreview = { count: 5, size: 1, scannedAt: 1, paths: ["/a"], binFree: null };
+    const preview: TrashPreview = {
+      count: 5,
+      size: 1,
+      scannedAt: 1,
+      paths: ["/a"],
+      binSize: 0,
+      binFree: null,
+    };
     const message = trashMessage(preview, ru, size, date, count);
     expect(message).toContain("Переместить в корзину 5 объектов?");
     expect(message).toContain("…и ещё 4");
@@ -75,7 +108,14 @@ describe("trashMessage", () => {
 
 describe("purgeMessage", () => {
   const paths = Array.from({ length: 10 }, (_, i) => `/a/${i}`);
-  const preview: TrashPreview = { count: 12, size: 300, scannedAt: 5, paths, binFree: 0 };
+  const preview: TrashPreview = {
+    count: 12,
+    size: 300,
+    scannedAt: 5,
+    paths,
+    binSize: 0,
+    binFree: 0,
+  };
 
   it("asks first with the paths, the total and that it cannot be undone", () => {
     expect(purgeMessage(preview, t, size, date, count).split("\n")).toEqual([
@@ -83,7 +123,7 @@ describe("purgeMessage", () => {
       ...paths,
       "…and 2 more",
       "Total size: 300 B. Scanned day 5.",
-      "This cannot be undone: the files will not go to the Recycle Bin.",
+      "This cannot be undone: the files will not go to the trash.",
     ]);
   });
 
@@ -105,6 +145,7 @@ describe("trashReport", () => {
     size: 1200,
     scannedAt: 1,
     paths: Array.from({ length: Math.min(n, 10) }, (_, i) => `C:\\a\\f${i}`),
+    binSize: 0,
     binFree: null,
   });
   const done = (removed: number, more: Partial<TrashResult> = {}): TrashResult => ({
@@ -167,7 +208,7 @@ describe("trashReport", () => {
   it("says after the clean-up lists' trash that the bin must be emptied", () => {
     const cleanup = (result: TrashResult, n: number) =>
       trashReport(result, preview(n), t, errorText, count, size, "cleanup");
-    const notice = "Moved to the Recycle Bin: 1200 B. Empty it to free the space.";
+    const notice = "Moved to the trash: 1200 B. Empty the trash to free the space.";
     expect(cleanup(done(1), 1)).toEqual([notice]);
     expect(cleanup(done(3), 3)).toEqual([notice]);
     expect(cleanup(done(0, { failed: [io("a")] }), 1)).toEqual([

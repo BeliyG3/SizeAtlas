@@ -353,13 +353,14 @@ fn trash_results_use_camel_case() {
     let preview = TrashPreviewDto {
         count: 1,
         size: 2,
+        bin_size: 4,
         scanned_at: 3,
         paths: vec![],
         bin_free: None,
     };
     assert_eq!(
         serde_json::to_value(preview).unwrap(),
-        json!({"count": 1, "size": 2, "scannedAt": 3, "paths": [], "binFree": null})
+        json!({"count": 1, "size": 2, "binSize": 4, "scannedAt": 3, "paths": [], "binFree": null})
     );
     assert_eq!(
         serde_json::to_value(CmdError::Protected).unwrap(),

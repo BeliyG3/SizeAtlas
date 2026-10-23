@@ -22,7 +22,7 @@ import { scrollToRow } from "../contents/useCursor";
 import { useMarks } from "../contents/useMarks";
 import { useExportSource, type ExportSource } from "../export/source";
 import type { MenuTarget } from "../menu/ItemMenu";
-import { useMovingIds } from "../trash/moving";
+import { useMoving } from "../trash/moving";
 import { itemPath } from "../export/names";
 import {
   LIST_LIMIT,
@@ -69,8 +69,11 @@ interface Props {
   onTrash: (ids: readonly number[], cleanup: boolean) => void;
   /** Shift+Delete in a clean-up list: asks to delete `ids` for good. */
   onPurge: (ids: readonly number[]) => void;
-  /** The marked items, whenever they change: Scan › Move to the trash acts on them. */
-  onMarks: (ids: readonly number[], cleanup: boolean) => void;
+  /**
+   * The marked items, whenever they change: Scan › Move to the trash acts on them. `cleanup`: of
+   * a clean-up list; `selectedRow`: the selected item, when it is one of its rows.
+   */
+  onMarks: (ids: readonly number[], cleanup: boolean, selectedRow: number | null) => void;
   onFail: (e: unknown) => void;
 }
 
@@ -100,7 +103,7 @@ export function ListTable({
   const { t, lang } = useT();
   const cleanup = isCleanupMode(kind);
   const { generation, rev, baselineRev } = summary;
-  const moving = useMovingIds(generation);
+  const moving = useMoving(generation);
   const body = useRef<HTMLDivElement>(null);
   const layout = useColumnLayout(body, kind, comparedByDefault(summary));
   const { list, shownQuery } = useListAnswer({
@@ -143,8 +146,13 @@ export function ListTable({
   const [marks, setMarks] = useMarks(listKey, selectedId);
   // A deleted folder is not a node: it cannot be marked, so no action takes it to the backend.
   const idAt = (index: number) => liveId(rows[index]);
-  useEffect(() => onMarks([...marks.ids], cleanup), [marks.ids, cleanup, onMarks]);
-  useEffect(() => () => onMarks([], false), [onMarks]);
+  const selectedRow =
+    cleanup && rows.some((r) => r.id === selectedId && !r.deleted) ? selectedId : null;
+  useEffect(
+    () => onMarks([...marks.ids], cleanup, selectedRow),
+    [marks.ids, cleanup, selectedRow, onMarks],
+  );
+  useEffect(() => () => onMarks([], false, null), [onMarks]);
   const { first, last } = visibleRange(scrollTop, viewport, rows.length);
 
   // Results of another query open at the top, not where the last ones were scrolled to.
@@ -233,7 +241,7 @@ export function ListTable({
         folderPath={basePath}
         selected={marks.ids.size > 0 ? marks.ids.has(item.id) : item.id === selectedId}
         cursor={index === cursor}
-        moving={moving.has(item.id)}
+        moving={moving(item.id)}
         onClick={callbacks.onClick}
         onOpen={callbacks.onOpen}
         onMenu={callbacks.onMenu}

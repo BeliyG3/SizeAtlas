@@ -22,12 +22,18 @@ interface Asking {
   preview: TrashPreview;
   /** Rows of a clean-up list: the backend checks them again; `purge` deletes them for good. */
   how: Removal;
+  /** One per question: a new request gets a new dialog, which starts at its first question. */
+  serial: number;
 }
 
-/** The marked rows of the table; `cleanup`: of a clean-up list. */
+/**
+ * The marked rows of the table; `cleanup`: of a clean-up list, whose `selectedRow` is the selected
+ * item when it is one of its rows.
+ */
 interface Marked {
   ids: readonly number[];
   cleanup: boolean;
+  selectedRow: number | null;
 }
 
 interface Args {
@@ -58,7 +64,8 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
   const size = useSize();
   const running = useTrashRun(onError);
   const busy = running.root !== null;
-  const [marked, setMarked] = useState<Marked>({ ids: [], cleanup: false });
+  const [marked, setMarked] = useState<Marked>({ ids: [], cleanup: false, selectedRow: null });
+  const questions = useRef(0);
   const job = useMemo(() => runningJob(roots), [roots]);
 
   /** Asks to remove `ids` of the tree with `generation` `how`, showing what would go. */
@@ -69,10 +76,11 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
     const list = [...ids];
     api.trashPreview(generation, rev, list).then(
       // One question at a time: one asked at the same moment does not replace it.
-      (preview) =>
-        setAsking(
-          (shown) => shown ?? { generation, root: entry.root, rev, ids: list, preview, how },
-        ),
+      (preview) => {
+        const serial = ++questions.current;
+        const next = { generation, root: entry.root, rev, ids: list, preview, how, serial };
+        setAsking((shown) => shown ?? next);
+      },
       // A preview is busy only while a scan still lists an item: say so as the menus do.
       (e: unknown) => {
         if (isCmdError(e) && e.code === "Busy") push(t(trashNoteKey(list.length)));
@@ -117,7 +125,8 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
     [],
   );
   const onMarks = useCallback(
-    (ids: readonly number[], cleanup = false) => setMarked({ ids, cleanup }),
+    (ids: readonly number[], cleanup = false, selectedRow: number | null = null) =>
+      setMarked({ ids, cleanup, selectedRow }),
     [],
   );
 
@@ -127,8 +136,10 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
   const rev = entries.find((e) => e.summary?.generation === generation)?.summary?.rev ?? null;
   const refused = useTrashRefused(job, generation, rev, targets);
   const available = trashAvailability(busy, job !== null, refused);
-  // Marked rows of a clean-up list go with its checks; the selected item as before.
-  const how = marked.ids.length > 0 && marked.cleanup ? "cleanup" : "trash";
+  // Rows of a clean-up list go with its checks: the marked ones, else the selected item when it
+  // is one of its rows. Anything else (such as the list's own folder) as before.
+  const rows = marked.ids.length > 0 || (selection !== null && marked.selectedRow === selection.id);
+  const how = marked.cleanup && rows ? "cleanup" : "trash";
   const menuTrash =
     generation !== null && targets.length > 0 && available.enabled
       ? () => ask(generation, targets, how)
@@ -140,7 +151,14 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
   const close = () => setAsking(null);
   let dialog: ReactNode = null;
   if (asking?.how === "purge")
-    dialog = <PurgeDialog preview={asking.preview} onConfirm={confirm} onClose={close} />;
+    dialog = (
+      <PurgeDialog
+        key={asking.serial}
+        preview={asking.preview}
+        onConfirm={confirm}
+        onClose={close}
+      />
+    );
   else if (asking)
     dialog = (
       <TrashDialog

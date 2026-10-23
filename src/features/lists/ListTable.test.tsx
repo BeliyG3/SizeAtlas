@@ -1,70 +1,27 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReactElement, ReactNode } from "react";
+import type { ReactElement } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../api/client";
-import type { List, ListItem, ListKind, Summary } from "../../api/types";
-import { CleanupNotes } from "../cleanup/CleanupNotes";
-import { COLUMNS, type Column, type ColumnId } from "../contents/columns";
-import { TableHeader } from "../contents/TableHeader";
-import { ListTable } from "./ListTable";
+import type { List, ListItem } from "../../api/types";
+import {
+  answer,
+  grid,
+  onEnter,
+  onMarks,
+  onOpenFolder,
+  onTrash,
+  press,
+  render,
+  resetTable,
+  row,
+  settle,
+  shown,
+  summary,
+  textOf,
+} from "./ListTable.harness";
 
-// The same minimal hook runtime as ContentsTable.live.test.tsx: state, memos and effects survive
-// explicit renders, without a DOM.
-const rt = vi.hoisted(() => {
-  type Slot = { value?: unknown; deps?: readonly unknown[]; cleanup?: unknown };
-  const state = { slots: [] as Slot[], at: 0, dirty: false, queue: [] as (() => void)[] };
-  const changed = (a?: readonly unknown[], b?: readonly unknown[]) =>
-    !a || !b || a.length !== b.length || a.some((x, i) => !Object.is(x, b[i]));
-  const slot = (): Slot => (state.slots[state.at++] ??= {});
-  const memo = (make: () => unknown, deps?: readonly unknown[]) => {
-    const s = slot();
-    if (changed(s.deps, deps)) {
-      s.value = make();
-      s.deps = deps;
-    }
-    return s.value;
-  };
-  const effect = (run: () => unknown, deps?: readonly unknown[]) => {
-    const s = slot();
-    if (!changed(s.deps, deps)) return;
-    s.deps = deps;
-    state.queue.push(() => {
-      if (typeof s.cleanup === "function") (s.cleanup as () => void)();
-      s.cleanup = run();
-    });
-  };
-  return {
-    state,
-    hooks: {
-      useState: (initial: unknown) => {
-        const s = slot();
-        if (!("value" in s)) s.value = typeof initial === "function" ? initial() : initial;
-        return [
-          s.value,
-          (next: unknown) => {
-            const value = typeof next === "function" ? next(s.value) : next;
-            if (!Object.is(value, s.value)) {
-              s.value = value;
-              state.dirty = true;
-            }
-          },
-        ];
-      },
-      useRef: (initial: unknown) => {
-        const s = slot();
-        if (!("value" in s)) s.value = { current: initial };
-        return s.value;
-      },
-      useMemo: memo,
-      useCallback: (callback: unknown, deps?: readonly unknown[]) => memo(() => callback, deps),
-      useLayoutEffect: effect,
-      useEffect: effect,
-      useContext: () => () => () => {},
-    },
-  };
-});
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
-  ...rt.hooks,
+  ...(await import("./hookRuntime")).rt.hooks,
 }));
 vi.mock("../../api/client", () => ({ api: { getList: vi.fn() } }));
 vi.mock("../../i18n/react", () => ({
@@ -75,111 +32,7 @@ vi.mock("../../i18n/react", () => ({
   }),
 }));
 
-const summary = {
-  generation: 1,
-  rev: 3,
-  scanning: false,
-  baselineAt: null,
-  baselineRev: 0,
-  baselinePending: false,
-  sizeMode: "Allocated",
-} as Summary;
-
-const row = (id: number) => ({ id, name: `f${id}`, isDir: false, deleted: false }) as ListItem;
-
-const answer = (found: List["found"], items: ListItem[] = []): List => ({
-  generation: 1,
-  rev: 3,
-  size: 500,
-  truncated: false,
-  items,
-  found,
-  cleanup: null,
-  baselineAt: null,
-  baselineRev: 0,
-  baselinePending: false,
-});
-
-// Stable, as the parent's are: a new one would run the effects again.
-const none = () => {};
-const onTrash = vi.fn();
-const onPurge = vi.fn();
-const onMarks = vi.fn();
-const onEnter = vi.fn();
-const onOpenFolder = vi.fn();
-const onMenu = vi.fn();
-const details = new Map();
-
-let shown: ReactElement | null = null;
-
-function render(query: string, leaves = true, of: Summary = summary, kind: ListKind = "search") {
-  for (let pass = 0; pass < 20; pass++) {
-    rt.state.at = 0;
-    rt.state.dirty = false;
-    shown = ListTable({
-      summary: of,
-      kind,
-      query,
-      base: 1,
-      basePath: "/root",
-      parent: 3,
-      selectedId: 1,
-      details,
-      onNeedDetails: none,
-      onPick: none,
-      onEnter,
-      onOpenFolder: leaves ? onOpenFolder : undefined,
-      onMenu,
-      onTrash,
-      onPurge,
-      onMarks,
-      onFail: none,
-    }) as ReactElement;
-    for (const run of rt.state.queue.splice(0)) run();
-    if (!rt.state.dirty) return;
-  }
-  throw new Error("the table never settled");
-}
-
-async function settle(query: string) {
-  render(query);
-  await Promise.resolve();
-  render(query);
-}
-
-/** The text of every element of the shown tree that has the class `name`. */
-function textOf(name: string): string[] {
-  const found: string[] = [];
-  const visit = (node: ReactNode) => {
-    if (Array.isArray(node)) node.forEach(visit);
-    else if (node && typeof node === "object" && "props" in node) {
-      const props = node.props as { className?: string; children?: ReactNode };
-      if (props.className?.split(" ").includes(name)) found.push([props.children].flat().join(""));
-      visit(props.children);
-    }
-  };
-  visit(shown);
-  return found;
-}
-
-/** The grid element and a key pressed in it. */
-const grid = () => (shown!.props as { children: ReactElement[] }).children.flat().at(-1)!;
-function press(key: Partial<KeyboardEvent>) {
-  const props = grid().props as { onKeyDown: (e: unknown) => void };
-  const target = {};
-  props.onKeyDown({ target, currentTarget: target, preventDefault: () => {}, ...key });
-}
-
-beforeEach(() => {
-  rt.state.slots = [];
-  vi.mocked(api.getList).mockReset();
-  onTrash.mockReset();
-  onPurge.mockReset();
-  onMarks.mockReset();
-  onEnter.mockReset();
-  onOpenFolder.mockReset();
-  onMenu.mockReset();
-});
+beforeEach(resetTable);
 
 describe("ListTable for a search", () => {
   it("asks for the query and again when it changes", async () => {
@@ -232,15 +85,15 @@ describe("ListTable for a search", () => {
     render("a");
     press({ ctrlKey: true, code: "KeyA" });
     render("a");
-    expect(onMarks).toHaveBeenLastCalledWith([1, 2], false);
+    expect(onMarks).toHaveBeenLastCalledWith([1, 2], false, null);
 
     // The new query is loading: the old rows and their marks are still on screen.
     render("ab");
-    expect(onMarks).toHaveBeenLastCalledWith([1, 2], false);
+    expect(onMarks).toHaveBeenLastCalledWith([1, 2], false, null);
     pending.get("ab")!(answer({ count: 1, size: 1 }, [row(1)]));
     await Promise.resolve();
     render("ab");
-    expect(onMarks).toHaveBeenLastCalledWith([], false);
+    expect(onMarks).toHaveBeenLastCalledWith([], false, null);
     press({ key: "Delete", repeat: false });
     expect(onTrash).not.toHaveBeenCalled();
   });
@@ -314,228 +167,5 @@ describe("ListTable for a search", () => {
       press({ key: "Enter", repeat: false });
       expect(onEnter).toHaveBeenCalledWith(7, 3);
     });
-  });
-});
-
-type MenuAt = (index: number, x: number, y: number) => void;
-
-describe("ListTable for the clean-up lists", () => {
-  const cache = {
-    id: 5,
-    name: "_cacache",
-    isDir: true,
-    deleted: false,
-    reason: { reason: "packageCache", command: "npm cache clean --force", restorable: null },
-  } as ListItem;
-  const plain = { ...cache, id: 6, reason: { ...cache.reason!, command: null } } as ListItem;
-  const withCleanup = (items: ListItem[] = []): List => ({
-    ...answer({ count: items.length, size: 9 }, items),
-    cleanup: { info: [], approximate: false },
-  });
-
-  /** The elements of the shown tree that `match`. */
-  const find = (match: (e: ReactElement) => boolean): ReactElement[] => {
-    const hits: ReactElement[] = [];
-    const visit = (node: ReactNode) => {
-      if (Array.isArray(node)) node.forEach(visit);
-      else if (node && typeof node === "object" && "props" in node) {
-        if (match(node as ReactElement)) hits.push(node as ReactElement);
-        visit((node.props as { children?: ReactNode }).children);
-      }
-    };
-    visit(shown);
-    return hits;
-  };
-  const rowsOf = () =>
-    find((e) => "item" in (e.props as object) && "onMenu" in (e.props as object));
-  const menuOf = (row: ReactElement) => (row.props as { onMenu: MenuAt }).onMenu;
-
-  async function settleKind(kind: ListKind, query = "") {
-    render(query, true, summary, kind);
-    await Promise.resolve();
-    render(query, true, summary, kind);
-  }
-
-  it.each(["cleanup", "review"] as const)(
-    "asks for the %s list of the folder, without a query",
-    async (kind) => {
-      vi.mocked(api.getList).mockResolvedValue(withCleanup());
-      await settleKind(kind);
-      expect(api.getList).toHaveBeenLastCalledWith(1, 1, kind, 1000, "");
-    },
-  );
-
-  it("shows the notes of the list instead of the totals of a search", async () => {
-    vi.mocked(api.getList).mockResolvedValue(withCleanup([cache]));
-    await settleKind("cleanup");
-    expect(find((e) => e.type === CleanupNotes)).toHaveLength(1);
-    expect(textOf("found")).toEqual([]);
-    expect(JSON.stringify(shown)).not.toContain("search.found");
-  });
-
-  it("shows no notes in a search or another list", async () => {
-    vi.mocked(api.getList).mockResolvedValue(answer({ count: 1, size: 1 }, [cache]));
-    await settleKind("search", "a");
-    expect(find((e) => e.type === CleanupNotes)).toHaveLength(0);
-    await settleKind("largest");
-    expect(find((e) => e.type === CleanupNotes)).toHaveLength(0);
-  });
-
-  it("says there is nothing to clean when the list is empty", async () => {
-    vi.mocked(api.getList).mockResolvedValue(withCleanup());
-    await settleKind("cleanup");
-    expect(JSON.stringify(shown)).toContain("cleanup.none");
-  });
-
-  it("tells the menu that a row is a clean-up row, with the command of its tool", async () => {
-    vi.mocked(api.getList).mockResolvedValue(withCleanup([cache, plain]));
-    await settleKind("review");
-    const [first, second] = rowsOf();
-    menuOf(first)(0, 3, 4);
-    expect(onMenu).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        id: 5,
-        cleanup: true,
-        command: "npm cache clean --force",
-        x: 3,
-        y: 4,
-      }),
-    );
-    menuOf(second)(1, 1, 2);
-    const target = onMenu.mock.calls.at(-1)![0] as object;
-    expect(target).toMatchObject({ id: 6, cleanup: true });
-    expect(target).not.toHaveProperty("command");
-  });
-
-  describe("deleting", () => {
-    /** The list of `kind`, mounted afresh as the viewer does, with its cursor on its first row. */
-    async function onFirstRow(kind: ListKind) {
-      rt.state.slots = [];
-      vi.mocked(api.getList).mockResolvedValue(withCleanup([cache, plain]));
-      await settleKind(kind);
-      press({ key: "ArrowDown" });
-      render("", true, summary, kind);
-    }
-
-    it.each(["cleanup", "review"] as const)(
-      "deletes the %s rows for good with Shift+Delete, after the dialog's questions",
-      async (kind) => {
-        await onFirstRow(kind);
-        press({ key: "Delete", shiftKey: true, repeat: false });
-        expect(onPurge).toHaveBeenCalledWith([5]);
-        expect(onTrash).not.toHaveBeenCalled();
-      },
-    );
-
-    it.each(["largest", "search"] as const)(
-      "does nothing with Shift+Delete in the %s list",
-      async (kind) => {
-        await onFirstRow(kind);
-        press({ key: "Delete", shiftKey: true, repeat: false });
-        expect(onPurge).not.toHaveBeenCalled();
-        expect(onTrash).not.toHaveBeenCalled();
-      },
-    );
-
-    it("moves clean-up rows to the trash as clean-up rows, other rows as before", async () => {
-      await onFirstRow("cleanup");
-      press({ key: "Delete", repeat: false });
-      await onFirstRow("largest");
-      press({ key: "Delete", repeat: false });
-      expect(onTrash.mock.calls).toEqual([
-        [[5], true],
-        [[5], false],
-      ]);
-    });
-
-    it("says that the marks are clean-up rows, for Scan › Move to the trash", async () => {
-      await onFirstRow("review");
-      press({ ctrlKey: true, code: "KeyA" });
-      render("", true, summary, "review");
-      expect(onMarks).toHaveBeenLastCalledWith([5, 6], true);
-      await onFirstRow("largest");
-      press({ ctrlKey: true, code: "KeyA" });
-      render("", true, summary, "largest");
-      expect(onMarks).toHaveBeenLastCalledWith([5, 6], false);
-    });
-  });
-
-  it("gives the menu of a search row no clean-up facts", async () => {
-    vi.mocked(api.getList).mockResolvedValue(answer({ count: 1, size: 1 }, [cache]));
-    await settleKind("search", "a");
-    menuOf(rowsOf()[0])(0, 1, 1);
-    expect(onMenu.mock.calls.at(-1)![0]).not.toHaveProperty("cleanup");
-    expect(onMenu.mock.calls.at(-1)![0]).not.toHaveProperty("command");
-  });
-});
-
-describe("the header of a clean-up list", () => {
-  const header = () => {
-    const found: ReactElement[] = [];
-    const visit = (node: ReactNode) => {
-      if (Array.isArray(node)) node.forEach(visit);
-      else if (node && typeof node === "object" && "props" in node) {
-        if ((node as ReactElement).type === TableHeader) found.push(node as ReactElement);
-        visit((node.props as { children?: ReactNode }).children);
-      }
-    };
-    visit(shown);
-    return found[0].props as { canSort: (column: Column) => boolean };
-  };
-  const column = (id: ColumnId) => COLUMNS.find((c) => c.id === id)!;
-
-  it("has no sort on Why: no arrow, no click, no reset of the marks", async () => {
-    vi.mocked(api.getList).mockResolvedValue({
-      ...answer({ count: 0, size: 0 }),
-      cleanup: { info: [], approximate: false },
-    });
-    render("", true, summary, "cleanup");
-    await Promise.resolve();
-    render("", true, summary, "cleanup");
-    expect(header().canSort(column("reason"))).toBe(false);
-    // The columns of the rows still sort, and the details read from disk still do not.
-    expect(header().canSort(column("size"))).toBe(true);
-    expect(header().canSort(column("path"))).toBe(true);
-    expect(header().canSort(column("created"))).toBe(false);
-  });
-});
-
-describe("a clean-up list during a live scan", () => {
-  const live = (rev: number): Summary => ({ ...summary, scanning: true, rev });
-  const fresh: List = {
-    ...answer({ count: 0, size: 0 }),
-    cleanup: { info: [], approximate: false },
-  };
-
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
-
-  it("is listed once for several revisions inside the window of the charts", async () => {
-    vi.mocked(api.getList).mockResolvedValue(fresh);
-    render("", true, live(1), "cleanup");
-    await vi.advanceTimersByTimeAsync(0);
-    expect(api.getList).toHaveBeenCalledTimes(1);
-    for (const rev of [2, 3, 4, 5]) {
-      render("", true, live(rev), "cleanup");
-      await vi.advanceTimersByTimeAsync(500);
-    }
-    expect(api.getList).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(5000);
-    render("", true, live(5), "cleanup");
-    expect(api.getList).toHaveBeenCalledTimes(2);
-  });
-
-  it("is listed at once for a tree that is not scanning", async () => {
-    vi.mocked(api.getList).mockResolvedValue(fresh);
-    render("", true, { ...summary, rev: 1 }, "cleanup");
-    render("", true, { ...summary, rev: 2 }, "cleanup");
-    expect(api.getList).toHaveBeenCalledTimes(2);
-  });
-
-  it("keeps a search on the cadence of the tree: its revision is not held back", async () => {
-    vi.mocked(api.getList).mockResolvedValue(answer({ count: 0, size: 0 }));
-    render("a", true, live(1), "search");
-    render("a", true, live(2), "search");
-    expect(api.getList).toHaveBeenCalledTimes(2);
   });
 });

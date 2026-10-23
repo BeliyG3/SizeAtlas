@@ -5,7 +5,7 @@ import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import { useExportSource, type ExportSource } from "../export/source";
 import type { MenuTarget } from "../menu/ItemMenu";
-import { useMovingIds } from "../trash/moving";
+import { useMoving } from "../trash/moving";
 import { hasSortKey, nextSort, type SortState } from "./columns";
 import { ContentsRow } from "./ContentsRow";
 import { comparedByDefault, visibleSort } from "./layout";
@@ -67,7 +67,7 @@ export function ContentsTable({
 }: Props) {
   const { t, lang } = useT();
   const { generation, rev, rootId, baselineRev } = summary;
-  const moving = useMovingIds(generation);
+  const moving = useMoving(generation);
   const body = useRef<HTMLDivElement>(null);
   const layout = useColumnLayout(body, null, comparedByDefault(summary));
   // Hiding the sorted column hands the order to a shown one.
@@ -238,7 +238,7 @@ export function ContentsTable({
           (marks.ids.size > 0 ? marks.ids.has(item.id) : item.id === selectedId)
         }
         cursor={index === cursor}
-        moving={item !== undefined && moving.has(item.id)}
+        moving={item === undefined ? undefined : moving(item.id)}
         onClick={callbacks.onClick}
         onOpen={callbacks.onOpen}
         onMenu={callbacks.onMenu}

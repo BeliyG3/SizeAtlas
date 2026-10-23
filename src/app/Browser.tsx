@@ -48,8 +48,11 @@ interface Props {
    * offer it: the tree and the charts never mark their menus as clean-up rows.
    */
   onPurge: (generation: number, ids: readonly number[]) => void;
-  /** The marked rows of the table, whenever they change; `cleanup`: of a clean-up list (stable). */
-  onMarks: (ids: readonly number[], cleanup?: boolean) => void;
+  /**
+   * The marked rows of the table, whenever they change; `cleanup`: of a clean-up list, whose
+   * `selectedRow` is the selected item when it is one of its rows (stable).
+   */
+  onMarks: (ids: readonly number[], cleanup?: boolean, selectedRow?: number | null) => void;
   /** Roots with a running job: they cannot be scanned again from their menu. */
   busyRoots: ReadonlySet<string>;
   /** The running job: it may keep the items of a menu from the trash (the backend says). */

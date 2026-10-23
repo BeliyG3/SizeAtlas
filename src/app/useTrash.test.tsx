@@ -103,6 +103,7 @@ beforeEach(() => {
     size: 10,
     scannedAt: 1,
     paths: ["/root/file"],
+    binSize: 0,
     binFree: null,
   });
 });
@@ -246,6 +247,7 @@ describe("useTrash while it moves items", () => {
       size: 1,
       scannedAt: 1,
       paths: [],
+      binSize: 0,
       binFree: null,
     });
     useRenderTrash(roots).onTrash(1, [7]);
@@ -324,6 +326,34 @@ describe("useTrash in the clean-up lists", () => {
     expect(api.trash).toHaveBeenCalledWith(1, 4, [8, 9], true);
   });
 
+  it("takes the selected item as a clean-up row when the list says it is one and nothing is marked", async () => {
+    vi.mocked(api.trash).mockResolvedValue(done);
+    Shell(vi.fn()).onMarks([], true, 7);
+    const dialog = await asked((trash) => trash.menuTrash?.());
+    expect(dialog.props.cleanup).toBe(true);
+    dialog.props.onConfirm();
+    expect(api.trash).toHaveBeenCalledWith(1, 4, [7], true);
+  });
+
+  it("takes the selected item as before when it is no row of the clean-up list", async () => {
+    vi.mocked(api.trash).mockResolvedValue(done);
+    // Another row of the list is the selected one, or none is (the list's own folder).
+    for (const row of [8, null]) {
+      Shell(vi.fn()).onMarks([], true, row);
+      const dialog = await asked((trash) => trash.menuTrash?.());
+      expect(dialog.props.cleanup).toBe(false);
+      dialog.props.onClose();
+    }
+  });
+
+  it("gives every request its own purge dialog: a new one starts at the first question", async () => {
+    const first = await asked((trash) => trash.onPurge(1, [7]));
+    first.props.onClose();
+    const second = await asked((trash) => trash.onPurge(1, [7]));
+    expect(second.key).not.toBeNull();
+    expect(second.key).not.toBe(first.key);
+  });
+
   it("asks for no other request while one runs: the backend's Stop is shared", async () => {
     vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
     (await asked((trash) => trash.onTrash(1, [7], true))).props.onConfirm();
@@ -335,7 +365,7 @@ describe("useTrash in the clean-up lists", () => {
     expect(running.menuTrash).toBeNull();
   });
 
-  const preview = { count: 1, size: 1, scannedAt: 1, paths: ["/a"], binFree: null };
+  const preview = { count: 1, size: 1, scannedAt: 1, paths: ["/a"], binSize: 0, binFree: null };
   /** Previews that come when the test resolves them. */
   function heldPreviews() {
     const previews: ((p: TrashPreview) => void)[] = [];

@@ -22,12 +22,18 @@ fn the_trash_preview_counts_nested_items_once() {
     let small = tree.children(0).find(|&c| !tree.node(c).is_dir()).unwrap();
     let big = tree.children(sub).next().unwrap();
     let size = tree.node(sub).size + tree.node(small).size;
+    // What the bin counts: per item the larger of the size on disk and the length.
+    let bin_size: u64 = [sub, small]
+        .iter()
+        .map(|&id| tree.node(id).size.max(tree.node(id).len))
+        .sum();
     let generation = state.install_tree(tree);
     let preview = state
         .trash_preview(generation, 0, &[big, sub, small, sub])
         .unwrap();
     let canonical = dunce::canonicalize(dir.path()).unwrap();
     assert_eq!((preview.count, preview.size), (2, size));
+    assert_eq!(preview.bin_size, bin_size);
     // Read only: the room left in the bin of the temporary folder's volume, where it has one.
     if cfg!(windows) && sizeatlas_core::can_recycle(&canonical, 0) {
         assert!(preview.bin_free.is_some());

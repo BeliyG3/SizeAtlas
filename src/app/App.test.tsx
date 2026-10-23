@@ -150,6 +150,7 @@ beforeEach(() => {
     size: 10,
     scannedAt: 1,
     paths: ["/root/file"],
+    binSize: 0,
     binFree: null,
   });
 });

@@ -4,14 +4,18 @@ import { createContext, useContext } from "react";
 export interface Moving {
   generation: number;
   ids: ReadonlySet<number>;
+  /** They are deleted for good, not moved to the trash. */
+  purge: boolean;
 }
 
 export const MovingContext = createContext<Moving | null>(null);
 
 const NONE: ReadonlySet<number> = new Set();
 
-/** Ids of the tree with `generation` that are being moved to the trash now. */
-export function useMovingIds(generation: number): ReadonlySet<number> {
+/** How the rows of the tree with `generation` go now: to the trash, for good, or not at all. */
+export function useMoving(generation: number): (id: number) => "trash" | "purge" | undefined {
   const moving = useContext(MovingContext);
-  return moving?.generation === generation ? moving.ids : NONE;
+  const ids = moving?.generation === generation ? moving.ids : NONE;
+  const how = moving?.purge ? "purge" : "trash";
+  return (id) => (ids.has(id) ? how : undefined);
 }

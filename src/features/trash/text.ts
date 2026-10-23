@@ -48,7 +48,9 @@ export function trashMessage(
   if (cleanup) {
     lines.push(t("trash.freedLater"));
     const free = preview.binFree;
-    if (free !== null && preview.size > free) lines.push(t("trash.binFull", { free: size(free) }));
+    // As the bin check counts it: the larger of the size on disk and the length, per item.
+    if (free !== null && preview.binSize > free)
+      lines.push(t("trash.binFull", { free: size(free) }));
   }
   return lines.join("\n");
 }

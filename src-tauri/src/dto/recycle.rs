@@ -12,6 +12,9 @@ pub struct TrashPreviewDto {
     pub count: u32,
     /// Size on disk of all of them.
     pub size: u64,
+    /// What the recycle bin counts for them: per item the larger of the size on disk and the
+    /// length, as the bin check does (cloud-only and compressed files count in full).
+    pub bin_size: u64,
     /// Seconds since the Unix epoch.
     pub scanned_at: i64,
     /// Full paths of the first few.
