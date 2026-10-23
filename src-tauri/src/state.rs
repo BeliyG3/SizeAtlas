@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, Rw
 use sizeatlas_core::baseline::Baseline;
 use sizeatlas_core::tree::{ListOrder, Tree};
 
-use crate::cleanup::{ContextFn, real_context};
+use crate::cleanup::{ContextFn, default_context};
 use crate::details::MAX_DETAILS;
 use crate::dto::{CrumbDto, RootsDto, Summary};
 use crate::error::CmdError;
@@ -61,8 +61,10 @@ pub struct Shared {
     pub exit: AtomicU8,
     /// Stop asked for the running trash request (see `AppState::stop_trash`).
     pub trash_stop: AtomicBool,
-    /// The context of the clean-up modes, built for each request that needs it.
+    /// The context of the clean-up modes, built for each walk that needs it.
     pub context: ContextFn,
+    /// The last clean-up walk, shared by the lists for a few seconds (see `state/cleanup.rs`).
+    walked: Mutex<Option<cleanup::Walked>>,
 }
 
 #[derive(Clone)]
@@ -70,7 +72,7 @@ pub struct AppState(pub Arc<Shared>);
 
 impl Default for AppState {
     fn default() -> Self {
-        AppState::with_context(Arc::new(real_context))
+        AppState::with_context(default_context())
     }
 }
 
@@ -87,6 +89,7 @@ impl AppState {
             exit: AtomicU8::new(crate::exit::RUNNING),
             trash_stop: AtomicBool::new(false),
             context,
+            walked: Mutex::default(),
         }))
     }
 
@@ -293,6 +296,7 @@ impl AppState {
 
 mod change;
 mod charts;
+mod cleanup;
 mod growth;
 mod lists;
 mod live;

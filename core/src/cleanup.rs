@@ -145,16 +145,21 @@ pub enum Info {
         id: u32,
         command: &'static str,
     },
-    /// A place a rule looks at could not be read.
+    /// A place a rule or a spot looks at could not be read.
     NoAccess {
         id: u32,
+        /// The place written by the rules of the listed OS. The app shows its own path of `id`;
+        /// this text is for the core's tests and debug output.
         path: String,
+        /// Found on the way to an info spot: it concerns only the info, never a row or a total.
+        spot: bool,
     },
     /// The rows of a running app in one mode: their ids and their summed size.
     AppRunning {
         app: &'static str,
         mode: Mode,
         ids: Vec<u32>,
+        /// The whole tree's sum; the app sums the `ids` inside the listed folder instead.
         size: u64,
     },
 }

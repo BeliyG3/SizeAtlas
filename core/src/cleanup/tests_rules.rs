@@ -204,7 +204,9 @@ fn an_unreadable_folder_inside_a_match_is_reported_not_listed() {
     assert_eq!(listed(&tree, &out).0, Vec::<String>::new());
     assert_eq!(out.review.len(), 1);
     assert!(out.approximate);
-    assert!(matches!(&out.info[..], [Info::NoAccess { path, .. }] if path.ends_with("old")));
+    assert!(
+        matches!(&out.info[..], [Info::NoAccess { path, spot: false, .. }] if path.ends_with("old"))
+    );
 }
 
 #[test]

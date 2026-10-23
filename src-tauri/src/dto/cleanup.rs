@@ -92,10 +92,12 @@ impl InfoDto {
             Info::WindowsUpdate { id } => place(InfoKind::WindowsUpdate, *id, None),
             Info::DeliveryOptimization { id } => place(InfoKind::DeliveryOptimization, *id, None),
             Info::ToolStore { id, command } => place(InfoKind::ToolStore, *id, Some(command)),
-            Info::NoAccess { id, .. } => inside(*id).then(|| InfoDto {
-                path: path(*id),
-                ..InfoDto::bare(InfoKind::NoAccess)
-            }),
+            // A place on the way to an info spot concerns only the info of `Cleanup`.
+            Info::NoAccess { id, spot, .. } => (inside(*id) && (!spot || mode == Mode::Cleanup))
+                .then(|| InfoDto {
+                    path: path(*id),
+                    ..InfoDto::bare(InfoKind::NoAccess)
+                }),
             Info::AppRunning {
                 app, mode: of, ids, ..
             } => {

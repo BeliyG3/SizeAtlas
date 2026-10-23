@@ -12,7 +12,11 @@ impl Walk<'_> {
     pub(super) fn finish(self) -> Cleanup {
         let mut out = Cleanup::default();
         let path = |id| node_path(self.tree, id, self.ctx.os);
-        let no_access = |id| Info::NoAccess { id, path: path(id) };
+        let no_access = |id| Info::NoAccess {
+            id,
+            path: path(id),
+            spot: false,
+        };
         out.info
             .extend(self.unreadable.iter().map(|&id| no_access(id)));
         let mut running: Vec<(&'static App, Mode, Vec<u32>, u64)> = Vec::new();

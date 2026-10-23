@@ -6,19 +6,18 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use sizeatlas_core::cleanup::{Cleanup, Context, Info, Known, Mode, Os, Reason, Running};
+use sizeatlas_core::cleanup::{Context, Known, Os, Reason, Running};
 use sizeatlas_core::scanner::{Progress, ScanOutcome, scan};
 use sizeatlas_core::tree::{ListKind, Tree};
 
-use super::cleanup_rows;
-use crate::dto::{FoundDto, InfoDto, InfoKind, ListDto};
+use crate::dto::{InfoDto, InfoKind, ListDto};
 use crate::state::AppState;
 
 const DAY: i64 = 86_400;
 const HOME: &str = "Users/u";
 const LOCAL: &str = "Users/u/AppData/Local";
-const TEMP: &str = "Users/u/AppData/Local/Temp";
-const CHROME: &str = "Users/u/AppData/Local/Google/Chrome/User Data/Default";
+pub(super) const TEMP: &str = "Users/u/AppData/Local/Temp";
+pub(super) const CHROME: &str = "Users/u/AppData/Local/Google/Chrome/User Data/Default";
 
 /// The known folders, all inside the scanned folder `root`.
 fn known(root: &Path) -> Known {
@@ -40,15 +39,14 @@ fn known(root: &Path) -> Known {
 
 /// A scanned "drive" with rows of both modes, an installed program and a pagefile, scanned a
 /// month ago as far as the ages go.
-struct Machine {
+pub(super) struct Machine {
     _dir: tempfile::TempDir,
-    state: AppState,
-    generation: u64,
-    tree: Arc<Tree>,
+    pub(super) state: AppState,
+    pub(super) generation: u64,
     /// Executables the injected context reports as running.
-    running: Arc<Mutex<Vec<&'static str>>>,
+    pub(super) running: Arc<Mutex<Vec<&'static str>>>,
     /// How often the context was built.
-    calls: Arc<AtomicUsize>,
+    pub(super) calls: Arc<AtomicUsize>,
 }
 
 fn put(root: &Path, rel: &str, len: usize) {
@@ -57,7 +55,7 @@ fn put(root: &Path, rel: &str, len: usize) {
     fs::write(path, vec![1u8; len]).unwrap();
 }
 
-fn machine() -> Machine {
+pub(super) fn machine() -> Machine {
     let dir = tempfile::tempdir().unwrap();
     let root = dunce::canonicalize(dir.path()).unwrap();
     put(&root, &format!("{TEMP}/old/a.bin"), 32_768);
@@ -101,32 +99,44 @@ fn machine() -> Machine {
         }
     }));
     let generation = state.install_tree(tree);
-    let tree = state.tree(generation).unwrap();
     Machine {
         _dir: dir,
         state,
         generation,
-        tree,
         running,
         calls,
     }
 }
 
 impl Machine {
-    fn id(&self, rel: &str) -> u32 {
+    /// Fetched for each use: a held tree would keep a change from running.
+    pub(super) fn tree(&self) -> Arc<Tree> {
+        self.state.tree(self.generation).unwrap()
+    }
+
+    pub(super) fn id(&self, rel: &str) -> u32 {
+        let tree = self.tree();
         rel.split('/').fold(0, |at, name| {
-            self.tree
-                .children(at)
-                .find(|&c| self.tree.name(c) == name)
+            tree.children(at)
+                .find(|&c| tree.name(c) == name)
                 .unwrap_or_else(|| panic!("no {name} in {rel}"))
         })
     }
 
-    fn size(&self, rel: &str) -> u64 {
-        self.tree.node(self.id(rel)).size
+    pub(super) fn size(&self, rel: &str) -> u64 {
+        self.tree().node(self.id(rel)).size
     }
 
-    fn list(&self, base: &str, kind: ListKind, limit: u32) -> ListDto {
+    /// A change of the tree, as a refresh or a trash makes: the next list walks again.
+    pub(super) fn bump(&self) {
+        let changed = self.state.change_tree(self.generation, |tree| {
+            tree.rev += 1;
+            Some(())
+        });
+        assert!(changed.is_some());
+    }
+
+    pub(super) fn list(&self, base: &str, kind: ListKind, limit: u32) -> ListDto {
         let base = if base.is_empty() { 0 } else { self.id(base) };
         self.state
             .list(self.generation, base, kind, limit, None)
@@ -134,7 +144,7 @@ impl Machine {
     }
 }
 
-fn names(list: &ListDto) -> Vec<&str> {
+pub(super) fn names(list: &ListDto) -> Vec<&str> {
     list.items.iter().map(|i| i.item.name.as_str()).collect()
 }
 
@@ -153,7 +163,7 @@ fn found(list: &ListDto) -> (u64, u64) {
     (found.count, found.size)
 }
 
-fn info(list: &ListDto) -> &[InfoDto] {
+pub(super) fn info(list: &ListDto) -> &[InfoDto] {
     &list
         .cleanup
         .as_ref()
@@ -194,7 +204,7 @@ fn both_modes_list_their_rows_with_reasons_totals_and_info() {
         [InfoDto {
             kind: InfoKind::Pagefile,
             path: Some(
-                m.tree
+                m.tree()
                     .path(m.id("pagefile.sys"))
                     .to_string_lossy()
                     .into_owned()
@@ -268,71 +278,9 @@ fn a_running_browser_turns_its_rows_into_info() {
     let temp = m.list(TEMP, ListKind::Cleanup, 10);
     assert_eq!(info(&temp), [], "the browser's rows are not in Temp");
 
+    // Processes are read again for each new walk.
     m.running.lock().unwrap().clear();
+    m.bump();
     let list = m.list("", ListKind::Cleanup, 10);
-    assert_eq!(names(&list)[0], "Cache", "processes are read for each list");
-}
-
-#[test]
-fn only_the_clean_up_modes_build_the_context() {
-    let m = machine();
-    let largest = m.list("", ListKind::Largest, 10);
-    assert_eq!((largest.found, largest.cleanup), (None, None));
-    assert!(largest.items.iter().all(|i| i.reason.is_none()));
-    assert_eq!(m.calls.load(Ordering::Relaxed), 0);
-    m.list("", ListKind::Review, 10);
-    assert_eq!(m.calls.load(Ordering::Relaxed), 1);
-    assert_eq!(
-        m.state
-            .list(m.generation + 1, 0, ListKind::Cleanup, 10, None)
-            .map(|_| ()),
-        Err(crate::error::CmdError::StaleId)
-    );
-}
-
-#[test]
-fn info_lines_are_never_repeated_and_unreadable_places_make_it_approximate() {
-    let m = machine();
-    let (temp, old) = (m.id(TEMP), m.id(&format!("{TEMP}/old")));
-    let cache = m.id(&format!("{CHROME}/Cache"));
-    let no_access = |id| Info::NoAccess {
-        id,
-        path: String::new(),
-    };
-    let held = |mode| Info::AppRunning {
-        app: "Google Chrome",
-        mode,
-        ids: vec![cache],
-        size: 0,
-    };
-    let all = Cleanup {
-        info: vec![
-            no_access(old),
-            no_access(old),
-            no_access(m.id("pagefile.sys")),
-            held(Mode::Cleanup),
-            held(Mode::Review),
-        ],
-        ..Cleanup::default()
-    };
-    let (items, truncated, found, cleanup) =
-        cleanup_rows(&m.tree, 0, Mode::Cleanup, 10, &all, None);
-    assert!(items.is_empty() && !truncated);
-    assert_eq!(found, FoundDto { count: 0, size: 0 });
-    let kinds: Vec<InfoKind> = cleanup.info.iter().map(|i| i.kind).collect();
-    assert_eq!(
-        kinds,
-        [InfoKind::NoAccess, InfoKind::NoAccess, InfoKind::AppRunning]
-    );
-    assert!(cleanup.approximate);
-
-    let (.., cleanup) = cleanup_rows(&m.tree, temp, Mode::Review, 10, &all, None);
-    let paths: Vec<_> = cleanup.info.iter().map(|i| i.path.clone()).collect();
-    assert_eq!(
-        paths,
-        [Some(m.tree.path(old).to_string_lossy().into_owned())]
-    );
-    assert!(cleanup.approximate);
-    let (.., cleanup) = cleanup_rows(&m.tree, cache, Mode::Review, 10, &Cleanup::default(), None);
-    assert!(!cleanup.approximate);
+    assert_eq!(names(&list)[0], "Cache");
 }

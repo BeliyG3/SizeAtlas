@@ -3,12 +3,12 @@
 use std::cmp::Reverse;
 
 use sizeatlas_core::baseline::Baseline;
-use sizeatlas_core::cleanup::{Cleanup, Mode, Row};
+use sizeatlas_core::cleanup::{Cleanup, Info, Mode, Row};
 use sizeatlas_core::tree::{ListKind, Query, Tree};
 
 use super::AppState;
 use super::growth;
-use crate::dto::{CleanupDto, FoundDto, InfoDto, InfoKind, ListDto, ListItemDto, ReasonDto};
+use crate::dto::{CleanupDto, FoundDto, InfoDto, ListDto, ListItemDto, ReasonDto};
 use crate::error::CmdError;
 
 /// The most items a list returns, so a bogus limit cannot ask for the whole tree.
@@ -30,6 +30,10 @@ impl AppState {
         query: Option<&str>,
     ) -> Result<ListDto, CmdError> {
         let (baseline, baseline_rev, baseline_pending) = self.compared(generation);
+        let walked = match kind {
+            ListKind::Cleanup | ListKind::Review => Some(self.walked(generation)?),
+            _ => None,
+        };
         self.with_live(generation, id, |tree| {
             let (baseline, limit) = (baseline.as_deref(), limit.min(MAX_LIST) as usize);
             let live = |nodes: Vec<u32>| -> Vec<ListItemDto> {
@@ -38,7 +42,7 @@ impl AppState {
                     .map(|node| ListItemDto::live(tree, id, node, baseline))
                     .collect()
             };
-            let mut cleanup = None;
+            let (mut cleanup, mut rev) = (None, tree.rev);
             let (items, truncated, found) = match (kind, baseline) {
                 (ListKind::GrewMost, Some(b)) => {
                     let (items, truncated) = growth::grew_most(tree, b, id, limit);
@@ -64,7 +68,10 @@ impl AppState {
                         ListKind::Cleanup => Mode::Cleanup,
                         _ => Mode::Review,
                     };
-                    let all = tree.cleanup(&(self.0.context)(&tree.path(0)));
+                    let (walked_rev, all) = walked.clone().expect("walked for these kinds");
+                    // The rev the rows were found at: if the tree changed after the walk, it
+                    // tells the UI to ask again, which walks again.
+                    rev = walked_rev;
                     let (items, truncated, found, info) =
                         cleanup_rows(tree, id, mode, limit, &all, baseline);
                     cleanup = Some(info);
@@ -77,7 +84,7 @@ impl AppState {
             };
             ListDto {
                 generation,
-                rev: tree.rev,
+                rev,
                 size: tree.node(id).size,
                 truncated,
                 items,
@@ -91,8 +98,10 @@ impl AppState {
     }
 }
 
-/// The rows of `mode` inside `base` (`base` itself included), largest first, their totals and
-/// the info about the same nodes.
+/// The rows of `mode` inside `base`, largest first, their totals and the info about the same
+/// nodes. `base` itself is listed when it is a row, on purpose: the mode shows "the folder and
+/// everything inside", and that row is the only way to see why the selected folder is junk.
+/// Rows of nodes no longer live (the tree changed after the walk) are left out.
 fn cleanup_rows(
     tree: &Tree,
     base: u32,
@@ -101,7 +110,7 @@ fn cleanup_rows(
     all: &Cleanup,
     baseline: Option<&Baseline>,
 ) -> (Vec<ListItemDto>, bool, FoundDto, CleanupDto) {
-    let inside = |id: u32| tree.crumbs(id).contains(&base);
+    let inside = |id: u32| tree.get(id).is_some() && tree.crumbs(id).contains(&base);
     let rows = match mode {
         Mode::Cleanup => &all.cleanup,
         Mode::Review => &all.review,
@@ -128,12 +137,16 @@ fn cleanup_rows(
             info.push(dto);
         }
     }
-    let approximate = tree.approximate || info.iter().any(|i| i.kind == InfoKind::NoAccess);
+    // A place on the way to an info spot is never in a total.
+    let unread = |i: &Info| matches!(i, Info::NoAccess { id, spot: false, .. } if inside(*id));
+    let approximate = tree.approximate || all.info.iter().any(unread);
     let cleanup = CleanupDto { info, approximate };
     (items.collect(), kept.len() > limit, found, cleanup)
 }
 
 #[cfg(test)]
 mod cleanup_tests;
+#[cfg(test)]
+mod cleanup_walk_tests;
 #[cfg(test)]
 mod tests;

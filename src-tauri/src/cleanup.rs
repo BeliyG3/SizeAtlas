@@ -13,11 +13,37 @@ use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 /// inject their own, since the real one points the rules at this machine's folders.
 pub type ContextFn = Arc<dyn Fn(&Path) -> Context + Send + Sync>;
 
+/// The context of `AppState::default()`: this machine's.
+#[cfg(not(test))]
+pub fn default_context() -> ContextFn {
+    Arc::new(real_context)
+}
+
+/// The context of `AppState::default()` in tests: nothing known and no recycle bin, so the
+/// clean-up modes list nothing. A test that needs rows injects its own context.
+#[cfg(test)]
+pub fn default_context() -> ContextFn {
+    Arc::new(|_: &Path| Context {
+        os: Os::current(),
+        known: Known::default(),
+        running: Vec::new(),
+        reboot_pending: false,
+        recyclable: false,
+    })
+}
+
 /// The context of this machine, read fresh: processes are listed on every call.
 pub fn real_context(root: &Path) -> Context {
+    let var = |name: &str| env::var(name).ok().filter(|v| !v.is_empty());
     Context {
         os: Os::current(),
-        known: known(),
+        known: known(
+            Os::current(),
+            &Env {
+                var: &var,
+                dir: &folder,
+            },
+        ),
         running: running(),
         reboot_pending: reboot_pending(),
         recyclable: can_recycle(root, 0),
@@ -26,8 +52,7 @@ pub fn real_context(root: &Path) -> Context {
 
 /// The long, canonical form of an existing folder (8.3 names expanded, no `\\?\`); `None` when
 /// it cannot be resolved or is not valid Unicode, which the rules read as "absent".
-fn folder(path: impl AsRef<Path>) -> Option<String> {
-    let path = path.as_ref();
+fn folder(path: &Path) -> Option<String> {
     if path.as_os_str().is_empty() {
         return None;
     }
@@ -38,61 +63,85 @@ fn folder(path: impl AsRef<Path>) -> Option<String> {
         .ok()
 }
 
-/// The folder an environment variable names.
-fn var(name: &str) -> Option<String> {
-    folder(env::var_os(name)?)
+/// Where the known folders come from: the value of an environment variable, and the form of a
+/// folder the rules compare (`None` = absent). Tests pass a map and plain strings.
+struct Env<'a> {
+    var: &'a dyn Fn(&str) -> Option<String>,
+    dir: &'a dyn Fn(&Path) -> Option<String>,
 }
 
-/// `folder` below `home`, or `None`.
-fn under(home: &str, rel: &str) -> Option<String> {
-    (!home.is_empty()).then(|| folder(Path::new(home).join(rel)))?
+impl Env<'_> {
+    /// The folder a variable names.
+    fn folder(&self, name: &str) -> Option<String> {
+        (self.dir)(Path::new(&(self.var)(name)?))
+    }
+
+    /// A folder below `base`.
+    fn under(&self, base: &str, rel: &str) -> Option<String> {
+        (!base.is_empty()).then(|| (self.dir)(&Path::new(base).join(rel)))?
+    }
+
+    /// Cloud sync folders: those the variables name, and the usual ones in the profile.
+    fn clouds(&self, home: &str, vars: &[&str]) -> Vec<String> {
+        let named = vars.iter().filter_map(|v| self.folder(v));
+        let usual = ["Dropbox", "iCloudDrive", "Google Drive"].map(|n| self.under(home, n));
+        let mut out: Vec<String> = Vec::new();
+        for path in named.chain(usual.into_iter().flatten()) {
+            if !out.contains(&path) {
+                out.push(path);
+            }
+        }
+        out
+    }
+
+    /// Cache folders the tools' environment variables move.
+    fn overrides(&self) -> Overrides {
+        Overrides {
+            nuget_http: self.folder("NUGET_HTTP_CACHE_PATH"),
+            pip_cache: self.folder("PIP_CACHE_DIR"),
+            npm_cache: self
+                .folder("npm_config_cache")
+                .or_else(|| self.folder("NPM_CONFIG_CACHE")),
+            cargo_home: self.folder("CARGO_HOME"),
+            gradle_home: self.folder("GRADLE_USER_HOME"),
+            go_cache: self.folder("GOCACHE"),
+        }
+    }
 }
 
-/// The folder holding the user's profile.
-fn parent(home: &str) -> Option<String> {
-    let parent = Path::new(home).parent()?.to_str()?;
+/// The parent folder of `path`.
+fn parent(path: &str) -> Option<String> {
+    let parent = Path::new(path).parent()?.to_str()?;
     (!parent.is_empty()).then(|| parent.to_owned())
 }
 
-/// Cloud sync folders: those the environment names, and the usual ones in the profile.
-fn clouds(home: &str, vars: &[&str]) -> Vec<String> {
-    let named = vars.iter().filter_map(|v| var(v));
-    let usual = ["Dropbox", "iCloudDrive", "Google Drive"].map(|n| under(home, n));
-    let mut out: Vec<String> = Vec::new();
-    for path in named.chain(usual.into_iter().flatten()) {
-        if !out.contains(&path) {
-            out.push(path);
-        }
+/// The known folders of `os` read from `env`.
+fn known(os: Os, env: &Env) -> Known {
+    if os != Os::Windows {
+        let home = env.folder("HOME").unwrap_or_default();
+        return Known {
+            // The core takes the parent of home only when it is `/home` or `/Users`: never
+            // `/` for `/root`, nor `/var` for `/var/root`.
+            users: None,
+            xdg_cache: env.folder("XDG_CACHE_HOME"),
+            cloud: env.clouds(&home, &[]),
+            env: env.overrides(),
+            home,
+            ..Known::default()
+        };
     }
-    out
-}
-
-/// Cache folders the tools' environment variables move.
-fn overrides() -> Overrides {
-    Overrides {
-        nuget_http: var("NUGET_HTTP_CACHE_PATH"),
-        pip_cache: var("PIP_CACHE_DIR"),
-        npm_cache: var("npm_config_cache").or_else(|| var("NPM_CONFIG_CACHE")),
-        cargo_home: var("CARGO_HOME"),
-        gradle_home: var("GRADLE_USER_HOME"),
-        go_cache: var("GOCACHE"),
-    }
-}
-
-#[cfg(windows)]
-fn known() -> Known {
-    let get = |name: &str| var(name).unwrap_or_default();
+    let get = |name: &str| env.folder(name).unwrap_or_default();
     let home = get("USERPROFILE");
     let mut program_files: Vec<String> = Vec::new();
     for name in ["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"] {
-        if let Some(path) = var(name).filter(|p| !program_files.contains(p)) {
+        if let Some(path) = env.folder(name).filter(|p| !program_files.contains(p)) {
             program_files.push(path);
         }
     }
-    let drive = env::var("SystemDrive").ok().and_then(|d| folder(d + "\\"));
+    let drive = (env.var)("SystemDrive").and_then(|d| (env.dir)(Path::new(&(d + "\\"))));
     Known {
         local: get("LOCALAPPDATA"),
-        local_low: under(&home, r"AppData\LocalLow").unwrap_or_default(),
+        local_low: env.under(&home, r"AppData\LocalLow").unwrap_or_default(),
         roaming: get("APPDATA"),
         temp: get("TEMP"),
         system_root: get("SystemRoot"),
@@ -100,30 +149,27 @@ fn known() -> Known {
         system_drive: drive.unwrap_or_default(),
         xdg_cache: None,
         program_files,
-        users: parent(&home),
-        cloud: clouds(
+        // `%PUBLIC%` lies in the profiles folder for every account, SYSTEM too, whose own home
+        // is `%SystemRoot%\System32\config\systemprofile`. Without it, an empty folder: unknown,
+        // so "anywhere" rules list nothing.
+        users: Some(
+            env.folder("PUBLIC")
+                .and_then(|p| parent(&p))
+                .unwrap_or_default(),
+        ),
+        cloud: env.clouds(
             &home,
             &["OneDrive", "OneDriveConsumer", "OneDriveCommercial"],
         ),
-        env: overrides(),
+        env: env.overrides(),
         home,
     }
 }
 
-#[cfg(not(windows))]
-fn known() -> Known {
-    let home = var("HOME").unwrap_or_default();
-    Known {
-        users: parent(&home),
-        xdg_cache: var("XDG_CACHE_HOME"),
-        cloud: clouds(&home, &[]),
-        env: overrides(),
-        home,
-        ..Known::default()
-    }
-}
-
-/// Every process with its lower-case executable name and command line.
+/// Every process with its lower-case executable name and command line. A process running
+/// elevated (or protected) while the app is not shows an empty command line, so a tool known by
+/// its command line (npm, pip, Gradle) does not count as running then; the delete-time check
+/// has the same blind spot.
 fn running() -> Vec<Running> {
     let mut system = System::new();
     system.refresh_processes_specifics(
@@ -148,27 +194,4 @@ fn running() -> Vec<Running> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The only test that reads this machine: it checks nothing about it.
-    #[test]
-    fn the_real_context_reads_without_failing() {
-        let dir = tempfile::tempdir().unwrap();
-        let ctx = real_context(dir.path());
-        assert_eq!(ctx.os, Os::current());
-        assert!(!ctx.known.home.is_empty());
-        assert!(!ctx.running.is_empty(), "this test runs in a process");
-    }
-
-    #[test]
-    fn a_missing_or_empty_folder_is_absent() {
-        let dir = tempfile::tempdir().unwrap();
-        assert_eq!(folder(""), None);
-        assert_eq!(folder(dir.path().join("missing")), None);
-        assert_eq!(under("", "x"), None);
-        let found = folder(dir.path()).unwrap();
-        assert!(!found.starts_with(r"\\?\"), "{found}");
-        assert_eq!(parent(&found), folder(dir.path().parent().unwrap()));
-    }
-}
+mod tests;

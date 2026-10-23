@@ -8,7 +8,9 @@ use crate::error::CmdError;
 
 mod cleanup;
 
-pub use cleanup::{CleanupDto, InfoDto, InfoKind, ReasonDto};
+#[cfg(test)]
+pub use cleanup::InfoKind;
+pub use cleanup::{CleanupDto, InfoDto, ReasonDto};
 
 mod growth;
 
