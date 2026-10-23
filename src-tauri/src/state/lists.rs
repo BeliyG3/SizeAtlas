@@ -1,9 +1,11 @@
 //! Flat lists of the contents table (see `sizeatlas_core::tree::ListKind`).
 
 use std::cmp::Reverse;
+use std::time::SystemTime;
 
 use sizeatlas_core::baseline::Baseline;
 use sizeatlas_core::cleanup::{Cleanup, Info, Mode, Row};
+use sizeatlas_core::scanner::epoch_nanos;
 use sizeatlas_core::tree::{ListKind, Query, Tree};
 
 use super::AppState;
@@ -56,7 +58,8 @@ impl AppState {
                     let query: Option<String> = query.map(|q| q.chars().take(MAX_QUERY).collect());
                     match query.as_deref().and_then(Query::parse) {
                         Some(query) => {
-                            let found = tree.search(id, &query, limit);
+                            let found =
+                                tree.search(id, &query, limit, epoch_nanos(SystemTime::now()));
                             let totals = FoundDto {
                                 count: found.count,
                                 size: found.size,

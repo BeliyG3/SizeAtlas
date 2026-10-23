@@ -160,6 +160,22 @@ fn search_lists_matches_with_their_totals() {
 }
 
 #[test]
+fn search_takes_conditions_alone_or_with_a_name() {
+    let (state, generation) = searchable();
+    let names = |query: &str| -> Vec<String> {
+        let list = state
+            .list(generation, 0, ListKind::Search, 10, Some(query))
+            .unwrap();
+        list.items.into_iter().map(|i| i.item.name).collect()
+    };
+    assert_eq!(names("type:archive"), ["backup.zip"]);
+    assert_eq!(names("folders"), ["backup"]);
+    // Just written files are neither old nor of unknown date; the app's "now" is real.
+    assert_eq!(names("files newer:1d backup type:archive"), ["backup.zip"]);
+    assert!(names("older:1d").is_empty());
+}
+
+#[test]
 fn search_without_words_finds_nothing() {
     let (state, generation) = searchable();
     for query in [None, Some(""), Some("   ")] {

@@ -134,7 +134,7 @@ fn names(tree: &Tree, found: &Found) -> Vec<String> {
 #[test]
 fn a_folder_and_what_is_inside_it_are_counted_but_sized_once() {
     let tree = tree();
-    let found = tree.search(0, &q("backup"), 10);
+    let found = tree.search(0, &q("backup"), 10, 0);
     assert_eq!(found.count, 3);
     assert!(!found.truncated);
     let folder = tree.node(id_of(&tree, "backup")).size;
@@ -146,20 +146,20 @@ fn a_folder_and_what_is_inside_it_are_counted_but_sized_once() {
 #[test]
 fn the_limit_keeps_the_largest_and_reports_the_rest() {
     let tree = tree();
-    let found = tree.search(0, &q("backup"), 1);
+    let found = tree.search(0, &q("backup"), 1, 0);
     assert!(found.truncated);
     assert_eq!(names(&tree, &found), ["backup"]);
     // The totals still cover every match.
     assert_eq!((found.count, found.size), (3, 180));
-    assert!(tree.search(0, &q("backup"), 0).items.is_empty());
+    assert!(tree.search(0, &q("backup"), 0, 0).items.is_empty());
 }
 
 #[test]
 fn the_searched_folder_itself_is_never_found() {
     let tree = tree();
-    assert_eq!(tree.search(0, &q("/r"), 10).count, 0);
+    assert_eq!(tree.search(0, &q("/r"), 10, 0).count, 0);
     let backup = id_of(&tree, "backup");
-    let found = tree.search(backup, &q("backup"), 10);
+    let found = tree.search(backup, &q("backup"), 10, 0);
     assert_eq!(names(&tree, &found), ["backup.zip"]);
     // Nothing above the folder is searched, and a match inside it is not covered by itself.
     assert_eq!((found.count, found.size), (1, 100));
@@ -170,18 +170,18 @@ fn dead_nodes_are_not_found() {
     let mut tree = tree();
     let zip = id_of(&tree, "backup.zip");
     tree.remove(zip);
-    let found = tree.search(0, &q("backup"), 10);
+    let found = tree.search(0, &q("backup"), 10, 0);
     assert_eq!(found.count, 2);
     assert_eq!(names(&tree, &found), ["backup", "backup.old"]);
     let other = id_of(&tree, "other");
     tree.remove(other);
-    assert_eq!(tree.search(0, &q("backup"), 10).count, 1);
+    assert_eq!(tree.search(0, &q("backup"), 10, 0).count, 1);
 }
 
 #[test]
 fn extensions_skip_folders_in_a_tree_search() {
     let tree = tree();
-    let found = tree.search(0, &q(".old .bin"), 10);
+    let found = tree.search(0, &q(".old .bin"), 10, 0);
     assert_eq!(names(&tree, &found), ["x.bin", "backup.old"]);
     assert_eq!(found.size, 80);
 }

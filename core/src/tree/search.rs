@@ -1,17 +1,24 @@
-//! Search of a subtree by name: substrings, masks (`*`, `?`) and extensions, case-insensitive.
+//! Search of a subtree by name (substrings, masks `*`, `?` and extensions, case-insensitive)
+//! and by conditions on size, modified date, type and files/folders (see `filters`).
 
 use super::Tree;
 use super::lists::TopN;
 
+mod filters;
+pub use filters::{Filters, Kind};
+
 /// A parsed search text. Words are split on whitespace: `.ext` (no wildcard) is an extension,
 /// a word with `*` or `?` is a mask over the whole name, any other word is a substring.
-/// A name has to contain every substring and, if there are extensions or masks, match one.
+/// A name has to contain every substring and, if there are extensions or masks, match one;
+/// condition words (`>1GB`, `older:1y`, `type:video`, `folders`) have to hold too, and a text
+/// of conditions only is a query.
 #[derive(Clone, Debug)]
 pub struct Query {
     /// Lowercase substrings.
     words: Vec<String>,
     /// Extensions and masks, any of which is enough.
     alternatives: Vec<Alternative>,
+    filters: Filters,
 }
 
 #[derive(Clone, Debug)]
@@ -46,8 +53,12 @@ impl Query {
     pub fn parse(text: &str) -> Option<Query> {
         let mut words = Vec::new();
         let mut alternatives = Vec::new();
+        let mut filters = Filters::default();
         for word in text.split_whitespace() {
             let lower = word.to_lowercase();
+            if filters.take(&lower) {
+                continue;
+            }
             if lower.contains(['*', '?']) {
                 alternatives.push(Alternative::Mask(Mask {
                     ascii: lower.is_ascii().then(|| lower.as_bytes().to_vec()),
@@ -59,12 +70,20 @@ impl Query {
                 words.push(lower);
             }
         }
-        (!words.is_empty() || !alternatives.is_empty()).then_some(Query {
-            words,
-            alternatives,
-        })
+        (!words.is_empty() || !alternatives.is_empty() || filters != Filters::default()).then_some(
+            Query {
+                words,
+                alternatives,
+                filters,
+            },
+        )
     }
 
+    pub fn filters(&self) -> &Filters {
+        &self.filters
+    }
+
+    /// Whether the name fits the name words, masks and extensions (not the conditions).
     pub fn matches(&self, name: &str, is_dir: bool) -> bool {
         if name.is_ascii() {
             self.matches_in(&Name::Ascii(name), is_dir)
@@ -162,15 +181,19 @@ pub(crate) fn glob<T: Copy + PartialEq>(
 impl Tree {
     /// The live nodes below `id` (not `id` itself) that fit `query`: the `limit` largest on
     /// disk, by size and then id, with the number and the size of all matches. A match inside
-    /// a matching folder is counted but adds nothing to the size.
-    pub fn search(&self, id: u32, query: &Query, limit: usize) -> Found {
+    /// a matching folder is counted but adds nothing to the size. `now_ns` (ns since the
+    /// epoch, like `Node::mtime`) is what `older:` and `newer:` count back from.
+    pub fn search(&self, id: u32, query: &Query, limit: usize, now_ns: i64) -> Found {
         let mut top = TopN::new(limit, self.len());
         let (mut count, mut size) = (0u64, 0u64);
         // Each node with whether a folder above it (below `id`) matched.
         let mut stack = vec![(id, false)];
         while let Some((at, mut covered)) = stack.pop() {
             let node = &self.nodes[at as usize];
-            if at != id && query.matches(&node.name, node.is_dir()) {
+            if at != id
+                && query.filters.accepts(node, now_ns)
+                && query.matches(&node.name, node.is_dir())
+            {
                 count += 1;
                 if !covered {
                     size = size.saturating_add(node.size);
@@ -198,3 +221,7 @@ impl Tree {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_filtered;
+#[cfg(test)]
+mod tests_filters;
