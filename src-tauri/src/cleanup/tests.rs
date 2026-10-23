@@ -82,11 +82,11 @@ fn as_system_other_profiles_stay_a_zone() {
     };
     let at = |rel: &str| root.join(rel).to_string_lossy().into_owned();
     let mut vars = vec![
-        ("USERPROFILE", at(r"Windows\System32\config\systemprofile")),
+        ("USERPROFILE", at("Windows/System32/config/systemprofile")),
         ("SystemRoot", at("Windows")),
         ("ProgramData", at("ProgramData")),
         ("ProgramFiles", at("Program Files")),
-        ("PUBLIC", at(r"Users\Public")),
+        ("PUBLIC", at("Users/Public")),
     ];
     let known = known_from(Os::Windows, &vars);
     assert_eq!(known.users, Some(at("Users")));

@@ -19,6 +19,10 @@ pub enum Reparse {
     Link,
     /// Another reparse point (a cloud file, a ProjFS or deduplicated folder): it holds real
     /// content that a delete would take with it.
+    #[cfg_attr(
+        not(windows),
+        allow(dead_code, reason = "only Windows has reparse points other than links")
+    )]
     Other,
 }
 

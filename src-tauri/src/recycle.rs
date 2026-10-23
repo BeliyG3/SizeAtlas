@@ -219,7 +219,9 @@ impl Pacer {
 /// The item still is what the scan saw: the same kind, the same modification time (its own,
 /// or as its folder lists it: the scan takes a folder's time from the listing).
 // ponytail: an item changed after the scan whose folder listing still shows the old time
-// passes; the trash can be undone and the confirmation shows the path and the scan date.
+// passes; the trash can be undone and the confirmation shows the path and the scan date. A
+// clean-up row, which may be deleted for good, does not rely on this: `recheck` walks it on
+// disk right before (see `membership::run_rows`).
 fn check(item: &TrashItem) -> Result<(), CmdError> {
     match fs::symlink_metadata(&item.path) {
         Ok(meta)
@@ -259,7 +261,9 @@ fn listed_mtime(path: &Path) -> Option<i64> {
 /// which needs no permission to control Finder), the freedesktop trash on Linux. A panic in the
 /// crate (it unwraps some system calls) is an error of this item, not of the app.
 // ponytail: between `check` and this call the item can still change (the crate takes a path);
-// the gap is short and the trash can be undone. See README, "Moving to the trash".
+// the gap is short and the trash can be undone. See README, "Moving to the trash". The same
+// short gap after `recheck` remains for `purge::delete`, which cannot be undone; closing it
+// needs handle-based deletes.
 pub fn move_to_trash(path: &Path) -> Result<(), String> {
     panic::catch_unwind(AssertUnwindSafe(|| {
         #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
@@ -281,6 +285,8 @@ pub mod purge;
 mod during_tests;
 #[cfg(test)]
 pub(crate) mod fixture;
+#[cfg(test)]
+mod membership_purge_tests;
 #[cfg(test)]
 mod membership_tests;
 #[cfg(test)]

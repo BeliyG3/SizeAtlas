@@ -8,13 +8,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use sizeatlas_core::cleanup::{Context, Guard, Reason, Refusal, recheck};
 
-use super::{bin_takes, run_plan};
+use super::{bin_takes, purge, run_plan};
 use crate::dto::{TrashDto, TrashProgressDto};
 use crate::error::CmdError;
 use crate::state::{AppState, TrashItem, TrashPlan};
 
 /// The trash check of an item by its path and size (`sizeatlas_core::can_recycle`).
-pub type BinCheck = dyn Fn(&Path, u64) -> bool;
+pub type BinCheck<'a> = dyn Fn(&Path, u64) -> bool + 'a;
 
 /// The reason of each item of `plan`, found by a new walk of the tree with `ctx`: an app started
 /// since the list was made, or a restart now pending, turns its rows into info, so they are no
@@ -37,8 +37,23 @@ pub fn rows_of(
         .collect()
 }
 
-/// Deletes the clean-up rows `ids` with `trash_one`: to the trash (`bin` = the trash check,
-/// `sizeatlas_core::can_recycle`) or for good (`bin` = `None`, `trash_one` = `purge::delete`).
+/// Where clean-up rows go. One choice sets both the check and the delete, so the trash path can
+/// never run without its bin check (Windows would delete a row too large for the bin for good).
+pub enum Disposal<'a> {
+    /// To the trash with `trash_one` (`recycle::move_to_trash`, a stand-in in tests), only when
+    /// `bin` (`sizeatlas_core::can_recycle`) says the item goes to the trash.
+    Trash {
+        bin: &'a BinCheck<'a>,
+        trash_one: &'a TrashOne<'a>,
+    },
+    /// For good with [`purge::delete`].
+    Purge,
+}
+
+/// Moves or deletes one item; the error is the system's message.
+pub type TrashOne<'a> = dyn Fn(&Path) -> Result<(), String> + 'a;
+
+/// Deletes the clean-up rows `ids` as `disposal` says.
 /// Nothing goes unless every item is a row of a mode by a fresh context ([`rows_of`]). Then, per
 /// item and right before it goes, the disk re-check (`recheck` with the never places of that
 /// context and the time now) and the trash check; else as `recycle::run_reporting`.
@@ -49,11 +64,13 @@ pub fn run_rows(
     generation: u64,
     rev: u64,
     ids: &[u32],
-    bin: Option<&BinCheck>,
-    trash_one: impl Fn(&Path) -> Result<(), String>,
+    disposal: Disposal,
     report: impl FnMut(TrashProgressDto),
 ) -> Result<TrashDto, CmdError> {
     let plan = state.trash_plan(generation, rev, ids)?;
+    // ponytail: processes and a pending restart are read once per request, so an app started
+    // during a long request is seen by the next one (its files in use fail as `Io`); read them
+    // again per app-owned row if long requests matter.
     let ctx = (state.0.context)(Path::new(&plan.root));
     let rows = rows_of(state, generation, &plan, &ctx)?;
     let guard = Guard::new(ctx.os, &ctx.known);
@@ -61,7 +78,14 @@ pub fn run_rows(
     let allowed = |item: &TrashItem| {
         let reason = *rows.get(&item.id).ok_or(CmdError::Protected)?;
         recheck(&item.path, reason, &guard, now_ns(), &stop).map_err(refused)?;
-        bin.map_or(Ok(()), |bin| bin_takes(item, bin))
+        match disposal {
+            Disposal::Trash { bin, .. } => bin_takes(item, bin),
+            Disposal::Purge => Ok(()),
+        }
+    };
+    let trash_one = |path: &Path| match disposal {
+        Disposal::Trash { trash_one, .. } => trash_one(path),
+        Disposal::Purge => purge::delete(path),
     };
     run_plan(
         state, cache_dir, generation, plan, allowed, trash_one, report,

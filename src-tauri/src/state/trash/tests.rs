@@ -28,8 +28,12 @@ fn the_trash_preview_counts_nested_items_once() {
         .unwrap();
     let canonical = dunce::canonicalize(dir.path()).unwrap();
     assert_eq!((preview.count, preview.size), (2, size));
-    // Read only: the room left in the bin of the temporary folder's volume.
-    assert_eq!(preview.bin_free.is_some(), cfg!(windows));
+    // Read only: the room left in the bin of the temporary folder's volume, where it has one.
+    if cfg!(windows) && sizeatlas_core::can_recycle(&canonical, 0) {
+        assert!(preview.bin_free.is_some());
+    } else if !cfg!(windows) {
+        assert_eq!(preview.bin_free, None);
+    }
     // By id: "small.txt" comes before "sub" in the tree.
     assert_eq!(
         preview.paths,

@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::dto::{RootsDto, ScanErrorDto, SourcesDto, Summary, TrashDto, TrashProgressDto};
 use crate::error::CmdError;
 use crate::queue::ScanJob;
-use crate::recycle::membership;
+use crate::recycle::membership::{self, Disposal};
 use crate::state::{AppState, TrashItem};
 use crate::worker::{self, Notice, Notify};
 use crate::{baseline, jobs, recycle, sources};
@@ -120,21 +120,15 @@ pub async fn trash(
 ) -> Result<TrashDto, CmdError> {
     removing(&app, &state, move |state, dir, report| {
         let bin = sizeatlas_core::can_recycle;
+        let trash_one = recycle::move_to_trash;
         if cleanup == Some(true) {
-            let trash_one = recycle::move_to_trash;
-            membership::run_rows(
-                state,
-                dir,
-                generation,
-                rev,
-                &ids,
-                Some(&bin),
-                trash_one,
-                report,
-            )
+            let disposal = Disposal::Trash {
+                bin: &bin,
+                trash_one: &trash_one,
+            };
+            membership::run_rows(state, dir, generation, rev, &ids, disposal, report)
         } else {
             let allowed = |item: &TrashItem| recycle::bin_takes(item, bin);
-            let trash_one = recycle::move_to_trash;
             recycle::run_reporting(
                 state, dir, generation, rev, &ids, allowed, trash_one, report,
             )
@@ -155,8 +149,8 @@ pub async fn delete_for_good(
     ids: Vec<u32>,
 ) -> Result<TrashDto, CmdError> {
     removing(&app, &state, move |state, dir, report| {
-        let delete = recycle::purge::delete;
-        membership::run_rows(state, dir, generation, rev, &ids, None, delete, report)
+        let purge = Disposal::Purge;
+        membership::run_rows(state, dir, generation, rev, &ids, purge, report)
     })
     .await
 }
