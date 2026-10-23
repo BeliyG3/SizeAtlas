@@ -8,6 +8,9 @@ use super::build::{app, go, package, shared};
 use super::paths::At;
 use super::{Age, App, Marker, Mode, Place, Reason, Rule, Spot, SpotKind, Target, caches, temp};
 
+/// The only files of a `__pycache__` that is offered.
+pub(crate) const BYTECODE: &[&str] = &["*.pyc", "*.pyo"];
+
 // Tools: npm, pip and Gradle by command line, as `node.exe`, `python.exe` and `java.exe` also
 // run other programs all the time (Claude Code, MCP servers, IDEs).
 const NPM: App = app(
@@ -191,7 +194,7 @@ const ANYWHERE: [Rule; 4] = [
     },
     // Source-less bytecode is never imported (PEP 3147), so only folders of nothing else.
     Rule {
-        marker: Some(Marker::Only(&["*.pyc", "*.pyo"])),
+        marker: Some(Marker::Only(BYTECODE)),
         ..Rule::new(
             Place::Anywhere,
             Target::Dir("__pycache__"),

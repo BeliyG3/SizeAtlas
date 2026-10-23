@@ -3,15 +3,19 @@
 use std::path::Path;
 use std::ptr::null_mut;
 
+use windows_sys::Win32::Foundation::S_OK;
 use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS};
 use windows_sys::Win32::Storage::FileSystem::{
-    GetDriveTypeW, GetVolumeNameForVolumeMountPointW, GetVolumePathNameW,
+    GetDiskFreeSpaceExW, GetDriveTypeW, GetVolumeNameForVolumeMountPointW, GetVolumePathNameW,
 };
 use windows_sys::Win32::System::Registry::{
     HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RegGetValueW,
 };
 
+use windows_sys::Win32::UI::Shell::{SHQUERYRBINFO, SHQueryRecycleBinW};
+
 use super::wide_nul;
+use crate::platform::BinSpace;
 
 /// `DRIVE_FIXED` of `GetDriveTypeW` (windows-sys has it under another feature).
 const DRIVE_FIXED: u32 = 3;
@@ -23,26 +27,56 @@ const EXPLORER_POLICIES: &str = r"Software\Microsoft\Windows\CurrentVersion\Poli
 /// Whether an item of `item_size` bytes goes to the Recycle Bin rather than being deleted for
 /// good: only on a fixed drive whose volume is known (`has_guid`: its bin settings can be read),
 /// when no policy deletes files at once (`no_recycle_policy`), its bin is not turned off
-/// (`nuke_on_delete`) and, when its size limit is known, not smaller than the item.
+/// (`nuke_on_delete`) and its [`effective_capacity`] is known and not smaller than the item.
 pub fn trash_allowed(
     drive_type: u32,
     has_guid: bool,
     no_recycle_policy: bool,
     nuke_on_delete: bool,
-    max_capacity: Option<u64>,
+    capacity: Option<u64>,
     item_size: u64,
 ) -> bool {
     drive_type == DRIVE_FIXED
         && has_guid
         && !no_recycle_policy
         && !nuke_on_delete
-        && max_capacity.is_none_or(|max| item_size <= max)
+        && capacity.is_some_and(|capacity| item_size <= capacity)
+}
+
+/// The size limit of a bin, for every check of the trash: `MaxCapacity` when set, else the
+/// Windows default for a volume of `volume_size` bytes; `None` when neither is known.
+///
+/// ponytail: the default of a bin never configured is taken as 5 % of the volume. Windows gives
+/// at least that, so this refuses some items the real bin would take, never the other way.
+fn effective_capacity(max_capacity: Option<u64>, volume_size: Option<u64>) -> Option<u64> {
+    max_capacity.or(volume_size.map(|size| size / 20))
+}
+
+/// The bin of the volume of `path`: its [`effective_capacity`] and the bytes it holds (for
+/// "the bin holds {free} more"). `None` when either cannot be read.
+pub fn bin_space(path: &Path) -> Option<BinSpace> {
+    let root = volume_root(path)?;
+    let guid = volume_guid(&root)?;
+    let capacity = effective_capacity(max_capacity(&guid).ok()?, volume_size(&root))?;
+    let mut info = SHQUERYRBINFO {
+        cbSize: size_of::<SHQUERYRBINFO>() as u32,
+        i64Size: 0,
+        i64NumItems: 0,
+    };
+    // SAFETY: `root` is NUL-terminated and `info` is a valid out-buffer whose size it states.
+    if unsafe { SHQueryRecycleBinW(root.as_ptr(), &mut info) } != S_OK {
+        return None;
+    }
+    Some(BinSpace {
+        capacity,
+        used: u64::try_from(info.i64Size).ok()?,
+    })
 }
 
 /// `trash_allowed` for an item at `path` of `size` bytes, read from the system: the drive type,
 /// the `NoRecycleFiles` policy and the Recycle Bin settings of its volume (a setting not set:
-/// the bin is on and its size limit unknown). A setting that cannot be read (access denied,
-/// another type) refuses the item: it may be the one that turns the bin off.
+/// the bin is on and its size limit is the volume default). A setting that cannot be read (access
+/// denied, another type) refuses the item: it may be the one that turns the bin off.
 pub fn can_recycle(path: &Path, size: u64) -> bool {
     let Some(root) = volume_root(path) else {
         return false;
@@ -52,14 +86,14 @@ pub fn can_recycle(path: &Path, size: u64) -> bool {
     // SAFETY: `root` is NUL-terminated.
     let drive_type = unsafe { GetDriveTypeW(root.as_ptr()) };
     let guid = volume_guid(&root);
-    let setting = |name: &str| match &guid {
-        Some(guid) => dword(HKEY_CURRENT_USER, &format!("{BIT_BUCKET}{guid}"), name),
-        // Refused by `trash_allowed` below, whatever the settings say.
-        None => Ok(None),
-    };
     let read = || -> Result<_, ()> {
-        let nuke = setting("NukeOnDelete")?.is_some_and(|v| v != 0);
-        let max_capacity = setting("MaxCapacity")?.map(|megabytes| u64::from(megabytes) << 20);
+        let Some(guid) = &guid else {
+            // Refused by `trash_allowed` below, whatever the settings say.
+            return Ok((false, None, false));
+        };
+        let nuke =
+            dword(HKEY_CURRENT_USER, &bin_key(guid), "NukeOnDelete")?.is_some_and(|v| v != 0);
+        let max_capacity = max_capacity(guid)?;
         let mut policy = false;
         for hive in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
             policy |= dword(hive, EXPLORER_POLICIES, "NoRecycleFiles")?.is_some_and(|v| v != 0);
@@ -69,7 +103,26 @@ pub fn can_recycle(path: &Path, size: u64) -> bool {
     let Ok((nuke, max_capacity, policy)) = read() else {
         return false;
     };
-    trash_allowed(drive_type, guid.is_some(), policy, nuke, max_capacity, size)
+    let capacity = effective_capacity(max_capacity, volume_size(&root));
+    trash_allowed(drive_type, guid.is_some(), policy, nuke, capacity, size)
+}
+
+fn bin_key(guid: &str) -> String {
+    format!("{BIT_BUCKET}{guid}")
+}
+
+/// `MaxCapacity` of the bin of the volume `guid`, in bytes; `Ok(None)` if not set.
+fn max_capacity(guid: &str) -> Result<Option<u64>, ()> {
+    Ok(dword(HKEY_CURRENT_USER, &bin_key(guid), "MaxCapacity")?
+        .map(|megabytes| u64::from(megabytes) << 20))
+}
+
+/// The size of the volume mounted at `root` (as the current user's quota allows).
+fn volume_size(root: &[u16]) -> Option<u64> {
+    let mut total = 0u64;
+    // SAFETY: `root` is NUL-terminated; the values not wanted may be null.
+    let read = unsafe { GetDiskFreeSpaceExW(root.as_ptr(), null_mut(), &mut total, null_mut()) };
+    (read != 0).then_some(total)
 }
 
 /// The mount point of the volume of `path` (`C:\` or a mounted folder), NUL-terminated.
@@ -142,24 +195,45 @@ mod tests {
         const REMOVABLE: u32 = 2;
         const REMOTE: u32 = 4;
         const MB: u64 = 1 << 20;
-        let fixed = |max, size| trash_allowed(DRIVE_FIXED, true, false, false, max, size);
-        assert!(fixed(None, u64::MAX), "no known limit");
+        const VOLUME: Option<u64> = Some(100_000 * MB);
+        let fixed = |max, size| {
+            let capacity = effective_capacity(max, VOLUME);
+            trash_allowed(DRIVE_FIXED, true, false, false, capacity, size)
+        };
+        assert!(
+            !fixed(None, u64::MAX),
+            "above the default 5 % of the volume"
+        );
+        assert!(fixed(None, 5_000 * MB), "the default 5 % of the volume");
+        assert!(!fixed(None, 5_000 * MB + 1));
         assert!(fixed(Some(10 * MB), 10 * MB));
         assert!(!fixed(Some(10 * MB), 10 * MB + 1), "bigger than the bin");
+        assert!(fixed(Some(10_000 * MB), 10_000 * MB), "a set limit wins");
         assert!(
-            !trash_allowed(DRIVE_FIXED, true, false, true, None, 1),
+            !trash_allowed(
+                DRIVE_FIXED,
+                true,
+                false,
+                false,
+                effective_capacity(None, None),
+                1
+            ),
+            "no limit and no volume size"
+        );
+        assert!(
+            !trash_allowed(DRIVE_FIXED, true, false, true, Some(MB), 1),
             "the bin is turned off"
         );
         assert!(
-            !trash_allowed(DRIVE_FIXED, true, true, false, None, 1),
+            !trash_allowed(DRIVE_FIXED, true, true, false, Some(MB), 1),
             "a policy deletes files at once"
         );
         assert!(
-            !trash_allowed(DRIVE_FIXED, false, false, false, None, 1),
+            !trash_allowed(DRIVE_FIXED, false, false, false, Some(MB), 1),
             "the volume is unknown, so are its bin settings"
         );
-        assert!(!trash_allowed(REMOVABLE, true, false, false, None, 1));
-        assert!(!trash_allowed(REMOTE, true, false, false, None, 1));
+        assert!(!trash_allowed(REMOVABLE, true, false, false, Some(MB), 1));
+        assert!(!trash_allowed(REMOTE, true, false, false, Some(MB), 1));
     }
 
     #[test]
@@ -184,5 +258,13 @@ mod tests {
     fn the_temporary_folder_takes_a_small_item() {
         // The system reader on the drive of %TEMP%: a fixed drive with its bin on by default.
         assert!(can_recycle(&std::env::temp_dir(), 1));
+        assert!(!can_recycle(&std::env::temp_dir(), u64::MAX));
+    }
+
+    #[test]
+    fn the_bin_of_the_temporary_folder_has_a_capacity() {
+        // Read only: the bin's settings and its size, nothing is moved.
+        let space = bin_space(&std::env::temp_dir()).expect("the bin of the system drive");
+        assert!(space.capacity > 0);
     }
 }

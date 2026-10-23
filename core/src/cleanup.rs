@@ -16,6 +16,7 @@ mod names;
 mod never;
 mod paths;
 mod pattern;
+mod recheck;
 mod report;
 mod rules;
 mod spots;
@@ -27,6 +28,7 @@ mod zones;
 pub use age::{is_old, newest_mtime};
 pub use never::{Guard, Trail, is_protected_name};
 pub use paths::{At, Known, Overrides};
+pub use recheck::{Refusal, recheck};
 
 /// Which rule and never tables apply. Chosen by value, not by `cfg`, so every table can be tested
 /// on every OS.
@@ -303,6 +305,8 @@ impl Tree {
     }
 }
 
+#[cfg(test)]
+mod recheck_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

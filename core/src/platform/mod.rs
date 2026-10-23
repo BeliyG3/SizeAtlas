@@ -10,6 +10,18 @@ mod windows;
 #[cfg(windows)]
 pub use windows::*;
 
+/// The Recycle Bin of a volume: its effective capacity and the bytes it holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BinSpace {
+    pub capacity: u64,
+    pub used: u64,
+}
+
+/// Room left in the bin; beyond it Windows deletes its oldest items for good.
+pub fn bin_free(space: BinSpace) -> u64 {
+    space.capacity.saturating_sub(space.used)
+}
+
 /// macOS `SF_DATALESS` (`<sys/stat.h>`): the item's content lives only in the cloud (iCloud
 /// Drive), and reading or listing it makes macOS download it. Reading the flag downloads nothing.
 const SF_DATALESS: u32 = 0x4000_0000;
@@ -22,7 +34,15 @@ fn is_dataless(st_flags: u32) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_dataless;
+    use super::{BinSpace, bin_free, is_dataless};
+
+    #[test]
+    fn the_free_room_of_a_bin_is_never_below_zero() {
+        let space = |capacity, used| bin_free(BinSpace { capacity, used });
+        assert_eq!(space(100, 30), 70);
+        assert_eq!(space(100, 100), 0);
+        assert_eq!(space(100, 130), 0, "a bin over its limit");
+    }
 
     #[test]
     fn only_the_dataless_flag_marks_a_cloud_only_item() {

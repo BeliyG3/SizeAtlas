@@ -101,3 +101,35 @@ pub fn hardlink_key(meta: &Metadata) -> Option<(u64, u64)> {
 pub fn can_recycle(_path: &Path, _size: u64) -> bool {
     true
 }
+
+/// A symbolic link.
+pub fn is_reparse(meta: &Metadata) -> bool {
+    meta.file_type().is_symlink()
+}
+
+/// Content that exists only in iCloud: reading it downloads it.
+pub fn is_cloud(meta: &Metadata) -> bool {
+    cloud_only(meta)
+}
+
+/// The device of an item: a folder on another device is a mount point.
+pub fn device(meta: &Metadata) -> u64 {
+    meta.dev()
+}
+
+/// When the item's data or attributes last changed (ctime, ns since the Unix epoch), read from
+/// the item itself, never from a link's target.
+pub fn change_time(path: &Path) -> std::io::Result<i64> {
+    let meta = std::fs::symlink_metadata(path)?;
+    Ok(meta.ctime().saturating_mul(1_000_000_000) + meta.ctime_nsec())
+}
+
+/// Only Windows defers file operations to a restart.
+pub fn reboot_pending() -> bool {
+    false
+}
+
+/// The trash of macOS and Linux has no size limit to report.
+pub fn bin_space(_path: &Path) -> Option<super::BinSpace> {
+    None
+}
