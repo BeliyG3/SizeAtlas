@@ -25,6 +25,6 @@
 }
 
 .crow [data-col="reason"] code {
-  margin-inline-start: 6px;
+  margin-inline-end: 6px;
   color: var(--text-dim);
 }
