@@ -36,21 +36,25 @@ pub fn default_context() -> ContextFn {
 
 /// The known folders of this machine, read once: the environment does not change while the
 /// app runs, and resolving a folder on a disconnected network drive may wait for a timeout.
-static KNOWN: LazyLock<Known> = LazyLock::new(|| {
+/// The cloud sync folders are read again for each context (see [`real_context`]).
+static KNOWN: LazyLock<Known> = LazyLock::new(|| on_machine(|env| known(Os::current(), env)));
+
+/// `read` with the environment variables and folders of this machine.
+fn on_machine<T>(read: impl FnOnce(&Env) -> T) -> T {
     let var = |name: &str| env::var(name).ok().filter(|v| !v.is_empty());
-    let env = Env {
+    read(&Env {
         var: &var,
         dir: &folder,
-    };
-    known(Os::current(), &env)
-});
+    })
+}
 
-/// The context of this machine: the known folders read once, processes, a pending restart and
-/// the recycle bin on every call.
+/// The context of this machine: the known folders read once, the cloud sync folders (a sync
+/// client installed while the app runs makes its folder then; a few lookups), processes, a
+/// pending restart and the recycle bin on every call.
 pub fn real_context(root: &Path) -> Context {
     Context {
         os: Os::current(),
-        known: KNOWN.clone(),
+        known: on_machine(|env| with_clouds(&KNOWN, Os::current(), env)),
         running: running(),
         reboot_pending: reboot_pending(),
         recyclable: can_recycle(root, 0),
@@ -89,7 +93,11 @@ impl Env<'_> {
     }
 
     /// Cloud sync folders: those the variables name, and the usual ones in the profile.
-    fn clouds(&self, home: &str, vars: &[&str]) -> Vec<String> {
+    fn clouds(&self, os: Os, home: &str) -> Vec<String> {
+        let vars: &[&str] = match os {
+            Os::Windows => &["OneDrive", "OneDriveConsumer", "OneDriveCommercial"],
+            _ => &[],
+        };
         let named = vars.iter().filter_map(|v| self.folder(v));
         let usual = ["Dropbox", "iCloudDrive", "Google Drive"].map(|n| self.under(home, n));
         let mut out: Vec<String> = Vec::new();
@@ -131,7 +139,7 @@ fn known(os: Os, env: &Env) -> Known {
             // `/` for `/root`, nor `/var` for `/var/root`.
             users: None,
             xdg_cache: env.folder("XDG_CACHE_HOME"),
-            cloud: env.clouds(&home, &[]),
+            cloud: env.clouds(os, &home),
             env: env.overrides(),
             home,
             ..Known::default()
@@ -164,12 +172,17 @@ fn known(os: Os, env: &Env) -> Known {
                 .and_then(|p| parent(&p))
                 .unwrap_or_default(),
         ),
-        cloud: env.clouds(
-            &home,
-            &["OneDrive", "OneDriveConsumer", "OneDriveCommercial"],
-        ),
+        cloud: env.clouds(os, &home),
         env: env.overrides(),
         home,
+    }
+}
+
+/// `known` with the cloud sync folders `env` has now.
+fn with_clouds(known: &Known, os: Os, env: &Env) -> Known {
+    Known {
+        cloud: env.clouds(os, &known.home),
+        ..known.clone()
     }
 }
 

@@ -107,3 +107,25 @@ fn on_unix_the_core_decides_the_users_folder() {
         assert_eq!(known.users, None, "{home}");
     }
 }
+
+#[test]
+fn a_cloud_folder_made_after_launch_is_known_at_the_next_context() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = folder(dir.path()).unwrap();
+    let map = HashMap::from([("USERPROFILE", home.clone()), ("HOME", home)]);
+    let var = |name: &str| map.get(name).cloned();
+    let env = Env {
+        var: &var,
+        dir: &folder,
+    };
+    let at_launch = known(Os::current(), &env);
+    assert_eq!(at_launch.cloud, Vec::<String>::new());
+    fs::create_dir(dir.path().join("Dropbox")).unwrap();
+    let now = with_clouds(&at_launch, Os::current(), &env);
+    assert_eq!(now.cloud, [folder(&dir.path().join("Dropbox")).unwrap()]);
+    let others = Known {
+        cloud: Vec::new(),
+        ..now
+    };
+    assert_eq!(others, at_launch, "only the cloud folders are read again");
+}
