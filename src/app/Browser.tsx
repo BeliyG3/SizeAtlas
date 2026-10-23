@@ -38,17 +38,25 @@ interface Props {
   onRefresh: (generation: number, id: number) => void;
   /** Queues a scan of folder `id` of the tree with `generation` as a root of its own. */
   onScanFolder: (generation: number, id: number) => void;
-  /** Asks to move `ids` of the tree with `generation` to the trash (stable). */
-  onTrash: (generation: number, ids: readonly number[]) => void;
-  /** The marked rows of the table, whenever they change (stable). */
-  onMarks: (ids: readonly number[]) => void;
+  /**
+   * Asks to move `ids` of the tree with `generation` to the trash; `cleanup`: rows of a
+   * clean-up list (stable).
+   */
+  onTrash: (generation: number, ids: readonly number[], cleanup?: boolean) => void;
+  /**
+   * Asks to delete `ids`, rows of a clean-up list, for good (stable). Only the clean-up lists
+   * offer it: the tree and the charts never mark their menus as clean-up rows.
+   */
+  onPurge: (generation: number, ids: readonly number[]) => void;
+  /** The marked rows of the table, whenever they change; `cleanup`: of a clean-up list (stable). */
+  onMarks: (ids: readonly number[], cleanup?: boolean) => void;
   /** Roots with a running job: they cannot be scanned again from their menu. */
   busyRoots: ReadonlySet<string>;
   /** The running job: it may keep the items of a menu from the trash (the backend says). */
   job: QueueEntry | null;
   /** Roots inside a running full scan: refresh and child scans are unavailable. */
   fullScans: ReadonlySet<string>;
-  /** A trash request runs. */
+  /** A trash or delete request runs: no other can start. */
   trashing: boolean;
   /** The root it moves items of: its folders cannot be refreshed meanwhile. */
   trashingRoot: string | null;
@@ -85,6 +93,7 @@ export function Browser({
   onRefresh,
   onScanFolder,
   onTrash,
+  onPurge,
   onMarks,
   busyRoots,
   job,
@@ -187,6 +196,7 @@ export function Browser({
         onSelect={onSelectNode}
         onMenu={openMenu}
         onTrash={onTrash}
+        onPurge={onPurge}
         onMarks={onMarks}
         onFail={onFail}
       />
@@ -237,6 +247,7 @@ export function Browser({
           onRefresh={onRefresh}
           onScanFolder={onScanFolder}
           onTrash={onTrash}
+          onPurge={onPurge}
           onClose={closeMenu}
           onFail={onFail}
         />

@@ -103,6 +103,7 @@ const answer = (found: List["found"], items: ListItem[] = []): List => ({
 // Stable, as the parent's are: a new one would run the effects again.
 const none = () => {};
 const onTrash = vi.fn();
+const onPurge = vi.fn();
 const onMarks = vi.fn();
 const onEnter = vi.fn();
 const onOpenFolder = vi.fn();
@@ -130,6 +131,7 @@ function render(query: string, leaves = true, of: Summary = summary, kind: ListK
       onOpenFolder: leaves ? onOpenFolder : undefined,
       onMenu,
       onTrash,
+      onPurge,
       onMarks,
       onFail: none,
     }) as ReactElement;
@@ -172,6 +174,7 @@ beforeEach(() => {
   rt.state.slots = [];
   vi.mocked(api.getList).mockReset();
   onTrash.mockReset();
+  onPurge.mockReset();
   onMarks.mockReset();
   onEnter.mockReset();
   onOpenFolder.mockReset();
@@ -229,15 +232,15 @@ describe("ListTable for a search", () => {
     render("a");
     press({ ctrlKey: true, code: "KeyA" });
     render("a");
-    expect(onMarks).toHaveBeenLastCalledWith([1, 2]);
+    expect(onMarks).toHaveBeenLastCalledWith([1, 2], false);
 
     // The new query is loading: the old rows and their marks are still on screen.
     render("ab");
-    expect(onMarks).toHaveBeenLastCalledWith([1, 2]);
+    expect(onMarks).toHaveBeenLastCalledWith([1, 2], false);
     pending.get("ab")!(answer({ count: 1, size: 1 }, [row(1)]));
     await Promise.resolve();
     render("ab");
-    expect(onMarks).toHaveBeenLastCalledWith([]);
+    expect(onMarks).toHaveBeenLastCalledWith([], false);
     press({ key: "Delete", repeat: false });
     expect(onTrash).not.toHaveBeenCalled();
   });
@@ -402,6 +405,59 @@ describe("ListTable for the clean-up lists", () => {
     const target = onMenu.mock.calls.at(-1)![0] as object;
     expect(target).toMatchObject({ id: 6, cleanup: true });
     expect(target).not.toHaveProperty("command");
+  });
+
+  describe("deleting", () => {
+    /** The list of `kind`, mounted afresh as the viewer does, with its cursor on its first row. */
+    async function onFirstRow(kind: ListKind) {
+      rt.state.slots = [];
+      vi.mocked(api.getList).mockResolvedValue(withCleanup([cache, plain]));
+      await settleKind(kind);
+      press({ key: "ArrowDown" });
+      render("", true, summary, kind);
+    }
+
+    it.each(["cleanup", "review"] as const)(
+      "deletes the %s rows for good with Shift+Delete, after the dialog's questions",
+      async (kind) => {
+        await onFirstRow(kind);
+        press({ key: "Delete", shiftKey: true, repeat: false });
+        expect(onPurge).toHaveBeenCalledWith([5]);
+        expect(onTrash).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(["largest", "search"] as const)(
+      "does nothing with Shift+Delete in the %s list",
+      async (kind) => {
+        await onFirstRow(kind);
+        press({ key: "Delete", shiftKey: true, repeat: false });
+        expect(onPurge).not.toHaveBeenCalled();
+        expect(onTrash).not.toHaveBeenCalled();
+      },
+    );
+
+    it("moves clean-up rows to the trash as clean-up rows, other rows as before", async () => {
+      await onFirstRow("cleanup");
+      press({ key: "Delete", repeat: false });
+      await onFirstRow("largest");
+      press({ key: "Delete", repeat: false });
+      expect(onTrash.mock.calls).toEqual([
+        [[5], true],
+        [[5], false],
+      ]);
+    });
+
+    it("says that the marks are clean-up rows, for Scan › Move to the trash", async () => {
+      await onFirstRow("review");
+      press({ ctrlKey: true, code: "KeyA" });
+      render("", true, summary, "review");
+      expect(onMarks).toHaveBeenLastCalledWith([5, 6], true);
+      await onFirstRow("largest");
+      press({ ctrlKey: true, code: "KeyA" });
+      render("", true, summary, "largest");
+      expect(onMarks).toHaveBeenLastCalledWith([5, 6], false);
+    });
   });
 
   it("gives the menu of a search row no clean-up facts", async () => {

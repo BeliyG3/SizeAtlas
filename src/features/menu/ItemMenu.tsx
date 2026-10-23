@@ -20,7 +20,10 @@ export interface MenuTarget {
   marked?: readonly number[];
   /** A deleted folder of "Grew most": its full path. Its id is not a node: only the path is copied. */
   deletedPath?: string;
-  /** The row is one of "Can be cleaned" or "Check before deleting". */
+  /**
+   * The row is one of "Can be cleaned" or "Check before deleting": its trash is checked again as
+   * a clean-up row, and it can be deleted for good. The tree and the charts never set it.
+   */
   cleanup?: boolean;
   /** The clean-up command of the tool that owns the row (a package manager's own cache clean). */
   command?: string;
@@ -37,9 +40,9 @@ export function menuIds(target: MenuTarget): readonly number[] {
 interface Props {
   target: MenuTarget;
   generation: number;
-  /** No scan still lists the items and no trash runs: they can go to the trash. */
+  /** No scan still lists the items and no trash or delete runs: they can go (also for good). */
   canTrash: boolean;
-  /** Why they cannot, shown as the tooltip of the disabled item. */
+  /** Why they cannot, shown as the tooltip of the disabled items. */
   trashNote: string | null;
   canScan: boolean;
   canRefresh: boolean;
@@ -49,8 +52,10 @@ interface Props {
   onRefresh: (generation: number, id: number) => void;
   /** Queues a scan of folder `id` as a root of its own. */
   onScanFolder: (generation: number, id: number) => void;
-  /** Asks to move `ids` to the trash. */
-  onTrash: (generation: number, ids: readonly number[]) => void;
+  /** Asks to move `ids` to the trash; `cleanup`: they are rows of a clean-up list. */
+  onTrash: (generation: number, ids: readonly number[], cleanup: boolean) => void;
+  /** Asks to delete `ids`, rows of a clean-up list, for good. */
+  onPurge: (generation: number, ids: readonly number[]) => void;
   onClose: () => void;
   onFail: (e: unknown) => void;
 }
@@ -67,11 +72,13 @@ export function ItemMenu({
   onRefresh,
   onScanFolder,
   onTrash,
+  onPurge,
   onClose,
   onFail,
 }: Props) {
   const { t, lang } = useT();
   const { command } = target;
+  const cleanup = target.cleanup ?? false;
   const ids = menuIds(target);
   const many = ids.length > 1;
   const one = !many;
@@ -88,6 +95,8 @@ export function ItemMenu({
     note: string | null = null,
     /** Shown under the label; it does not depend on the path, so a lossy name does not block it. */
     sub: string | null = null,
+    /** It cannot be taken back: red. */
+    danger = false,
   ) => {
     // The one item with a line under it, the clean-up command, does not depend on the path.
     const needsPath = blocked && sub === null;
@@ -95,6 +104,7 @@ export function ItemMenu({
       <button
         key={label}
         role="menuitem"
+        className={danger ? "danger" : undefined}
         disabled={needsPath || !enabled}
         title={needsPath ? t("menu.lossy") : (note ?? undefined)}
         onClick={() => {
@@ -108,6 +118,7 @@ export function ItemMenu({
       </button>
     );
   };
+  const counted = { count: ids.length, items: formatCount(ids.length, lang) };
   // Groups of items, set apart by separators; a group without items leaves no separator.
   const groups: (ReactNode[] | false)[] = [
     one && [
@@ -151,13 +162,21 @@ export function ItemMenu({
     [
       item(
         "trash",
-        many
-          ? t("menu.trashMany", { count: ids.length, items: formatCount(ids.length, lang) })
-          : t("menu.trash"),
-        () => onTrash(generation, ids),
+        many ? t("menu.trashMany", counted) : t("menu.trash"),
+        () => onTrash(generation, ids, cleanup),
         canTrash,
         trashNote,
       ),
+      cleanup &&
+        item(
+          "trash",
+          many ? t("menu.purgeMany", counted) : t("menu.purge"),
+          () => onPurge(generation, ids),
+          canTrash,
+          trashNote,
+          null,
+          true,
+        ),
     ],
   ];
   const { deletedPath } = target;

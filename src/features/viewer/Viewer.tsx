@@ -38,10 +38,15 @@ interface Props {
   onSort: (sort: SortState) => void;
   onSelect: (generation: number, id: number, isDir: boolean, parent?: number) => void;
   onMenu: (generation: number, target: MenuTarget) => void;
-  /** Delete in a table: asks to move `ids` of the tree with `generation` to the trash. */
-  onTrash: (generation: number, ids: readonly number[]) => void;
-  /** The marked rows of the table, whenever they change. */
-  onMarks: (ids: readonly number[]) => void;
+  /**
+   * Delete in a table: asks to move `ids` of the tree with `generation` to the trash;
+   * `cleanup`: rows of a clean-up list.
+   */
+  onTrash: (generation: number, ids: readonly number[], cleanup?: boolean) => void;
+  /** Shift+Delete in a clean-up list: asks to delete `ids` for good. */
+  onPurge: (generation: number, ids: readonly number[]) => void;
+  /** The marked rows of the table, whenever they change; `cleanup`: of a clean-up list. */
+  onMarks: (ids: readonly number[], cleanup?: boolean) => void;
   /** Stable handler for failed requests. */
   onFail: (e: unknown) => void;
 }
@@ -58,6 +63,7 @@ export const Viewer = memo(function Viewer({
   onSelect,
   onMenu,
   onTrash,
+  onPurge,
   onMarks,
   onFail,
 }: Props) {
@@ -74,8 +80,12 @@ export const Viewer = memo(function Viewer({
     [generation, onMenu],
   );
   const trash = useCallback(
-    (ids: readonly number[]) => onTrash(generation, ids),
+    (ids: readonly number[], cleanup = false) => onTrash(generation, ids, cleanup),
     [generation, onTrash],
+  );
+  const purge = useCallback(
+    (ids: readonly number[]) => onPurge(generation, ids),
+    [generation, onPurge],
   );
   const crumbs = useCrumbs(generation, summary.rev, selection.folder, onFail);
   const shownFolder = useDebounced(selection.folder, VIEW_DELAY_MS);
@@ -152,6 +162,7 @@ export const Viewer = memo(function Viewer({
             onOpenFolder={list === "search" ? leaveSearch : undefined}
             onMenu={menu}
             onTrash={trash}
+            onPurge={purge}
             onMarks={onMarks}
             onFail={onFail}
           />

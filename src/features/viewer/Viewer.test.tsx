@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api } from "../../api/client";
 import type { Summary } from "../../api/types";
 import type { Mode } from "../lists/modes";
 import { Viewer } from "./Viewer";
@@ -76,12 +77,12 @@ const onLeaveSearch = vi.fn();
 const onSelect = vi.fn();
 
 /** The table the viewer shows, after the state has settled. */
-function render(mode: Mode, query: string): ReactElement<Record<string, unknown>> {
+function render(mode: Mode, query: string, of = summary): ReactElement<Record<string, unknown>> {
   for (let pass = 0; pass < 20; pass++) {
     rt.state.at = 0;
     rt.state.dirty = false;
     const split = (Viewer as unknown as { type: (props: object) => ReactElement }).type({
-      summary,
+      summary: of,
       selection,
       mode,
       query,
@@ -91,6 +92,7 @@ function render(mode: Mode, query: string): ReactElement<Record<string, unknown>
       onSelect,
       onMenu: none,
       onTrash: none,
+      onPurge: none,
       onMarks: none,
       onFail: none,
     });
@@ -131,5 +133,19 @@ describe("Viewer leaving a search", () => {
     const table = render("all", "backup");
     (table.props.onEnter as (id: number) => void)(3);
     expect(onLeaveSearch).not.toHaveBeenCalled();
+  });
+});
+
+describe("Viewer after a delete in a clean-up list", () => {
+  it("lists the nearest live ancestor when the list's own folder was one of its rows", async () => {
+    // The selected folder 1 is listed; deleting it (a row of its own list) changes the tree.
+    expect(render("cleanup", "").props.base).toBe(1);
+    vi.mocked(api.getLiveAncestor).mockResolvedValue(0);
+    render("cleanup", "", { ...summary, rev: 1 });
+    expect(api.getLiveAncestor).toHaveBeenCalledWith(1, 1);
+    await Promise.resolve();
+    const table = render("cleanup", "", { ...summary, rev: 1 });
+    expect(table.props.kind).toBe("cleanup");
+    expect(table.props.base).toBe(0);
   });
 });

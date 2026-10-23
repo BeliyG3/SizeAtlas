@@ -232,6 +232,7 @@ export function App() {
                 onRefresh={refreshFolder}
                 onScanFolder={scanItem}
                 onTrash={trash.onTrash}
+                onPurge={trash.onPurge}
                 onMarks={trash.onMarks}
                 busyRoots={busy}
                 job={trash.job}

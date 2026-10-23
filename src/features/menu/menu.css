@@ -139,3 +139,14 @@
   white-space: normal;
   opacity: 0.75;
 }
+
+/* An item that cannot be taken back (Delete permanently): red text, a red bar when pointed at. */
+.menu button.danger:not(:disabled) {
+  color: var(--danger);
+}
+
+.menu button.danger:hover:not(:disabled),
+.menu button.danger:focus-visible {
+  color: var(--bg);
+  background: var(--danger);
+}

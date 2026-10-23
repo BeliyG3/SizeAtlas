@@ -41,10 +41,20 @@ export const api = {
   /** Whether a running scan keeps one of `ids` from going to the trash now (it still lists it). */
   trashRefused: (generation: number, rev: number, ids: number[]) =>
     invoke<boolean>("trash_refused", { generation, rev, ids }),
-  /** Moves items of one tree to the trash; nothing moves if one changed on disk since the scan. */
-  trash: (generation: number, rev: number, ids: number[]) =>
-    invoke<TrashResult>("trash", { generation, rev, ids }),
-  /** Stops the running trash request before its next item; what went stays in the trash. */
+  /**
+   * Moves items of one tree to the trash; nothing moves if one changed on disk since the scan.
+   * `cleanup`: rows of a clean-up list, checked again on disk first; an item that is no row of
+   * either list refuses the whole request (`Protected`).
+   */
+  trash: (generation: number, rev: number, ids: number[], cleanup: boolean) =>
+    invoke<TrashResult>("trash", { generation, rev, ids, cleanup }),
+  /**
+   * Deletes rows of the clean-up lists for good, with the checks of `trash(…, true)`; progress
+   * and Stop as for the trash.
+   */
+  deleteForGood: (generation: number, rev: number, ids: number[]) =>
+    invoke<TrashResult>("delete_for_good", { generation, rev, ids }),
+  /** Stops the running trash or delete request before its next item; what went is not brought back. */
   cancelTrash: () => invoke<void>("cancel_trash"),
   /** Without a root: the running scan. A waiting root leaves the queue. */
   cancelScan: (root?: string) => invoke<void>("cancel_scan", { path: root ?? null }),

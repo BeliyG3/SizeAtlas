@@ -11,23 +11,21 @@ interface Props {
   progress: TrashProgress;
   /** Stop was pressed: the request ends after the item that moves now. */
   stopping: boolean;
+  /** The items are deleted for good: the texts say so, not "to the trash". */
+  purge: boolean;
   onStop: () => void;
 }
 
-/** "Moving to the trash: 3 of 120", the full path of that item, the bar and the Stop label. */
-function useLine(progress: TrashProgress, stopping: boolean) {
+/** "Moving to the trash: 3 of 120" (or "Deleting permanently"), that item's path, the bar, Stop. */
+function useLine(progress: TrashProgress, stopping: boolean, purge: boolean) {
   const { t, lang } = useT();
   const { done, total, current } = progress;
+  const title = t(purge ? "purge.title" : "trash.title");
   return {
-    text: trashProgressText(progress, t, (n) => formatCount(n, lang)),
+    title,
+    text: trashProgressText(progress, t, (n) => formatCount(n, lang), purge),
     path: current ?? "",
-    bar: (
-      <progress
-        aria-label={t("trash.title")}
-        max={Math.max(1, total)}
-        value={Math.min(done, total)}
-      />
-    ),
+    bar: <progress aria-label={title} max={Math.max(1, total)} value={Math.min(done, total)} />,
     stop: t(stopping ? "trash.stopping" : "trash.stop"),
   };
 }
@@ -36,9 +34,10 @@ function useLine(progress: TrashProgress, stopping: boolean) {
 export function TrashStatus({
   progress,
   stopping,
+  purge,
   onStop,
 }: Omit<Props, "onStop"> & { onStop: (() => void) | null }) {
-  const line = useLine(progress, stopping);
+  const line = useLine(progress, stopping, purge);
   return (
     <span className="scan">
       <span className="counters">{line.text}</span>
@@ -58,12 +57,11 @@ export function TrashStatus({
 }
 
 /** The running trash request of many items, in the middle of the window; the app stays usable. */
-export function TrashWindow({ progress, stopping, onStop }: Props) {
-  const { t } = useT();
-  const line = useLine(progress, stopping);
+export function TrashWindow({ progress, stopping, purge, onStop }: Props) {
+  const line = useLine(progress, stopping, purge);
   return (
-    <section className="trash-window" role="dialog" aria-label={t("trash.title")}>
-      <h2>{t("trash.title")}</h2>
+    <section className="trash-window" role="dialog" aria-label={line.title}>
+      <h2>{line.title}</h2>
       <p>{line.text}</p>
       <p className="ellipsis dim" title={line.path}>
         {line.path ? itemName(line.path) : " "}

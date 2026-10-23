@@ -4,17 +4,20 @@ import type { TrashPreview, TrashProgress } from "../../api/types";
 import type { Moving } from "./moving";
 import { TrashStatus, TrashWindow, WINDOW_ITEMS } from "./TrashProgress";
 
-/** The trash request that runs: its tree and root, the items asked for and their preview. */
+/** The request that runs: its tree and root, the items asked for and their preview. */
 export interface TrashRun {
   generation: number;
   root: string;
   ids: readonly number[];
   preview: TrashPreview;
+  /** The items are deleted for good, not moved to the trash. */
+  purge: boolean;
 }
 
 /**
- * The running trash request as the user sees it: its progress (from `trash-progress`) in the
- * status bar and, for many items, in a window of its own, Stop, and the rows it moves.
+ * The running trash (or delete) request as the user sees it: its progress (from
+ * `trash-progress`) in the status bar and, for many items, in a window of its own, Stop, and the
+ * rows it moves.
  */
 export function useTrashRun(onError: (e: unknown) => void) {
   const [run, setRun] = useState<(TrashRun & { stopping: boolean }) | null>(null);
@@ -51,8 +54,9 @@ export function useTrashRun(onError: (e: unknown) => void) {
   if (run) {
     const shown = progress ?? { done: 0, total: run.preview.count, current: null };
     const big = run.preview.count > WINDOW_ITEMS;
-    status = <TrashStatus progress={shown} stopping={run.stopping} onStop={big ? null : stop} />;
-    if (big) floating = <TrashWindow progress={shown} stopping={run.stopping} onStop={stop} />;
+    const line = { progress: shown, stopping: run.stopping, purge: run.purge };
+    status = <TrashStatus {...line} onStop={big ? null : stop} />;
+    if (big) floating = <TrashWindow {...line} onStop={stop} />;
   }
   return { root: run?.root ?? null, start, end, moving, status, window: floating };
 }

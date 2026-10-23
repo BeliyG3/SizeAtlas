@@ -10,6 +10,7 @@ type MenuItem = ReactElement<{
   onClick: () => void;
   title?: string;
   disabled?: boolean;
+  className?: string;
   children: ReactNode[];
 }>;
 
@@ -41,25 +42,64 @@ describe("item menu", () => {
     expect(menuIds(gone)).toEqual([]);
   });
 
-  describe("Copy clean-up command", () => {
-    const menuOf = (target: Partial<Parameters<typeof ItemMenu>[0]["target"]>) =>
-      menuItems(
-        ItemMenu({
-          target: { id: 5, isDir: true, lossy: false, x: 0, y: 0, ...target },
-          generation: 1,
-          canTrash: true,
-          trashNote: null,
-          canScan: true,
-          canRefresh: true,
-          onRefresh: vi.fn(),
-          onScanFolder: vi.fn(),
-          onTrash: vi.fn(),
-          onClose: vi.fn(),
-          onFail: vi.fn(),
-        }),
-      );
-    const labels = (items: MenuItem[]) => items.map((i) => i.props.children[1]);
+  type Target = Parameters<typeof ItemMenu>[0]["target"];
+  const onTrash = vi.fn();
+  const onPurge = vi.fn();
+  const menuOf = (target: Partial<Target>, canTrash = true) =>
+    menuItems(
+      ItemMenu({
+        target: { id: 5, isDir: true, lossy: false, x: 0, y: 0, ...target },
+        generation: 1,
+        canTrash,
+        trashNote: canTrash ? null : "trash.busy",
+        canScan: true,
+        canRefresh: true,
+        onRefresh: vi.fn(),
+        onScanFolder: vi.fn(),
+        onTrash,
+        onPurge,
+        onClose: vi.fn(),
+        onFail: vi.fn(),
+      }),
+    );
+  const labels = (items: MenuItem[]) => items.map((i) => i.props.children[1]);
+  const itemOf = (items: MenuItem[], label: string) =>
+    items.find((i) => i.props.children[1] === label);
 
+  describe("Delete permanently", () => {
+    it("is offered, in red, only for the rows of the clean-up lists", () => {
+      const purge = itemOf(menuOf({ cleanup: true }), "menu.purge");
+      expect(purge?.props.className).toBe("danger");
+      expect(itemOf(menuOf({}), "menu.purge")).toBeUndefined();
+      expect(labels(menuOf({ marked: [5, 6] }))).not.toContain("menu.purgeMany");
+    });
+
+    it("asks to delete the items of the menu for good, never to move them", () => {
+      onTrash.mockReset();
+      onPurge.mockReset();
+      itemOf(menuOf({ cleanup: true, marked: [5, 6] }), "menu.purgeMany")!.props.onClick();
+      expect(onPurge).toHaveBeenCalledWith(1, [5, 6]);
+      expect(onTrash).not.toHaveBeenCalled();
+    });
+
+    it("is not available while another request removes items, and says why", () => {
+      const purge = itemOf(menuOf({ cleanup: true }, false), "menu.purge")!;
+      expect(purge.props.disabled).toBe(true);
+      expect(purge.props.title).toBe("trash.busy");
+    });
+
+    it("leaves the trash of a clean-up row to the clean-up checks, of other rows as before", () => {
+      onTrash.mockReset();
+      itemOf(menuOf({ cleanup: true }), "menu.trash")!.props.onClick();
+      itemOf(menuOf({}), "menu.trash")!.props.onClick();
+      expect(onTrash.mock.calls).toEqual([
+        [1, [5], true],
+        [1, [5], false],
+      ]);
+    });
+  });
+
+  describe("Copy clean-up command", () => {
     it("is offered for a clean-up row with a command, and copies it through the backend", () => {
       const items = menuOf({ cleanup: true, command: "npm cache clean --force" });
       expect(labels(items)).toContain("cleanup.copyCommand");
@@ -106,6 +146,7 @@ describe("item menu", () => {
       onRefresh: vi.fn(),
       onScanFolder: vi.fn(),
       onTrash: vi.fn(),
+      onPurge: vi.fn(),
       onClose,
       onFail,
     });

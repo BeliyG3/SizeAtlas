@@ -5,6 +5,10 @@ import "./dialog.css";
 export interface DialogAction {
   label: string;
   run: () => void;
+  /** It cannot be taken back: the button is red (its label says so too). */
+  danger?: boolean;
+  /** The dialog stays open: `run` puts the next question in it. */
+  keepOpen?: boolean;
 }
 
 interface Props {
@@ -15,8 +19,13 @@ interface Props {
    * `focusCancel`), Enter presses it.
    */
   actions: readonly DialogAction[];
-  /** The focus starts on Cancel: for a question whose main action is hard to take back. */
+  /**
+   * The focus starts on Cancel: for a question whose main action is hard to take back. It goes
+   * back there when the dialog asks its next question (another main action).
+   */
   focusCancel?: boolean;
+  /** A key held down (Enter, Space) presses no button: it may still be down from the question before. */
+  ignoreHeldKeys?: boolean;
   /** Label of the last button, which only closes the dialog (default: Cancel). */
   cancelLabel?: string;
   /** Any button or Escape closes the dialog. */
@@ -34,6 +43,7 @@ export function ConfirmDialog({
   actions,
   cancelLabel,
   focusCancel,
+  ignoreHeldKeys,
   onClose,
   icon,
 }: Props) {
@@ -50,7 +60,6 @@ export function ConfirmDialog({
     // A modal dialog focuses its first button, the main one. StrictMode re-runs this on an
     // open dialog. Removing the dialog from the page ends it: no close() on the way out.
     if (!el.open) el.showModal();
-    if (focusCancel) cancel.current?.focus();
     return () => {
       // After the commit that removes the dialog; StrictMode re-runs this on a dialog that stays.
       queueMicrotask(() => {
@@ -58,11 +67,16 @@ export function ConfirmDialog({
           previous.focus();
       });
     };
-  }, [previous, focusCancel]);
+  }, [previous]);
+  // After `showModal`, which focused the main button; again for each new question.
+  const main = actions[0]?.label;
+  useLayoutEffect(() => {
+    if (focusCancel) cancel.current?.focus();
+  }, [focusCancel, main]);
 
-  const press = (run?: () => void) => {
-    run?.();
-    onClose();
+  const press = (action?: DialogAction) => {
+    action?.run();
+    if (!action?.keepOpen) onClose();
   };
   return (
     <dialog
@@ -71,6 +85,14 @@ export function ConfirmDialog({
       aria-labelledby={id}
       // Escape: the browser closes the dialog (it may not let a page refuse that).
       onClose={onClose}
+      // A held key repeats: only its first press, made for this question, may answer it.
+      onKeyDown={
+        ignoreHeldKeys
+          ? (e) => {
+              if (e.repeat && (e.key === "Enter" || e.key === " ")) e.preventDefault();
+            }
+          : undefined
+      }
     >
       <div className="body">
         {icon && <img className="icon" src={icon} width={64} height={64} alt="" />}
@@ -80,8 +102,8 @@ export function ConfirmDialog({
         {actions.map((a, i) => (
           <button
             key={a.label}
-            className={i === 0 ? "primary" : undefined}
-            onClick={() => press(a.run)}
+            className={a.danger ? "danger" : i === 0 ? "primary" : undefined}
+            onClick={() => press(a)}
           >
             {a.label}
           </button>

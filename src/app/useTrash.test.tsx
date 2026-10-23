@@ -1,7 +1,9 @@
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
-import type { Roots, Summary, TrashResult } from "../api/types";
+import type { Roots, Summary, TrashPreview, TrashResult } from "../api/types";
+import { PurgeDialog } from "../features/trash/PurgeDialog";
+import { TrashDialog } from "../features/trash/TrashDialog";
 import { rootEntries } from "./roots";
 import { useTrash } from "./useTrash";
 import { useTrashRefused } from "./useTrashRefused";
@@ -43,13 +45,20 @@ vi.mock("react", async (original) => ({
   useEffect: (commit: () => void) => void commit(),
 }));
 vi.mock("../api/client", () => ({
-  api: { trashPreview: vi.fn(), trash: vi.fn(), trashRefused: vi.fn(), cancelTrash: vi.fn() },
+  api: {
+    trashPreview: vi.fn(),
+    trash: vi.fn(),
+    deleteForGood: vi.fn(),
+    trashRefused: vi.fn(),
+    cancelTrash: vi.fn(),
+  },
   isCmdError: (e: unknown) => typeof e === "object" && e !== null && "code" in e,
   onTrashProgress: () => Promise.resolve(() => {}),
 }));
 vi.mock("../settings/react", () => ({ useSize: () => String }));
 vi.mock("../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
 vi.mock("../features/trash/TrashDialog", () => ({ TrashDialog: () => null }));
+vi.mock("../features/trash/PurgeDialog", () => ({ PurgeDialog: () => null }));
 
 const summary = (scanning: boolean): Summary => ({
   root: "/root",
@@ -211,7 +220,7 @@ describe("useTrash while it moves items", () => {
     await flush();
     const asking = useRenderTrash(roots, 7, vi.fn(), push);
     (asking.dialog as ReactElement<{ onConfirm: () => void }>).props.onConfirm();
-    expect(api.trash).toHaveBeenCalledWith(1, 4, [7]);
+    expect(api.trash).toHaveBeenCalledWith(1, 4, [7], false);
 
     const running = useRenderTrash(roots, 7, vi.fn(), push);
     expect([running.busy, running.root, running.menuTrash]).toEqual([true, "/root", null]);
@@ -245,5 +254,127 @@ describe("useTrash while it moves items", () => {
     const running = useRenderTrash(roots);
     expect(running.window).not.toBeNull();
     expect((running.status as ReactElement<{ onStop: unknown }>).props.onStop).toBeNull();
+  });
+});
+
+type Dialog = ReactElement<{ onConfirm: () => void; onClose: () => void; cleanup?: boolean }>;
+
+describe("useTrash in the clean-up lists", () => {
+  const roots: Roots = { roots: [summary(false)], queue: [] };
+  const done: TrashResult = { removed: 1, failed: [], warning: null, stopped: false };
+  /** One render of the hook, as the app shell does. */
+  const Shell = (push: Parameters<typeof useRenderTrash>[3]) =>
+    useRenderTrash(roots, 7, vi.fn(), push);
+  /** The dialog once the preview of the request that `ask` makes has come. */
+  async function asked(ask: (trash: ReturnType<typeof Shell>) => void, push = vi.fn()) {
+    ask(Shell(push));
+    await flush();
+    return Shell(push).dialog as Dialog;
+  }
+
+  it("asks with its own dialog before deleting for good, and deletes only on its answer", async () => {
+    vi.mocked(api.deleteForGood).mockResolvedValue(done);
+    const push = vi.fn();
+    const dialog = await asked((trash) => trash.onPurge(1, [7]), push);
+    expect(api.trashPreview).toHaveBeenCalledWith(1, 4, [7]);
+    expect(dialog.type).toBe(PurgeDialog);
+    expect(api.deleteForGood).not.toHaveBeenCalled();
+    expect(api.trash).not.toHaveBeenCalled();
+
+    dialog.props.onConfirm();
+    expect(api.deleteForGood).toHaveBeenCalledWith(1, 4, [7]);
+    expect(api.trash).not.toHaveBeenCalled();
+    await flush();
+    expect(push).toHaveBeenCalledWith("purge.done");
+  });
+
+  it("deletes nothing when the dialog is closed", async () => {
+    const dialog = await asked((trash) => trash.onPurge(1, [7]));
+    dialog.props.onClose();
+    expect(useRenderTrash(roots).dialog).toBeNull();
+    expect(api.deleteForGood).not.toHaveBeenCalled();
+  });
+
+  it("moves clean-up rows to the trash with the clean-up checks and says the bin must be emptied", async () => {
+    vi.mocked(api.trash).mockResolvedValue(done);
+    const push = vi.fn();
+    const dialog = await asked((trash) => trash.onTrash(1, [7], true), push);
+    expect(dialog.type).toBe(TrashDialog);
+    expect(dialog.props.cleanup).toBe(true);
+    dialog.props.onConfirm();
+    expect(api.trash).toHaveBeenCalledWith(1, 4, [7], true);
+    await flush();
+    expect(push).toHaveBeenCalledWith("trash.doneCleanup");
+  });
+
+  it("moves other rows to the trash without the clean-up checks", async () => {
+    vi.mocked(api.trash).mockResolvedValue(done);
+    const dialog = await asked((trash) => trash.onTrash(1, [7]));
+    expect(dialog.props.cleanup).toBe(false);
+    dialog.props.onConfirm();
+    expect(api.trash).toHaveBeenCalledWith(1, 4, [7], false);
+  });
+
+  it("takes marked clean-up rows to the trash as clean-up rows from the menu bar", async () => {
+    vi.mocked(api.trash).mockResolvedValue(done);
+    useRenderTrash(roots).onMarks([8, 9], true);
+    const dialog = await asked((trash) => trash.menuTrash?.());
+    expect(dialog.props.cleanup).toBe(true);
+    dialog.props.onConfirm();
+    expect(api.trash).toHaveBeenCalledWith(1, 4, [8, 9], true);
+  });
+
+  it("asks for no other request while one runs: the backend's Stop is shared", async () => {
+    vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
+    (await asked((trash) => trash.onTrash(1, [7], true))).props.onConfirm();
+    vi.mocked(api.trashPreview).mockClear();
+    const running = useRenderTrash(roots);
+    running.onPurge(1, [7]);
+    running.onTrash(1, [7]);
+    expect(api.trashPreview).not.toHaveBeenCalled();
+    expect(running.menuTrash).toBeNull();
+  });
+
+  const preview = { count: 1, size: 1, scannedAt: 1, paths: ["/a"], binFree: null };
+  /** Previews that come when the test resolves them. */
+  function heldPreviews() {
+    const previews: ((p: TrashPreview) => void)[] = [];
+    vi.mocked(api.trashPreview).mockImplementation(
+      () => new Promise((resolve) => previews.push(resolve)),
+    );
+    return previews;
+  }
+
+  it("keeps the first question of two asked at once", async () => {
+    const previews = heldPreviews();
+    const first = useRenderTrash(roots);
+    first.onTrash(1, [7]);
+    first.onPurge(1, [8]);
+    previews[0](preview);
+    previews[1](preview);
+    await flush();
+    expect((useRenderTrash(roots).dialog as Dialog).type).toBe(TrashDialog);
+  });
+
+  it("starts nothing from a question that comes while another request runs", async () => {
+    vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
+    const previews = heldPreviews();
+    const push = vi.fn();
+    const first = useRenderTrash(roots, 7, vi.fn(), push);
+    first.onTrash(1, [7]);
+    first.onPurge(1, [8]);
+    previews[0](preview);
+    await flush();
+    // The trash question is shown and answered: its request runs.
+    (useRenderTrash(roots, 7, vi.fn(), push).dialog as Dialog).props.onConfirm();
+    expect(api.trash).toHaveBeenCalledOnce();
+    // The late question comes while it runs: answering it starts nothing.
+    previews[1](preview);
+    await flush();
+    const late = useRenderTrash(roots, 7, vi.fn(), push).dialog as Dialog;
+    expect(late.type).toBe(PurgeDialog);
+    late.props.onConfirm();
+    expect(api.deleteForGood).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith("trash.busy");
   });
 });

@@ -234,7 +234,7 @@ export function TreeBody({
         if (row) activate(rowKey(row));
         break;
       case "Delete":
-        // Never with Shift: there is no deleting for good.
+        // Never with Shift: only the clean-up lists delete for good, the tree never does.
         if (row?.kind === "item" && !e.shiftKey && !e.repeat) {
           onTrash(row.generation, [row.item.id]);
         }

@@ -7,12 +7,14 @@ import { trashMessage } from "./text";
 
 interface Props {
   preview: TrashPreview;
+  /** Rows of a clean-up list: also when the space comes back, and whether the bin can take them. */
+  cleanup: boolean;
   onConfirm: () => void;
   onClose: () => void;
 }
 
 /** The confirmation of a trash request: what goes, its size, when it was scanned. Cancel has the focus. */
-export function TrashDialog({ preview, onConfirm, onClose }: Props) {
+export function TrashDialog({ preview, cleanup, onConfirm, onClose }: Props) {
   const { t, lang } = useT();
   const size = useSize();
   const message = trashMessage(
@@ -21,6 +23,7 @@ export function TrashDialog({ preview, onConfirm, onClose }: Props) {
     size,
     (seconds) => formatDate(seconds * 1000, lang),
     (n) => formatCount(n, lang),
+    cleanup,
   );
   return (
     <ConfirmDialog

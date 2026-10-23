@@ -24,6 +24,11 @@ export interface RowActions {
   markAll: () => void;
   /** Delete: the marked rows, else the cursor row, to the trash. */
   trash: () => void;
+  /**
+   * Shift+Delete: the same rows deleted for good (the dialog asks twice). Only the tables of the
+   * clean-up lists give it; elsewhere Shift+Delete does nothing.
+   */
+  purge?: () => void;
   /** Double click, or Enter on the cursor row. */
   open: (index: number) => void;
   /** The context menu of row `index` at viewport coordinates. */
@@ -110,8 +115,11 @@ export function tableKeyDown(
   // Keys pressed on the header buttons are theirs (Enter sorts).
   if (e.target !== e.currentTarget) return;
   if (e.key === "Delete") {
-    // Never with Shift: there is no deleting for good. A held key does not repeat it.
-    if (!e.repeat && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) actions.trash();
+    // A held key does not repeat it. With Shift: for good, only where the table offers it.
+    if (!e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (e.shiftKey) actions.purge?.();
+      else actions.trash();
+    }
     e.preventDefault();
     return;
   }

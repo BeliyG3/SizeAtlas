@@ -38,3 +38,17 @@
 .confirm a {
   color: var(--accent);
 }
+
+/* An action that cannot be taken back: red, in the theme's danger colour (its label says so too).
+   The text takes the window background, which reads well on the red of either theme. */
+.confirm button.danger,
+.confirm button.danger:hover:not(:disabled),
+.confirm button.danger:active:not(:disabled) {
+  color: var(--bg);
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.confirm button.danger:hover:not(:disabled) {
+  filter: brightness(1.1);
+}

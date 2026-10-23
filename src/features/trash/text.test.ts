@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { TrashPreview, TrashResult } from "../../api/types";
 import { translate, type Params } from "../../i18n";
-import { itemName, trashMessage, trashProgressText, trashReport } from "./text";
+import {
+  itemName,
+  purgeAgain,
+  purgeMessage,
+  trashMessage,
+  trashProgressText,
+  trashReport,
+} from "./text";
 
 const t = (key: string, params?: Params) => translate("en", key, params);
 const size = (bytes: number) => `${bytes} B`;
@@ -36,12 +43,55 @@ describe("trashMessage", () => {
     ]);
   });
 
+  it("says in the clean-up lists that the space comes back only with an empty bin", () => {
+    const preview: TrashPreview = { count: 1, size: 7, scannedAt: 1, paths: ["/a"], binFree: 100 };
+    const lines = trashMessage(preview, t, size, date, count, true).split("\n");
+    expect(lines.at(-1)).toBe("Space is freed only when you empty the Recycle Bin.");
+    expect(trashMessage(preview, t, size, date, count)).not.toContain("Recycle Bin");
+  });
+
+  it("warns that the bin will drop its oldest files when the items do not fit in its free space", () => {
+    const over: TrashPreview = { count: 2, size: 300, scannedAt: 1, paths: [], binFree: 200 };
+    const warning =
+      "The Recycle Bin can take 200 B more. Windows will delete its oldest files for good.";
+    expect(trashMessage(over, t, size, date, count, true).split("\n").at(-1)).toBe(warning);
+    // It fits, or the free space is not known (macOS, Linux): no warning.
+    for (const binFree of [300, null])
+      expect(trashMessage({ ...over, binFree }, t, size, date, count, true)).not.toContain(
+        "oldest",
+      );
+    // Not outside the clean-up lists.
+    expect(trashMessage(over, t, size, date, count)).not.toContain("oldest");
+  });
+
   it("speaks Russian", () => {
     const ru = (key: string, params?: Params) => translate("ru", key, params);
     const preview: TrashPreview = { count: 5, size: 1, scannedAt: 1, paths: ["/a"], binFree: null };
     const message = trashMessage(preview, ru, size, date, count);
     expect(message).toContain("Переместить в корзину 5 объектов?");
     expect(message).toContain("…и ещё 4");
+  });
+});
+
+describe("purgeMessage", () => {
+  const paths = Array.from({ length: 10 }, (_, i) => `/a/${i}`);
+  const preview: TrashPreview = { count: 12, size: 300, scannedAt: 5, paths, binFree: 0 };
+
+  it("asks first with the paths, the total and that it cannot be undone", () => {
+    expect(purgeMessage(preview, t, size, date, count).split("\n")).toEqual([
+      "Delete permanently?",
+      ...paths,
+      "…and 2 more",
+      "Total size: 300 B. Scanned day 5.",
+      "This cannot be undone: the files will not go to the Recycle Bin.",
+    ]);
+  });
+
+  it("asks again with the count and the size", () => {
+    expect(purgeAgain(preview, t, size, count)).toBe("Delete 12 items, 300 B, permanently?");
+    expect(purgeAgain({ ...preview, count: 1 }, t, size, count)).toBe(
+      "Delete 1 item, 300 B, permanently?",
+    );
   });
 });
 
@@ -114,6 +164,31 @@ describe("trashReport", () => {
     ]);
   });
 
+  it("says after the clean-up lists' trash that the bin must be emptied", () => {
+    const cleanup = (result: TrashResult, n: number) =>
+      trashReport(result, preview(n), t, errorText, count, size, "cleanup");
+    const notice = "Moved to the Recycle Bin: 1200 B. Empty it to free the space.";
+    expect(cleanup(done(1), 1)).toEqual([notice]);
+    expect(cleanup(done(3), 3)).toEqual([notice]);
+    expect(cleanup(done(0, { failed: [io("a")] }), 1)).toEqual([
+      "Could not move to the trash: a: in use",
+    ]);
+  });
+
+  it("says after deleting for good that the space is free, and never speaks of the trash", () => {
+    const purge = (result: TrashResult, n: number) =>
+      trashReport(result, preview(n), t, errorText, count, size, "purge");
+    expect(purge(done(1), 1)).toEqual(["Deleted permanently: 1200 B. The space is free."]);
+    expect(purge(done(2, { failed: [io("a")] }), 3)).toEqual([
+      "Deleted 2 of 3 permanently. Could not delete: a: in use",
+    ]);
+    expect(purge(done(0, { failed: [io("a")] }), 1)).toEqual(["Could not delete: a: in use"]);
+    expect(purge(done(3, { stopped: true, failed: [io("a")] }), 120)).toEqual([
+      "Stopped after deleting 3 of 120 items.",
+      "Could not delete: a: in use",
+    ]);
+  });
+
   it("speaks Russian with its plural forms", () => {
     const ru = (key: string, params?: Params) => translate("ru", key, params);
     expect(report(done(5), 5, ru)).toEqual(["Перемещено в корзину: 5 объектов (1200 B)."]);
@@ -130,6 +205,11 @@ describe("trashProgressText", () => {
       trashProgressText({ done, total: 1200, current }, t, count);
     expect(at(2, "C:\\a")).toBe("Moving to the trash: 3 of 1,200");
     expect(at(1200, null)).toBe("Moving to the trash: 1,200 of 1,200");
+  });
+
+  it("says that the items are deleted for good, not moved", () => {
+    const at = trashProgressText({ done: 2, total: 1200, current: "/a" }, t, count, true);
+    expect(at).toBe("Deleting permanently: 3 of 1,200");
   });
 
   it("names an item by the last part of its path", () => {

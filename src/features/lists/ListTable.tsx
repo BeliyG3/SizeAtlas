@@ -65,10 +65,12 @@ interface Props {
   /** Instead of `onEnter` for Enter or a double click on a folder (not for Backspace): a search leaves itself there. */
   onOpenFolder?: (id: number, parent?: number) => void;
   onMenu: (target: MenuTarget) => void;
-  /** Delete: asks to move `ids` to the trash. */
-  onTrash: (ids: readonly number[]) => void;
+  /** Delete: asks to move `ids` to the trash; `cleanup`: rows of a clean-up list. */
+  onTrash: (ids: readonly number[], cleanup: boolean) => void;
+  /** Shift+Delete in a clean-up list: asks to delete `ids` for good. */
+  onPurge: (ids: readonly number[]) => void;
   /** The marked items, whenever they change: Scan › Move to the trash acts on them. */
-  onMarks: (ids: readonly number[]) => void;
+  onMarks: (ids: readonly number[], cleanup: boolean) => void;
   onFail: (e: unknown) => void;
 }
 
@@ -91,10 +93,12 @@ export function ListTable({
   onOpenFolder = onEnter,
   onMenu,
   onTrash,
+  onPurge,
   onMarks,
   onFail,
 }: Props) {
   const { t, lang } = useT();
+  const cleanup = isCleanupMode(kind);
   const { generation, rev, baselineRev } = summary;
   const moving = useMovingIds(generation);
   const body = useRef<HTMLDivElement>(null);
@@ -139,8 +143,8 @@ export function ListTable({
   const [marks, setMarks] = useMarks(listKey, selectedId);
   // A deleted folder is not a node: it cannot be marked, so no action takes it to the backend.
   const idAt = (index: number) => liveId(rows[index]);
-  useEffect(() => onMarks([...marks.ids]), [marks.ids, onMarks]);
-  useEffect(() => () => onMarks([]), [onMarks]);
+  useEffect(() => onMarks([...marks.ids], cleanup), [marks.ids, cleanup, onMarks]);
+  useEffect(() => () => onMarks([], false), [onMarks]);
   const { first, last } = visibleRange(scrollTop, viewport, rows.length);
 
   // Results of another query open at the top, not where the last ones were scrolled to.
@@ -195,12 +199,16 @@ export function ListTable({
   const up = () => {
     if (parent !== null) onEnter(parent);
   };
+  /** Delete and Shift+Delete act on the marked rows, else on the cursor row. */
+  const withRows = (go: (ids: readonly number[]) => void) => () => {
+    const ids = targets(marks, cursor === null ? undefined : idAt(cursor));
+    if (ids.length > 0) go(ids);
+  };
   const actions = {
     point,
-    trash: () => {
-      const ids = targets(marks, cursor === null ? undefined : idAt(cursor));
-      if (ids.length > 0) onTrash(ids);
-    },
+    trash: withRows((ids) => onTrash(ids, cleanup)),
+    // Only the clean-up lists delete for good; elsewhere Shift+Delete does nothing.
+    purge: cleanup ? withRows(onPurge) : undefined,
     markAll: () => setMarks(markAll(marks, rows.length, idAt)),
     open,
     menuAt,
@@ -249,9 +257,7 @@ export function ListTable({
           })}
         </p>
       )}
-      {list && isCleanupMode(kind) && (
-        <CleanupNotes list={list} summary={summary} onFail={onFail} />
-      )}
+      {list && cleanup && <CleanupNotes list={list} summary={summary} onFail={onFail} />}
       <div
         className="contents"
         ref={body}

@@ -70,6 +70,24 @@ describe("tableKeyDown", () => {
     expect(a.trash).toHaveBeenCalledOnce();
   });
 
+  it("deletes for good with Shift+Delete only where the table offers it, never while it repeats", () => {
+    const plain = actions();
+    tableKeyDown(press("Delete", { shiftKey: true }), table, plain, false);
+    expect(plain.trash).not.toHaveBeenCalled();
+
+    const cleanup = { ...actions(), purge: vi.fn() };
+    tableKeyDown(press("Delete", { shiftKey: true }), table, cleanup, false);
+    expect(cleanup.purge).toHaveBeenCalledOnce();
+    expect(cleanup.trash).not.toHaveBeenCalled();
+    tableKeyDown(press("Delete", { shiftKey: true, repeat: true }), table, cleanup, false);
+    tableKeyDown(press("Delete", { shiftKey: true, ctrlKey: true }), table, cleanup, false);
+    expect(cleanup.purge).toHaveBeenCalledOnce();
+    // Delete alone still moves to the trash.
+    tableKeyDown(press("Delete"), table, cleanup, false);
+    expect(cleanup.trash).toHaveBeenCalledOnce();
+    expect(cleanup.purge).toHaveBeenCalledOnce();
+  });
+
   it("opens the cursor row once per press and goes up", () => {
     const a = actions();
     tableKeyDown(press("Enter"), table, a, false);
