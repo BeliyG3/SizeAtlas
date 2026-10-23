@@ -2,7 +2,7 @@
 //! hide them. A spot that could not be found or read for lack of access is reported as
 //! `NoAccess`.
 
-use super::paths::{components, fits};
+use super::paths::{components, fits, node_path};
 use super::{Context, Info, Spot, SpotKind};
 use crate::tree::{NO_PARENT, Tree, flags};
 
@@ -53,7 +53,7 @@ pub(crate) fn find(tree: &Tree, ctx: &Context, spots: &[Spot]) -> Vec<Info> {
             );
         }
     }
-    let path = |id| tree.path(id).to_string_lossy().into_owned();
+    let path = |id| node_path(tree, id, ctx.os);
     out.extend(
         unreadable
             .into_iter()

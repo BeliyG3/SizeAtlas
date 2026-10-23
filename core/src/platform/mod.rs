@@ -10,6 +10,18 @@ mod windows;
 #[cfg(windows)]
 pub use windows::*;
 
+/// What a walk that deletes may do with an entry that may be a reparse point.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reparse {
+    /// An ordinary file or folder.
+    Plain,
+    /// A symbolic link, junction or mount point: deleting it removes only the link.
+    Link,
+    /// Another reparse point (a cloud file, a ProjFS or deduplicated folder): it holds real
+    /// content that a delete would take with it.
+    Other,
+}
+
 /// The Recycle Bin of a volume: its effective capacity and the bytes it holds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BinSpace {

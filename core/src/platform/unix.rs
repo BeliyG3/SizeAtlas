@@ -102,9 +102,13 @@ pub fn can_recycle(_path: &Path, _size: u64) -> bool {
     true
 }
 
-/// A symbolic link.
-pub fn is_reparse(meta: &Metadata) -> bool {
-    meta.file_type().is_symlink()
+/// A symbolic link is a link; Unix has no other kind of reparse point.
+pub fn reparse(meta: &Metadata, _path: &Path) -> super::Reparse {
+    if meta.file_type().is_symlink() {
+        super::Reparse::Link
+    } else {
+        super::Reparse::Plain
+    }
 }
 
 /// Content that exists only in iCloud: reading it downloads it.
@@ -113,15 +117,27 @@ pub fn is_cloud(meta: &Metadata) -> bool {
 }
 
 /// The device of an item: a folder on another device is a mount point.
+///
+/// ponytail: a bind mount of the same file system keeps the device, so it is not caught;
+/// compare mount IDs (`statx` `STATX_MNT_ID`) if Linux rules ever reach such places.
 pub fn device(meta: &Metadata) -> u64 {
     meta.dev()
 }
 
-/// When the item's data or attributes last changed (ctime, ns since the Unix epoch), read from
-/// the item itself, never from a link's target.
+/// Mount points are no links on Unix, so the re-check looks for links up to `/`.
+pub fn volume_mount(_path: &Path) -> Option<PathBuf> {
+    None
+}
+
+/// When the item's data or attributes last changed (ctime, ns since the Unix epoch; at or
+/// before the epoch: unknown, 0), read from the item itself, never from a link's target.
 pub fn change_time(path: &Path) -> std::io::Result<i64> {
     let meta = std::fs::symlink_metadata(path)?;
-    Ok(meta.ctime().saturating_mul(1_000_000_000) + meta.ctime_nsec())
+    let ns = meta
+        .ctime()
+        .saturating_mul(1_000_000_000)
+        .saturating_add(meta.ctime_nsec());
+    Ok(ns.max(0))
 }
 
 /// Only Windows defers file operations to a restart.

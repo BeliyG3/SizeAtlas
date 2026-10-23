@@ -308,6 +308,8 @@ impl Tree {
 #[cfg(test)]
 mod recheck_tests;
 #[cfg(test)]
+mod recheck_time_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tests_never;

@@ -4,17 +4,14 @@ use std::path::Path;
 use std::ptr::null_mut;
 
 use windows_sys::Win32::Foundation::S_OK;
-use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS};
 use windows_sys::Win32::Storage::FileSystem::{
-    GetDiskFreeSpaceExW, GetDriveTypeW, GetVolumeNameForVolumeMountPointW, GetVolumePathNameW,
+    GetDiskFreeSpaceExW, GetDriveTypeW, GetVolumeNameForVolumeMountPointW,
 };
-use windows_sys::Win32::System::Registry::{
-    HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RegGetValueW,
-};
-
+use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
 use windows_sys::Win32::UI::Shell::{SHQUERYRBINFO, SHQueryRecycleBinW};
 
-use super::wide_nul;
+use super::registry::dword;
+use super::volume_root;
 use crate::platform::BinSpace;
 
 /// `DRIVE_FIXED` of `GetDriveTypeW` (windows-sys has it under another feature).
@@ -43,13 +40,28 @@ pub fn trash_allowed(
         && capacity.is_some_and(|capacity| item_size <= capacity)
 }
 
+/// What limits the bin of a volume.
+#[derive(Clone, Copy, Debug, Default)]
+struct Limits {
+    /// The bin's own `MaxCapacity`, in bytes.
+    max_capacity: Option<u64>,
+    /// The "Maximum allowed Recycle Bin size" policy (`RecycleBinSize`), in percent of the
+    /// volume: the smaller of the user's and the machine's.
+    policy_percent: Option<u32>,
+}
+
 /// The size limit of a bin, for every check of the trash: `MaxCapacity` when set, else the
-/// Windows default for a volume of `volume_size` bytes; `None` when neither is known.
+/// Windows default for a volume of `volume_size` bytes, and never more than the policy allows;
+/// `None` when it cannot be known.
 ///
 /// ponytail: the default of a bin never configured is taken as 5 % of the volume. Windows gives
 /// at least that, so this refuses some items the real bin would take, never the other way.
-fn effective_capacity(max_capacity: Option<u64>, volume_size: Option<u64>) -> Option<u64> {
-    max_capacity.or(volume_size.map(|size| size / 20))
+fn effective_capacity(limits: Limits, volume_size: Option<u64>) -> Option<u64> {
+    let own = limits.max_capacity.or(volume_size.map(|size| size / 20))?;
+    match limits.policy_percent {
+        None => Some(own),
+        Some(percent) => Some(own.min(volume_size? / 100 * u64::from(percent.min(100)))),
+    }
 }
 
 /// The bin of the volume of `path`: its [`effective_capacity`] and the bytes it holds (for
@@ -57,7 +69,7 @@ fn effective_capacity(max_capacity: Option<u64>, volume_size: Option<u64>) -> Op
 pub fn bin_space(path: &Path) -> Option<BinSpace> {
     let root = volume_root(path)?;
     let guid = volume_guid(&root)?;
-    let capacity = effective_capacity(max_capacity(&guid).ok()?, volume_size(&root))?;
+    let capacity = effective_capacity(limits(&guid).ok()?, volume_size(&root))?;
     let mut info = SHQUERYRBINFO {
         cbSize: size_of::<SHQUERYRBINFO>() as u32,
         i64Size: 0,
@@ -89,21 +101,20 @@ pub fn can_recycle(path: &Path, size: u64) -> bool {
     let read = || -> Result<_, ()> {
         let Some(guid) = &guid else {
             // Refused by `trash_allowed` below, whatever the settings say.
-            return Ok((false, None, false));
+            return Ok((false, Limits::default(), false));
         };
         let nuke =
             dword(HKEY_CURRENT_USER, &bin_key(guid), "NukeOnDelete")?.is_some_and(|v| v != 0);
-        let max_capacity = max_capacity(guid)?;
         let mut policy = false;
         for hive in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
             policy |= dword(hive, EXPLORER_POLICIES, "NoRecycleFiles")?.is_some_and(|v| v != 0);
         }
-        Ok((nuke, max_capacity, policy))
+        Ok((nuke, limits(guid)?, policy))
     };
-    let Ok((nuke, max_capacity, policy)) = read() else {
+    let Ok((nuke, limits, policy)) = read() else {
         return false;
     };
-    let capacity = effective_capacity(max_capacity, volume_size(&root));
+    let capacity = effective_capacity(limits, volume_size(&root));
     trash_allowed(drive_type, guid.is_some(), policy, nuke, capacity, size)
 }
 
@@ -111,10 +122,20 @@ fn bin_key(guid: &str) -> String {
     format!("{BIT_BUCKET}{guid}")
 }
 
-/// `MaxCapacity` of the bin of the volume `guid`, in bytes; `Ok(None)` if not set.
-fn max_capacity(guid: &str) -> Result<Option<u64>, ()> {
-    Ok(dword(HKEY_CURRENT_USER, &bin_key(guid), "MaxCapacity")?
-        .map(|megabytes| u64::from(megabytes) << 20))
+/// The [`Limits`] of the bin of the volume `guid`.
+fn limits(guid: &str) -> Result<Limits, ()> {
+    let max_capacity = dword(HKEY_CURRENT_USER, &bin_key(guid), "MaxCapacity")?
+        .map(|megabytes| u64::from(megabytes) << 20);
+    let mut policy_percent: Option<u32> = None;
+    for hive in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
+        if let Some(percent) = dword(hive, EXPLORER_POLICIES, "RecycleBinSize")? {
+            policy_percent = Some(policy_percent.map_or(percent, |p| p.min(percent)));
+        }
+    }
+    Ok(Limits {
+        max_capacity,
+        policy_percent,
+    })
 }
 
 /// The size of the volume mounted at `root` (as the current user's quota allows).
@@ -123,19 +144,6 @@ fn volume_size(root: &[u16]) -> Option<u64> {
     // SAFETY: `root` is NUL-terminated; the values not wanted may be null.
     let read = unsafe { GetDiskFreeSpaceExW(root.as_ptr(), null_mut(), &mut total, null_mut()) };
     (read != 0).then_some(total)
-}
-
-/// The mount point of the volume of `path` (`C:\` or a mounted folder), NUL-terminated.
-fn volume_root(path: &Path) -> Option<Vec<u16>> {
-    let wide = wide_nul(path);
-    let mut root = vec![0u16; 1024];
-    // SAFETY: `wide` is NUL-terminated and `root` has the capacity we pass.
-    if unsafe { GetVolumePathNameW(wide.as_ptr(), root.as_mut_ptr(), root.len() as u32) } == 0 {
-        return None;
-    }
-    let end = root.iter().position(|&c| c == 0)?;
-    root.truncate(end + 1);
-    Some(root)
 }
 
 /// `{GUID}` of the volume mounted at `root`, as the Recycle Bin settings name it.
@@ -154,50 +162,26 @@ fn volume_guid(root: &[u16]) -> Option<String> {
     Some(name[start..=end].to_owned())
 }
 
-/// The DWORD `value` of `key` in `hive`, read only: `Ok(None)` if it is not set, `Err` if it
-/// cannot be read.
-fn dword(hive: HKEY, key: &str, value: &str) -> Result<Option<u32>, ()> {
-    let key: Vec<u16> = key.encode_utf16().chain(Some(0)).collect();
-    let value: Vec<u16> = value.encode_utf16().chain(Some(0)).collect();
-    let mut data = 0u32;
-    let mut size = size_of::<u32>() as u32;
-    // SAFETY: both names are NUL-terminated; `data` is a valid out-buffer of `size` bytes.
-    let status = unsafe {
-        RegGetValueW(
-            hive,
-            key.as_ptr(),
-            value.as_ptr(),
-            RRF_RT_REG_DWORD,
-            null_mut(),
-            (&raw mut data).cast(),
-            &mut size,
-        )
-    };
-    read_status(status, data)
-}
-
-/// The result of `RegGetValueW`: the value, no value (the key or the value does not exist), or
-/// an error that says nothing about the setting.
-fn read_status(status: u32, data: u32) -> Result<Option<u32>, ()> {
-    match status {
-        ERROR_SUCCESS => Ok(Some(data)),
-        ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND => Ok(None),
-        _ => Err(()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const MB: u64 = 1 << 20;
+    const VOLUME: Option<u64> = Some(100_000 * MB);
+
+    fn caps(max_capacity: Option<u64>, policy_percent: Option<u32>) -> Limits {
+        Limits {
+            max_capacity,
+            policy_percent,
+        }
+    }
 
     #[test]
     fn only_a_fixed_drive_with_room_in_its_bin_takes_an_item() {
         const REMOVABLE: u32 = 2;
         const REMOTE: u32 = 4;
-        const MB: u64 = 1 << 20;
-        const VOLUME: Option<u64> = Some(100_000 * MB);
         let fixed = |max, size| {
-            let capacity = effective_capacity(max, VOLUME);
+            let capacity = effective_capacity(caps(max, None), VOLUME);
             trash_allowed(DRIVE_FIXED, true, false, false, capacity, size)
         };
         assert!(
@@ -209,15 +193,9 @@ mod tests {
         assert!(fixed(Some(10 * MB), 10 * MB));
         assert!(!fixed(Some(10 * MB), 10 * MB + 1), "bigger than the bin");
         assert!(fixed(Some(10_000 * MB), 10_000 * MB), "a set limit wins");
+        let unknown = effective_capacity(Limits::default(), None);
         assert!(
-            !trash_allowed(
-                DRIVE_FIXED,
-                true,
-                false,
-                false,
-                effective_capacity(None, None),
-                1
-            ),
+            !trash_allowed(DRIVE_FIXED, true, false, false, unknown, 1),
             "no limit and no volume size"
         );
         assert!(
@@ -237,21 +215,27 @@ mod tests {
     }
 
     #[test]
-    fn only_a_missing_setting_counts_as_not_set() {
-        use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_MORE_DATA};
-        const ERROR_UNSUPPORTED_TYPE: u32 = 1630;
-        assert_eq!(read_status(ERROR_SUCCESS, 7), Ok(Some(7)));
-        assert_eq!(read_status(ERROR_SUCCESS, 0), Ok(Some(0)));
-        assert_eq!(read_status(ERROR_FILE_NOT_FOUND, 0), Ok(None));
-        assert_eq!(read_status(ERROR_PATH_NOT_FOUND, 0), Ok(None));
-        for status in [
-            ERROR_ACCESS_DENIED,
-            ERROR_MORE_DATA,
-            ERROR_UNSUPPORTED_TYPE,
-            u32::MAX,
-        ] {
-            assert_eq!(read_status(status, 7), Err(()), "status {status}");
-        }
+    fn the_size_policy_caps_the_bin() {
+        let capacity = |max, percent| effective_capacity(caps(max, percent), VOLUME);
+        assert_eq!(
+            capacity(None, Some(1)),
+            Some(1_000 * MB),
+            "below the default"
+        );
+        assert_eq!(
+            capacity(None, Some(50)),
+            Some(5_000 * MB),
+            "the default is smaller"
+        );
+        assert_eq!(capacity(Some(80_000 * MB), Some(10)), Some(10_000 * MB));
+        assert_eq!(capacity(Some(10 * MB), Some(10)), Some(10 * MB));
+        assert_eq!(capacity(None, Some(0)), Some(0));
+        assert_eq!(capacity(Some(200_000 * MB), Some(300)), Some(100_000 * MB));
+        assert_eq!(
+            effective_capacity(caps(Some(MB), Some(10)), None),
+            None,
+            "a policy share of an unknown volume"
+        );
     }
 
     #[test]

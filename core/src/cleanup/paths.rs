@@ -1,7 +1,7 @@
 //! Known folders as component lists, and matching those lists against node names.
 
 use super::Os;
-use crate::tree::glob;
+use crate::tree::{NO_PARENT, Tree, glob};
 
 /// Known folders of the current user and the system, as plain path strings. An empty string,
 /// or one with no components, means the folder does not exist on this OS.
@@ -163,6 +163,26 @@ impl At {
         };
         lists.into_iter().filter(|c| !c.is_empty()).collect()
     }
+}
+
+/// The path of node `id` written by the rules of `os`: the root's own path, then the names below
+/// it joined with `\` on Windows and `/` elsewhere, so a table gives the same text on every host.
+pub(crate) fn node_path(tree: &Tree, id: u32, os: Os) -> String {
+    let sep = if os == Os::Windows { '\\' } else { '/' };
+    let mut names = Vec::new();
+    let mut at = id;
+    while at != NO_PARENT {
+        names.push(tree.name(at));
+        at = tree.node(at).parent;
+    }
+    let mut out = String::new();
+    for name in names.iter().rev() {
+        if !out.is_empty() && !out.ends_with(['\\', '/']) {
+            out.push(sep);
+        }
+        out.push_str(name);
+    }
+    out
 }
 
 /// The components of a path by the rules of `os`. On Windows the `\\?\` and `\\?\UNC\`

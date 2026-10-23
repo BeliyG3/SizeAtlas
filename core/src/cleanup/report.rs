@@ -1,7 +1,7 @@
 //! Matched items to rows and info: what they hold, their age and size, running apps.
 
 use super::markers::locks;
-use super::paths::fits;
+use super::paths::{fits, node_path};
 use super::walk::{Found, Walk};
 use super::{Age, App, Cleanup, Info, Mode, Reason, Row, Rule, is_old};
 
@@ -11,7 +11,7 @@ const LARGE: u64 = 1 << 30;
 impl Walk<'_> {
     pub(super) fn finish(self) -> Cleanup {
         let mut out = Cleanup::default();
-        let path = |id| self.tree.path(id).to_string_lossy().into_owned();
+        let path = |id| node_path(self.tree, id, self.ctx.os);
         let no_access = |id| Info::NoAccess { path: path(id) };
         out.info
             .extend(self.unreadable.iter().map(|&id| no_access(id)));

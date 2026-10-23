@@ -220,7 +220,7 @@ fn an_unreadable_update_folder_is_reported() {
         .info
         .iter()
         .map(|i| match i {
-            Info::NoAccess { path } => path.replace('/', "\\"),
+            Info::NoAccess { path } => path.clone(),
             other => panic!("{other:?}"),
         })
         .collect();

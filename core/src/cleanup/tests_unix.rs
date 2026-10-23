@@ -142,3 +142,22 @@ fn linux_follows_xdg_cache_home_and_skips_tmp() {
         (vec!["home/u/.cache/thumbnails".into()], vec![])
     );
 }
+
+#[test]
+fn info_paths_follow_the_rules_of_the_listed_os() {
+    let linux = ctx(Os::Linux, "/home/u");
+    let tree = build(
+        "/",
+        vec![it("home/u/.cache/").flags(crate::tree::flags::ACCESS_ERROR)],
+    );
+    let paths: Vec<_> = tree
+        .cleanup(&linux)
+        .info
+        .into_iter()
+        .filter_map(|i| match i {
+            Info::NoAccess { path } => Some(path),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(paths, ["/home/u/.cache"]);
+}
