@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, Rw
 use sizeatlas_core::baseline::Baseline;
 use sizeatlas_core::tree::{ListOrder, Tree};
 
+use crate::cleanup::{ContextFn, real_context};
 use crate::details::MAX_DETAILS;
 use crate::dto::{CrumbDto, RootsDto, Summary};
 use crate::error::CmdError;
@@ -60,6 +61,8 @@ pub struct Shared {
     pub exit: AtomicU8,
     /// Stop asked for the running trash request (see `AppState::stop_trash`).
     pub trash_stop: AtomicBool,
+    /// The context of the clean-up modes, built for each request that needs it.
+    pub context: ContextFn,
 }
 
 #[derive(Clone)]
@@ -67,6 +70,13 @@ pub struct AppState(pub Arc<Shared>);
 
 impl Default for AppState {
     fn default() -> Self {
+        AppState::with_context(Arc::new(real_context))
+    }
+}
+
+impl AppState {
+    /// A state whose clean-up modes see the machine through `context`.
+    pub fn with_context(context: ContextFn) -> Self {
         AppState(Arc::new(Shared {
             data: RwLock::new(Data {
                 generation: 0,
@@ -76,11 +86,10 @@ impl Default for AppState {
             scans: Mutex::default(),
             exit: AtomicU8::new(crate::exit::RUNNING),
             trash_stop: AtomicBool::new(false),
+            context,
         }))
     }
-}
 
-impl AppState {
     fn read_data(&self) -> RwLockReadGuard<'_, Data> {
         self.0.data.read().unwrap_or_else(PoisonError::into_inner)
     }

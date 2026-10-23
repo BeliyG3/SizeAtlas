@@ -17,7 +17,7 @@ tauri-build = { version = "2.7", features = [] }
 sizeatlas-core = { path = "../core" }
 dunce = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-sysinfo = { version = "0.38", default-features = false, features = ["disk"] }
+sysinfo = { version = "0.38", default-features = false, features = ["disk", "system"] }
 tauri = { version = "2.12", features = [] }
 tauri-plugin-clipboard-manager = "2.4"
 tauri-plugin-dialog = "2.8"

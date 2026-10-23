@@ -84,13 +84,15 @@ fn a_running_mac_browser_hides_its_cache() {
     );
     let out = tree.cleanup(&mac);
     assert!(out.cleanup.is_empty());
-    assert_eq!(
-        out.info,
+    assert!(matches!(
+        &out.info[..],
         [Info::AppRunning {
             app: "Google Chrome",
+            mode: Mode::Cleanup,
+            ids,
             size: 4
-        }]
-    );
+        }] if ids.len() == 1
+    ));
 }
 
 #[test]
@@ -155,7 +157,7 @@ fn info_paths_follow_the_rules_of_the_listed_os() {
         .info
         .into_iter()
         .filter_map(|i| match i {
-            Info::NoAccess { path } => Some(path),
+            Info::NoAccess { path, .. } => Some(path),
             _ => None,
         })
         .collect();

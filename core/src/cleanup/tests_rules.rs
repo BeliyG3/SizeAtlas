@@ -169,6 +169,12 @@ fn a_running_app_turns_its_rows_into_one_info() {
         out.info,
         [Info::AppRunning {
             app: DISCORD.name,
+            mode: Mode::Cleanup,
+            // In the order of the walk.
+            ids: vec![
+                id(&tree, r"Users\u\AppData\Roaming\discordptb\Code Cache"),
+                id(&tree, r"Users\u\AppData\Roaming\discord\Code Cache"),
+            ],
             size: 12
         }]
     );
@@ -178,6 +184,8 @@ fn a_running_app_turns_its_rows_into_one_info() {
     assert!(out.cleanup.is_empty());
     assert!(out.info.contains(&Info::AppRunning {
         app: NPM.name,
+        mode: Mode::Cleanup,
+        ids: vec![id(&tree, r"Users\u\AppData\Local\npm-cache\_cacache")],
         size: 3
     }));
 }
@@ -196,7 +204,7 @@ fn an_unreadable_folder_inside_a_match_is_reported_not_listed() {
     assert_eq!(listed(&tree, &out).0, Vec::<String>::new());
     assert_eq!(out.review.len(), 1);
     assert!(out.approximate);
-    assert!(matches!(&out.info[..], [Info::NoAccess { path }] if path.ends_with("old")));
+    assert!(matches!(&out.info[..], [Info::NoAccess { path, .. }] if path.ends_with("old")));
 }
 
 #[test]
@@ -207,7 +215,7 @@ fn an_unreadable_place_of_a_rule_is_reported() {
     );
     let out = run(&tree, &win());
     assert!(out.approximate);
-    assert!(matches!(&out.info[..], [Info::NoAccess { path }] if path.ends_with("Temp")));
+    assert!(matches!(&out.info[..], [Info::NoAccess { path, .. }] if path.ends_with("Temp")));
 }
 
 #[test]

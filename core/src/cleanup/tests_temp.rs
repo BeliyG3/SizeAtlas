@@ -105,7 +105,7 @@ fn the_system_temp_needs_access_and_no_pending_restart() {
     );
     let out = tree.cleanup(&win());
     assert_eq!(listed(&tree, &out), (vec![], vec![]));
-    assert!(matches!(&out.info[..], [Info::NoAccess { path }] if path.ends_with("Temp")));
+    assert!(matches!(&out.info[..], [Info::NoAccess { path, .. }] if path.ends_with("Temp")));
 
     let items = || vec![it(r"Windows\Temp\old\f"), it(temp(r"old\f"))];
     assert_eq!(

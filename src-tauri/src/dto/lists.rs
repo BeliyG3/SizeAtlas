@@ -7,7 +7,7 @@ use sizeatlas_core::baseline::Baseline;
 use sizeatlas_core::categories::DIR_CATEGORY;
 use sizeatlas_core::tree::Tree;
 
-use super::{ChangeDto, ItemDto};
+use super::{ChangeDto, CleanupDto, ItemDto, ReasonDto};
 
 /// Folder of `id` relative to its ancestor `base`, its names joined with the OS separator;
 /// empty when `id` is directly inside `base`.
@@ -35,6 +35,8 @@ pub struct ListItemDto {
     pub parent: u32,
     /// A folder the baseline had and the tree has no more (only in `GrewMost`).
     pub deleted: bool,
+    /// Why the item is listed (only in `Cleanup` and `Review`).
+    pub reason: Option<ReasonDto>,
 }
 
 impl ListItemDto {
@@ -49,6 +51,7 @@ impl ListItemDto {
             folder: folder_below(tree, base, id),
             parent: tree.node(id).parent,
             deleted: false,
+            reason: None,
         }
     }
 
@@ -92,6 +95,7 @@ impl ListItemDto {
             folder,
             parent,
             deleted: true,
+            reason: None,
         }
     }
 }
@@ -106,15 +110,18 @@ pub struct ListDto {
     /// More items matched than the limit allowed.
     pub truncated: bool,
     pub items: Vec<ListItemDto>,
-    /// Totals of a search; `None` for every other list.
+    /// Totals of a search or of a clean-up mode; `None` for every other list.
     pub found: Option<FoundDto>,
+    /// The info and accuracy of a clean-up mode; `None` for every other list.
+    pub cleanup: Option<CleanupDto>,
     /// As in [`super::Summary`].
     pub baseline_at: Option<i64>,
     pub baseline_rev: u64,
     pub baseline_pending: bool,
 }
 
-/// What a search found in all, not just in the `items` that fit the limit.
+/// What a search or a clean-up mode found in all, not just in the `items` that fit the limit.
+/// Clean-up rows never nest, so there each row counts once.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FoundDto {

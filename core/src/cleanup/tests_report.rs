@@ -51,7 +51,7 @@ fn unreadable_places_are_reported_once_and_not_for_young_items() {
         .info
         .iter()
         .map(|i| match i {
-            Info::NoAccess { path } => path.replace('/', "\\"),
+            Info::NoAccess { path, .. } => path.replace('/', "\\"),
             other => panic!("{other:?}"),
         })
         .collect();
@@ -100,6 +100,8 @@ fn an_app_command_line_matches_ignoring_case() {
         out.info,
         [Info::AppRunning {
             app: "Gradle",
+            mode: Mode::Review,
+            ids: vec![id(&tree, r"Users\u\.gradle\caches")],
             size: 4
         }]
     );

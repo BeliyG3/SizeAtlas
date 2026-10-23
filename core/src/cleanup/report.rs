@@ -12,10 +12,10 @@ impl Walk<'_> {
     pub(super) fn finish(self) -> Cleanup {
         let mut out = Cleanup::default();
         let path = |id| node_path(self.tree, id, self.ctx.os);
-        let no_access = |id| Info::NoAccess { path: path(id) };
+        let no_access = |id| Info::NoAccess { id, path: path(id) };
         out.info
             .extend(self.unreadable.iter().map(|&id| no_access(id)));
-        let mut running: Vec<(&'static App, u64)> = Vec::new();
+        let mut running: Vec<(&'static App, Mode, Vec<u32>, u64)> = Vec::new();
         for found in &self.found {
             if found.busy || found.cloud || found.blocked {
                 continue;
@@ -34,9 +34,15 @@ impl Walk<'_> {
             }
             if let Some(app) = rule.app.filter(|app| self.is_running(app)) {
                 let size = self.tree.node(found.id).size;
-                match running.iter_mut().find(|(a, _)| a.name == app.name) {
-                    Some((_, total)) => *total += size,
-                    None => running.push((app, size)),
+                match running
+                    .iter_mut()
+                    .find(|(a, m, ..)| a.name == app.name && *m == mode)
+                {
+                    Some((_, _, ids, total)) => {
+                        ids.push(found.id);
+                        *total += size;
+                    }
+                    None => running.push((app, mode, vec![found.id], size)),
                 }
                 continue;
             }
@@ -52,11 +58,16 @@ impl Walk<'_> {
                 Mode::Review => out.review.push(row),
             }
         }
-        out.info
-            .extend(running.into_iter().map(|(app, size)| Info::AppRunning {
-                app: app.name,
-                size,
-            }));
+        out.info.extend(
+            running
+                .into_iter()
+                .map(|(app, mode, ids, size)| Info::AppRunning {
+                    app: app.name,
+                    mode,
+                    ids,
+                    size,
+                }),
+        );
         out.approximate = out.info.iter().any(|i| matches!(i, Info::NoAccess { .. }));
         out
     }

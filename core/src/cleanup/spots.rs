@@ -57,7 +57,7 @@ pub(crate) fn find(tree: &Tree, ctx: &Context, spots: &[Spot]) -> Vec<Info> {
     out.extend(
         unreadable
             .into_iter()
-            .map(|id| Info::NoAccess { path: path(id) }),
+            .map(|id| Info::NoAccess { id, path: path(id) }),
     );
     out
 }

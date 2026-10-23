@@ -147,11 +147,14 @@ pub enum Info {
     },
     /// A place a rule looks at could not be read.
     NoAccess {
+        id: u32,
         path: String,
     },
-    /// The rows of a running app, summed.
+    /// The rows of a running app in one mode: their ids and their summed size.
     AppRunning {
         app: &'static str,
+        mode: Mode,
+        ids: Vec<u32>,
         size: u64,
     },
 }

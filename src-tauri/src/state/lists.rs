@@ -1,10 +1,14 @@
 //! Flat lists of the contents table (see `sizeatlas_core::tree::ListKind`).
 
-use sizeatlas_core::tree::{ListKind, Query};
+use std::cmp::Reverse;
+
+use sizeatlas_core::baseline::Baseline;
+use sizeatlas_core::cleanup::{Cleanup, Mode, Row};
+use sizeatlas_core::tree::{ListKind, Query, Tree};
 
 use super::AppState;
 use super::growth;
-use crate::dto::{FoundDto, ListDto, ListItemDto};
+use crate::dto::{CleanupDto, FoundDto, InfoDto, InfoKind, ListDto, ListItemDto, ReasonDto};
 use crate::error::CmdError;
 
 /// The most items a list returns, so a bogus limit cannot ask for the whole tree.
@@ -34,6 +38,7 @@ impl AppState {
                     .map(|node| ListItemDto::live(tree, id, node, baseline))
                     .collect()
             };
+            let mut cleanup = None;
             let (items, truncated, found) = match (kind, baseline) {
                 (ListKind::GrewMost, Some(b)) => {
                     let (items, truncated) = growth::grew_most(tree, b, id, limit);
@@ -54,6 +59,17 @@ impl AppState {
                         None => (Vec::new(), false, Some(FoundDto { count: 0, size: 0 })),
                     }
                 }
+                (ListKind::Cleanup | ListKind::Review, _) => {
+                    let mode = match kind {
+                        ListKind::Cleanup => Mode::Cleanup,
+                        _ => Mode::Review,
+                    };
+                    let all = tree.cleanup(&(self.0.context)(&tree.path(0)));
+                    let (items, truncated, found, info) =
+                        cleanup_rows(tree, id, mode, limit, &all, baseline);
+                    cleanup = Some(info);
+                    (items, truncated, Some(found))
+                }
                 _ => {
                     let found = tree.list(id, kind, limit);
                     (live(found.items), found.truncated, None)
@@ -66,6 +82,7 @@ impl AppState {
                 truncated,
                 items,
                 found,
+                cleanup,
                 baseline_at: baseline.map(|b| b.scanned_at),
                 baseline_rev,
                 baseline_pending,
@@ -74,5 +91,49 @@ impl AppState {
     }
 }
 
+/// The rows of `mode` inside `base` (`base` itself included), largest first, their totals and
+/// the info about the same nodes.
+fn cleanup_rows(
+    tree: &Tree,
+    base: u32,
+    mode: Mode,
+    limit: usize,
+    all: &Cleanup,
+    baseline: Option<&Baseline>,
+) -> (Vec<ListItemDto>, bool, FoundDto, CleanupDto) {
+    let inside = |id: u32| tree.crumbs(id).contains(&base);
+    let rows = match mode {
+        Mode::Cleanup => &all.cleanup,
+        Mode::Review => &all.review,
+    };
+    let mut kept: Vec<&Row> = rows.iter().filter(|row| inside(row.id)).collect();
+    let size = |row: &Row| tree.node(row.id).size;
+    kept.sort_by_key(|&row| (Reverse(size(row)), row.id));
+    let found = FoundDto {
+        count: kept.len() as u64,
+        size: kept.iter().map(|&row| size(row)).sum(),
+    };
+    let items = kept.iter().take(limit).map(|&row| ListItemDto {
+        reason: Some(ReasonDto::from(row)),
+        ..ListItemDto::live(tree, base, row.id, baseline)
+    });
+    // One line per place and per app, however often the walk met it.
+    let mut info: Vec<InfoDto> = Vec::new();
+    for dto in all
+        .info
+        .iter()
+        .filter_map(|i| InfoDto::of(tree, i, mode, inside))
+    {
+        if !info.contains(&dto) {
+            info.push(dto);
+        }
+    }
+    let approximate = tree.approximate || info.iter().any(|i| i.kind == InfoKind::NoAccess);
+    let cleanup = CleanupDto { info, approximate };
+    (items.collect(), kept.len() > limit, found, cleanup)
+}
+
+#[cfg(test)]
+mod cleanup_tests;
 #[cfg(test)]
 mod tests;

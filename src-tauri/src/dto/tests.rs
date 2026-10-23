@@ -208,6 +208,8 @@ fn list_kinds_and_list_items_use_camel_case() {
         ("longestPaths", ListKind::LongestPaths),
         ("grewMost", ListKind::GrewMost),
         ("search", ListKind::Search),
+        ("cleanup", ListKind::Cleanup),
+        ("review", ListKind::Review),
     ];
     for (name, kind) in kinds {
         assert_eq!(
@@ -244,8 +246,10 @@ fn list_kinds_and_list_items_use_camel_case() {
             folder: "x".into(),
             parent: 3,
             deleted: true,
+            reason: None,
         }],
         found: Some(FoundDto { count: 7, size: 90 }),
+        cleanup: None,
         baseline_at: None,
         baseline_rev: 0,
         baseline_pending: false,
@@ -256,6 +260,8 @@ fn list_kinds_and_list_items_use_camel_case() {
         (&json!(50), &json!(true), &json!(null))
     );
     assert_eq!(value["found"], json!({ "count": 7, "size": 90 }));
+    assert_eq!(value["cleanup"], json!(null));
+    assert_eq!(value["items"][0]["reason"], json!(null));
     let item = &value["items"][0];
     assert_eq!(
         (
@@ -274,6 +280,57 @@ fn list_kinds_and_list_items_use_camel_case() {
             &json!(true),
             &json!(null)
         )
+    );
+}
+
+#[test]
+fn clean_up_reasons_and_info_use_camel_case() {
+    use sizeatlas_core::cleanup::Reason;
+    let reason = ReasonDto {
+        reason: Reason::NodeModules,
+        command: None,
+        restorable: Some(true),
+    };
+    assert_eq!(
+        serde_json::to_value(reason).unwrap(),
+        json!({"reason": "nodeModules", "command": null, "restorable": true})
+    );
+    let info = |kind| InfoDto {
+        kind,
+        path: None,
+        size: Some(5),
+        app: None,
+        command: None,
+    };
+    let cleanup = CleanupDto {
+        info: vec![
+            InfoDto {
+                path: Some(r"C:\Users\u\AppData\Local\uv\cache".into()),
+                command: Some("uv cache clean".into()),
+                ..info(InfoKind::ToolStore)
+            },
+            InfoDto {
+                app: Some("Google Chrome".into()),
+                ..info(InfoKind::AppRunning)
+            },
+            info(InfoKind::PreviousWindows),
+            info(InfoKind::DeliveryOptimization),
+        ],
+        approximate: true,
+    };
+    assert_eq!(
+        serde_json::to_value(cleanup).unwrap(),
+        json!({"info": [
+            {"kind": "toolStore", "path": r"C:\Users\u\AppData\Local\uv\cache", "size": 5,
+                "app": null, "command": "uv cache clean"},
+            {"kind": "appRunning", "path": null, "size": 5, "app": "Google Chrome", "command": null},
+            {"kind": "previousWindows", "path": null, "size": 5, "app": null, "command": null},
+            {"kind": "deliveryOptimization", "path": null, "size": 5, "app": null, "command": null},
+        ], "approximate": true})
+    );
+    assert_eq!(
+        serde_json::to_value(InfoKind::NoAccess).unwrap(),
+        json!("noAccess")
     );
 }
 

@@ -39,6 +39,10 @@ pub enum ListKind {
     GrewMost,
     /// Matches of a search text. Built by `Tree::search`; as a kind the tree lists nothing.
     Search,
+    /// Rows of the clean-up modes (see `crate::cleanup`). Built by the app, which has the
+    /// context (known folders, running apps); the tree lists nothing.
+    Cleanup,
+    Review,
 }
 
 /// A list and whether more items matched than the limit allowed.
@@ -86,7 +90,7 @@ impl ListKind {
             K::Empty => (Both, Rank::Empty),
             K::Unreadable => (Folders, Rank::Unreadable),
             K::LongestPaths => (Both, Rank::Longest),
-            K::GrewMost | K::Search => return None,
+            K::GrewMost | K::Search | K::Cleanup | K::Review => return None,
         })
     }
 }

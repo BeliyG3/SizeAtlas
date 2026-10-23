@@ -6,6 +6,10 @@ use sizeatlas_core::tree::{SizeMode, Tree, flags};
 
 use crate::error::CmdError;
 
+mod cleanup;
+
+pub use cleanup::{CleanupDto, InfoDto, InfoKind, ReasonDto};
+
 mod growth;
 
 pub use growth::{ChangeDto, Compared, delta};
