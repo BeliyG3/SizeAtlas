@@ -17,6 +17,7 @@ A cross-platform disk usage analyzer: see which folders and file types take up y
 
 - Scan drives and folders, and keep several of them side by side in one folder tree. The tree fills in while the first scan of a drive runs, and you can browse it meanwhile. Scans wait in a queue and run one at a time.
 - See where the space goes: a sortable table of the current folder; lists of the largest, oldest, newest and empty items below it, and of the folders that grew most since the last scan; pie and bar charts, a treemap, file types and the largest files; free and unaccounted space of a drive.
+- Search by name or extension, and filter the results by size, date and type.
 - Refresh a single folder after a change, and move files and folders to the trash after a confirmation.
 - Find known junk (caches, old temporary files, crash dumps) in two lists, **Can be cleaned** and **Check before deleting**, and move it to the trash or, on an explicit command, delete it for good.
 - Open items, show their properties and export the table to CSV. On Windows, restart as administrator to read every folder.
@@ -25,6 +26,10 @@ A cross-platform disk usage analyzer: see which folders and file types take up y
 Installers for Windows, macOS and Linux are on the [Releases](https://github.com/BeliyG3/SizeAtlas/releases) page.
 
 ![The treemap of a drive](assets/screenshot-map.png)
+
+![A search for videos over 1 GB, with the Filters panel open](assets/screenshot-search.png)
+
+![The folders that grew most since the previous scan](assets/screenshot-growth.png)
 
 ## Install
 
@@ -146,6 +151,8 @@ While items move, the status bar shows how many have gone and the name of the it
 ## Cleaning up
 
 Two table modes list known junk below the listed folder, from the finished scan: up to 1,000 rows, largest first, with a **Why** column that says what each row is and what deleting it costs. Above the rows, a line gives the total, with `≈` when part of it could not be read. Under it are facts that are not rows and are never deleted: the paging and hibernation files, Windows update leftovers (remove them in **Settings › System › Storage › Temporary files**), caches that only their tool can clean safely (uv, pnpm, Yarn Berry, with the command), folders that need administrator rights and apps to close first. When the scan is more than a day old, the list says so: rescan for an exact list.
+
+![Can be cleaned: caches, old temporary files and crash dumps, with the total and the Why column](assets/screenshot-cleanup.png)
 
 - **Can be cleaned:** what well-known cleaners such as BleachBit remove without asking. Items in `%TEMP%` not changed for more than 7 days and up to 1 GB (`%SystemRoot%\Temp` too, as administrator and with no restart pending); crash dumps older than 14 days; Windows error reports; the Internet cache, without `Content.Outlook` and `Content.MSO`; the DirectX shader cache and those of the NVIDIA, AMD and Intel drivers; the caches of Chrome, Edge, Yandex, Brave, Vivaldi, Opera and Firefox; the caches of Discord, Slack, the Steam browser and VS Code; the package caches of npm, pip, NuGet, Cargo, Yarn and Go; `__pycache__` folders that hold nothing but bytecode.
 - **Check before deleting:** what comes back only at the cost of time or a download, or may still be needed. `node_modules` next to a `package.json` and Python virtual environments (**Why** says whether a lock file next to it can restore it), the Gradle cache, the Discord `Cache` (your favorite GIFs go with it), crash dumps younger than 14 days, and `%TEMP%` items older than 7 days that are larger than 1 GB or look like work in progress (a `.blend`, `.psd`, `.kra` or `.xcf` file, Office `~$` files, a `.git` folder, a project file such as `package.json`). Ctrl+A in **Can be cleaned** never takes these rows.
