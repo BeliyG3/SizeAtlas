@@ -5,10 +5,10 @@
 
 use std::sync::LazyLock;
 
-use super::Os;
 use super::names::Names;
 use super::paths::{At, Known, components};
 use super::pattern::{Entry, Hit, Pattern, State, add, is_never, start, step};
+use super::{Os, Spot};
 
 /// Names that block any folder holding them, compared ignoring case on every OS.
 const ANYWHERE: &[&str] = &[
@@ -27,6 +27,8 @@ const ANYWHERE: &[&str] = &[
     "*.vmdk",
     "*.vdi",
     "*.qcow2",
+    "*.hds",
+    "*.pvm",
     "*.gguf",
     "*.safetensors",
     "*.ckpt",
@@ -236,6 +238,13 @@ pub(crate) fn add_never<'a>(out: &mut Vec<Pattern<'a>>, os: Os, known: &'a Known
     }
 }
 
+/// Adds the info places as never places: info only, never inside a row.
+pub(crate) fn add_spots<'a>(out: &mut Vec<Pattern<'a>>, os: Os, known: &'a Known, spots: &[Spot]) {
+    for spot in spots {
+        add(out, (os, known), (spot.at, spot.path, None), Hit::Never);
+    }
+}
+
 /// The never check for the re-check right before deleting: [`Guard::blocks`] for one path, or
 /// [`Guard::start`] / [`Guard::enter`] to carry the check down a walk at the cost of one step per
 /// entry.
@@ -249,9 +258,15 @@ pub struct Guard<'a> {
 pub struct Trail(State);
 
 impl<'a> Guard<'a> {
+    /// The never places of `os`, and the info places of its tables, as the list sees them.
     pub fn new(os: Os, known: &'a Known) -> Guard<'a> {
+        Guard::with_spots(os, known, super::tables(os).1)
+    }
+
+    pub(crate) fn with_spots(os: Os, known: &'a Known, spots: &[Spot]) -> Guard<'a> {
         let mut patterns = Vec::new();
         add_never(&mut patterns, os, known);
+        add_spots(&mut patterns, os, known, spots);
         Guard { os, patterns }
     }
 

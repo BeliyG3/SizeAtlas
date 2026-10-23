@@ -128,6 +128,14 @@ fn an_info_spot_is_never_inside_a_row() {
     );
     let out = tree.cleanup_with(&win(), &[broad], &[berry]);
     assert_eq!(listed(&tree, &out).0, [format!(r"{local}\Other")]);
+    // The re-check before deleting refuses the same row.
+    let ctx = win();
+    let guard = Guard::with_spots(Os::Windows, &ctx.known, &[berry]);
+    assert!(guard.blocks(r"C:\Users\u\AppData\Local\Yarn\Berry\cache\a.zip"));
+    assert!(!guard.blocks(r"C:\Users\u\AppData\Local\Other\a"));
+    let yarn = guard.start(r"C:\Users\u\AppData\Local\Yarn").unwrap();
+    let berry_dir = guard.enter(&yarn, "Berry").unwrap();
+    assert!(guard.enter(&berry_dir, "cache").is_none());
     assert_eq!(
         out.info,
         [Info::ToolStore {

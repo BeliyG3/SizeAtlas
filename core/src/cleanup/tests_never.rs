@@ -174,6 +174,8 @@ fn spots_are_found_by_path_even_inside_never_places() {
 fn virtual_machine_images_are_protected() {
     for name in [
         "disk.vmdk",
+        "win11.HDS",
+        "Windows 11.pvm",
         "a.VDI",
         "b.qcow2",
         "c.avhdx",

@@ -67,13 +67,13 @@ pub(crate) fn add_zones<'a>(out: &mut Vec<Pattern<'a>>, os: Os, known: &'a Known
 
 pub(crate) static ZONE_NAMES: LazyLock<Names> = LazyLock::new(|| Names::new(NAMES, true));
 
-/// "Anywhere" rules need a recycle bin and, on Windows, every place that holds installed
-/// programs or other users' files: without one of them they list nothing (fail closed).
+/// "Anywhere" rules need a recycle bin, the own home and the folder of every user's profile,
+/// and on Windows the places of the system and installed programs: without one of them they
+/// list nothing (fail closed).
 pub(crate) fn anywhere_allowed(ctx: &Context) -> bool {
-    let places = [At::SystemRoot, At::ProgramData, At::ProgramFiles, At::Users];
+    let known = |at: &At| !at.bases(ctx.os, &ctx.known).is_empty();
+    let windows = [At::SystemRoot, At::ProgramData, At::ProgramFiles];
     ctx.recyclable
-        && (ctx.os != Os::Windows
-            || places
-                .iter()
-                .all(|at| !at.bases(ctx.os, &ctx.known).is_empty()))
+        && [At::Home, At::Users].iter().all(known)
+        && (ctx.os != Os::Windows || windows.iter().all(known))
 }

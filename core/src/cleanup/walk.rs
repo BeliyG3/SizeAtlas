@@ -4,7 +4,7 @@
 
 use super::markers::WORK_NAMES;
 use super::names::{Names, lower};
-use super::never::{PROTECTED, add_never};
+use super::never::{PROTECTED, add_never, add_spots};
 use super::paths::{components, fits};
 use super::pattern::{Hit, Pattern, State, add, ended, is_never, start, step};
 use super::zones::{ZONE_NAMES, add_zones, anywhere_allowed};
@@ -65,15 +65,7 @@ pub(crate) fn run(tree: &Tree, ctx: &Context, rules: &[Rule], spots: &[Spot]) ->
     }
     add_never(&mut patterns, os, known);
     add_zones(&mut patterns, os, known);
-    // Info places are never inside a row.
-    for spot in spots {
-        add(
-            &mut patterns,
-            (os, known),
-            (spot.at, spot.path, None),
-            Hit::Never,
-        );
-    }
+    add_spots(&mut patterns, os, known, spots);
     let mut walk = Walk {
         tree,
         ctx,

@@ -26,7 +26,8 @@ pub struct Known {
     /// `Program Files`, `Program Files (x86)`; on Unix, folders of installed programs.
     pub program_files: Vec<String>,
     /// The folder holding every user's profile (`C:\Users`, `/home`, `/Users`); the parent of
-    /// `home` when unset.
+    /// `home` when unset and that parent is `X:\<folder>`, `/home` or `/Users`; else unknown,
+    /// and "anywhere" rules list nothing.
     pub users: Option<String>,
     /// Cloud sync folders (OneDrive, Dropbox, Google Drive, iCloud).
     pub cloud: Vec<String>,
@@ -112,11 +113,17 @@ impl At {
             At::ProgramFiles => k.program_files.iter().map(|s| one(s)).collect(),
             At::Users => match &k.users {
                 Some(s) => vec![one(s)],
-                // Fail closed: the folder holding the own profile.
+                // The folder holding the own profile, if it is the usual one: never the root
+                // of the file system or of a drive (`/root`, `C:\u`), nor `/var` (`/var/root`).
                 None => {
                     let mut c = one(&k.home);
                     c.pop();
-                    vec![c]
+                    let usual = match os {
+                        Os::Windows => c.len() >= 2,
+                        Os::Linux => c == ["home"],
+                        Os::Mac => c == ["Users"],
+                    };
+                    vec![if usual { c } else { vec![] }]
                 }
             },
             At::Cloud => k.cloud.iter().map(|s| one(s)).collect(),

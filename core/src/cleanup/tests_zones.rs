@@ -160,3 +160,51 @@ fn on_windows_an_unknown_system_place_turns_anywhere_rules_off() {
         [r"src\p\node_modules"]
     );
 }
+
+/// Review rows of a Unix project at `at` (no leading `/`) with `home` and no `users`.
+fn unix_rows(os: Os, home: &str, at: &str) -> Vec<String> {
+    let mut ctx = win();
+    ctx.os = os;
+    ctx.known = Known {
+        home: home.into(),
+        ..Known::default()
+    };
+    let items = project(at)
+        .into_iter()
+        .map(|i| it(i.path().replace('\\', "/")))
+        .collect();
+    review("/", items, &ctx)
+}
+
+#[test]
+fn on_unix_a_home_without_a_users_folder_turns_anywhere_rules_off() {
+    assert!(unix_rows(Os::Linux, "/root", "home/alice/p").is_empty());
+    assert!(unix_rows(Os::Linux, "/root", "srv/p").is_empty());
+    assert!(unix_rows(Os::Mac, "/var/root", "Users/alice/p").is_empty());
+    assert!(unix_rows(Os::Mac, "/var/root", "srv/p").is_empty());
+    assert!(unix_rows(Os::Linux, "", "srv/p").is_empty());
+    assert!(unix_rows(Os::Mac, "", "srv/p").is_empty());
+    // The usual homes still have rows, and other profiles stay a zone.
+    assert_eq!(
+        unix_rows(Os::Linux, "/home/u", "home/u/p"),
+        [r"home\u\p\node_modules"]
+    );
+    assert!(unix_rows(Os::Linux, "/home/u", "home/alice/p").is_empty());
+    assert_eq!(
+        unix_rows(Os::Mac, "/Users/u", "Users/u/p"),
+        [r"Users\u\p\node_modules"]
+    );
+    assert!(unix_rows(Os::Mac, "/Users/u", "Users/alice/p").is_empty());
+    assert_eq!(
+        unix_rows(Os::Linux, "/home/u", "srv/p"),
+        [r"srv\p\node_modules"]
+    );
+}
+
+#[test]
+fn on_windows_a_home_at_a_drive_root_is_no_users_folder() {
+    let mut ctx = win();
+    ctx.known.users = None;
+    ctx.known.home = r"C:\u".into();
+    assert!(review(r"C:\", project(r"src\p"), &ctx).is_empty());
+}
