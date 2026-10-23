@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { I18nProvider } from "../../i18n/react";
-import { FiltersButton, focusLeft, holdsFocus } from "./FiltersButton";
+import { closeOnEscape, FiltersButton, focusLeft, holdsFocus } from "./FiltersButton";
 
 describe("FiltersButton", () => {
   it("starts closed, as a button that opens a dialog", () => {
@@ -47,5 +47,24 @@ describe("holdsFocus", () => {
 
   it("leaves it on another control that was pressed", () => {
     expect(holdsFocus(other, body, box([inner]))).toBe(false);
+  });
+});
+
+describe("closeOnEscape", () => {
+  const press = (key: string) => {
+    const done: string[] = [];
+    const e = {
+      key,
+      preventDefault: () => done.push("prevent"),
+      stopPropagation: () => done.push("stop"),
+    };
+    closeOnEscape(e, () => done.push("close"));
+    return done;
+  };
+  it("closes the panel on Escape, and nothing behind it gets the key", () => {
+    expect(press("Escape")).toEqual(["prevent", "stop", "close"]);
+  });
+  it("ignores other keys", () => {
+    expect(press("Enter")).toEqual([]);
   });
 });

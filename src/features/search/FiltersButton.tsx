@@ -148,6 +148,8 @@ function Popover({ id, at, button, onClose, children }: PopoverProps) {
       ref={box}
       // A press on bare panel keeps the focus in the panel (so Esc still works).
       tabIndex={-1}
+      // Esc on the bare panel (the controls handle their own and stop it there).
+      onKeyDown={(e) => closeOnEscape(e, onClose)}
       onBlur={(e) =>
         // Onto the button is its press (it closes the panel itself), not Tab out of the panel.
         e.relatedTarget !== button.current && focusLeft(e.relatedTarget, box.current) && onClose()
@@ -157,4 +159,15 @@ function Popover({ id, at, button, onClose, children }: PopoverProps) {
     </div>,
     document.body,
   );
+}
+
+/** Closes on Escape and keeps the key from reaching anything behind the panel. */
+export function closeOnEscape(
+  e: { key: string; preventDefault: () => void; stopPropagation: () => void },
+  close: () => void,
+) {
+  if (e.key !== "Escape") return;
+  e.preventDefault();
+  e.stopPropagation();
+  close();
 }
