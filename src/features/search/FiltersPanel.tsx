@@ -3,8 +3,11 @@ import { useT } from "../../i18n/react";
 import { CATEGORY_NAMES } from "../../palette";
 import {
   AGE_UNITS,
+  MAX_QUERY,
   SIZE_UNITS,
+  conflicts,
   formatFilters,
+  numberFromText,
   parseFilters,
   withNumber,
   type NumberField,
@@ -21,6 +24,16 @@ export const DEFAULT_UNITS: Units = {
   newerThan: "d",
 };
 
+/** What was typed in a number box that is no condition (yet): it stays in the box. */
+export type Drafts = Partial<Record<NumberField, string>>;
+
+export const NUMBER_FIELDS: readonly NumberField[] = [
+  "minSize",
+  "maxSize",
+  "olderThan",
+  "newerThan",
+];
+
 interface Props {
   /** The search text: the panel shows its conditions and writes its changes into it. */
   text: string;
@@ -28,23 +41,50 @@ interface Props {
   units: Units;
   /** The unit now shown for a number, to be remembered while its condition is absent. */
   onUnit: (field: NumberField, unit: string) => void;
+  drafts: Drafts;
+  /** The text of a number box that is no condition, or undefined once it is one (or empty). */
+  onDraft: (field: NumberField, raw: string | undefined) => void;
+  /** A change was not written: the text would be longer than the search takes. */
+  tooLong: boolean;
+  onTooLong: (tooLong: boolean) => void;
   onClose: () => void;
 }
 
 const KINDS = ["both", "files", "folders"] as const;
 
 /** The condition controls of the search text: size, modified date, types, files or folders. */
-export function FiltersPanel({ text, onText, units, onUnit, onClose }: Props) {
+export function FiltersPanel({
+  text,
+  onText,
+  units,
+  onUnit,
+  drafts,
+  onDraft,
+  tooLong,
+  onTooLong,
+  onClose,
+}: Props) {
   const { t } = useT();
   const { words, filters } = parseFilters(text);
-  const apply = (next: UiFilters) => onText(formatFilters(words, next));
+  const bad = conflicts(filters);
   const unitOf = (field: NumberField) => filters[field]?.unit ?? units[field];
 
+  /** Writes the filters into the text unless it would outgrow what the search takes. */
+  const apply = (next: UiFilters): boolean => {
+    const written = formatFilters(words, next);
+    // The core counts characters (Unicode scalar values), not UTF-16 units.
+    const fits = [...written].length <= MAX_QUERY;
+    onTooLong(!fits);
+    if (fits) onText(written);
+    return fits;
+  };
   const setNumber = (field: NumberField, raw: string) => {
     const unit = unitOf(field);
     onUnit(field, unit);
-    // Only plain digits make a number the search understands; anything else removes the condition.
-    apply(withNumber(filters, field, /^\d+(\.\d+)?$/.test(raw) ? Number(raw) : undefined, unit));
+    // Only a number the search understands is a condition; else the box keeps what was typed.
+    const value = numberFromText(field, raw, unit);
+    const wrote = apply(withNumber(filters, field, value, unit));
+    onDraft(field, raw !== "" && (value === undefined || !wrote) ? raw : undefined);
   };
   const setUnit = (field: NumberField, unit: string) => {
     onUnit(field, unit);
@@ -61,22 +101,34 @@ export function FiltersPanel({ text, onText, units, onUnit, onClose }: Props) {
     });
   const setKind = (kind: (typeof KINDS)[number]) =>
     apply({ ...filters, kind: kind === "both" ? undefined : kind });
+  const clear = () => {
+    onTooLong(false);
+    for (const field of NUMBER_FIELDS) onDraft(field, undefined);
+    onText(words);
+  };
 
-  const row = (field: NumberField, label: string, unitList: readonly string[], age = false) => (
+  const row = (
+    field: NumberField,
+    label: string,
+    unitList: readonly string[],
+    conflict: boolean,
+    age = false,
+  ) => (
     <div className="filters-row" key={field}>
-      <span>{label}</span>
+      <label htmlFor={`filters-${field}`}>{label}</label>
       <input
+        id={`filters-${field}`}
         type="number"
         min={0}
         step="any"
         name={field}
-        aria-label={label}
-        value={filters[field]?.value ?? ""}
+        aria-invalid={conflict || drafts[field] !== undefined}
+        value={drafts[field] ?? filters[field]?.value ?? ""}
         onChange={(e) => setNumber(field, e.target.value)}
       />
       <select
         name={`${field}Unit`}
-        aria-label={t("filters.unit")}
+        aria-label={t("filters.unitOf", { label })}
         value={unitOf(field)}
         onChange={(e) => setUnit(field, e.target.value)}
       >
@@ -100,13 +152,23 @@ export function FiltersPanel({ text, onText, units, onUnit, onClose }: Props) {
     <div className="filters" onKeyDown={onKeyDown}>
       <fieldset>
         <legend>{t("filters.size")}</legend>
-        {row("minSize", t("filters.from"), SIZE_UNITS)}
-        {row("maxSize", t("filters.to"), SIZE_UNITS)}
+        {row("minSize", t("filters.from"), SIZE_UNITS, bad.size)}
+        {row("maxSize", t("filters.to"), SIZE_UNITS, bad.size)}
+        {bad.size && (
+          <p className="filters-hint" role="status" data-hint="size">
+            {t("filters.hint.size")}
+          </p>
+        )}
       </fieldset>
       <fieldset>
         <legend>{t("filters.modified")}</legend>
-        {row("olderThan", t("filters.older"), AGE_UNITS, true)}
-        {row("newerThan", t("filters.newer"), AGE_UNITS, true)}
+        {row("olderThan", t("filters.older"), AGE_UNITS, bad.age, true)}
+        {row("newerThan", t("filters.newer"), AGE_UNITS, bad.age, true)}
+        {bad.age && (
+          <p className="filters-hint" role="status" data-hint="age">
+            {t("filters.hint.age")}
+          </p>
+        )}
       </fieldset>
       <fieldset>
         <legend>{t("filters.type")}</legend>
@@ -142,10 +204,17 @@ export function FiltersPanel({ text, onText, units, onUnit, onClose }: Props) {
           ))}
         </div>
       </fieldset>
+      {tooLong && (
+        <p className="filters-hint" role="status" data-hint="long">
+          {t("filters.tooLong")}
+        </p>
+      )}
       <button
         name="clear"
-        disabled={formatFilters("", filters) === ""}
-        onClick={() => onText(words)}
+        disabled={
+          formatFilters("", filters) === "" && NUMBER_FIELDS.every((f) => drafts[f] === undefined)
+        }
+        onClick={clear}
       >
         {t("filters.clear")}
       </button>

@@ -2,6 +2,7 @@ import type { KeyboardEvent, RefObject } from "react";
 import { useT } from "../../i18n/react";
 import { Icon } from "../icons/Icon";
 import { FiltersButton } from "./FiltersButton";
+import { MAX_QUERY } from "./filters";
 import "./search.css";
 
 interface Props {
@@ -48,7 +49,7 @@ export function SearchField({ value, onChange, onCommit, inputRef }: Props) {
         spellCheck={false}
         autoComplete="off"
         // The search takes this many characters (MAX_QUERY in src-tauri/src/state/lists.rs).
-        maxLength={256}
+        maxLength={MAX_QUERY}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
       />

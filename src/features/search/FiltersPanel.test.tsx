@@ -1,9 +1,16 @@
 import type { ReactElement, ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CATEGORY_NAMES } from "../../palette";
-import { DEFAULT_UNITS, FiltersPanel } from "./FiltersPanel";
+import { DEFAULT_UNITS, FiltersPanel, NUMBER_FIELDS, type Drafts } from "./FiltersPanel";
 
-vi.mock("../../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
+// Keys come back as they are; a key with parameters carries them, so that texts built from the
+// same key with other parameters differ.
+vi.mock("../../i18n/react", () => ({
+  useT: () => ({
+    t: (key: string, params?: object) => (params ? `${key}${JSON.stringify(params)}` : key),
+    lang: "en",
+  }),
+}));
 
 /** Every element of the tree that satisfies `test`. */
 function find(node: ReactNode, test: (props: Record<string, unknown>) => boolean): ReactElement[] {
@@ -14,23 +21,39 @@ function find(node: ReactNode, test: (props: Record<string, unknown>) => boolean
 }
 
 interface Control {
+  id?: string;
   value?: unknown;
   checked?: boolean;
   disabled?: boolean;
+  "aria-label"?: string;
+  "aria-invalid"?: boolean;
   onChange: (e?: unknown) => void;
   onClick: () => void;
 }
 
-function setup(text: string, units = DEFAULT_UNITS) {
+function setup(text: string, units = DEFAULT_UNITS, drafts: Drafts = {}, tooLong = false) {
   const onText = vi.fn();
   const onUnit = vi.fn();
+  const onDraft = vi.fn();
+  const onTooLong = vi.fn();
   const onClose = vi.fn();
-  const tree = FiltersPanel({ text, onText, units, onUnit, onClose });
+  const tree = FiltersPanel({
+    text,
+    onText,
+    units,
+    onUnit,
+    drafts,
+    onDraft,
+    tooLong,
+    onTooLong,
+    onClose,
+  });
   /** The control called `name` (a radio or a checkbox also by its `value`). */
   const named = (name: string, value?: string) =>
     find(tree, (p) => p.name === name && (value === undefined || p.value === value))[0]
       ?.props as Control;
-  return { tree, named, onText, onUnit, onClose };
+  const hint = (which: string) => find(tree, (p) => p["data-hint"] === which)[0]?.props;
+  return { tree, named, hint, onText, onUnit, onDraft, onTooLong, onClose };
 }
 
 const typed = (value: string) => ({ target: { value } });
@@ -64,26 +87,53 @@ describe("FiltersPanel shows the conditions of the text", () => {
     const { tree } = setup("");
     for (const name of CATEGORY_NAMES) expect(JSON.stringify(tree)).toContain(`category.${name}`);
   });
+
+  it("labels every number box, and every unit by the box it belongs to", () => {
+    const { tree, named } = setup("");
+    const labels = find(tree, (p) => typeof p.htmlFor === "string").map(
+      (e) => (e.props as { htmlFor: string }).htmlFor,
+    );
+    expect(labels.sort()).toEqual(NUMBER_FIELDS.map((f) => `filters-${f}`).sort());
+    for (const field of NUMBER_FIELDS) expect(named(field).id).toBe(`filters-${field}`);
+    const unitLabels = NUMBER_FIELDS.map((f) => named(`${f}Unit`)["aria-label"]);
+    expect(new Set(unitLabels).size).toBe(4);
+    expect(unitLabels.every((l) => l?.startsWith("filters.unitOf"))).toBe(true);
+  });
 });
 
 describe("FiltersPanel writes the text", () => {
   it("sets a size and keeps the names and the other conditions", () => {
     const { named, onText } = setup("photo type:video >1GB");
     named("minSize").onChange(typed("2"));
-    expect(onText).toHaveBeenCalledWith("photo >2GB type:video");
+    expect(onText).toHaveBeenCalledWith("photo >=2GB type:video");
+  });
+
+  it("keeps a size typed with >= and <= when something else changes", () => {
+    const { named, onText } = setup("a >=1GB");
+    named("type", "Video").onChange();
+    expect(onText).toHaveBeenCalledWith("a >=1GB type:video");
+    const upper = setup("a <=1GB");
+    upper.named("kind", "files").onChange();
+    expect(upper.onText).toHaveBeenCalledWith("a <=1GB files");
+  });
+
+  it("takes 0 as a lower limit", () => {
+    const { named, onText } = setup("a");
+    named("minSize").onChange(typed("0"));
+    expect(onText).toHaveBeenCalledWith("a >=0MB");
   });
 
   it("uses the unit it shows, and tells which one", () => {
     const { named, onText, onUnit } = setup("", { ...DEFAULT_UNITS, maxSize: "TB" });
     named("maxSize").onChange(typed("3"));
-    expect(onText).toHaveBeenCalledWith("<3TB");
+    expect(onText).toHaveBeenCalledWith("<=3TB");
     expect(onUnit).toHaveBeenCalledWith("maxSize", "TB");
   });
 
   it("changes the unit of a size that is set, and only remembers it when there is none", () => {
     const set = setup("a >1GB");
     set.named("minSizeUnit").onChange(typed("MB"));
-    expect(set.onText).toHaveBeenCalledWith("a >1MB");
+    expect(set.onText).toHaveBeenCalledWith("a >=1MB");
     expect(set.onUnit).toHaveBeenCalledWith("minSize", "MB");
     const bare = setup("a");
     bare.named("minSizeUnit").onChange(typed("TB"));
@@ -102,7 +152,7 @@ describe("FiltersPanel writes the text", () => {
     named("olderThan").onChange(typed("1"));
     expect(onText).toHaveBeenLastCalledWith("x older:1y");
     named("minSize").onChange(typed("1.5"));
-    expect(onText).toHaveBeenLastCalledWith("x >1.5MB");
+    expect(onText).toHaveBeenLastCalledWith("x >=1.5MB");
   });
 
   it("removes a condition when its number is emptied or is no number", () => {
@@ -110,7 +160,15 @@ describe("FiltersPanel writes the text", () => {
     named("minSize").onChange(typed(""));
     expect(onText).toHaveBeenLastCalledWith("a older:1y");
     named("olderThan").onChange(typed("1e3"));
-    expect(onText).toHaveBeenLastCalledWith("a >1GB");
+    expect(onText).toHaveBeenLastCalledWith("a >=1GB");
+  });
+
+  it("never writes a number that would be a name word", () => {
+    const { named, onText } = setup("a");
+    named("olderThan").onChange(typed("1.5"));
+    expect(onText).toHaveBeenLastCalledWith("a");
+    named("minSize").onChange(typed("0.0000000000000000001"));
+    expect(onText).toHaveBeenLastCalledWith("a");
   });
 
   it("ticks and unticks types", () => {
@@ -129,15 +187,87 @@ describe("FiltersPanel writes the text", () => {
     expect(onText).toHaveBeenLastCalledWith("a");
   });
 
-  it("clears the conditions and nothing else", () => {
-    const { named, onText } = setup("IMG_* >abc >1 GB holiday type:image files");
+  it("clears the conditions and nothing else, and what was typed in the boxes", () => {
+    const { named, onText, onDraft, onTooLong } = setup(
+      "IMG_* >abc >1 GB holiday type:image files",
+    );
     named("clear").onClick();
     expect(onText).toHaveBeenCalledWith("IMG_* >abc holiday");
+    for (const field of NUMBER_FIELDS) expect(onDraft).toHaveBeenCalledWith(field, undefined);
+    expect(onTooLong).toHaveBeenCalledWith(false);
   });
 
-  it("has nothing to clear without conditions", () => {
+  it("has nothing to clear without conditions or drafts", () => {
     expect(setup("a >abc").named("clear").disabled).toBe(true);
     expect(setup("a files").named("clear").disabled).toBe(false);
+    expect(setup("a", DEFAULT_UNITS, { minSize: "1e3" }).named("clear").disabled).toBe(false);
+  });
+});
+
+describe("FiltersPanel keeps what was typed in a number box", () => {
+  it("remembers a text that is no condition, and forgets it once it is one", () => {
+    const { named, onDraft } = setup("a");
+    named("minSize").onChange(typed("1e3"));
+    expect(onDraft).toHaveBeenLastCalledWith("minSize", "1e3");
+    named("minSize").onChange(typed("12"));
+    expect(onDraft).toHaveBeenLastCalledWith("minSize", undefined);
+    named("minSize").onChange(typed(""));
+    expect(onDraft).toHaveBeenLastCalledWith("minSize", undefined);
+  });
+
+  it("shows the draft in the box, marked invalid", () => {
+    const { named } = setup("a", DEFAULT_UNITS, { olderThan: "1.5" });
+    expect(named("olderThan").value).toBe("1.5");
+    expect(named("olderThan")["aria-invalid"]).toBe(true);
+    expect(named("newerThan")["aria-invalid"]).toBe(false);
+  });
+});
+
+describe("FiltersPanel and the 256 characters of the search", () => {
+  it("refuses a write that would be longer, and says so", () => {
+    const { named, onText, onTooLong, onDraft } = setup("x".repeat(252));
+    named("type", "Video").onChange();
+    expect(onText).not.toHaveBeenCalled();
+    expect(onTooLong).toHaveBeenLastCalledWith(true);
+    named("minSize").onChange(typed("5"));
+    expect(onText).not.toHaveBeenCalled();
+    // The number stays in the box, as typed.
+    expect(onDraft).toHaveBeenLastCalledWith("minSize", "5");
+  });
+
+  it("counts characters, not UTF-16 units", () => {
+    // 240 emoji are 480 UTF-16 units but 240 characters: " type:video" still fits.
+    const { named, onText, onTooLong } = setup("😀".repeat(240));
+    named("type", "Video").onChange();
+    expect(onText).toHaveBeenCalledWith(`${"😀".repeat(240)} type:video`);
+    expect(onTooLong).toHaveBeenLastCalledWith(false);
+  });
+
+  it("writes up to exactly 256", () => {
+    const name = "x".repeat(256 - " type:video".length);
+    const { named, onText } = setup(name);
+    named("type", "Video").onChange();
+    expect(onText).toHaveBeenCalledWith(`${name} type:video`);
+  });
+
+  it("shows the hint while it applies", () => {
+    expect(setup("a", DEFAULT_UNITS, {}, true).hint("long")).toBeDefined();
+    expect(setup("a").hint("long")).toBeUndefined();
+  });
+});
+
+describe("FiltersPanel hints", () => {
+  it("says when the lower size is above the upper one, and marks both boxes", () => {
+    const { hint, named } = setup("a >=2GB <=1GB");
+    expect(hint("size")).toBeDefined();
+    expect(named("minSize")["aria-invalid"]).toBe(true);
+    expect(named("maxSize")["aria-invalid"]).toBe(true);
+    expect(setup("a 1GB..2GB").hint("size")).toBeUndefined();
+  });
+
+  it("says when 'older than' is longer than 'within the last'", () => {
+    expect(setup("older:1y newer:30d").hint("age")).toBeDefined();
+    expect(setup("older:30d newer:1y").hint("age")).toBeUndefined();
   });
 });
 

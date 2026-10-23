@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatFilters, parseFilters, type UiFilters } from "./filters";
+import {
+  MAX_QUERY,
+  conflicts,
+  formatFilters,
+  numberFromText,
+  parseFilters,
+  withNumber,
+  type UiFilters,
+} from "./filters";
 
 const none: UiFilters = { types: [] };
 const parsed = (text: string) => parseFilters(text);
@@ -136,17 +144,17 @@ describe("formatFilters", () => {
       types: ["Video", "Audio"],
       kind: "files",
     });
-    expect(text).toBe("photo >1GB older:1y newer:30d type:video type:audio files");
+    expect(text).toBe("photo >=1GB older:1y newer:30d type:video type:audio files");
   });
 
-  it("writes one range for both size ends, and a lone bound as > or <", () => {
+  it("writes one range for both size ends, and a lone bound as >= or <=", () => {
     const both = {
       minSize: { value: 100, unit: "MB" as const },
       maxSize: { value: 1, unit: "GB" as const },
     };
     expect(formatFilters("", { ...none, ...both })).toBe("100MB..1GB");
-    expect(formatFilters("", { ...none, maxSize: both.maxSize })).toBe("<1GB");
-    expect(formatFilters("", { ...none, minSize: both.minSize })).toBe(">100MB");
+    expect(formatFilters("", { ...none, maxSize: both.maxSize })).toBe("<=1GB");
+    expect(formatFilters("", { ...none, minSize: both.minSize })).toBe(">=100MB");
   });
 
   it("does not write a range that its own grammar would refuse", () => {
@@ -155,23 +163,28 @@ describe("formatFilters", () => {
       minSize: { value: 2, unit: "GB" },
       maxSize: { value: 1, unit: "GB" },
     });
-    expect(text).toBe(">2GB <1GB");
+    expect(text).toBe(">=2GB <=1GB");
     expect(parsed(text).filters).toMatchObject({
       minSize: { value: 2, unit: "GB" },
       maxSize: { value: 1, unit: "GB" },
     });
   });
 
-  it("writes an upper bound of 0 so that it still means something", () => {
-    const text = formatFilters("", { ...none, maxSize: { value: 0, unit: "MB" } });
-    expect(parsed(text).filters.maxSize).toEqual({ value: 0, unit: "MB" });
+  it("writes a bound of 0 and a bound under a byte: both are conditions", () => {
+    expect(formatFilters("", { ...none, minSize: { value: 0, unit: "MB" } })).toBe(">=0MB");
+    expect(formatFilters("", { ...none, maxSize: { value: 0, unit: "MB" } })).toBe("<=0MB");
+    const text = formatFilters("", { ...none, maxSize: { value: 0.1, unit: "B" } });
+    expect(text).toBe("<=0.1B");
+    expect(parsed(text).filters.maxSize).toEqual({ value: 0.1, unit: "B" });
   });
 
   it("writes fractions and tiny numbers in plain digits", () => {
-    expect(formatFilters("", { ...none, minSize: { value: 1.5, unit: "GB" } })).toBe(">1.5GB");
+    expect(formatFilters("", { ...none, minSize: { value: 1.5, unit: "GB" } })).toBe(">=1.5GB");
     const tiny = formatFilters("", { ...none, minSize: { value: 1e-7, unit: "B" } });
-    expect(tiny).not.toMatch(/e/);
+    expect(tiny).toBe(">=0.0000001B");
     expect(parsed(tiny).filters.minSize).toBeDefined();
+    // Never a number like `0.`: it is no size.
+    expect(formatFilters("", { ...none, minSize: { value: 1e-25, unit: "GB" } })).toBe(">=0GB");
   });
 
   it("is the name words alone with no conditions", () => {
@@ -187,8 +200,19 @@ describe("the panel round trip", () => {
     expect(filters.types).toEqual(["Video"]);
     expect(filters.minSize).toEqual({ value: 1, unit: "GB" });
     const next = formatFilters(words, { ...filters, minSize: { value: 2, unit: "GB" } });
-    expect(next).toBe("photo >2GB type:video");
+    expect(next).toBe("photo >=2GB type:video");
     expect(parsed(next).words).toBe("photo");
+  });
+
+  it("ticking a type keeps a size that was typed with >= and <=", () => {
+    const { words, filters } = parsed(">=1GB <=2GB a");
+    expect(formatFilters(words, { ...filters, types: ["Video"] })).toBe("a 1GB..2GB type:video");
+    const lone = parsed("a >=1GB");
+    expect(formatFilters(lone.words, { ...lone.filters, types: ["Video"] })).toBe(
+      "a >=1GB type:video",
+    );
+    const upper = parsed("a <=1GB");
+    expect(formatFilters(upper.words, { ...upper.filters, kind: "files" })).toBe("a <=1GB files");
   });
 
   it("clearing removes only the condition words, in their order", () => {
@@ -215,4 +239,78 @@ describe("the panel round trip", () => {
     };
     expect(parsed(formatFilters("a b", filters))).toEqual({ words: "a b", filters });
   });
+});
+
+describe("tightening works on the limits the core resolves", () => {
+  it("compares > and < by the byte they exclude", () => {
+    expect(parsed(">1KB >=1026").filters.minSize).toEqual({ value: 1026, unit: "B" });
+    expect(parsed(">=1026 >1KB").filters.minSize).toEqual({ value: 1026, unit: "B" });
+    expect(parsed("<=1024 <1KB").filters.maxSize).toEqual({ value: 1, unit: "KB" });
+    expect(parsed("<1KB <=1022").filters.maxSize).toEqual({ value: 1022, unit: "B" });
+  });
+});
+
+describe("whitespace", () => {
+  it("splits on Unicode white space like the core, but not on U+FEFF", () => {
+    expect(parsed("a\u00a0>=1GB").words).toBe("a");
+    expect(parsed("a\u0085>=1GB").filters.minSize).toEqual({ value: 1, unit: "GB" });
+    expect(parsed("a\ufeff>=1GB").words).toBe("a\ufeff>=1GB");
+    expect(formatFilters("a\u00a0 b", none)).toBe("a b");
+  });
+});
+
+describe("numberFromText", () => {
+  it("takes the numbers the search understands", () => {
+    expect(numberFromText("minSize", "1", "GB")).toBe(1);
+    expect(numberFromText("maxSize", "0.1", "B")).toBe(0.1);
+    expect(numberFromText("minSize", "0", "MB")).toBe(0);
+    expect(numberFromText("olderThan", "30", "d")).toBe(30);
+  });
+
+  it.each(["", "-", "-1", "+1", "1e3", "1e", ".5", "1.", "1,5", " 1", "0x10", "\u0663"])(
+    "refuses %j",
+    (raw) => {
+      expect(numberFromText("minSize", raw, "MB")).toBeUndefined();
+      expect(numberFromText("olderThan", raw, "d")).toBeUndefined();
+    },
+  );
+
+  it("refuses what no condition could hold", () => {
+    expect(numberFromText("olderThan", "1.5", "y")).toBeUndefined();
+    expect(numberFromText("newerThan", "99999999999", "y")).toBeUndefined();
+    expect(numberFromText("minSize", "0.0000000000000000001", "GB")).toBeUndefined();
+    expect(numberFromText("minSize", "9".repeat(40), "B")).toBeUndefined();
+    expect(numberFromText("minSize", "9".repeat(30), "TB")).toBeDefined();
+  });
+});
+
+describe("withNumber", () => {
+  it("drops a number that cannot be written", () => {
+    const base: UiFilters = { types: [], olderThan: { value: 1, unit: "y" } };
+    expect(withNumber(base, "olderThan", 99999999999, "y").olderThan).toBeUndefined();
+    expect(withNumber(base, "olderThan", 1.5, "y").olderThan).toBeUndefined();
+    expect(withNumber(base, "olderThan", 3, "w").olderThan).toEqual({ value: 3, unit: "w" });
+  });
+});
+
+describe("conflicts", () => {
+  it("tells a lower size limit above the upper one", () => {
+    const f = (min: UiFilters["minSize"], max: UiFilters["maxSize"]) =>
+      conflicts({ types: [], minSize: min, maxSize: max });
+    expect(f({ value: 2, unit: "GB" }, { value: 1, unit: "GB" }).size).toBe(true);
+    expect(f({ value: 1, unit: "GB" }, { value: 1024, unit: "MB" }).size).toBe(false);
+    expect(f({ value: 1, unit: "GB" }, undefined).size).toBe(false);
+  });
+
+  it("tells an older-than limit longer than the within-the-last one", () => {
+    const f = (older: UiFilters["olderThan"], newer: UiFilters["newerThan"]) =>
+      conflicts({ types: [], olderThan: older, newerThan: newer });
+    expect(f({ value: 1, unit: "y" }, { value: 30, unit: "d" }).age).toBe(true);
+    expect(f({ value: 30, unit: "d" }, { value: 1, unit: "y" }).age).toBe(false);
+    expect(f({ value: 4, unit: "w" }, { value: 28, unit: "d" }).age).toBe(false);
+  });
+});
+
+it("takes as many characters as the core: 256", () => {
+  expect(MAX_QUERY).toBe(256);
 });
