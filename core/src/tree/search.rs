@@ -132,7 +132,7 @@ impl Name<'_> {
 
 /// Whether `text` fits the whole of `mask`: `star` is any run, `any` one element. Walks both
 /// once, going back to the last `star` on a mismatch, so it needs no recursion.
-fn glob<T: Copy + PartialEq>(
+pub(crate) fn glob<T: Copy + PartialEq>(
     mask: &[T],
     text: &[T],
     (star, any): (T, T),

@@ -248,6 +248,7 @@ mod validate;
 pub use lists::{ListKind, ListResult};
 pub use order::{ListOrder, SortKey};
 pub use query::ChildrenPage;
+pub(crate) use search::glob;
 pub use search::{Found, Query};
 pub use stats::TypeStat;
 
