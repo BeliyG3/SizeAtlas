@@ -22,6 +22,7 @@ fn the_real_context_reads_without_failing() {
         assert!(k.users.as_deref().is_some_and(|u| !u.is_empty()));
         assert!(!k.program_files.is_empty());
         let mut unique = k.program_files.clone();
+        unique.sort();
         unique.dedup();
         assert_eq!(unique.len(), k.program_files.len(), "no duplicates");
     }
