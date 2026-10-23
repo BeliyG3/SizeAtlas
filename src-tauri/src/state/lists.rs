@@ -69,8 +69,9 @@ impl AppState {
                         _ => Mode::Review,
                     };
                     let (walked_rev, all) = walked.clone().expect("walked for these kinds");
-                    // The rev the rows were found at: if the tree changed after the walk, it
-                    // tells the UI to ask again, which walks again.
+                    // The rev the rows were found at: one older than the UI's (the tree
+                    // changed after the walk) makes it ask once more (`useListAnswer`), which
+                    // walks again.
                     rev = walked_rev;
                     let (items, truncated, found, info) =
                         cleanup_rows(tree, id, mode, limit, &all, baseline);

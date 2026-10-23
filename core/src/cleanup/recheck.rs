@@ -11,7 +11,7 @@ use super::markers::WORK_NAMES;
 use super::paths::fits;
 use super::rules::BYTECODE;
 use super::{Guard, Reason};
-use crate::platform::{Reparse, change_time, device, is_cloud, reparse, volume_mount};
+use crate::platform::{Reparse, change_time, device, is_cloud, is_foreign, reparse, volume_mount};
 
 /// A Temp item must be older than this by all three of its times.
 const TEMP_AGE_NS: i64 = 7 * 86_400 * 1_000_000_000;
@@ -22,7 +22,8 @@ const STOP_EVERY: u32 = 1000;
 #[derive(Debug)]
 pub enum Refusal {
     /// Never touched: a never place or name ([`Guard`]), cloud content, a reparse point that is
-    /// no link, a mount point, or a work marker in an old Temp item.
+    /// no link, a mount point, a work marker in an old Temp item, or on Unix another user's
+    /// item, a socket, FIFO or device.
     Protected,
     /// No longer what was listed: the item or a folder above it is a link now, its content no
     /// longer fits its rule, or a Temp item is younger than 7 days by one of its times, or one of
@@ -144,7 +145,7 @@ struct Check {
 impl Check {
     /// `top`: the row itself.
     fn entry(&self, path: &Path, name: &str, meta: &Metadata, top: bool) -> Result<(), Refusal> {
-        if is_cloud(meta) || device(meta) != self.device {
+        if is_cloud(meta) || is_foreign(meta) || device(meta) != self.device {
             return Err(Refusal::Protected);
         }
         match self.reason {

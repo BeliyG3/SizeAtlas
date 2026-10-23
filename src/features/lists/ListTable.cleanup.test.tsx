@@ -105,6 +105,24 @@ describe("ListTable for the clean-up lists", () => {
     expect(JSON.stringify(shown)).toContain("cleanup.none");
   });
 
+  it("asks once more when the answer was walked at an older revision, never twice", async () => {
+    vi.mocked(api.getList).mockResolvedValue({ ...withCleanup([cache]), rev: summary.rev - 1 });
+    await settleKind("cleanup");
+    for (let tick = 0; tick < 5; tick++) await Promise.resolve();
+    render("", true, summary, "cleanup");
+    expect(api.getList).toHaveBeenCalledTimes(2);
+    expect(rowsOf()).toHaveLength(1);
+    // An answer of this revision, and any other list, is asked once.
+    vi.mocked(api.getList).mockClear();
+    vi.mocked(api.getList).mockResolvedValue(withCleanup([cache]));
+    rt.state.slots = [];
+    await settleKind("review");
+    vi.mocked(api.getList).mockResolvedValue({ ...answer({ count: 0, size: 0 }), rev: 1 });
+    await settleKind("largest");
+    for (let tick = 0; tick < 5; tick++) await Promise.resolve();
+    expect(api.getList).toHaveBeenCalledTimes(2);
+  });
+
   it("tells the menu that a row is a clean-up row, with the command of its tool", async () => {
     vi.mocked(api.getList).mockResolvedValue(withCleanup([cache, plain]));
     await settleKind("review");

@@ -116,6 +116,25 @@ pub fn is_cloud(meta: &Metadata) -> bool {
     cloud_only(meta)
 }
 
+/// An item the re-check never deletes: another user's (unlinking needs write access only to the
+/// folder, so a `sudo pip install` leaves root's files deletable in the own cache), or a socket,
+/// FIFO or device, which no clean-up rule is for.
+pub fn is_foreign(meta: &Metadata) -> bool {
+    // SAFETY: `geteuid` has no preconditions and cannot fail.
+    foreign_to(meta, unsafe { libc::geteuid() })
+}
+
+/// [`is_foreign`] for the user `me`.
+pub fn foreign_to(meta: &Metadata, me: u32) -> bool {
+    use std::os::unix::fs::FileTypeExt;
+    let kind = meta.file_type();
+    meta.uid() != me
+        || kind.is_socket()
+        || kind.is_fifo()
+        || kind.is_block_device()
+        || kind.is_char_device()
+}
+
 /// The device of an item: a folder on another device is a mount point.
 ///
 /// ponytail: a bind mount of the same file system keeps the device, so it is not caught;

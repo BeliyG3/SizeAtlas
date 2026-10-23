@@ -47,17 +47,25 @@ export function useListAnswer({
   useEffect(() => {
     let live = true;
     const applied = measure();
-    api.getList(generation, base, kind, LIST_LIMIT, query).then(
-      (answer) => {
-        if (!live) return;
-        applied();
-        setAnswered({ list: answer, query: query ?? "" });
-      },
-      (e: unknown) => live && onFail(e),
-    );
+    const ask = (again: boolean) =>
+      api.getList(generation, base, kind, LIST_LIMIT, query).then(
+        (answer) => {
+          if (!live) return;
+          // A clean-up answer carries the revision of its walk: the tree changed after it, so
+          // ask once more, which walks again. Once only: a busy tree must not keep it asking.
+          if (again && cleanup && answer.rev < shownRev) {
+            void ask(false);
+            return;
+          }
+          applied();
+          setAnswered({ list: answer, query: query ?? "" });
+        },
+        (e: unknown) => live && onFail(e),
+      );
+    void ask(true);
     return () => {
       live = false;
     };
-  }, [generation, shownRev, baselineRev, base, kind, query, onFail, measure]);
+  }, [generation, shownRev, baselineRev, base, kind, cleanup, query, onFail, measure]);
   return { list, shownQuery: answered?.query ?? "" };
 }

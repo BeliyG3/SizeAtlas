@@ -58,6 +58,12 @@ pub fn is_cloud(meta: &Metadata) -> bool {
     meta.file_attributes() & ELSEWHERE != 0
 }
 
+/// Owners and special files are checked on Unix only: Windows folders hold no sockets or
+/// devices, and other users' profiles are zones and never places.
+pub fn is_foreign(_meta: &Metadata) -> bool {
+    false
+}
+
 /// The device of an item, to notice mount points that are no links. Windows mount points are
 /// reparse points, so every item counts as on one device.
 pub fn device(_meta: &Metadata) -> u64 {

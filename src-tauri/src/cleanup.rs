@@ -3,7 +3,7 @@
 
 use std::env;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use sizeatlas_core::cleanup::{Context, Known, Os, Overrides, Running};
 use sizeatlas_core::{can_recycle, reboot_pending};
@@ -13,9 +13,11 @@ use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 /// inject their own, since the real one points the rules at this machine's folders.
 pub type ContextFn = Arc<dyn Fn(&Path) -> Context + Send + Sync>;
 
-/// The context of `AppState::default()`: this machine's.
+/// The context of `AppState::default()`: this machine's. The known folders start reading here,
+/// at launch on a thread of their own, not on the first list under a lock of the state.
 #[cfg(not(test))]
 pub fn default_context() -> ContextFn {
+    std::thread::spawn(|| LazyLock::force(&KNOWN));
     Arc::new(real_context)
 }
 
@@ -32,18 +34,23 @@ pub fn default_context() -> ContextFn {
     })
 }
 
-/// The context of this machine, read fresh: processes are listed on every call.
-pub fn real_context(root: &Path) -> Context {
+/// The known folders of this machine, read once: the environment does not change while the
+/// app runs, and resolving a folder on a disconnected network drive may wait for a timeout.
+static KNOWN: LazyLock<Known> = LazyLock::new(|| {
     let var = |name: &str| env::var(name).ok().filter(|v| !v.is_empty());
+    let env = Env {
+        var: &var,
+        dir: &folder,
+    };
+    known(Os::current(), &env)
+});
+
+/// The context of this machine: the known folders read once, processes, a pending restart and
+/// the recycle bin on every call.
+pub fn real_context(root: &Path) -> Context {
     Context {
         os: Os::current(),
-        known: known(
-            Os::current(),
-            &Env {
-                var: &var,
-                dir: &folder,
-            },
-        ),
+        known: KNOWN.clone(),
         running: running(),
         reboot_pending: reboot_pending(),
         recyclable: can_recycle(root, 0),
