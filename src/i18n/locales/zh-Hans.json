@@ -277,7 +277,7 @@
   "filters.from": "最小",
   "filters.to": "最大",
   "filters.modified": "修改日期",
-  "filters.older": "早于",
+  "filters.older": "距今超过",
   "filters.newer": "最近",
   "filters.age.d": "天",
   "filters.age.w": "周",

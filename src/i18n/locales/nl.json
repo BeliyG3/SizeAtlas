@@ -303,7 +303,7 @@
   "filters.age.d": "dagen",
   "filters.age.w": "weken",
   "filters.age.m": "maanden",
-  "filters.age.y": "jaren",
+  "filters.age.y": "jaar",
   "filters.unitOf": "{label}, eenheid",
   "filters.type": "Type",
   "filters.show": "Tonen",
