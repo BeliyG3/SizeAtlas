@@ -105,6 +105,25 @@ describe("ListTable for the clean-up lists", () => {
     expect(JSON.stringify(shown)).toContain("cleanup.none");
   });
 
+  it("says it is looking until the first answer, also when the mode is left and opened again", async () => {
+    vi.mocked(api.getList).mockResolvedValue(withCleanup([cache]));
+    await settleKind("cleanup");
+    expect(rowsOf()).toHaveLength(1);
+    expect(textOf("looking")).toEqual([]);
+    // Another mode, then back: a new table, whose walk takes a while.
+    rt.state.slots = [];
+    let reply: (list: List) => void = () => {};
+    vi.mocked(api.getList).mockReturnValue(new Promise((resolve) => (reply = resolve)));
+    render("", true, summary, "cleanup");
+    expect(textOf("looking")).toEqual(["lists.looking"]);
+    expect(rowsOf()).toHaveLength(0);
+    reply(withCleanup([cache]));
+    await Promise.resolve();
+    render("", true, summary, "cleanup");
+    expect(textOf("looking")).toEqual([]);
+    expect(rowsOf()).toHaveLength(1);
+  });
+
   it("asks once more when the answer was walked at an older revision, never twice", async () => {
     vi.mocked(api.getList).mockResolvedValue({ ...withCleanup([cache]), rev: summary.rev - 1 });
     await settleKind("cleanup");

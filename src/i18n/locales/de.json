@@ -249,6 +249,7 @@
   "mode.search": "Suchergebnisse",
   "lists.empty": "Keine passenden Elemente in diesem Ordner.",
   "lists.capped": "Die ersten {count} werden angezeigt.",
+  "lists.looking": "Wird gesucht…",
   "lists.noBaseline": "Kein vorheriger Scan zum Vergleichen. Scannen Sie neu, um die Änderungen zu sehen.",
   "lists.baselinePending": "Wird mit dem vorherigen Scan verglichen…",
   "search.found_one": "{items} Element gefunden, {size}",

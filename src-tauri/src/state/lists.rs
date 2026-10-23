@@ -31,7 +31,10 @@ impl AppState {
     ) -> Result<ListDto, CmdError> {
         let (baseline, baseline_rev, baseline_pending) = self.compared(generation);
         let walked = match kind {
-            ListKind::Cleanup | ListKind::Review => Some(self.walked(generation)?),
+            ListKind::Cleanup | ListKind::Review => {
+                let (rev, matches, running) = self.walked(generation)?;
+                Some((rev, matches.route(&running)))
+            }
             _ => None,
         };
         self.with_live(generation, id, |tree| {
@@ -68,13 +71,13 @@ impl AppState {
                         ListKind::Cleanup => Mode::Cleanup,
                         _ => Mode::Review,
                     };
-                    let (walked_rev, all) = walked.clone().expect("walked for these kinds");
+                    let (walked_rev, all) = walked.as_ref().expect("walked for these kinds");
                     // The rev the rows were found at: one older than the UI's (the tree
                     // changed after the walk) makes it ask once more (`useListAnswer`), which
                     // walks again.
-                    rev = walked_rev;
+                    rev = *walked_rev;
                     let (items, truncated, found, info) =
-                        cleanup_rows(tree, id, mode, limit, &all, baseline);
+                        cleanup_rows(tree, id, mode, limit, all, baseline);
                     cleanup = Some(info);
                     (items, truncated, Some(found))
                 }

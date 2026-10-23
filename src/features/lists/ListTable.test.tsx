@@ -87,12 +87,17 @@ describe("ListTable for a search", () => {
     render("a");
     expect(onMarks).toHaveBeenLastCalledWith([1, 2], false, null);
 
-    // The new query is loading: the old rows and their marks are still on screen.
+    expect(textOf("crows")).toHaveLength(1);
+    expect(textOf("stale")).toEqual([]);
+
+    // The new query is loading: the old rows and their marks are still on screen, dimmed.
     render("ab");
     expect(onMarks).toHaveBeenLastCalledWith([1, 2], false, null);
+    expect(textOf("stale")).toHaveLength(1);
     pending.get("ab")!(answer({ count: 1, size: 1 }, [row(1)]));
     await Promise.resolve();
     render("ab");
+    expect(textOf("stale")).toEqual([]);
     expect(onMarks).toHaveBeenLastCalledWith([], false, null);
     press({ key: "Delete", repeat: false });
     expect(onTrash).not.toHaveBeenCalled();

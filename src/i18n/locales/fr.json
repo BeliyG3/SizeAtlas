@@ -267,6 +267,7 @@
   "mode.search": "Résultats de la recherche",
   "lists.empty": "Aucun élément de ce type dans ce dossier.",
   "lists.capped": "Affichage des {count} premiers.",
+  "lists.looking": "Recherche…",
   "lists.noBaseline": "Aucune analyse précédente pour comparer. Réanalysez pour voir ce qui a changé.",
   "lists.baselinePending": "Comparaison avec l’analyse précédente…",
   "search.found_one": "{items} élément trouvé, {size}",

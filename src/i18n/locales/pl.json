@@ -285,6 +285,7 @@
   "mode.search": "Wyniki wyszukiwania",
   "lists.empty": "Brak takich elementów w tym folderze.",
   "lists.capped": "Pokazano pierwszych {count}.",
+  "lists.looking": "Wyszukiwanie…",
   "lists.noBaseline": "Brak wcześniejszego skanu do porównania. Skanuj ponownie, aby zobaczyć zmiany.",
   "lists.baselinePending": "Porównywanie z wcześniejszym skanem…",
   "search.found_one": "Znaleziono {items} element, {size}",

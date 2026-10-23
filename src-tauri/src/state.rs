@@ -63,7 +63,7 @@ pub struct Shared {
     pub trash_stop: AtomicBool,
     /// The context of the clean-up modes, built for each walk that needs it.
     pub context: ContextFn,
-    /// The last clean-up walk, shared by the lists for a few seconds (see `state/cleanup.rs`).
+    /// The last clean-up walk, shared by the lists until the tree changes (see `state/cleanup.rs`).
     walked: Mutex<Option<cleanup::Walked>>,
 }
 

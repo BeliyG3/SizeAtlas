@@ -231,6 +231,7 @@
   "mode.search": "搜索结果",
   "lists.empty": "此文件夹中没有此类项目。",
   "lists.capped": "仅显示前 {count} 项。",
+  "lists.looking": "正在查找…",
   "lists.noBaseline": "没有可供比较的上次扫描。请重新扫描以查看变化。",
   "lists.baselinePending": "正在与上次扫描比较…",
   "search.found_other": "找到 {items} 个项目，{size}",

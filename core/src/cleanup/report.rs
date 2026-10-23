@@ -3,14 +3,16 @@
 use super::markers::locks;
 use super::paths::{fits, node_path};
 use super::walk::{Found, Walk};
-use super::{Age, App, Cleanup, Info, Mode, Reason, Row, Rule, is_old};
+use super::{Age, App, Cleanup, Info, Matches, Mode, Reason, Row, Rule, Running, is_old};
 
 /// Temp items larger than this go to Review.
 const LARGE: u64 = 1 << 30;
 
 impl Walk<'_> {
-    pub(super) fn finish(self) -> Cleanup {
-        let mut out = Cleanup::default();
+    /// The rows and info of the walk; which rows a running app holds back is left to
+    /// [`Matches::route`].
+    pub(super) fn finish(self) -> Matches {
+        let mut out = Matches::default();
         let path = |id| node_path(self.tree, id, self.ctx.os);
         let no_access = |id| Info::NoAccess {
             id,
@@ -19,7 +21,6 @@ impl Walk<'_> {
         };
         out.info
             .extend(self.unreadable.iter().map(|&id| no_access(id)));
-        let mut running: Vec<(&'static App, Mode, Vec<u32>, u64)> = Vec::new();
         for found in &self.found {
             if found.busy || found.cloud || found.blocked {
                 continue;
@@ -36,20 +37,6 @@ impl Walk<'_> {
                 out.info.push(no_access(found.id));
                 continue;
             }
-            if let Some(app) = rule.app.filter(|app| self.is_running(app)) {
-                let size = self.tree.node(found.id).size;
-                match running
-                    .iter_mut()
-                    .find(|(a, m, ..)| a.name == app.name && *m == mode)
-                {
-                    Some((_, _, ids, total)) => {
-                        ids.push(found.id);
-                        *total += size;
-                    }
-                    None => running.push((app, mode, vec![found.id], size)),
-                }
-                continue;
-            }
             let row = Row {
                 id: found.id,
                 mode,
@@ -57,22 +44,9 @@ impl Walk<'_> {
                 command: rule.command,
                 restorable: locks(reason).map(|names| self.beside(found.id, names)),
             };
-            match mode {
-                Mode::Cleanup => out.cleanup.push(row),
-                Mode::Review => out.review.push(row),
-            }
+            let size = self.tree.node(found.id).size;
+            out.rows.push((row, rule.app, size));
         }
-        out.info.extend(
-            running
-                .into_iter()
-                .map(|(app, mode, ids, size)| Info::AppRunning {
-                    app: app.name,
-                    mode,
-                    ids,
-                    size,
-                }),
-        );
-        out.approximate = out.info.iter().any(|i| matches!(i, Info::NoAccess { .. }));
         out
     }
 
@@ -101,13 +75,55 @@ impl Walk<'_> {
                 .any(|m| fits(m, tree.name(c), self.ctx.os.folds()))
         })
     }
+}
 
-    fn is_running(&self, app: &App) -> bool {
-        self.ctx.running.iter().any(|r| {
-            app.exes.iter().any(|m| fits(m, &r.exe, true))
-                || app.cmds.iter().any(|(m, cmd)| {
-                    fits(m, &r.exe, true) && r.cmd.to_lowercase().contains(&cmd.to_lowercase())
-                })
-        })
+impl Matches {
+    /// The lists with the rows of the apps in `running` held back: one info line per app and
+    /// mode instead.
+    pub fn route(&self, running: &[Running]) -> Cleanup {
+        let mut out = Cleanup {
+            info: self.info.clone(),
+            approximate: self.approximate,
+            ..Cleanup::default()
+        };
+        let mut held: Vec<(&'static App, Mode, Vec<u32>, u64)> = Vec::new();
+        for (row, app, size) in &self.rows {
+            if let Some(app) = app.filter(|app| is_running(app, running)) {
+                match held
+                    .iter_mut()
+                    .find(|(a, m, ..)| a.name == app.name && *m == row.mode)
+                {
+                    Some((_, _, ids, total)) => {
+                        ids.push(row.id);
+                        *total += size;
+                    }
+                    None => held.push((app, row.mode, vec![row.id], *size)),
+                }
+                continue;
+            }
+            match row.mode {
+                Mode::Cleanup => out.cleanup.push(row.clone()),
+                Mode::Review => out.review.push(row.clone()),
+            }
+        }
+        out.info.extend(
+            held.into_iter()
+                .map(|(app, mode, ids, size)| Info::AppRunning {
+                    app: app.name,
+                    mode,
+                    ids,
+                    size,
+                }),
+        );
+        out
     }
+}
+
+fn is_running(app: &App, running: &[Running]) -> bool {
+    running.iter().any(|r| {
+        app.exes.iter().any(|m| fits(m, &r.exe, true))
+            || app.cmds.iter().any(|(m, cmd)| {
+                fits(m, &r.exe, true) && r.cmd.to_lowercase().contains(&cmd.to_lowercase())
+            })
+    })
 }

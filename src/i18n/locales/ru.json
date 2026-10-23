@@ -285,6 +285,7 @@
   "mode.search": "Результаты поиска",
   "lists.empty": "В этой папке ничего такого нет.",
   "lists.capped": "Показаны первые {count}.",
+  "lists.looking": "Ищу…",
   "lists.noBaseline": "Нет прошлого скана для сравнения. Пересканируйте, чтобы увидеть изменения.",
   "lists.baselinePending": "Сравниваю с прошлым сканом…",
   "search.found_one": "Найден {items} элемент, {size}",

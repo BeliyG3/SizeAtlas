@@ -8,7 +8,7 @@ use super::never::{PROTECTED, add_never, add_spots};
 use super::paths::{components, fits};
 use super::pattern::{Hit, Pattern, State, add, ended, is_never, start, step};
 use super::zones::{ZONE_NAMES, add_zones, anywhere_allowed};
-use super::{Cleanup, Context, Marker, Place, Rule, Spot, Target};
+use super::{Context, Marker, Matches, Place, Rule, Spot, Target};
 use crate::tree::{Tree, flags};
 
 /// A matched item and what its subtree holds.
@@ -44,7 +44,7 @@ struct Visit {
     inside: Option<usize>,
 }
 
-pub(crate) fn run(tree: &Tree, ctx: &Context, rules: &[Rule], spots: &[Spot]) -> Cleanup {
+pub(crate) fn run(tree: &Tree, ctx: &Context, rules: &[Rule], spots: &[Spot]) -> Matches {
     let (os, known) = (ctx.os, &ctx.known);
     let mut patterns = Vec::new();
     let mut anywhere = Vec::new();

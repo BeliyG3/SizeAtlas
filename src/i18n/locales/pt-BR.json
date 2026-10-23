@@ -267,6 +267,7 @@
   "mode.search": "Resultados da pesquisa",
   "lists.empty": "Nada deste tipo nesta pasta.",
   "lists.capped": "Mostrando os primeiros {count}.",
+  "lists.looking": "Procurando…",
   "lists.noBaseline": "Nenhuma análise anterior para comparar. Reanalise para ver o que mudou.",
   "lists.baselinePending": "Comparando com a análise anterior…",
   "search.found_one": "{items} item encontrado, {size}",

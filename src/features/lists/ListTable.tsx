@@ -294,9 +294,15 @@ export function ListTable({
           baselineAt={summary.baselineAt}
           onSort={(column) => setSort(nextListSort(sort, column.id))}
         />
-        <div className="crows" style={{ height: rows.length * ROW_HEIGHT, width: layout.width }}>
+        <div
+          // The rows of the last query while the answer to the new one comes.
+          className={list && shownQuery !== (query ?? "") ? "crows stale" : "crows"}
+          style={{ height: rows.length * ROW_HEIGHT, width: layout.width }}
+        >
           {shown}
         </div>
+        {/* A clean-up list walks the whole tree first, which can take seconds. */}
+        {!list && <p className="dim pad looking">{t("lists.looking")}</p>}
         {list && rows.length === 0 && <p className="dim pad">{t(emptyListKey(kind, list))}</p>}
         {list?.truncated && (
           <p className="dim pad">{t("lists.capped", { count: formatCount(LIST_LIMIT, lang) })}</p>

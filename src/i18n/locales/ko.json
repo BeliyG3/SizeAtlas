@@ -231,6 +231,7 @@
   "mode.search": "검색 결과",
   "lists.empty": "이 폴더에는 해당하는 항목이 없습니다.",
   "lists.capped": "처음 {count}개를 표시합니다.",
+  "lists.looking": "찾는 중…",
   "lists.noBaseline": "비교할 이전 스캔이 없습니다. 변경 내용을 보려면 다시 스캔하세요.",
   "lists.baselinePending": "이전 스캔과 비교하는 중…",
   "search.found_other": "항목 {items}개 찾음, {size}",

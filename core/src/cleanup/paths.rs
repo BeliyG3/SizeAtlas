@@ -5,7 +5,7 @@ use crate::tree::{NO_PARENT, Tree, glob};
 
 /// Known folders of the current user and the system, as plain path strings. An empty string,
 /// or one with no components, means the folder does not exist on this OS.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Known {
     pub home: String,
     /// `%LOCALAPPDATA%`.
@@ -35,7 +35,7 @@ pub struct Known {
 }
 
 /// Cache locations moved by environment variables or the tools' own settings.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Overrides {
     pub nuget_http: Option<String>,
     pub pip_cache: Option<String>,

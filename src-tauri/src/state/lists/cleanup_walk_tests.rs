@@ -2,7 +2,8 @@
 //! for the two modes, blind in the tests' default state; and the info lines made from it.
 
 use std::path::Path;
-use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use sizeatlas_core::cleanup::{Cleanup, Info, Mode};
 use sizeatlas_core::tree::{ListKind, Tree};
@@ -13,25 +14,61 @@ use crate::dto::{FoundDto, InfoKind};
 use crate::state::AppState;
 
 #[test]
-fn lists_share_one_walk_until_the_tree_changes() {
+fn lists_share_one_walk_until_the_tree_changes_and_see_the_processes_of_now() {
     let m = machine();
-    let calls = || m.calls.load(Ordering::Relaxed);
-    let first = m.list("", ListKind::Cleanup, 10);
+    let walk = || m.state.walked(m.generation).unwrap();
+    let (rev, first, _) = walk();
+    assert!(names(&m.list("", ListKind::Cleanup, 10)).contains(&"Cache"));
     m.list(TEMP, ListKind::Review, 10);
-    m.list(TEMP, ListKind::Cleanup, 10);
-    assert_eq!(calls(), 1, "both modes and any folder read the same walk");
     m.running.lock().unwrap().push("chrome.exe");
-    assert_eq!(
-        m.list("", ListKind::Cleanup, 10),
-        first,
-        "within the window"
+    let (_, again, running) = walk();
+    assert!(
+        Arc::ptr_eq(&first, &again),
+        "both modes and any folder read one walk"
     );
+    assert_eq!(running.len(), 1, "the processes of now");
+    assert_eq!(
+        names(&m.list("", ListKind::Cleanup, 10)),
+        ["old", "_cacache"],
+        "a browser started since holds its rows back at once"
+    );
+    assert_eq!(m.calls.load(Ordering::Relaxed), 5, "a context per call");
 
     m.bump();
-    let after = m.list("", ListKind::Cleanup, 10);
-    assert_eq!(calls(), 2, "a new rev walks again");
-    assert_eq!(after.rev, first.rev + 1);
-    assert_eq!(names(&after), ["old", "_cacache"]);
+    let (after, walked, _) = walk();
+    assert!(!Arc::ptr_eq(&first, &walked), "a new rev walks again");
+    assert_eq!(after, rev + 1);
+}
+
+#[test]
+fn other_known_folders_walk_again() {
+    let m = machine();
+    let synced = Arc::new(AtomicBool::new(false));
+    let (inner, now) = (m.state.0.context.clone(), synced.clone());
+    let state = AppState::with_context(Arc::new(move |root: &Path| {
+        let mut ctx = inner(root);
+        if now.load(Ordering::Relaxed) {
+            ctx.known
+                .cloud
+                .push(root.join("Users/u/proj").to_string_lossy().into());
+        }
+        ctx
+    }));
+    let generation = state.install_tree(Tree::clone(&m.tree()));
+    let review = || {
+        names(
+            &state
+                .list(generation, 0, ListKind::Review, 10, None)
+                .unwrap(),
+        )
+        .join(",")
+    };
+    assert!(review().contains("node_modules"));
+    synced.store(true, Ordering::Relaxed);
+    assert!(
+        !review().contains("node_modules"),
+        "a cloud folder made since is a zone"
+    );
 }
 
 #[test]

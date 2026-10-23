@@ -267,6 +267,7 @@
   "mode.search": "Risultati della ricerca",
   "lists.empty": "Niente di questo tipo in questa cartella.",
   "lists.capped": "Vengono mostrati i primi {count}.",
+  "lists.looking": "Ricerca…",
   "lists.noBaseline": "Nessuna scansione precedente da confrontare. Ripeti la scansione per vedere cosa è cambiato.",
   "lists.baselinePending": "Confronto con la scansione precedente…",
   "search.found_one": "Trovato {items} elemento, {size}",

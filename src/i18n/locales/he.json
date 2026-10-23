@@ -267,6 +267,7 @@
   "mode.search": "תוצאות חיפוש",
   "lists.empty": "אין פריטים מסוג זה בתיקייה זו.",
   "lists.capped": "מוצגים {count} הראשונים.",
+  "lists.looking": "מחפש…",
   "lists.noBaseline": "אין סריקה קודמת להשוואה. יש לסרוק מחדש כדי לראות מה השתנה.",
   "lists.baselinePending": "משווה לסריקה הקודמת…",
   "search.found_one": "נמצא {items} פריט, {size}",

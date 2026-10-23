@@ -231,6 +231,7 @@
   "mode.search": "Hasil pencarian",
   "lists.empty": "Tidak ada item seperti ini di folder ini.",
   "lists.capped": "Menampilkan {count} item pertama.",
+  "lists.looking": "Mencari…",
   "lists.noBaseline": "Tidak ada hasil pindai sebelumnya untuk dibandingkan. Pindai ulang untuk melihat perubahannya.",
   "lists.baselinePending": "Membandingkan dengan hasil pindai sebelumnya…",
   "search.found_other": "Ditemukan {items} item, {size}",

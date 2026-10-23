@@ -176,6 +176,16 @@ pub struct Cleanup {
     pub approximate: bool,
 }
 
+/// Every match of a walk, before the running apps are known: the walk depends only on the tree
+/// and the rest of the context, so it can be kept while processes come and go.
+#[derive(Clone, Debug, Default)]
+pub struct Matches {
+    /// Each row with the app that holds it back while running, and its size.
+    rows: Vec<(Row, Option<&'static App>, u64)>,
+    info: Vec<Info>,
+    approximate: bool,
+}
+
 /// The rule and spot tables of `os`.
 fn tables(os: Os) -> (&'static [Rule], &'static [Spot]) {
     match os {
@@ -188,11 +198,16 @@ fn tables(os: Os) -> (&'static [Rule], &'static [Spot]) {
 impl Tree {
     /// The clean-up lists of the whole tree.
     pub fn cleanup(&self, ctx: &Context) -> Cleanup {
-        let (rules, spots) = tables(ctx.os);
-        self.cleanup_with(ctx, rules, spots)
+        self.matches(ctx).route(&ctx.running)
     }
 
-    pub(crate) fn cleanup_with(&self, ctx: &Context, rules: &[Rule], spots: &[Spot]) -> Cleanup {
+    /// The matches of the whole tree; `ctx.running` is not read, [`Matches::route`] applies it.
+    pub fn matches(&self, ctx: &Context) -> Matches {
+        let (rules, spots) = tables(ctx.os);
+        self.matches_with(ctx, rules, spots)
+    }
+
+    pub(crate) fn matches_with(&self, ctx: &Context, rules: &[Rule], spots: &[Spot]) -> Matches {
         let mut out = walk::run(self, ctx, rules, spots);
         for info in spots::find(self, ctx, spots) {
             if !out.info.contains(&info) {
@@ -202,6 +217,11 @@ impl Tree {
         let no_access = |i: &Info| matches!(i, Info::NoAccess { .. });
         out.approximate = self.approximate || out.info.iter().any(no_access);
         out
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cleanup_with(&self, ctx: &Context, rules: &[Rule], spots: &[Spot]) -> Cleanup {
+        self.matches_with(ctx, rules, spots).route(&ctx.running)
     }
 }
 

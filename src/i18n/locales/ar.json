@@ -321,6 +321,7 @@
   "mode.search": "نتائج البحث",
   "lists.empty": "لا يوجد شيء من هذا النوع في هذا المجلد.",
   "lists.capped": "يُعرض أول {count} فقط.",
+  "lists.looking": "جارٍ البحث…",
   "lists.noBaseline": "لا يوجد فحص سابق للمقارنة. أعد الفحص لترى ما الذي تغيّر.",
   "lists.baselinePending": "جارٍ المقارنة بالفحص السابق…",
   "search.found_zero": "تم العثور على {items} عنصر، {size}",

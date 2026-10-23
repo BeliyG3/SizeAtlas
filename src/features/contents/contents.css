@@ -59,6 +59,17 @@
   pointer-events: none;
 }
 
+/* "Looking…" shows only when the answer takes a moment, so a quick list does not flash it. */
+.looking {
+  animation: looking-shows 0s 0.3s both;
+}
+
+@keyframes looking-shows {
+  from {
+    visibility: hidden;
+  }
+}
+
 .crow {
   position: absolute;
   inset-inline-start: 0;

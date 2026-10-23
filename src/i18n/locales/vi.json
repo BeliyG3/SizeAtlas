@@ -231,6 +231,7 @@
   "mode.search": "Kết quả tìm kiếm",
   "lists.empty": "Thư mục này không có mục nào thuộc loại này.",
   "lists.capped": "Đang hiển thị {count} mục đầu tiên.",
+  "lists.looking": "Đang tìm…",
   "lists.noBaseline": "Không có lần quét trước để so sánh. Hãy quét lại để xem những gì đã thay đổi.",
   "lists.baselinePending": "Đang so sánh với lần quét trước…",
   "search.found_other": "Tìm thấy {items} mục, {size}",

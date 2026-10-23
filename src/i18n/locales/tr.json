@@ -249,6 +249,7 @@
   "mode.search": "Arama sonuçları",
   "lists.empty": "Bu klasörde bu türden bir şey yok.",
   "lists.capped": "İlk {count} öğe gösteriliyor.",
+  "lists.looking": "Aranıyor…",
   "lists.noBaseline": "Karşılaştırılacak önceki bir tarama yok. Neyin değiştiğini görmek için yeniden tarayın.",
   "lists.baselinePending": "Önceki taramayla karşılaştırılıyor…",
   "search.found_one": "{items} öğe bulundu, {size}",
