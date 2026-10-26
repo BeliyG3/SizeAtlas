@@ -56,6 +56,8 @@
   "banner.hintMac": "Sau khi cấp quyền truy cập, hãy khởi động lại SizeAtlas và quét lại.",
   "banner.hintMacFda": "Quyền truy cập đầy đủ vào ổ đĩa đang bật. Đây là các thư mục mà macOS bảo vệ khỏi mọi ứng dụng.",
   "banner.show": "Hiển thị",
+  "banner.dismiss": "Ẩn",
+  "banner.chip": "Thư mục không đọc được",
   "banner.hintOther": "Chạy SizeAtlas với nhiều quyền hơn để tính cả các thư mục này.",
   "banner.restartElevated": "Khởi động lại với tư cách quản trị viên",
   "banner.openPrivacy": "Mở cài đặt Quyền truy cập đầy đủ vào ổ đĩa",

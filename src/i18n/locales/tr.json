@@ -61,6 +61,8 @@
   "banner.hintMac": "Erişime izin verdikten sonra SizeAtlas'ı yeniden başlatıp tekrar tarayın.",
   "banner.hintMacFda": "Tam Disk Erişimi açık. Bunlar, macOS'in tüm uygulamalardan koruduğu klasörlerdir.",
   "banner.show": "Göster",
+  "banner.dismiss": "Gizle",
+  "banner.chip": "Okunamayan klasörler",
   "banner.hintOther": "Bunları dahil etmek için SizeAtlas'ı daha fazla izinle çalıştırın.",
   "banner.restartElevated": "Yönetici olarak yeniden başlat",
   "banner.openPrivacy": "Tam Disk Erişimi ayarlarını aç",

@@ -66,6 +66,8 @@
   "banner.hintMac": "Después de permitir el acceso, reinicia SizeAtlas y vuelve a analizar.",
   "banner.hintMacFda": "El acceso total al disco está activado. Son carpetas que macOS protege de todas las apps.",
   "banner.show": "Mostrar",
+  "banner.dismiss": "Ocultar",
+  "banner.chip": "Carpetas que no se pudieron leer",
   "banner.hintOther": "Ejecuta SizeAtlas con más permisos para incluirlas.",
   "banner.restartElevated": "Reiniciar como administrador",
   "banner.openPrivacy": "Abrir los ajustes de Acceso total al disco",

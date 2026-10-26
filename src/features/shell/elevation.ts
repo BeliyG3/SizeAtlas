@@ -23,6 +23,11 @@ export function useElevated(ask: boolean): boolean | null {
   return elevated;
 }
 
+export interface Restart {
+  busy: boolean;
+  run: () => void;
+}
+
 /**
  * Restarts the app as administrator to rescan `root`, with the button off meanwhile (on success
  * the window closes). A refused prompt and a failure are told through `push`; `errorText` words
@@ -32,7 +37,7 @@ export function useRestartElevated(
   root: string,
   push: (text: string) => void,
   errorText: (e: unknown) => string,
-) {
+): Restart {
   const { t } = useT();
   const [busy, setBusy] = useState(false);
   // The banner can go away while the restart waits for the UAC prompt.

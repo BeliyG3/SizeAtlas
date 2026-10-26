@@ -1,3 +1,4 @@
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   createContext,
@@ -76,6 +77,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       getCurrentWindow()
         .setTheme(theme === "system" ? null : theme)
         .then(paint, paint);
+      // The startup frame is dark (tauri.conf.json); the window and webview behind the page
+      // follow the theme from here on, so a light theme shows no dark edges when resized.
+      const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+      if (bg)
+        getCurrentWebviewWindow()
+          .setBackgroundColor(bg)
+          .catch(() => {});
     } catch {
       // Not running inside Tauri: getCurrentWindow throws without its internals.
     }

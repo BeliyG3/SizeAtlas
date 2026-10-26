@@ -66,6 +66,8 @@
   "banner.hintMac": "לאחר מתן הגישה, יש להפעיל מחדש את SizeAtlas ולסרוק שוב.",
   "banner.hintMacFda": "גישה מלאה לכונן מופעלת. אלה תיקיות ש-macOS מגן עליהן מפני כל היישומים.",
   "banner.show": "הצג",
+  "banner.dismiss": "הסתר",
+  "banner.chip": "תיקיות שלא ניתן היה לקרוא",
   "banner.hintOther": "כדי לכלול אותן, יש להפעיל את SizeAtlas עם הרשאות נוספות.",
   "banner.restartElevated": "הפעל מחדש כמנהל מערכת",
   "banner.openPrivacy": "פתח את הגדרות ״גישה מלאה לכונן״",

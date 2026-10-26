@@ -64,6 +64,47 @@
   padding: 2px 8px;
 }
 
+/* The unreadable folders in the status bar: a chip in the colours of the banner. */
+.statusbar .access-chip {
+  flex: none;
+  margin-inline-start: auto;
+  padding: 0 8px;
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+/* The global button hover would turn it grey: it keeps its colours and brightens. */
+.statusbar .access-chip:hover:not(:disabled),
+.statusbar .access-chip:active:not(:disabled) {
+  background: var(--warn-bg);
+  filter: brightness(1.15);
+}
+
+.access-popover {
+  position: fixed;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  inline-size: 360px;
+  max-inline-size: calc(100vw - 8px);
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  z-index: 10;
+  box-shadow: var(--shadow);
+}
+
+/* It takes the focus when opened, so that Esc works; the buttons show their own. */
+.access-popover:focus-visible {
+  outline: none;
+}
+
+.access-popover > span {
+  flex: 1 0 100%;
+}
+
 .workspace {
   display: flex;
   flex: 1;

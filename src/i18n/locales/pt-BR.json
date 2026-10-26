@@ -66,6 +66,8 @@
   "banner.hintMac": "Depois de permitir o acesso, reinicie o SizeAtlas e analise novamente.",
   "banner.hintMacFda": "O Acesso Total ao Disco está ativado. Estas são pastas que o macOS protege de todos os apps.",
   "banner.show": "Mostrar",
+  "banner.dismiss": "Ocultar",
+  "banner.chip": "Pastas que não puderam ser lidas",
   "banner.hintOther": "Execute o SizeAtlas com mais permissões para incluí-las.",
   "banner.restartElevated": "Reiniciar como administrador",
   "banner.openPrivacy": "Abrir ajustes de Acesso Total ao Disco",

@@ -18,6 +18,8 @@ interface Props {
     progress: ScanProgress | null;
     expected: number | null;
   } | null;
+  /** The chip of the unreadable folders, if there are any (`AccessChip`). */
+  access?: ReactNode;
   /** The running trash request, if any (`TrashStatus`). */
   trash: ReactNode;
 }
@@ -62,7 +64,7 @@ function ScanStatus({ root, folder, progress, expected }: NonNullable<Props["sca
   );
 }
 
-export function StatusBar({ summary, scan, trash }: Props) {
+export function StatusBar({ summary, scan, access, trash }: Props) {
   const { t, lang } = useT();
   const size = useSize();
   return (
@@ -86,6 +88,7 @@ export function StatusBar({ summary, scan, trash }: Props) {
         </>
       )}
       {scan && <ScanStatus {...scan} />}
+      {access}
       {trash}
     </footer>
   );

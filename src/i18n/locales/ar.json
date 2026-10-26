@@ -81,6 +81,8 @@
   "banner.hintMac": "بعد السماح بالوصول، أعد تشغيل SizeAtlas وأعد الفحص.",
   "banner.hintMacFda": "الوصول الكامل إلى القرص مفعّل. هذه مجلدات يحميها macOS من جميع التطبيقات.",
   "banner.show": "إظهار",
+  "banner.dismiss": "إخفاء",
+  "banner.chip": "مجلدات تعذّرت قراءتها",
   "banner.hintOther": "شغّل SizeAtlas بأذونات أعلى لتضمينها.",
   "banner.restartElevated": "إعادة التشغيل كمسؤول",
   "banner.openPrivacy": "فتح إعدادات الوصول الكامل إلى القرص",

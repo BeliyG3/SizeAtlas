@@ -48,7 +48,7 @@ vi.mock("../features/toasts/Toasts", () => ({
   }),
 }));
 vi.mock("../features/menubar/AppMenuBar", () => ({ AppMenuBar: () => null }));
-vi.mock("../features/shell/AccessBanner", () => ({ AccessBanner: () => null }));
+vi.mock("../features/shell/useAccess", () => ({ useAccess: () => ({ banner: null, chip: null }) }));
 vi.mock("../features/update/UpdateBanner", () => ({ UpdateBanner: () => null }));
 vi.mock("../features/update/useUpdateCheck", () => ({
   useUpdateCheck: () => ({
