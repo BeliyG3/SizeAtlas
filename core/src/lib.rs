@@ -6,6 +6,7 @@ pub mod categories;
 pub mod cleanup;
 pub mod details;
 pub mod duplicates;
+pub mod image_size;
 mod platform;
 pub mod scanner;
 pub mod tree;

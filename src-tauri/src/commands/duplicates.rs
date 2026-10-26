@@ -9,7 +9,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use super::roots::{cache_dir, changed};
 use crate::dto::{DuplicatesDto, EstimateDto, RefDto, TrashDto, TrashProgressEventDto};
-use crate::duplicates::{Emit, trash};
+use crate::duplicates::{Emit, thumb, trash};
 use crate::error::CmdError;
 use crate::recycle;
 use crate::state::AppState;
@@ -95,4 +95,22 @@ pub async fn trash_duplicates(
     changed(&app);
     let _ = app.emit("duplicates-status", state.duplicates_status());
     result
+}
+
+/// The bytes of the image file of node `id` for a thumbnail; empty when there is none to show
+/// (not an image the webview shows, too large, in the cloud, gone).
+#[tauri::command]
+pub async fn get_thumbnail(
+    state: State<'_, AppState>,
+    root: String,
+    generation: u64,
+    id: u32,
+) -> Result<tauri::ipc::Response, CmdError> {
+    let state = state.inner().clone();
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
+        thumb::thumbnail(&state, &root, generation, id)
+    })
+    .await
+    .map_err(CmdError::from)??;
+    Ok(tauri::ipc::Response::new(bytes))
 }

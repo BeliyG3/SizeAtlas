@@ -29,6 +29,7 @@ mod decide;
 mod job;
 mod roots;
 mod select;
+pub mod thumb;
 pub mod trash;
 
 use roots::Picked;
@@ -268,6 +269,8 @@ mod roots_tests;
 mod stale_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod thumb_tests;
 #[cfg(test)]
 mod trash_fixture;
 #[cfg(test)]
