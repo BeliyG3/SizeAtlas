@@ -110,6 +110,10 @@
   display: none;
 }
 
+html {
+  background: var(--bg);
+}
+
 body {
   margin: 0;
   background: var(--bg);
