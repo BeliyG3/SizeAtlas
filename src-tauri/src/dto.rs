@@ -12,6 +12,12 @@ mod cleanup;
 pub use cleanup::InfoKind;
 pub use cleanup::{CleanupDto, InfoDto, ReasonDto};
 
+mod duplicates;
+
+#[cfg(test)]
+pub use duplicates::{CopyDto, RefDto};
+pub use duplicates::{DuplicatesDto, EstimateDto, GroupDto, StatusDto, hex};
+
 mod growth;
 
 pub use growth::{ChangeDto, Compared, delta};

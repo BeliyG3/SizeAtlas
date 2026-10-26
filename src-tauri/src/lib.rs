@@ -5,6 +5,7 @@ mod cleanup;
 mod commands;
 mod details;
 mod dto;
+mod duplicates;
 mod elevate;
 // pub: some variants are used from M2 on (trash, rescan)
 pub mod error;
@@ -85,6 +86,10 @@ pub fn run() {
             commands::roots::open_cached,
             commands::roots::close_root,
             commands::roots::forget_scan,
+            commands::duplicates::estimate_duplicates,
+            commands::duplicates::find_duplicates,
+            commands::duplicates::cancel_duplicates,
+            commands::duplicates::get_duplicates,
         ])
         .setup(|app| {
             let title = title_bar::window_title(

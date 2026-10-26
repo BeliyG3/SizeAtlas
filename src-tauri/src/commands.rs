@@ -1,6 +1,6 @@
 //! Thin Tauri wrappers for reads; logic lives in `state`. Commands that change the open roots
 //! are in `roots`, the removals in `trash`, those that act on one item on disk in `items`, the
-//! CSV export in `export`.
+//! CSV export in `export`, the duplicate search in `duplicates`.
 
 use sizeatlas_core::tree::{ListKind, ListOrder};
 use tauri::{State, Window};
@@ -13,6 +13,7 @@ use crate::elevate::{self, StartupRescans};
 use crate::error::CmdError;
 use crate::state::AppState;
 
+pub mod duplicates;
 pub mod export;
 pub mod items;
 pub mod roots;

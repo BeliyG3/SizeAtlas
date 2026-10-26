@@ -72,6 +72,8 @@ pub struct Shared {
     pub context: ContextFn,
     /// The last clean-up walk, shared by the lists until the tree changes (see `state/cleanup.rs`).
     walked: Mutex<Option<cleanup::Walked>>,
+    /// The duplicate search and its result (see `crate::duplicates`).
+    pub duplicates: crate::duplicates::Duplicates,
 }
 
 #[derive(Clone)]
@@ -95,6 +97,12 @@ impl AppState {
         AppState::new(default_context(), volume_of)
     }
 
+    /// A state with both `context` and `volume_of` given.
+    #[cfg(test)]
+    pub fn with_context_and_volumes(context: ContextFn, volume_of: VolumeFn) -> Self {
+        AppState::new(context, volume_of)
+    }
+
     fn new(context: ContextFn, volume_of: VolumeFn) -> Self {
         AppState(Arc::new(Shared {
             data: RwLock::new(Data {
@@ -109,6 +117,7 @@ impl AppState {
             requests: Mutex::default(),
             context,
             walked: Mutex::default(),
+            duplicates: Default::default(),
         }))
     }
 
@@ -254,6 +263,16 @@ impl AppState {
         let data = self.read_data();
         data.find(root)
             .map(|i| (data.roots[i].generation, data.roots[i].tree.clone()))
+    }
+
+    /// The generation and the tree of every open root, in the order of the folder tree; the lock
+    /// is held only to clone them.
+    pub(crate) fn open_trees(&self) -> Vec<(u64, Arc<Tree>)> {
+        let data = self.read_data();
+        data.roots
+            .iter()
+            .map(|r| (r.generation, r.tree.clone()))
+            .collect()
     }
 
     /// Runs `f` on the tree of the root with `generation`.
