@@ -9,7 +9,9 @@ use std::time::{Duration, SystemTime};
 
 use sizeatlas_core::scanner::{Progress, ScanOutcome, scan};
 
-use super::fixture::{anywhere, deleting, id, open, real, rev, settle};
+use super::fixture::{
+    Log, anywhere, confirm, deleting, done, id, logged, open, real, rev, root_of, settle, start,
+};
 use super::run_plan;
 use crate::dto::TrashProgressDto;
 use crate::error::CmdError;
@@ -149,4 +151,72 @@ fn one_gone_and_one_changed_refuse_the_request() {
     assert_eq!(refused, Err(CmdError::Changed));
     assert!(log.lock().unwrap().is_empty() && top.exists());
     assert_eq!(state.summary(g).unwrap().files, 3, "the tree is as it was");
+}
+
+#[test]
+fn a_folder_queued_after_removing_inside_it_goes() {
+    let state = AppState::default();
+    let (dir, g) = open(&state);
+    let (cache, log) = (tempfile::tempdir().unwrap(), Log::default());
+    // Planned before the first two run: the plan of `sub` holds its time from then.
+    let (x, y) = (
+        confirm(&state, 1, g, &[&["sub", "x.bin"]]),
+        confirm(&state, 2, g, &[&["sub", "y.bin"]]),
+    );
+    let folder = confirm(&state, 3, g, &[&["sub"]]);
+    let runs = [x, y, folder].map(|r| start(&state, cache.path(), r, logged(&log)));
+    for run in runs {
+        assert_eq!(done(run).removed, 1);
+    }
+    let sub = real(&dir, &["sub"]);
+    assert_eq!(
+        *log.lock().unwrap(),
+        [sub.join("x.bin"), sub.join("y.bin"), sub.clone()]
+    );
+    assert!(!sub.exists());
+}
+
+#[test]
+fn a_folder_changed_by_something_else_after_a_removal_inside_it_stays() {
+    let state = AppState::default();
+    let (dir, g) = open(&state);
+    let (cache, log) = (tempfile::tempdir().unwrap(), Log::default());
+    let inside = confirm(&state, 1, g, &[&["sub", "x.bin"]]);
+    let folder = confirm(&state, 2, g, &[&["sub"]]);
+    assert_eq!(
+        done(start(&state, cache.path(), inside, logged(&log))).removed,
+        1
+    );
+    let added = real(&dir, &["sub", "new.bin"]);
+    fs::write(&added, b"n").unwrap();
+    settle(&added);
+    let refused = start(&state, cache.path(), folder, logged(&log))
+        .join()
+        .unwrap();
+    assert_eq!(refused, Err(CmdError::Changed));
+    assert_eq!(*log.lock().unwrap(), [real(&dir, &["sub", "x.bin"])]);
+}
+
+#[test]
+fn the_folder_times_of_a_root_are_kept_only_while_it_has_requests() {
+    let state = AppState::default();
+    let (dir, g) = open(&state);
+    let (root, sub) = (root_of(&state, g), real(&dir, &["sub"]));
+    state.note_settled(&root, &sub, 1, 2);
+    assert_eq!(
+        state.settled_times(&root, &sub, 1),
+        [1],
+        "no request: not kept"
+    );
+    let ticket = state.enqueue_trash(1, &root, "v").unwrap();
+    state.note_settled(&root, &sub, 1, 2);
+    state.note_settled(&root, &sub, 2, 3);
+    assert_eq!(state.settled_times(&root, &sub, 1), [1, 2, 3]);
+    assert_eq!(state.settled_times(&root, &sub, 2), [2, 3]);
+    drop(ticket);
+    assert_eq!(
+        state.settled_times(&root, &sub, 1),
+        [1],
+        "cleared with the last"
+    );
 }

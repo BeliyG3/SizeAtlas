@@ -47,6 +47,12 @@ pub fn run_plan(
     stop: &dyn Fn() -> bool,
     mut report: impl FnMut(TrashProgressDto),
 ) -> Result<TrashDto, CmdError> {
+    let check = |item: &TrashItem| {
+        check(
+            item,
+            &state.settled_times(&plan.root, &item.path, item.mtime),
+        )
+    };
     for item in plan.items.iter().filter(|item| !gone(&item.path)) {
         check(item)?;
     }
@@ -118,17 +124,22 @@ pub fn run_plan(
         match trash_one(&item.path) {
             Ok(()) => {
                 size = size.saturating_add(item.size);
+                let parent_after = modified(&item.parent_path);
+                // A later request of the root planned with the folder's time before this.
+                if let (Some(before), Some(after)) = (parent_before, parent_after) {
+                    state.note_settled(&plan.root, &item.parent_path, before, after);
+                }
                 trashed.push(Trashed {
                     id: item.id,
                     path: item.path.clone(),
                     parent_before,
                     parent_listed,
-                    parent_after: modified(&item.parent_path),
+                    parent_after,
                 });
                 noted.push(TrashedPath {
                     path: item.path.clone(),
                     parent_before: [parent_before, parent_listed],
-                    parent_after: modified(&item.parent_path),
+                    parent_after,
                 });
             }
             Err(os_message) => failed.push(TrashFailureDto {

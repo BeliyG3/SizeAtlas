@@ -3,6 +3,7 @@
 //! one volume run one after another in the order they were confirmed, those of other volumes
 //! meanwhile.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, MutexGuard, PoisonError};
@@ -23,9 +24,15 @@ struct Entry {
     started: bool,
 }
 
-/// The confirmed requests that have not ended, in the order they were confirmed.
+/// The confirmed requests that have not ended, in the order they were confirmed, and the folder
+/// times they changed.
 #[derive(Default)]
-pub struct Requests(Vec<Entry>);
+pub struct Requests {
+    entries: Vec<Entry>,
+    /// By root while it has requests: the times a removal gave a folder (before → after), so a
+    /// request planned before still finds the folder unchanged (see `AppState::settled_times`).
+    settled: HashMap<String, HashMap<PathBuf, Vec<(i64, i64)>>>,
+}
 
 /// A confirmed request; it leaves the registry when dropped.
 pub struct Ticket {
@@ -46,7 +53,11 @@ impl Ticket {
 impl Drop for Ticket {
     fn drop(&mut self) {
         let request = self.request;
-        self.state.requests().0.retain(|e| e.request != request);
+        let mut requests = self.state.requests();
+        requests.entries.retain(|e| e.request != request);
+        if !requests.entries.iter().any(|e| e.root == self.root) {
+            requests.settled.remove(&self.root);
+        }
     }
 }
 
@@ -68,11 +79,11 @@ impl AppState {
     ) -> Result<Ticket, CmdError> {
         let mut requests = self.requests();
         // Under the lock `stop_all` takes: a request either sees the app closing or is stopped.
-        if self.closing() || requests.0.iter().any(|e| e.request == request) {
+        if self.closing() || requests.entries.iter().any(|e| e.request == request) {
             return Err(CmdError::Busy);
         }
         let stop = Arc::new(AtomicBool::new(false));
-        requests.0.push(Entry {
+        requests.entries.push(Entry {
             request,
             root: root.to_owned(),
             volume: volume.to_owned(),
@@ -92,7 +103,7 @@ impl AppState {
     /// `stop_volume_of`, so a stop counts it as cancelled only if it never starts.
     pub fn start(&self, request: u64) -> bool {
         let mut requests = self.requests();
-        match requests.0.iter_mut().find(|e| e.request == request) {
+        match requests.entries.iter_mut().find(|e| e.request == request) {
             Some(entry) if !entry.stop.load(Ordering::Acquire) => {
                 entry.started = true;
                 true
@@ -106,11 +117,11 @@ impl AppState {
     /// those stopped before); 0 for a request that is not registered (it ended).
     pub fn stop_volume_of(&self, request: u64) -> u32 {
         let requests = self.requests();
-        let Some(asked) = requests.0.iter().find(|e| e.request == request) else {
+        let Some(asked) = requests.entries.iter().find(|e| e.request == request) else {
             return 0;
         };
         let mut cancelled = 0;
-        for entry in requests.0.iter().filter(|e| e.volume == asked.volume) {
+        for entry in requests.entries.iter().filter(|e| e.volume == asked.volume) {
             let was_stopped = entry.stop.swap(true, Ordering::AcqRel);
             if !was_stopped && !entry.started {
                 cancelled += 1;
@@ -121,7 +132,7 @@ impl AppState {
 
     /// Stops every request, for the exit.
     pub fn stop_all(&self) {
-        for entry in &self.requests().0 {
+        for entry in &self.requests().entries {
             entry.stop.store(true, Ordering::Release);
         }
     }
@@ -129,7 +140,42 @@ impl AppState {
     /// A request of `root` is registered: its tree is not compacted (see `compact_if_idle`).
     /// May be asked with the lock of `data` held, never the other way round.
     pub(crate) fn trash_pending(&self, root: &str) -> bool {
-        self.requests().0.iter().any(|e| e.root == root)
+        self.requests().entries.iter().any(|e| e.root == root)
+    }
+
+    /// A removal in `root` changed the time of `folder` from `before` to `after`. Kept only while
+    /// the root has requests.
+    pub(crate) fn note_settled(&self, root: &str, folder: &Path, before: i64, after: i64) {
+        let mut requests = self.requests();
+        if before == after || !requests.entries.iter().any(|e| e.root == root) {
+            return;
+        }
+        let times = requests.settled.entry(root.to_owned()).or_default();
+        times
+            .entry(folder.to_owned())
+            .or_default()
+            .push((before, after));
+    }
+
+    /// The times `folder` of `root` may have now if it had `stored` and only the removals of
+    /// this app changed it since: `stored` first, then each time a removal gave it after one of
+    /// those (`before → after1 → after2`).
+    pub(crate) fn settled_times(&self, root: &str, folder: &Path, stored: i64) -> Vec<i64> {
+        let requests = self.requests();
+        let mut times = vec![stored];
+        let Some(changes) = requests.settled.get(root).and_then(|f| f.get(folder)) else {
+            return times;
+        };
+        let mut at = 0;
+        while let Some(&time) = times.get(at) {
+            for &(before, after) in changes {
+                if before == time && !times.contains(&after) {
+                    times.push(after);
+                }
+            }
+            at += 1;
+        }
+        times
     }
 }
 

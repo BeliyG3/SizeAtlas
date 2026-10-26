@@ -9,17 +9,21 @@ use sizeatlas_core::scanner::mtime_of;
 use crate::error::CmdError;
 use crate::state::TrashItem;
 
-/// The item still is what the scan saw: the same kind, the same modification time (its own,
-/// or as its folder lists it: the scan takes a folder's time from the listing).
+/// The item still is what the scan saw: the same kind, one of the modification `times` (its own,
+/// or as its folder lists it: the scan takes a folder's time from the listing). `times` is the
+/// stored time, then those that removals of this app gave a folder since
+/// (`AppState::settled_times`).
 // ponytail: an item changed after the scan whose folder listing still shows the old time
 // passes; the trash can be undone and the confirmation shows the path and the scan date. A
 // clean-up row, which may be deleted for good, does not rely on this: `recheck` walks it on
 // disk right before (see `membership::run_rows`).
-pub(super) fn check(item: &TrashItem) -> Result<(), CmdError> {
+pub(super) fn check(item: &TrashItem, times: &[i64]) -> Result<(), CmdError> {
     match fs::symlink_metadata(&item.path) {
         Ok(meta)
             if meta.is_dir() == item.is_dir
-                && unchanged(item.mtime, mtime_of(&meta), || listed_mtime(&item.path)) =>
+                && times
+                    .iter()
+                    .any(|&time| unchanged(time, mtime_of(&meta), || listed_mtime(&item.path))) =>
         {
             Ok(())
         }
