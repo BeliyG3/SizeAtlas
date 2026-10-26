@@ -64,7 +64,12 @@ export function useTrashRun(onError: (e: unknown) => void, push: (text: string) 
             onStop={big(r) ? null : () => stop(r.request)}
           />
         ))}
-        {more > 0 && <span className="dim">{`+${formatCount(more, lang)}`}</span>}
+        {more > 0 && (
+          // Isolated, so a right-to-left interface still reads "+N".
+          <bdi dir="ltr" className="dim">
+            {`+${formatCount(more, lang)}`}
+          </bdi>
+        )}
       </>
     );
   const windows = runs.filter((r) => r.progress !== null && big(r));

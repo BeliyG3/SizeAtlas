@@ -20,7 +20,7 @@ interface Props {
   } | null;
   /** The chip of the unreadable folders, if there are any (`AccessChip`). */
   access?: ReactNode;
-  /** The running trash request, if any (`TrashStatus`). */
+  /** The lines of the started trash requests and the "+N" for the rest, if any (`TrashStatus`). */
   trash: ReactNode;
 }
 

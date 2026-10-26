@@ -276,8 +276,9 @@ describe("useTrash with numbered requests", () => {
 
   it("shows two status lines and how many more there are", async () => {
     await threeStarted([]);
-    expect(lines().map((line) => line.type)).toEqual([TrashStatus, TrashStatus, "span"]);
+    expect(lines().map((line) => line.type)).toEqual([TrashStatus, TrashStatus, "bdi"]);
     expect(lines().map(label)).toEqual([5000, 5001, "+1"]);
+    expect((lines()[2].props as { dir?: string }).dir).toBe("ltr");
   });
 
   it("gives each started request of many items a window with its own Stop", async () => {
