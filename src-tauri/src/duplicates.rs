@@ -168,7 +168,10 @@ impl AppState {
             query: inner.query.clone(),
             system: inner.system,
             skipped: inner.skipped.clone(),
-            status: inner.status.clone(),
+            status: StatusDto {
+                stale,
+                ..inner.status.clone()
+            },
             ..DuplicatesDto::default()
         };
         if let Some(r) = &inner.results {
@@ -187,16 +190,14 @@ impl AppState {
     }
 
     /// The set of searched roots, or the `(generation, rev)` of one, changed since the search.
-    /// Never under `Inner`: there use `stale_in`.
+    /// Never under `Inner`: there use `stale_in`. The app reads it from the statuses instead.
+    #[cfg(test)]
     pub(crate) fn duplicates_stale(&self) -> bool {
         let inner = self.duplicates();
         self.stale_in(&inner)
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the trash of duplicates asks it (Task 6)")
-    )]
+    #[cfg(test)]
     pub(crate) fn duplicates_running(&self) -> bool {
         self.duplicates().running.is_some()
     }

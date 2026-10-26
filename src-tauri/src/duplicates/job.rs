@@ -34,7 +34,7 @@ impl AppState {
                 let Some(status) = self.progressed(job, p) else {
                     return;
                 };
-                if self.duplicates_stale() {
+                if status.stale {
                     cancel.store(true, Ordering::Relaxed);
                 }
                 emit(status);
@@ -59,6 +59,7 @@ impl AppState {
             job,
             version,
             running: true,
+            stale: self.stale_in(&inner),
             phase: Some(p.phase),
             files_done: p.files_done,
             files_total: p.files_total,
@@ -91,6 +92,7 @@ impl Drop for Ended<'_> {
             inner.running = None;
             inner.status.running = false;
             inner.status.version = inner.results.as_ref().map_or(0, |r| r.version);
+            inner.status.stale = self.state.stale_in(&inner);
             inner.status.clone()
         };
         (self.emit)(status);

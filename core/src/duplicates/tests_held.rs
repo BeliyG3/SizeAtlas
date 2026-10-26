@@ -1,7 +1,8 @@
+use std::cell::Cell;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 
-use super::hash::{Skip, rehash};
+use super::hash::{BUFFER, Skip, rehash};
 use super::held::rehash_held;
 use crate::scanner::mtime_of;
 
@@ -39,6 +40,17 @@ fn rehash_held_stops_before_the_first_buffer() {
     let got = rehash_held(&path, len, mtime, &|| true, &mut |n| read += n).map(|_| ());
     assert_eq!(got, Err(Skip::Failed));
     assert_eq!(read, 0, "nothing was read");
+}
+
+#[test]
+fn rehash_held_stops_between_buffers() {
+    let dir = temp();
+    let (path, len, mtime) = write(dir.path(), "a", 2 * BUFFER + 1);
+    let read = Cell::new(0);
+    let stop = || read.get() > 0;
+    let got = rehash_held(&path, len, mtime, &stop, &mut |n| read.set(read.get() + n));
+    assert_eq!(got.map(|_| ()), Err(Skip::Failed));
+    assert_eq!(read.get(), BUFFER as u64, "one buffer, then the stop");
 }
 
 #[cfg(windows)]

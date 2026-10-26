@@ -78,6 +78,15 @@ impl AppState {
         known.entry(root.to_owned()).or_insert(volume).clone()
     }
 
+    /// The volume of `root` if it was asked already; never asks the system.
+    pub(crate) fn known_volume(&self, root: &str) -> Option<String> {
+        let known = self.0.locks.volume_of_root.lock();
+        known
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(root)
+            .cloned()
+    }
+
     /// The turn of `volume`. Its place in the queue is taken when the future is first polled.
     pub fn volume_turn(
         &self,

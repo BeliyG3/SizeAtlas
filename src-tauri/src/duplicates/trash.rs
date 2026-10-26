@@ -43,8 +43,19 @@ pub struct Confirmed {
 /// in memory and under one lock of the result: `Busy` while a search runs, `StaleId` when the
 /// result or a ref is out of date (freshness is left to the decision while another request of
 /// duplicates is registered: its removals move the revisions before it updates the result),
-/// `Protected`/`LastCopy` as `decide::select`. A refusal registers nothing.
+/// `Protected`/`LastCopy` as `select::select`. A refusal registers nothing. Besides the volumes
+/// of the copies it queues on those of every root around the copy that stays: of the searched
+/// roots, and of the open ones the search left out whose volume is known already.
 pub fn confirm(state: &AppState, request: u64, refs: &[RefDto]) -> Result<Confirmed, CmdError> {
+    // Before `Inner`, and no tree held under it.
+    // ponytail: a root left out whose volume nobody asked yet is not queued; Windows still holds
+    // the copy against deletes, Unix warns afterwards.
+    let open: Vec<(String, String)> = (state.open_trees().into_iter())
+        .filter_map(|(_, tree)| {
+            let root = tree.name(0).to_owned();
+            state.known_volume(&root).map(|volume| (root, volume))
+        })
+        .collect();
     let inner = state.duplicates();
     if inner.running.is_some() {
         return Err(CmdError::Busy);
@@ -62,8 +73,12 @@ pub fn confirm(state: &AppState, request: u64, refs: &[RefDto]) -> Result<Confir
         .map(|r| (r.mark.path.clone(), r.volume.clone()))
         .collect();
     let tickets = state.enqueue_batch(request, &roots)?;
+    let around = (open.into_iter())
+        .filter(|(root, _)| batch.keep.path.starts_with(root))
+        .map(|(_, volume)| volume);
     let volumes: Vec<String> = (roots.into_iter().map(|(_, volume)| volume))
         .chain(batch.keep_volumes)
+        .chain(around)
         .collect();
     let turns = state.reserve_turns(&volumes);
     // Last: a refusal above leaves no trace.
@@ -171,8 +186,9 @@ fn execute(
         settle(state, &root, &journal);
         merge(&mut sum, moved);
     }
-    // Unix only can see a change here: Windows held the file closed to writes and deletes.
-    if !d.held.unchanged(&d.keep) && sum.warning.is_none() {
+    // Windows held the file closed to writes and deletes (its times may still change); on Unix
+    // this is the only sign that the copy left may have changed, so it wins over a save warning.
+    if !d.held.unchanged(&d.keep) {
         sum.warning = Some(CmdError::Changed);
     }
     drop(d.held);
@@ -228,6 +244,7 @@ impl AppState {
         let version = inner.results.as_ref().map_or(0, |r| r.version);
         StatusDto {
             version,
+            stale: self.stale_in(&inner),
             ..inner.status.clone()
         }
     }

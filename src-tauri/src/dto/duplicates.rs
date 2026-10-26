@@ -17,6 +17,8 @@ pub struct StatusDto {
     /// The version of the result when this was sent.
     pub version: u64,
     pub running: bool,
+    /// The result is out of date (see `DuplicatesDto::stale`) as this was sent.
+    pub stale: bool,
     /// `None` before the first progress.
     pub phase: Option<Phase>,
     pub files_done: u64,

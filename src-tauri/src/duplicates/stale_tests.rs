@@ -1,5 +1,6 @@
-//! A trash of duplicates whose result is out of date moves nothing; an exit or a failure after
-//! the first root keeps what moved; one count of progress for the whole request.
+//! A trash of duplicates whose result is out of date moves nothing, and a search whose result
+//! goes out of date stops; an exit or a failure after the first root keeps what moved; one
+//! count of progress for the whole request.
 
 use std::fs;
 use std::sync::Arc;
@@ -8,7 +9,8 @@ use std::thread;
 
 use tauri::async_runtime::block_on;
 
-use super::tests::{dir_named, scanned};
+use super::Emit;
+use super::tests::{Hold, dir_named, scanned};
 use super::trash_fixture::{Dups, at, progress, write};
 use crate::error::CmdError;
 use crate::exit::ExitDecision;
@@ -186,4 +188,22 @@ fn a_second_root_failing_after_the_first_moved_is_reported_in_failed() {
     assert_eq!(done.failed.len(), 1);
     assert_eq!(done.failed[0].path, at(&b, "x").display().to_string());
     assert_eq!(gate.log(), [at(&a, "x")]);
+}
+
+#[test]
+fn a_search_whose_result_goes_stale_stops() {
+    let t = Dups::new();
+    let (dir, _a) = t.root("a", &[("a", 1), ("b", 1)]);
+    let (hold, entered, go) = Hold::new();
+    let emit: Emit = Arc::new(move |_| hold.wait());
+    let (_, handle) = (t.state)
+        .find_duplicates(String::new(), false, emit)
+        .unwrap();
+    entered.recv_timeout(HANG).unwrap();
+    t.state.install_tree(scanned(dir.path()));
+    go.send(()).unwrap();
+    handle.join().unwrap();
+    let dto = t.dto();
+    assert!(dto.stale && !dto.complete, "cancelled at its next status");
+    assert!(dto.status.stale);
 }

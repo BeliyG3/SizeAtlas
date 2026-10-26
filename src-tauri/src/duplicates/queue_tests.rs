@@ -79,6 +79,24 @@ fn a_removal_in_an_outer_root_of_the_kept_copy_holds_the_batch() {
 }
 
 #[test]
+fn a_removal_in_a_root_scanned_at_find_time_holds_the_batch() {
+    let t = Dups::new();
+    let (_da, a) = t.root("a", &[("x", 1)]);
+    let outer = super::tests::dir_named("o-");
+    super::trash_fixture::write(outer.path(), &[("c-in/k", 1)]);
+    t.open(&outer.path().join("c-in"));
+    let o = t.open(outer.path());
+    // Being scanned: the search leaves it out, so its queue is not in the result.
+    t.state.enqueue(o.clone()).unwrap();
+    t.find(false);
+    assert_eq!(t.dto().skipped, std::slice::from_ref(&o));
+    let held = hold_like_a_trash(&t.state, &o);
+    let running = waits(&t, &a);
+    drop(held);
+    assert_eq!(ended(running).unwrap().removed, 1);
+}
+
+#[test]
 fn a_removal_of_the_kept_copy_queued_before_refuses() {
     let t = Dups::new();
     let (_da, a) = t.root("a", &[("x", 1)]);
@@ -290,6 +308,7 @@ fn the_batch_defers_compaction_of_each_root() {
     assert_ne!(generation(&t, &a), ga, "compacted at the end");
     assert_ne!(generation(&t, &b), gb);
     assert!(t.dto().stale);
+    assert!(t.state.duplicates_status().stale, "the status says so");
 }
 
 #[test]

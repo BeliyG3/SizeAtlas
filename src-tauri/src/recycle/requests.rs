@@ -15,6 +15,8 @@ use crate::error::CmdError;
 use crate::state::AppState;
 use crate::writes::{Turn, wait_turns};
 
+mod settled;
+
 /// A request in the registry. Not the `Ticket`: that holds the state, which holds the registry.
 struct Entry {
     request: u64,
@@ -147,14 +149,15 @@ impl AppState {
             .filter(|e| e.request == request)
             .map(|e| e.volume.as_str())
             .collect();
-        let mut cancelled = HashSet::new();
+        let mut cancelled = 0;
         for entry in (requests.entries.iter()).filter(|e| volumes.contains(e.volume.as_str())) {
+            // The entries of a batch share one stop: only the first of them sees it unset.
             let was_stopped = entry.stop.swap(true, Ordering::AcqRel);
             if !was_stopped && !entry.started {
-                cancelled.insert(entry.request);
+                cancelled += 1;
             }
         }
-        cancelled.len() as u32
+        cancelled
     }
 
     /// Stops every request, for the exit.
@@ -168,41 +171,6 @@ impl AppState {
     /// May be asked with the lock of `data` held, never the other way round.
     pub(crate) fn trash_pending(&self, root: &str) -> bool {
         self.requests().entries.iter().any(|e| e.root == root)
-    }
-
-    /// A removal in `root` changed the time of `folder` from `before` to `after`. Kept only while
-    /// the root has requests.
-    pub(crate) fn note_settled(&self, root: &str, folder: &Path, before: i64, after: i64) {
-        let mut requests = self.requests();
-        if before == after || !requests.entries.iter().any(|e| e.root == root) {
-            return;
-        }
-        let times = requests.settled.entry(root.to_owned()).or_default();
-        times
-            .entry(folder.to_owned())
-            .or_default()
-            .push((before, after));
-    }
-
-    /// The times `folder` of `root` may have now if it had `stored` and only the removals of
-    /// this app changed it since: `stored` first, then each time a removal gave it after one of
-    /// those (`before → after1 → after2`).
-    pub(crate) fn settled_times(&self, root: &str, folder: &Path, stored: i64) -> Vec<i64> {
-        let requests = self.requests();
-        let mut times = vec![stored];
-        let Some(changes) = requests.settled.get(root).and_then(|f| f.get(folder)) else {
-            return times;
-        };
-        let mut at = 0;
-        while let Some(&time) = times.get(at) {
-            for &(before, after) in changes {
-                if before == time && !times.contains(&after) {
-                    times.push(after);
-                }
-            }
-            at += 1;
-        }
-        times
     }
 }
 
@@ -230,8 +198,9 @@ pub async fn run_request(
 /// [`run_request`] of a batch: `tickets` of one request (one per root) and `turns` of all the
 /// volumes it needs (`AppState::reserve_turns`), waited for together. Each time a turn comes
 /// the request is let go when it was stopped or the app is closing: it holds no turn while it
-/// cannot run, and leaves as a refused one does (`leave`). Then the writes of its roots, in ascending order; after `work` the tickets go,
-/// then each root is compacted if due, then the writes, then the turns.
+/// cannot run, and leaves as a refused one does (`leave`). Then the writes of its roots, in
+/// ascending order; after `work` the tickets go, then each root is compacted if due, then the
+/// writes, then the turns.
 pub async fn run_batch(
     state: AppState,
     cache_dir: PathBuf,

@@ -33,6 +33,7 @@ fn duplicates_dto_is_camel_case() {
         job: 1,
         version: 3,
         running: true,
+        stale: true,
         phase: Some(Phase::Full),
         files_done: 1,
         files_total: 2,
@@ -41,7 +42,7 @@ fn duplicates_dto_is_camel_case() {
     };
     assert_eq!(
         serde_json::to_value(status).unwrap(),
-        json!({"job": 1, "version": 3, "running": true, "phase": "full", "filesDone": 1,
+        json!({"job": 1, "version": 3, "running": true, "stale": true, "phase": "full", "filesDone": 1,
             "filesTotal": 2, "bytesDone": 3, "bytesTotal": 4})
     );
     let read: RefDto =

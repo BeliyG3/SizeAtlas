@@ -120,3 +120,50 @@ fn a_kept_copy_changed_after_the_batch_warns() {
     assert_eq!(done.removed, 1);
     assert!(!at(&a, "b").exists());
 }
+
+/// Gives `path` another modification time, as another program may even while the batch holds
+/// it on Windows: changing attributes is no write of its content.
+fn touch(path: &std::path::Path) {
+    let mut open = std::fs::File::options();
+    #[cfg(windows)]
+    std::os::windows::fs::OpenOptionsExt::access_mode(
+        &mut open,
+        windows_sys::Win32::Storage::FileSystem::FILE_WRITE_ATTRIBUTES,
+    );
+    #[cfg(unix)]
+    open.write(true);
+    let later = super::trash_fixture::time() + std::time::Duration::from_secs(60);
+    open.open(path).unwrap().set_modified(later).unwrap();
+}
+
+#[test]
+fn a_changed_kept_copy_warns_before_a_failed_save() {
+    let t = Dups::new();
+    let (_dir, a) = t.root("a", &[("a", 1), ("b", 1)]);
+    t.find(false);
+    let confirmed = t.confirm(1, &[at(&a, "b")]).unwrap();
+    let (log, state, root) = (t.log.clone(), t.state.clone(), a.clone());
+    let both: crate::recycle::fixture::TrashOne = Box::new(move |path| {
+        crate::recycle::fixture::logged(&log)(path)?;
+        // Closed meanwhile: its saved scan cannot be written.
+        assert!(state.close_path(&root));
+        touch(&at(&root, "a"));
+        Ok(())
+    });
+    let done = t.start(confirmed, both).join().unwrap().unwrap();
+    assert_eq!(done.removed, 1);
+    assert_eq!(done.warning, Some(CmdError::Changed));
+}
+
+#[test]
+fn a_kept_copy_deleted_before_the_batch_refuses() {
+    let t = Dups::new();
+    let (_dir, a) = t.root("a", &[("a", 1), ("b", 1)]);
+    t.find(false);
+    std::fs::remove_file(at(&a, "a")).unwrap();
+    let refused = t.trash(1, &[at(&a, "b")]);
+    assert_eq!(refused.err(), Some(CmdError::Changed));
+    assert!(t.logged().is_empty());
+    assert!(at(&a, "b").exists());
+    assert!(t.dto().groups[0].stale);
+}
