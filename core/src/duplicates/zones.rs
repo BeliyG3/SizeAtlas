@@ -127,6 +127,8 @@ impl<'a> Zones<'a> {
 }
 
 /// Whether folder `id` holds a `pyvenv.cfg` file.
+// ponytail: the walk reads each folder's children twice (here and when it pops the folder),
+// a cheap name compare; fold into one pass by deferring the folder's mark if it ever shows up.
 pub(crate) fn is_venv(tree: &Tree, id: u32) -> bool {
     tree.children(id)
         .any(|c| !tree.node(c).is_dir() && tree.name(c).eq_ignore_ascii_case(VENV_MARKER))

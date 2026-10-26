@@ -196,3 +196,32 @@ fn a_root_opened_inside_a_zone_is_protected() {
         assert!(found.iter().all(|m| m.1), "{root_path}");
     }
 }
+
+#[test]
+fn mac_packages_are_zones_anywhere() {
+    for path in [
+        "/Users/me/Downloads/Tool.app/Contents/x.png",
+        "/Users/u/Pictures/Old.photoslibrary/a.jpg",
+    ] {
+        assert!(protected(path, Os::Mac, &mac()), "{path}");
+    }
+}
+
+#[test]
+fn every_project_name_is_a_zone() {
+    let known = win().known;
+    for name in [".svn", ".hg", "venv", "site-packages"] {
+        let path = format!(r"D:\work\{name}\x.png");
+        assert!(protected(&path, Os::Windows, &known), "{path}");
+    }
+}
+
+#[test]
+fn places_fold_case_on_windows_but_not_on_linux() {
+    assert!(protected(
+        r"d:\windows\web\x.jpg",
+        Os::Windows,
+        &win().known
+    ));
+    assert!(!protected("/USR/share/x.png", Os::Linux, &linux()));
+}
