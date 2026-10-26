@@ -3,12 +3,14 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+#[cfg(test)]
+use std::sync::atomic::Ordering;
 
 use sizeatlas_core::duplicates::DiskKind;
 use sizeatlas_core::duplicates::results::RootMark;
 use sizeatlas_core::tree::Tree;
 use sizeatlas_core::tree::flags::SCANNING;
-use sysinfo::Disks;
+use sysinfo::{DiskRefreshKind, Disks};
 
 use crate::state::AppState;
 
@@ -44,11 +46,17 @@ pub(crate) fn current(state: &AppState) -> (Vec<RootMark>, Vec<String>) {
 }
 
 /// The roots a search takes now, with their trees, and the paths of those it skips (see
-/// [`current`]). Asking the volume of a network share the first time may take a while: call it
-/// off the async runtime. The trees are taken last, so none is held meanwhile.
-pub(crate) fn pick(state: &AppState) -> (Vec<Picked>, Vec<String>) {
+/// [`current`]). Asking the volume of a network share the first time may take a while, and so
+/// may the context the first time: call it off the async runtime. The disks are listed only
+/// with `disks` (a search; an estimate needs no disk kind, and listing them asks every volume of
+/// the machine); otherwise every disk is `Unknown`. The trees are taken last, in one read, so
+/// none is held across a question or a second read.
+pub(crate) fn pick(state: &AppState, disks: bool) -> (Vec<Picked>, Vec<String>) {
     let (roots, skipped) = current(state);
-    let mounts = mounts();
+    if let Some(first) = roots.first() {
+        state.duplicates_env(&first.path);
+    }
+    let mounts = if disks { mounts(state) } else { Vec::new() };
     let placed: Vec<(String, String, DiskKind)> = roots
         .into_iter()
         .map(|m| {
@@ -57,11 +65,13 @@ pub(crate) fn pick(state: &AppState) -> (Vec<Picked>, Vec<String>) {
             (m.path, volume, disk)
         })
         .collect();
+    let mut trees = state.open_trees();
     let picked = placed
         .into_iter()
         .filter_map(|(root, volume, disk)| {
             // A root closed meanwhile is left out; the result then is stale at once.
-            let (generation, tree) = state.root_tree(&root)?;
+            let at = trees.iter().position(|(_, t)| t.name(0) == root)?;
+            let (generation, tree) = trees.swap_remove(at);
             Some(Picked {
                 tree,
                 root,
@@ -84,9 +94,21 @@ pub(crate) fn disk_of(root: &Path, mounts: &[(PathBuf, DiskKind)]) -> DiskKind {
         .map_or(DiskKind::Unknown, |&(_, kind)| kind)
 }
 
-/// The mount points of this machine and the kind of disk of each.
-fn mounts() -> Vec<(PathBuf, DiskKind)> {
-    Disks::new_with_refreshed_list()
+/// The mount points of this machine and the kind of disk of each; nothing else is asked.
+fn mounts(
+    #[cfg_attr(
+        not(test),
+        expect(unused_variables, reason = "only the tests count the reads")
+    )]
+    state: &AppState,
+) -> Vec<(PathBuf, DiskKind)> {
+    #[cfg(test)]
+    state
+        .0
+        .duplicates
+        .mounts_read
+        .fetch_add(1, Ordering::SeqCst);
+    Disks::new_with_refreshed_list_specifics(DiskRefreshKind::nothing().with_kind())
         .list()
         .iter()
         .map(|d| {

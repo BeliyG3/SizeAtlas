@@ -2,12 +2,13 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use sizeatlas_core::duplicates::DiskKind;
 
 use super::Emit;
 use super::roots::{disk_of, pick};
-use super::tests::{counting, open_pair};
+use super::tests::{counting, find, open_pair, recorder, state};
 use crate::state::AppState;
 
 /// `p` as written on Windows; elsewhere `C:\x` becomes `/C/x`.
@@ -48,7 +49,7 @@ fn picked_roots_carry_the_volume_of_the_trash_queue() {
         }),
     );
     let (_dir, root, generation) = open_pair(&state, "v7-");
-    let (picked, skipped) = pick(&state);
+    let (picked, skipped) = pick(&state, true);
     assert!(skipped.is_empty());
     assert_eq!(picked.len(), 1);
     assert_eq!(picked[0].root, root);
@@ -60,4 +61,17 @@ fn picked_roots_carry_the_volume_of_the_trash_queue() {
     let (_, handle) = state.find_duplicates(String::new(), false, emit).unwrap();
     handle.join().unwrap();
     assert_eq!(state.0.duplicates.inner.lock().unwrap().volumes, ["v7"]);
+}
+
+#[test]
+fn only_a_find_lists_the_disks() {
+    let (state, _) = state();
+    let _dir = open_pair(&state, "disks");
+    let read = || state.0.duplicates.mounts_read.load(Ordering::SeqCst);
+    for _ in 0..3 {
+        state.estimate_duplicates("", false);
+    }
+    assert_eq!(read(), 0);
+    find(&state, recorder().0);
+    assert_eq!(read(), 1);
 }

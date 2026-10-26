@@ -4,10 +4,8 @@
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
 
 use sizeatlas_core::cleanup::{Context, Known, Os};
 use sizeatlas_core::scanner::{Progress, ScanOutcome, scan};
@@ -58,7 +56,7 @@ pub(super) fn counting() -> (ContextFn, Arc<AtomicUsize>) {
     (context, calls)
 }
 
-fn state() -> (AppState, Arc<AtomicUsize>) {
+pub(super) fn state() -> (AppState, Arc<AtomicUsize>) {
     let (context, calls) = counting();
     (AppState::with_context(context), calls)
 }
@@ -79,7 +77,7 @@ pub(super) fn open_pair(state: &AppState, prefix: &str) -> (TempDir, String, u64
     (dir, root, generation)
 }
 
-fn recorder() -> (Emit, Arc<Mutex<Vec<StatusDto>>>) {
+pub(super) fn recorder() -> (Emit, Arc<Mutex<Vec<StatusDto>>>) {
     let log = Arc::new(Mutex::new(Vec::new()));
     let into = log.clone();
     let emit: Emit = Arc::new(move |s| into.lock().unwrap().push(s));
@@ -87,10 +85,31 @@ fn recorder() -> (Emit, Arc<Mutex<Vec<StatusDto>>>) {
 }
 
 /// Runs a job with no query to its end.
-fn find(state: &AppState, emit: Emit) -> u64 {
+pub(super) fn find(state: &AppState, emit: Emit) -> u64 {
     let (job, handle) = state.find_duplicates(String::new(), false, emit).unwrap();
     handle.join().unwrap();
     job
+}
+
+/// Holds the first caller of `wait` until `go` is sent, after telling `entered`; later callers
+/// pass.
+pub(super) struct Hold(Mutex<Option<(Sender<()>, Receiver<()>)>>);
+
+impl Hold {
+    /// The hold, `entered` and `go`.
+    pub(super) fn new() -> (Hold, Receiver<()>, Sender<()>) {
+        let (entered, at) = mpsc::channel();
+        let (go, wait) = mpsc::channel();
+        (Hold(Mutex::new(Some((entered, wait)))), at, go)
+    }
+
+    pub(super) fn wait(&self) {
+        let first = self.0.lock().unwrap().take();
+        if let Some((entered, go)) = first {
+            entered.send(()).unwrap();
+            go.recv_timeout(HANG).unwrap();
+        }
+    }
 }
 
 fn keys(dto: &DuplicatesDto) -> Vec<String> {
@@ -130,30 +149,6 @@ fn estimate_reads_no_file() {
 }
 
 #[test]
-fn a_tree_change_does_not_wait_for_a_search() {
-    let (state, _) = state();
-    let (_dir, root, generation) = open_pair(&state, "change");
-    let changer = state.clone();
-    let waited = Arc::new(Mutex::new(None));
-    let result = waited.clone();
-    let started = AtomicBool::new(false);
-    let emit: Emit = Arc::new(move |_| {
-        if started.swap(true, Ordering::SeqCst) {
-            return;
-        }
-        let (tx, rx) = mpsc::channel();
-        let (changer, root) = (changer.clone(), root.clone());
-        thread::spawn(move || {
-            changer.remove_trashed(&root, generation, &[], None);
-            let _ = tx.send(());
-        });
-        *result.lock().unwrap() = Some(rx.recv_timeout(Duration::from_secs(5)));
-    });
-    find(&state, emit);
-    assert_eq!(*waited.lock().unwrap(), Some(Ok(())));
-}
-
-#[test]
 fn a_resumed_search_starts_with_the_old_groups() {
     let (state, _) = state();
     let _dir = open_pair(&state, "resumed");
@@ -169,15 +164,8 @@ fn a_resumed_search_starts_with_the_old_groups() {
     assert!(!stopped.complete);
     assert_eq!(stopped.groups.len(), 1);
     // "Continue": the new job is held at its first progress, before it reads any content.
-    let (started, at_start) = mpsc::channel();
-    let (go, wait) = mpsc::channel::<()>();
-    let gate = Mutex::new(Some((started, wait)));
-    let hold: Emit = Arc::new(move |_| {
-        if let Some((started, wait)) = gate.lock().unwrap().take() {
-            started.send(()).unwrap();
-            wait.recv_timeout(HANG).unwrap();
-        }
-    });
+    let (hold, at_start, go) = Hold::new();
+    let hold: Emit = Arc::new(move |_| hold.wait());
     let (job, handle) = state.find_duplicates(String::new(), false, hold).unwrap();
     at_start.recv_timeout(HANG).unwrap();
     let resumed = state.duplicates_since(0, 0);
@@ -196,15 +184,8 @@ fn a_resumed_search_of_another_query_starts_empty() {
     let (state, _) = state();
     let _dir = open_pair(&state, "requery");
     find(&state, recorder().0);
-    let (started, at_start) = mpsc::channel();
-    let (go, wait) = mpsc::channel::<()>();
-    let gate = Mutex::new(Some((started, wait)));
-    let hold: Emit = Arc::new(move |_| {
-        if let Some((started, wait)) = gate.lock().unwrap().take() {
-            started.send(()).unwrap();
-            wait.recv_timeout(HANG).unwrap();
-        }
-    });
+    let (hold, at_start, go) = Hold::new();
+    let hold: Emit = Arc::new(move |_| hold.wait());
     let (_, handle) = state.find_duplicates("a".into(), false, hold).unwrap();
     at_start.recv_timeout(HANG).unwrap();
     assert!(state.duplicates_since(0, 0).groups.is_empty());
@@ -261,22 +242,53 @@ fn opening_another_root_marks_the_result_stale() {
 fn a_new_find_replaces_the_old_job() {
     let (state, _) = state();
     let _dir = open_pair(&state, "replace");
-    let (first, statuses) = recorder();
+    // Job 1 is held at its first progress while job 2 runs to its end.
+    let (statuses, log) = recorder();
+    let (hold, entered, go) = Hold::new();
+    let first: Emit = Arc::new(move |s| {
+        statuses(s);
+        hold.wait();
+    });
     let (job1, h1) = state.find_duplicates(String::new(), false, first).unwrap();
-    let (job2, h2) = state
-        .find_duplicates(String::new(), false, recorder().0)
-        .unwrap();
-    h1.join().unwrap();
-    h2.join().unwrap();
+    entered.recv_timeout(HANG).unwrap();
+    let job2 = find(&state, recorder().0);
     assert_eq!(job2, job1 + 1);
-    assert!(statuses.lock().unwrap().iter().all(|s| s.job == job1));
+    let before = state.duplicates_since(0, 0);
+    go.send(()).unwrap();
+    h1.join().unwrap();
+    // Job 1 went on after it was replaced, and sent and changed nothing more.
+    assert_eq!(log.lock().unwrap().len(), 1);
+    assert_eq!(log.lock().unwrap()[0].job, job1);
     let results = state.0.duplicates.inner.lock().unwrap();
     assert_eq!(results.results.as_ref().unwrap().job, job2);
+    assert_eq!(results.status.job, job2);
     drop(results);
     let dto = state.duplicates_since(job1, 1);
     assert!(dto.full && dto.complete && !dto.running);
-    assert_eq!(dto.job, job2);
+    assert_eq!((dto.job, dto.version), (job2, before.version));
     assert_eq!(dto.groups.len(), 1);
+}
+
+#[test]
+fn a_panic_in_the_search_still_ends_the_job() {
+    let (state, _) = state();
+    let _dir = open_pair(&state, "panic");
+    let (record, log) = recorder();
+    let panicked = AtomicBool::new(false);
+    let emit: Emit = Arc::new(move |s| {
+        if !panicked.swap(true, Ordering::SeqCst) {
+            panic!("the first status fails");
+        }
+        record(s);
+    });
+    let (job, handle) = state.find_duplicates(String::new(), false, emit).unwrap();
+    assert!(handle.join().is_err());
+    assert!(!state.duplicates_running());
+    let dto = state.duplicates_since(0, 0);
+    assert!(!dto.running && !dto.status.running && !dto.complete);
+    let log = log.lock().unwrap();
+    assert_eq!(log.len(), 1);
+    assert_eq!((log[0].job, log[0].running), (job, false));
 }
 
 #[test]

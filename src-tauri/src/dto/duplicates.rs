@@ -140,7 +140,7 @@ impl GroupDto {
 
 fn copy(object: &Object, roots: &[RootMark]) -> CopyDto {
     let root = |at: u16| &roots[usize::from(at)];
-    let first = &object.paths[0];
+    let first = object.paths.first();
     CopyDto {
         refs: (object.paths.iter())
             .map(|p| RefDto {
@@ -149,9 +149,13 @@ fn copy(object: &Object, roots: &[RootMark]) -> CopyDto {
                 id: p.at.node,
             })
             .collect(),
-        path: first.path.display().to_string(),
-        root: root(first.at.root).path.clone(),
-        mtime: millis(first.mtime),
+        path: first
+            .map(|p| p.path.display().to_string())
+            .unwrap_or_default(),
+        root: first
+            .map(|p| root(p.at.root).path.clone())
+            .unwrap_or_default(),
+        mtime: first.map_or(0, |p| millis(p.mtime)),
         size: object.size(),
         protected: object.protected,
         hardlink: object.outside_links(),

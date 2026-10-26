@@ -18,7 +18,11 @@ impl AppState {
         cancel: &AtomicBool,
         emit: &(dyn Fn(StatusDto) + Sync),
     ) {
-        let _ended = Ended { state: self, job };
+        let ended = Ended {
+            state: self,
+            job,
+            emit,
+        };
         let on_event = |event: Event| match event {
             Event::Group(group) => {
                 // A late group of a replaced job is dropped by its id.
@@ -37,21 +41,11 @@ impl AppState {
             }
         };
         let outcome = core::search(prepared, &self.0.duplicates.cache, cancel, &on_event);
-        let status = {
-            let mut inner = self.duplicates();
-            let Some(r) = inner.results.as_mut() else {
-                return;
-            };
-            if !r.finish(job, outcome.complete, outcome.unread) {
-                return;
-            }
-            let version = r.version;
-            inner.running = None;
-            inner.status.running = false;
-            inner.status.version = version;
-            inner.status.clone()
-        };
-        emit(status);
+        // A replaced job changes nothing: `finish` refuses another job.
+        if let Some(r) = self.duplicates().results.as_mut() {
+            r.finish(job, outcome.complete, outcome.unread);
+        }
+        drop(ended);
     }
 
     /// Takes the progress `p` of `job` into its status; `None` once the job was replaced.
@@ -75,21 +69,30 @@ impl AppState {
     }
 }
 
-/// Clears `running` when a job ends, also by a panic, but only for its own job.
+/// Ends the job, also by a panic: when it is still the current one, `running` is cleared and
+/// the last status (not running) is sent, outside the lock.
 struct Ended<'a> {
     state: &'a AppState,
     job: u64,
+    emit: &'a (dyn Fn(StatusDto) + Sync),
 }
 
 impl Drop for Ended<'_> {
     fn drop(&mut self) {
-        let mut inner = self.state.duplicates();
-        if inner
-            .running
-            .as_ref()
-            .is_some_and(|(job, _)| *job == self.job)
-        {
+        let status = {
+            let mut inner = self.state.duplicates();
+            if inner
+                .running
+                .as_ref()
+                .is_none_or(|(job, _)| *job != self.job)
+            {
+                return;
+            }
             inner.running = None;
-        }
+            inner.status.running = false;
+            inner.status.version = inner.results.as_ref().map_or(0, |r| r.version);
+            inner.status.clone()
+        };
+        (self.emit)(status);
     }
 }

@@ -43,6 +43,9 @@ pub struct Duplicates {
     /// The known folders and the system, from `context` once (by the first root): asking it on
     /// every estimate would list the processes and wake external disks.
     env: OnceLock<(Known, Os)>,
+    /// How often the disks of the machine were listed.
+    #[cfg(test)]
+    mounts_read: std::sync::atomic::AtomicUsize,
 }
 
 #[derive(Default)]
@@ -68,7 +71,7 @@ impl AppState {
 
     /// What a search for `query` (with the zones when `system`) would compare; reads no file.
     pub fn estimate_duplicates(&self, query: &str, system: bool) -> EstimateDto {
-        let (picked, skipped) = roots::pick(self);
+        let (picked, skipped) = roots::pick(self, false);
         let e = self.searching(&picked, query, system, |roots, opts| {
             core::estimate(roots, opts)
         });
@@ -96,7 +99,7 @@ impl AppState {
         if trashing() {
             return Err(CmdError::Busy);
         }
-        let (picked, skipped) = roots::pick(self);
+        let (picked, skipped) = roots::pick(self, true);
         let marks: Vec<RootMark> = (picked.iter())
             .map(|p| RootMark {
                 path: p.root.clone(),
@@ -203,7 +206,16 @@ impl AppState {
         now.len() != r.roots.len() || now.iter().any(|m| !r.roots.contains(m))
     }
 
-    /// Runs `f` with the roots of `picked` and the options of `query`.
+    /// Asks `context` once, by the first root `first`, for the known folders and the system:
+    /// before any tree is taken, as the question may take a while.
+    fn duplicates_env(&self, first: &str) {
+        self.0.duplicates.env.get_or_init(|| {
+            let ctx = (self.0.context)(Path::new(first));
+            (ctx.known, ctx.os)
+        });
+    }
+
+    /// Runs `f` with the roots of `picked` and the options of `query` (`duplicates_env` first).
     fn searching<T>(
         &self,
         picked: &[Picked],
@@ -212,12 +224,9 @@ impl AppState {
         f: impl FnOnce(&[SearchRoot], &Options) -> T,
     ) -> T {
         let fallback;
-        let (known, os) = match picked.first() {
-            Some(first) => self.0.duplicates.env.get_or_init(|| {
-                let ctx = (self.0.context)(Path::new(&first.root));
-                (ctx.known, ctx.os)
-            }),
-            // No root: nothing is searched, and nothing needs asking.
+        let (known, os) = match self.0.duplicates.env.get() {
+            Some(env) => env,
+            // Not asked yet: no root was picked, and nothing is searched.
             None => {
                 fallback = (Known::default(), Os::current());
                 &fallback
@@ -247,3 +256,5 @@ impl AppState {
 mod roots_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod waits_tests;
