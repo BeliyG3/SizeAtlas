@@ -113,3 +113,24 @@
   outline: 1px solid var(--accent);
   outline-offset: -1px;
 }
+
+/* The Free cell is a drive bar like Explorer's: the used share fills from the inline-start side
+   (the pseudo-element sits under the number), red when under a tenth is free. */
+.drives td.fill {
+  position: relative;
+  isolation: isolate;
+}
+
+.drives td.fill::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: -1;
+  width: calc(var(--used) * 100%);
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.drives td.fill.low::before {
+  background: color-mix(in srgb, var(--danger) 40%, transparent);
+}

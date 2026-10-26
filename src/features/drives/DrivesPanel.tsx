@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
@@ -25,6 +26,7 @@ import { DriveAsk } from "./DriveAsk";
 import { DriveMenu } from "./DriveMenu";
 import { DriveName } from "./DriveName";
 import { DrivesHeader } from "./DrivesHeader";
+import { driveFill } from "./fill";
 import { MIN_NAME, drivesWidth, useFittedWidths } from "./fit";
 import {
   DRIVE_SORT_KEY,
@@ -134,8 +136,15 @@ export function DrivesPanel({ sources, roots, onOpen, onScan, onForget, onWidth 
       return <DriveName key="name" disk={d} saved={sources && savedScan(sources, d.mount)} t={t} />;
     if (!d.connected) return <td key={id} data-col={id} className="num" />;
     const text = size({ size: d.total, used: d.total - d.available, free: d.available }[id]);
+    const fill = id === "free" ? driveFill(d.total, d.available) : null;
     return (
-      <td key={id} data-col={id} className="num" title={text}>
+      <td
+        key={id}
+        data-col={id}
+        className={fill ? (fill.low ? "num fill low" : "num fill") : "num"}
+        style={fill ? ({ "--used": fill.used } as CSSProperties) : undefined}
+        title={text}
+      >
         {text}
       </td>
     );
