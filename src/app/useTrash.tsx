@@ -147,7 +147,11 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
       .then(({ rev, preview }) => {
         // The same revision would be refused again: no loop.
         if (rev === asked.rev) throw new Error("still out of date");
-        const same = preview.count === asked.preview.count && preview.size === asked.preview.size;
+        // Deleting for good cannot be undone: the paths shown must match too.
+        const samePaths =
+          asked.how !== "purge" || preview.paths.join("\n") === asked.preview.paths.join("\n");
+        const same =
+          preview.count === asked.preview.count && preview.size === asked.preview.size && samePaths;
         if (same) send({ ...asked, rev, preview });
         else show({ ...asked, rev, preview });
       })

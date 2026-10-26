@@ -348,6 +348,19 @@ describe("useTrash when the tree changed under a question", () => {
     expect(api.trash).toHaveBeenLastCalledWith(5001, 1, 5, [7], false);
   });
 
+  it("asks again before deleting for good when the paths differ, even at the same size", async () => {
+    vi.mocked(api.deleteForGood).mockRejectedValueOnce(stale).mockResolvedValueOnce(done);
+    vi.mocked(api.trashPreview)
+      .mockResolvedValueOnce(shown)
+      .mockResolvedValueOnce({ ...shown, paths: ["/root/other"] });
+    Shell().onPurge(1, [7]);
+    await flush();
+    dialog().props.onConfirm();
+    await flush();
+    expect(api.deleteForGood).toHaveBeenCalledOnce();
+    expect(dialog().props.preview.paths).toEqual(["/root/other"]);
+  });
+
   it("says nothing was removed when the items are gone", async () => {
     vi.mocked(api.trash).mockRejectedValue(stale);
     vi.mocked(api.trashPreview).mockResolvedValueOnce(shown).mockRejectedValueOnce(stale);

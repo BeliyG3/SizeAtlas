@@ -179,7 +179,7 @@
   "trash.doneCleanup": "Dipindahkan ke tempat sampah: {size}. Kosongkan tempat sampah untuk membebaskan ruang.",
   "trash.queued": "mengantre…",
   "trash.already": "Sedang dihapus.",
-  "trash.notRemoved": "Tidak ada yang dihapus: item berubah sementara itu.",
+  "trash.notRemoved": "Tidak ada yang dihapus: item sudah berubah.",
   "trash.gone_other": "{items} item sudah tidak ada.",
   "trash.cancelledQueued_other": "{items} penghapusan dalam antrean dibatalkan.",
   "purge.ask": "Hapus permanen?",
