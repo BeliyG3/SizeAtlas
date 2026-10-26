@@ -11,7 +11,7 @@ const ALLOWED: Record<string, string> = {
   // Centred on a pointer coordinate that JS computes (clientX), so both sides are equal.
   ".col-drop": "drop line centred on a JS pointer coordinate",
   // Centred on the screen together with translate(-50%, -50%): mirrors onto itself.
-  ".trash-window": "centred on the window, symmetric",
+  ".trash-windows": "centred on the window, symmetric",
   // dir="auto" makes `start` follow the name, not the interface: the side is set per direction.
   ":dir(ltr) :is(.panel-row, .legend, .bar-row) .ellipsis": "dir=auto name, LTR column side",
   ":dir(rtl) :is(.panel-row, .legend, .bar-row) .ellipsis": "dir=auto name, RTL column side",

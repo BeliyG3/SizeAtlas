@@ -9,14 +9,14 @@ export function itemMenuActions(
   entries: readonly RootEntry[],
   generation: number | undefined,
   fullScans: ReadonlySet<string>,
-  trashingRoot: string | null = null,
+  trashingRoots: ReadonlySet<string> = new Set(),
 ) {
   const root =
     generation === undefined
       ? undefined
       : entries.find((entry) => entry.summary?.generation === generation)?.root;
   const actions = scanActions(root === undefined || fullScans.has(root));
-  const trashing = root !== undefined && root === trashingRoot;
+  const trashing = root !== undefined && trashingRoots.has(root);
   return {
     ...actions,
     refresh: actions.refresh && !trashing,

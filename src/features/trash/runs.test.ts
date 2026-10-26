@@ -85,3 +85,19 @@ describe("shownRuns", () => {
     expect(shownRuns([started(1), started(2), started(3), started(4)], 3).more).toBe(1);
   });
 });
+
+describe("rows while progress events come", () => {
+  // Every event makes a new runs array; a memoized row only re-renders when its own state changes.
+  it("keeps the state of every row and the item sets of the runs", () => {
+    const ids = Array.from({ length: 10_000 }, (_, i) => i);
+    const before = [run(1, { ids }), run(2, { ids: [20_000] })];
+    const states = (runs: readonly Run[]) =>
+      [0, 5_000, 9_999, 20_000, 30_000].map((id) => removingState(runs, 1, id));
+    const waiting = states(before);
+    const after = applyProgress(before, at(2, 1));
+    expect(after).not.toBe(before);
+    expect(after[0].ids).toBe(ids);
+    // Only the run that got the event changes: the rows of the other one keep their state.
+    expect(states(after)).toEqual([...waiting.slice(0, 3), "trash", undefined]);
+  });
+});

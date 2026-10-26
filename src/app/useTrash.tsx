@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode
 import { api, isCmdError } from "../api/client";
 import { ROOT_ID, type Roots, type TrashPreview } from "../api/types";
 import { PurgeDialog } from "../features/trash/PurgeDialog";
+import { isRemoving as removesAny } from "../features/trash/runs";
 import { trashReport, type Removal } from "../features/trash/text";
 import { TrashDialog } from "../features/trash/TrashDialog";
 import { useTrashRun } from "../features/trash/useTrashRun";
@@ -49,21 +50,23 @@ interface Args {
 
 /**
  * Everything about removing items, kept out of the app shell: the marked rows of the table, the
- * preview for the confirmation, the request (one at a time for now), its
- * progress (`useTrashRun`) and its report. Items go to the trash; rows of a clean-up list also
- * for good (`onPurge`), after the two questions of `PurgeDialog`. `root` is the root it removes
- * items of: no refresh there meanwhile. `onTrash`, `onPurge` and `onMarks` are stable, for the
+ * preview for the confirmation, the requests (any number: the backend queues them per drive), their
+ * progress (`useTrashRun`) and their reports. Items go to the trash; rows of a clean-up list also
+ * for good (`onPurge`), after the two questions of `PurgeDialog`. `roots` are the roots requests
+ * remove items of: no refresh there meanwhile. `onTrash`, `onPurge` and `onMarks` are stable, for the
  * memoized views. `menuTrash` is what Scan › Move to the trash and Delete outside the table and
  * the tree do: the marked rows, else the selected item (never a root); null while there is none,
- * a request runs or a scan still lists one of them (`trashNote` then says why). The backend
- * refuses the same items.
+ * a request already has one of them or a scan still lists one of them (`trashNote` then says why).
+ * The backend refuses the same items.
  */
 export function useTrash({ roots, entries, selection, push, onTrashed, onError, errorText }: Args) {
   const { t, lang } = useT();
   const [asking, setAsking] = useState<Asking | null>(null);
   const size = useSize();
-  const running = useTrashRun(onError);
-  const busy = running.root !== null;
+  const running = useTrashRun(onError, push);
+  /** Whether a request, started or waiting, already has one of `ids` of the tree with `generation`. */
+  const isRemoving = (generation: number, ids: readonly number[]) =>
+    removesAny(running.moving, generation, ids);
   const [marked, setMarked] = useState<Marked>({ ids: [], cleanup: false, selectedRow: null });
   const questions = useRef(0);
   const job = useMemo(() => runningJob(roots), [roots]);
@@ -71,7 +74,11 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
   /** Asks to remove `ids` of the tree with `generation` `how`, showing what would go. */
   const ask = (generation: number, ids: readonly number[], how: Removal) => {
     const entry = entries.find((e) => e.summary?.generation === generation);
-    if (!entry?.summary || busy || ids.length === 0) return;
+    if (!entry?.summary || ids.length === 0) return;
+    if (isRemoving(generation, ids)) {
+      push(t("trash.already"));
+      return;
+    }
     const { rev } = entry.summary;
     const list = [...ids];
     api.trashPreview(generation, rev, list).then(
@@ -91,12 +98,12 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
   const confirm = () => {
     if (!asking) return;
     setAsking(null);
-    // A question that came while another request ran: that one's Stop must stay its own.
-    if (busy) {
-      push(t("trash.busy"));
+    const { generation, root, rev, ids, preview, how } = asking;
+    // The preview may have come after another request took these items.
+    if (isRemoving(generation, ids)) {
+      push(t("trash.already"));
       return;
     }
-    const { generation, root, rev, ids, preview, how } = asking;
     const request = running.start({ generation, root, ids, preview, purge: how === "purge" });
     const removal =
       how === "purge"
@@ -137,7 +144,11 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
   const targets = marked.ids.length > 0 ? marked.ids : selected;
   const rev = entries.find((e) => e.summary?.generation === generation)?.summary?.rev ?? null;
   const refused = useTrashRefused(job, generation, rev, targets);
-  const available = trashAvailability(busy, job !== null, refused);
+  const available = trashAvailability(
+    generation !== null && isRemoving(generation, targets),
+    job !== null,
+    refused,
+  );
   // Rows of a clean-up list go with its checks: the marked ones, else the selected item when it
   // is one of its rows. Anything else (such as the list's own folder) as before.
   const rows = marked.ids.length > 0 || (selection !== null && marked.selectedRow === selection.id);
@@ -171,11 +182,11 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
       />
     );
   return {
-    busy,
-    root: running.root,
+    roots: running.roots,
+    isRemoving,
     moving: running.moving,
     status: running.status,
-    window: running.window,
+    windows: running.windows,
     job,
     onTrash,
     onPurge,

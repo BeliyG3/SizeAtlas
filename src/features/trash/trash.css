@@ -1,20 +1,27 @@
-/* The progress of a trash request of many items: in the middle, over the app but not blocking it. */
-.trash-window {
+/* The progress windows of the trash requests of many items: in the middle, over the app but not blocking it. */
+.trash-windows {
   position: fixed;
   top: 50%;
   left: 50%;
   z-index: 30;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   width: min(420px, calc(100vw - 32px));
+  transform: translate(-50%, -50%);
+}
+
+.trash-window {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: 8px;
   padding: 16px;
   color: var(--text);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgb(0 0 0 / 30%);
-  transform: translate(-50%, -50%);
 }
 
 .trash-window h2 {

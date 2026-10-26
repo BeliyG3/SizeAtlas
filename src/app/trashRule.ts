@@ -7,21 +7,22 @@ export const runningJob = (roots: Roots): QueueEntry | null =>
 /** "Move to the trash" for some items: available, or not, with the reason for its tooltip. */
 export interface TrashAvailability {
   enabled: boolean;
-  /** Set when a scan still lists one of the items, or another trash request runs. */
-  reason: "scanning" | "trashing" | null;
+  /** Set when a scan still lists one of the items, or a trash request already has one of them. */
+  reason: "scanning" | "removing" | null;
 }
 
 /**
- * Whether items can go to the trash now. Another trash request blocks it; while a job runs, the
+ * Whether items can go to the trash now. `removing`: a trash request already has one of them,
+ * started or waiting (other requests do not matter: they queue). While a job runs, the
  * backend says whether the scan still lists one of them (`refused`, undefined until it first
  * answers): a first scan's unfinished folders and a refreshed folder are refused, the rest may go.
  */
 export function trashAvailability(
-  trashing: boolean,
+  removing: boolean,
   jobRunning: boolean,
   refused: boolean | undefined,
 ): TrashAvailability {
-  if (trashing) return { enabled: false, reason: "trashing" };
+  if (removing) return { enabled: false, reason: "removing" };
   if (!jobRunning) return { enabled: true, reason: null };
   return { enabled: refused === false, reason: refused === true ? "scanning" : null };
 }
@@ -32,7 +33,7 @@ export function availabilityNoteKey(
   count: number,
   isDir?: boolean,
 ): string | null {
-  if (available.reason === "trashing") return "trash.busy";
+  if (available.reason === "removing") return "trash.already";
   return available.reason ? trashNoteKey(count, isDir) : null;
 }
 

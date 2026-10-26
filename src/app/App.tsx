@@ -142,7 +142,7 @@ export function App() {
     errorText,
   });
   // Not in the root whose items move to the trash: the tooltip says why.
-  const trashingHere = selectedRoot !== null && selectedRoot === trash.root;
+  const trashingHere = selectedRoot !== null && trash.roots.has(selectedRoot);
   const refreshCurrent =
     shownGeneration === null ||
     shownFolder === null ||
@@ -234,8 +234,8 @@ export function App() {
                 busyRoots={busy}
                 job={trash.job}
                 fullScans={fullScans}
-                trashing={trash.busy}
-                trashingRoot={trash.root}
+                isRemoving={trash.isRemoving}
+                trashingRoots={trash.roots}
                 onCloseRoot={roots.closeRoot}
                 onForget={roots.forget}
                 onCancelScan={(root) => roots.cancel(root)}
@@ -262,7 +262,7 @@ export function App() {
         access={access.chip}
         trash={trash.status}
       />
-      {trash.window}
+      {trash.windows}
       {trash.dialog}
       <Toasts toasts={toasts} />
       {roots.closing && <div className="overlay">{t("closing")}</div>}

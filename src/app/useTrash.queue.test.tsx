@@ -1,7 +1,8 @@
-import type { ReactElement } from "react";
+import { Children, type ReactElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { Roots, Summary, TrashProgress, TrashResult } from "../api/types";
+import { TrashStatus } from "../features/trash/TrashProgress";
 import { rootEntries } from "./roots";
 import { useTrash } from "./useTrash";
 
@@ -100,14 +101,28 @@ function Shell(push = vi.fn()) {
   });
 }
 
-/** Asks for the trash of item 7 and confirms it. */
-async function confirmed(push = vi.fn()) {
-  Shell(push).onTrash(1, [7]);
+/** Asks for the trash of item `id` and confirms it. */
+async function confirmed(push = vi.fn(), id = 7) {
+  Shell(push).onTrash(1, [id]);
   await flush();
   (Shell(push).dialog as ReactElement<{ onConfirm: () => void }>).props.onConfirm();
 }
 
-type Status = ReactElement<{ progress: TrashProgress; onStop: () => void }>;
+type Line = ReactElement<{ progress?: TrashProgress; onStop: () => void; children?: string }>;
+/** The lines of the status bar: one per started request, then "+N". */
+const lines = (push = vi.fn()) =>
+  Children.toArray(
+    (Shell(push).status as ReactElement<{ children: ReactNode }> | null)?.props.children,
+  ) as Line[];
+/** The windows of the started requests of many items. */
+const windowsOf = () =>
+  Children.toArray(
+    (Shell().windows as ReactElement<{ children: ReactNode }> | null)?.props.children,
+  ) as Line[];
+const label = (line: Line) => line.props.progress?.request ?? line.props.children;
+/** The request `request` starts: the backend reports its first progress. */
+const started = (request: number, done = 0) =>
+  hooks.progress?.({ request, done, total: 3, current: done ? "/root/file" : null });
 
 beforeEach(() => {
   hooks.values = [];
@@ -139,7 +154,8 @@ describe("useTrash with numbered requests", () => {
   it("stops its own request", async () => {
     vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
     await confirmed();
-    (Shell().status as Status).props.onStop();
+    started(5000);
+    lines()[0].props.onStop();
     expect(api.cancelTrash).toHaveBeenCalledWith(5000);
   });
 
@@ -148,15 +164,14 @@ describe("useTrash with numbered requests", () => {
     await confirmed();
     Shell();
     hooks.progress?.({ request: 4999, done: 2, total: 9, current: "/other" });
-    expect((Shell().status as Status).props.progress).toEqual({
+    expect(lines()).toEqual([]);
+    started(5000, 1);
+    expect(lines()[0].props.progress).toEqual({
       request: 5000,
-      done: 0,
+      done: 1,
       total: 3,
-      current: null,
+      current: "/root/file",
     });
-    const own = { request: 5000, done: 1, total: 3, current: "/root/file" };
-    hooks.progress?.(own);
-    expect((Shell().status as Status).props.progress).toEqual(own);
   });
 
   it("keeps the progress of its request when an event of another one comes after", async () => {
@@ -166,7 +181,7 @@ describe("useTrash with numbered requests", () => {
     const own = { request: 5000, done: 2, total: 3, current: "/root/file" };
     hooks.progress?.(own);
     hooks.progress?.({ request: 4999, done: 0, total: 9, current: "/other" });
-    expect((Shell().status as Status).props.progress).toEqual(own);
+    expect(lines()[0].props.progress).toEqual(own);
   });
 
   it("reports nothing for a request cancelled while it waited", async () => {
@@ -176,6 +191,121 @@ describe("useTrash with numbered requests", () => {
     await confirmed(push);
     await flush();
     expect(push).not.toHaveBeenCalled();
-    expect(Shell(push).busy).toBe(false);
+    expect(Shell(push).moving).toEqual([]);
+  });
+
+  it("keeps the trash menu open while another request runs", async () => {
+    vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
+    await confirmed(vi.fn(), 8);
+    const trash = Shell();
+    expect(trash.menuTrash).not.toBeNull();
+    expect(trash.trashNote).toBeNull();
+  });
+
+  it("starts the next request at once, with the next number", async () => {
+    vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
+    await confirmed(vi.fn(), 8);
+    await confirmed(vi.fn(), 9);
+    expect(vi.mocked(api.trash).mock.calls.map((call) => call[0])).toEqual([5000, 5001]);
+  });
+
+  it("refuses the items a request already has: no menu, a note, no question", async () => {
+    vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
+    const push = vi.fn();
+    await confirmed(push);
+    const trash = Shell(push);
+    expect(trash.menuTrash).toBeNull();
+    expect(trash.trashNote).toBe("trash.already");
+    vi.mocked(api.trashPreview).mockClear();
+    trash.onTrash(1, [7]);
+    trash.onPurge(1, [6, 7]);
+    expect(api.trashPreview).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledTimes(2);
+    expect(push).toHaveBeenCalledWith("trash.already");
+  });
+
+  it("starts nothing from a late question whose items a request took meanwhile", async () => {
+    vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
+    const previews: (() => void)[] = [];
+    const preview = { count: 1, size: 1, scannedAt: 1, paths: [], binSize: 0, binFree: null };
+    vi.mocked(api.trashPreview).mockImplementation(
+      () => new Promise((resolve) => previews.push(() => resolve(preview))),
+    );
+    const push = vi.fn();
+    const first = Shell(push);
+    first.onTrash(1, [7]);
+    first.onPurge(1, [7]);
+    previews[0]();
+    await flush();
+    (Shell(push).dialog as ReactElement<{ onConfirm: () => void }>).props.onConfirm();
+    previews[1]();
+    await flush();
+    (Shell(push).dialog as ReactElement<{ onConfirm: () => void }>).props.onConfirm();
+    expect(api.trash).toHaveBeenCalledOnce();
+    expect(api.deleteForGood).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith("trash.already");
+  });
+
+  it("moves the progress of the request it belongs to only", async () => {
+    vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
+    await confirmed(vi.fn(), 8);
+    await confirmed(vi.fn(), 9);
+    const second = { request: 5001, done: 2, total: 3, current: "/root/file" };
+    hooks.progress?.(second);
+    expect(Shell().moving.map((r) => r.progress)).toEqual([null, second]);
+  });
+
+  it("says how many waiting requests Stop cancelled", async () => {
+    vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
+    vi.mocked(api.cancelTrash).mockResolvedValue(1);
+    const push = vi.fn();
+    await confirmed(push);
+    started(5000, 1);
+    lines(push)[0].props.onStop();
+    await flush();
+    expect(api.cancelTrash).toHaveBeenCalledWith(5000);
+    expect(push).toHaveBeenCalledWith("trash.cancelledQueued");
+  });
+
+  /** Confirms the requests of items 8, 9 and 10 and starts all of them. */
+  async function threeStarted(finish: ((result: TrashResult) => void)[]) {
+    vi.mocked(api.trash).mockImplementation(() => new Promise((resolve) => finish.push(resolve)));
+    for (const id of [8, 9, 10]) await confirmed(vi.fn(), id);
+    for (const request of [5000, 5001, 5002]) started(request);
+  }
+
+  it("shows two status lines and how many more there are", async () => {
+    await threeStarted([]);
+    expect(lines().map((line) => line.type)).toEqual([TrashStatus, TrashStatus, "span"]);
+    expect(lines().map(label)).toEqual([5000, 5001, "+1"]);
+  });
+
+  it("gives each started request of many items a window with its own Stop", async () => {
+    vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
+    vi.mocked(api.trashPreview).mockResolvedValue({
+      count: 21,
+      size: 1,
+      scannedAt: 1,
+      paths: [],
+      binSize: 0,
+      binFree: null,
+    });
+    await confirmed(vi.fn(), 8);
+    await confirmed(vi.fn(), 9);
+    started(5000);
+    expect(windowsOf()).toHaveLength(1);
+    started(5001);
+    const windows = windowsOf();
+    expect(windows).toHaveLength(2);
+    windows[1].props.onStop();
+    expect(api.cancelTrash).toHaveBeenCalledWith(5001);
+  });
+
+  it("keeps the first request in the status bar when the second ends first", async () => {
+    const finish: ((result: TrashResult) => void)[] = [];
+    await threeStarted(finish);
+    finish[1](done);
+    await flush();
+    expect(lines().map(label)).toEqual([5000, 5002]);
   });
 });

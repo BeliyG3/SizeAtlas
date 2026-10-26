@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { TrashProgress } from "../../api/types";
 import { formatCount } from "../../format";
 import { useT } from "../../i18n/react";
@@ -30,16 +31,20 @@ function useLine(progress: TrashProgress, stopping: boolean, purge: boolean) {
   };
 }
 
-/** The running trash request in the status bar; `onStop` null when the window offers Stop. */
+/** The running trash request of `root` in the status bar; `onStop` null when its window offers Stop. */
 export function TrashStatus({
+  root,
   progress,
   stopping,
   purge,
   onStop,
-}: Omit<Props, "onStop"> & { onStop: (() => void) | null }) {
+}: Omit<Props, "onStop"> & { root: string; onStop: (() => void) | null }) {
   const line = useLine(progress, stopping, purge);
   return (
     <span className="scan">
+      <span className="ellipsis path dim" title={root}>
+        {root} —
+      </span>
       <span className="counters">{line.text}</span>
       {line.path && (
         <span className="ellipsis path dim" title={line.path}>
@@ -56,7 +61,12 @@ export function TrashStatus({
   );
 }
 
-/** The running trash request of many items, in the middle of the window; the app stays usable. */
+/** The windows of the running requests of many items, one below the other in the middle. */
+export function TrashWindows({ children }: { children: ReactNode }) {
+  return <div className="trash-windows">{children}</div>;
+}
+
+/** One running trash request of many items, with its own Stop; the app stays usable. */
 export function TrashWindow({ progress, stopping, purge, onStop }: Props) {
   const line = useLine(progress, stopping, purge);
   return (
