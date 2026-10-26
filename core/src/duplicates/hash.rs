@@ -134,7 +134,7 @@ pub fn open_checked(path: &Path, len: u64, mtime: i64) -> Result<(File, Identity
         return Err(Skip::Cloud);
     }
     let stamp = Stamp::of(&meta);
-    if stamp.len != len || !unchanged(mtime, stamp.mtime, || listed_mtime(path)) {
+    if stamp.len != len || !same_time(mtime, stamp.mtime, path) {
         return Err(Skip::Changed);
     }
     let identity = identity(&file);
@@ -173,11 +173,13 @@ fn skip_of(e: &io::Error) -> Skip {
     }
 }
 
-/// Whether the `stored` time of a file is its `own` time or, only if that differs, the time of
-/// its entry in its folder's listing: on Windows the scan takes it from the listing, which can
-/// lag behind the file's own. The rule of `recycle::disk::unchanged` in the app.
-fn unchanged(stored: i64, own: i64, listed: impl FnOnce() -> Option<i64>) -> bool {
-    own == stored || listed() == Some(stored)
+/// Whether the `stored` time of the file at `path` is its `own` time or, on Windows and only if
+/// that differs, the time of its entry in its folder's listing: there the scan takes it from the
+/// listing, which can lag behind the file's own. Elsewhere the two are the same.
+// ponytail: the rule of `recycle::disk::{unchanged, listed_mtime}` in the app, kept apart (two
+// lines); the app may import this one once core exposes it.
+fn same_time(stored: i64, own: i64, path: &Path) -> bool {
+    own == stored || (cfg!(windows) && listed_mtime(path) == Some(stored))
 }
 
 fn listed_mtime(path: &Path) -> Option<i64> {

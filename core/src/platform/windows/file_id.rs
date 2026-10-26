@@ -16,6 +16,12 @@ use windows_sys::Win32::Storage::FileSystem::{
 use crate::platform::{FileId, Identity};
 
 /// Opens `path` for reading without keeping others from writing, renaming or deleting it.
+///
+/// A symbolic link swapped in after the caller's check is followed: `FILE_FLAG_OPEN_REPARSE_POINT`
+/// would bypass the filters of deduplicated, WOF-compressed and cloud files and read their stub
+/// data (zeros), so equal-length stubs would hash as duplicates. To close the race: open with the
+/// flag, read `FileAttributeTagInfo`, refuse only name-surrogate tags (links, mount points) and
+/// reopen the others without the flag, checking the file id is the same.
 pub fn open_for_hash(path: &Path) -> io::Result<File> {
     OpenOptions::new()
         .read(true)

@@ -149,7 +149,24 @@ fn rehash_hashes_the_whole_file_unless_stopped() {
     let len = bytes.len() as u64;
     let (hash, id) = rehash(&path, len, mtime, &|| false, &mut |_| {}).unwrap();
     assert_eq!(hash, blake(&bytes));
-    assert_eq!(Some(id), Some(identity(&open_for_hash(&path).unwrap())));
+    assert_eq!(id, identity(&open_for_hash(&path).unwrap()));
     let stopped = rehash(&path, len, mtime, &|| true, &mut |_| {}).map(|_| ());
     assert_eq!(stopped, Err(Skip::Failed));
+}
+
+#[cfg(windows)]
+#[test]
+fn open_checked_cannot_read_a_file_held_by_another_program() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let dir = temp();
+    let (path, mtime) = write(dir.path(), "a", &data(20_000));
+    let held = OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(&path)
+        .unwrap();
+    let got = open_checked(&path, 20_000, mtime).map(|_| ());
+    assert_eq!(got, Err(Skip::NoAccess));
+    drop(held);
+    assert!(open_checked(&path, 20_000, mtime).is_ok());
 }

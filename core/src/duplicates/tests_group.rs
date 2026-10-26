@@ -158,6 +158,24 @@ fn merge_by_id_never_joins_ids_of_two_volumes() {
 }
 
 #[test]
+fn merge_by_id_never_joins_one_id_of_two_lengths() {
+    let same = Identity {
+        id: id(9),
+        nlink: 2,
+    };
+    let longer = Location {
+        len: 8192,
+        ..location(2, 4096, 0)
+    };
+    let objects = merge_by_id(vec![
+        (location(1, 4096, 0), same, candidate(1)),
+        (longer, same, candidate(2)),
+    ]);
+    assert_eq!(objects.len(), 2);
+    assert!(objects.iter().all(|o| !o.keepable() && !o.trashable()));
+}
+
+#[test]
 fn zero_ids_are_unknown() {
     assert_eq!(FileId::new(7, 0), None);
     assert!(FileId::new(7, 1).is_some());

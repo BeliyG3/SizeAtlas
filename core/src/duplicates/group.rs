@@ -99,9 +99,10 @@ impl Group {
     }
 }
 
-/// The opened paths as objects: paths of one file id on one volume become one object. Equal
-/// ids on different volumes (a cloned volume keeps its serial number) are told apart by
-/// nothing, so their objects get no id; a path without an id is an object of its own.
+/// The opened paths as objects: paths of one file id and one length on one volume become one
+/// object. Equal ids on different volumes (a cloned volume keeps its serial number), or of
+/// different lengths (a server reusing ids across the file systems of a share), are told apart
+/// by nothing, so their objects get no id; a path without an id is an object of its own.
 #[cfg_attr(not(test), expect(dead_code, reason = "the search pipeline calls it"))]
 pub(crate) fn merge_by_id(opened: Vec<(Location, Identity, Candidate)>) -> Vec<Object> {
     let mut objects: Vec<Object> = Vec::new();
@@ -109,29 +110,37 @@ pub(crate) fn merge_by_id(opened: Vec<(Location, Identity, Candidate)>) -> Vec<O
     let mut first_volume: HashMap<FileId, u16> = HashMap::new();
     let mut clashes = Vec::new();
     for (at, identity, c) in opened {
+        let mut join = None;
         if let Some(id) = identity.id {
             if *first_volume.entry(id).or_insert(at.volume) != at.volume {
                 clashes.push(id);
             }
-            if let Some(&i) = found.get(&(at.volume, id)) {
+            match found.get(&(at.volume, id)) {
+                Some(&i) if objects[i].paths[0].len == at.len => join = Some(i),
+                Some(_) => clashes.push(id),
+                None => {
+                    found.insert((at.volume, id), objects.len());
+                }
+            }
+        }
+        match join {
+            Some(i) => {
                 let o = &mut objects[i];
                 o.paths.push(at);
                 o.nlink = o.nlink.max(identity.nlink);
                 o.protected |= c.protected;
                 o.synced |= c.synced;
                 o.seed |= c.seed;
-                continue;
             }
-            found.insert((at.volume, id), objects.len());
+            None => objects.push(Object {
+                paths: vec![at],
+                id: identity.id,
+                nlink: identity.nlink,
+                protected: c.protected,
+                synced: c.synced,
+                seed: c.seed,
+            }),
         }
-        objects.push(Object {
-            paths: vec![at],
-            id: identity.id,
-            nlink: identity.nlink,
-            protected: c.protected,
-            synced: c.synced,
-            seed: c.seed,
-        });
     }
     for o in &mut objects {
         if o.id.is_some_and(|id| clashes.contains(&id)) {

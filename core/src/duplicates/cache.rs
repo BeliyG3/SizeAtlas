@@ -54,7 +54,10 @@ impl HashCache {
         if mtime == 0 {
             return None;
         }
-        let files = self.volumes.entry(volume.to_owned()).or_default();
+        if !self.volumes.contains_key(volume) {
+            self.volumes.insert(volume.to_owned(), HashMap::new());
+        }
+        let files = self.volumes.get_mut(volume)?;
         let fresh = || Entry {
             len,
             mtime,
