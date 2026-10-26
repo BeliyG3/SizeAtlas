@@ -9,7 +9,7 @@ use super::hash::Hash;
 use crate::platform::{FileId, Identity};
 
 /// A file of a searched tree: the index of its root and its node.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PathRef {
     pub root: u16,
     pub node: u32,

@@ -2,7 +2,7 @@
 //! asks for what changed after the version it saw. Events of any job but the current one are
 //! ignored, so a late group of a cancelled search cannot reach the result.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::Unread;
 use super::group::{Group, PathRef};
@@ -33,8 +33,10 @@ pub struct Results {
     pub roots: Vec<RootMark>,
     /// Each group with the version it last changed at; groups of the earlier job start at 0.
     groups: Vec<(Group, u64)>,
-    /// Groups gone after version `.1`.
-    removed: Vec<(Hash, u64)>,
+    /// Where each group is in `groups`.
+    index: HashMap<Hash, usize>,
+    /// Groups gone, with the version they went at.
+    removed: HashMap<Hash, u64>,
     /// Groups taken over from the earlier job and not found again yet.
     carried: HashSet<Hash>,
 }
@@ -42,8 +44,10 @@ pub struct Results {
 impl Results {
     /// An empty result of `job`. With `previous` (the earlier job with the same query and
     /// roots) its groups are shown until this job finishes and drops those it did not find.
+    /// A `previous` with other root marks is ignored: its paths index nodes of other trees.
     pub fn new(job: u64, roots: Vec<RootMark>, previous: Option<&Results>) -> Results {
         let groups: Vec<_> = previous
+            .filter(|p| p.roots == roots)
             .map(|p| p.groups.iter().map(|(g, _)| (g.clone(), 0)).collect())
             .unwrap_or_default();
         Results {
@@ -53,24 +57,32 @@ impl Results {
             unread: Unread::default(),
             roots,
             carried: groups.iter().map(|(g, _)| g.hash).collect(),
+            index: groups
+                .iter()
+                .enumerate()
+                .map(|(i, (g, _))| (g.hash, i))
+                .collect(),
             groups,
-            removed: Vec::new(),
+            removed: HashMap::new(),
         }
     }
 
     /// Adds `group`, or replaces the one with its hash. `false` when `job` is not the current
-    /// one.
+    /// one. A group has at least two objects: `remove` drops any with fewer.
     pub fn upsert(&mut self, job: u64, group: Group) -> bool {
         if job != self.job {
             return false;
         }
         self.version += 1;
         self.carried.remove(&group.hash);
-        self.removed.retain(|(h, _)| *h != group.hash);
+        self.removed.remove(&group.hash);
         let entry = (group, self.version);
-        match self.groups.iter_mut().find(|(g, _)| g.hash == entry.0.hash) {
-            Some(slot) => *slot = entry,
-            None => self.groups.push(entry),
+        match self.index.get(&entry.0.hash) {
+            Some(&i) => self.groups[i] = entry,
+            None => {
+                self.index.insert(entry.0.hash, self.groups.len());
+                self.groups.push(entry);
+            }
         }
         true
     }
@@ -106,6 +118,7 @@ impl Results {
     /// Takes paths out of the groups after they left the disk: an object without paths goes,
     /// and so does a group left with fewer than two objects.
     pub fn remove(&mut self, gone: &[PathRef]) {
+        let gone: HashSet<PathRef> = gone.iter().copied().collect();
         let touched = |g: &Group| {
             g.objects
                 .iter()
@@ -130,11 +143,14 @@ impl Results {
 
     /// Flags the group: the disk may no longer match it.
     pub fn mark_stale(&mut self, hash: &Hash) {
-        let version = self.version + 1;
-        if let Some((g, seq)) = self.groups.iter_mut().find(|(g, _)| g.hash == *hash) {
+        let Some(&i) = self.index.get(hash) else {
+            return;
+        };
+        let (g, seq) = &mut self.groups[i];
+        if !g.stale {
             g.stale = true;
-            *seq = version;
-            self.version = version;
+            self.version += 1;
+            *seq = self.version;
         }
     }
 
@@ -155,12 +171,16 @@ impl Results {
                 .filter(|(_, seq)| *seq > cursor)
                 .map(|(g, _)| g)
                 .collect(),
-            removed: self
-                .removed
-                .iter()
-                .filter(|(_, seq)| *seq > cursor)
-                .map(|(h, _)| *h)
-                .collect(),
+            removed: {
+                let mut gone: Vec<Hash> = self
+                    .removed
+                    .iter()
+                    .filter(|(_, seq)| **seq > cursor)
+                    .map(|(h, _)| *h)
+                    .collect();
+                gone.sort_unstable();
+                gone
+            },
         }
     }
 
@@ -172,12 +192,18 @@ impl Results {
     fn drop_where(&mut self, gone: impl Fn(&Group) -> bool) {
         let version = self.version;
         let removed = &mut self.removed;
+        let before = self.groups.len();
         self.groups.retain(|(g, _)| {
             let drop = gone(g);
             if drop {
-                removed.push((g.hash, version));
+                removed.insert(g.hash, version);
             }
             !drop
         });
+        if self.groups.len() != before {
+            self.index = (self.groups.iter().enumerate())
+                .map(|(i, (g, _))| (g.hash, i))
+                .collect();
+        }
     }
 }

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use super::Unread;
@@ -191,4 +192,85 @@ fn a_removed_group_found_again_is_no_longer_removed() {
     assert!(r.upsert(1, group(1, &[1, 2])));
     assert!(r.since(1, 1).removed.is_empty());
     assert_eq!(hashes(&r, 1, 1), vec![hash(1)]);
+}
+
+#[test]
+fn a_previous_result_of_other_roots_carries_nothing() {
+    let mut old = Results::new(1, roots(), None);
+    old.upsert(1, group(1, &[1, 2]));
+    let rescanned = vec![RootMark {
+        generation: 2,
+        ..roots().remove(0)
+    }];
+    let r = Results::new(2, rescanned, Some(&old));
+    assert_eq!(r.groups().count(), 0);
+    assert_eq!(Results::new(2, roots(), Some(&old)).groups().count(), 1);
+}
+
+#[test]
+fn marking_a_stale_group_again_changes_nothing() {
+    let mut r = Results::new(1, roots(), None);
+    r.upsert(1, group(1, &[1, 2]));
+    r.mark_stale(&hash(1));
+    let v = r.version;
+    r.mark_stale(&hash(1));
+    assert_eq!(r.version, v);
+}
+
+/// What a reader keeps of the result: per hash, the object count and the stale flag.
+type View = BTreeMap<Hash, (usize, bool)>;
+
+fn apply(view: &mut View, r: &Results, job: u64, cursor: u64) {
+    let delta = r.since(job, cursor);
+    if delta.full {
+        view.clear();
+    }
+    for h in &delta.removed {
+        assert!(view.remove(h).is_some() || !delta.full);
+    }
+    for g in &delta.groups {
+        assert!(!delta.removed.contains(&g.hash));
+        view.insert(g.hash, (g.objects.len(), g.stale));
+    }
+}
+
+#[test]
+fn deltas_from_every_cursor_replay_to_the_full_result() {
+    let mut old = Results::new(1, roots(), None);
+    old.upsert(1, group(4, &[40, 41]));
+    old.upsert(1, group(5, &[50, 51]));
+    let mut r = Results::new(2, roots(), Some(&old));
+    let mut seen: Vec<(u64, View)> = Vec::new();
+    let mut note = |r: &Results| {
+        let mut view = View::new();
+        apply(&mut view, r, r.job, 0);
+        seen.push((r.version, view));
+    };
+    note(&r);
+    r.upsert(2, group(1, &[1, 2]));
+    note(&r);
+    r.upsert(2, group(2, &[3, 4, 5]));
+    note(&r);
+    r.upsert(2, group(2, &[3, 4]));
+    note(&r);
+    r.remove(&[at(1)]);
+    note(&r);
+    r.upsert(2, group(1, &[1, 2]));
+    note(&r);
+    r.mark_stale(&hash(2));
+    note(&r);
+    r.remove(&[at(50)]);
+    note(&r);
+    r.upsert(2, group(3, &[6, 7]));
+    r.finish(2, true, Unread::default());
+    note(&r);
+    let (_, last) = seen.last().unwrap().clone();
+    assert_eq!(
+        last.keys().copied().collect::<Vec<_>>(),
+        vec![hash(1), hash(2), hash(3)]
+    );
+    for (cursor, mut view) in seen {
+        apply(&mut view, &r, 2, cursor);
+        assert_eq!(view, last, "from cursor {cursor}");
+    }
 }
