@@ -6,7 +6,7 @@ use crate::tree::{SizeMode, flags};
 
 mod file_id;
 
-pub use file_id::{identity, open_for_hash};
+pub use file_id::{identity, open_for_hash, open_pinned};
 
 /// macOS: the Data volume, reached from `/` through firmlinks (/Users, /Applications...).
 const MAC_DATA: &str = "/System/Volumes/Data";

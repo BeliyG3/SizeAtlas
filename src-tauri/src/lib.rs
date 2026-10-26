@@ -90,6 +90,7 @@ pub fn run() {
             commands::duplicates::find_duplicates,
             commands::duplicates::cancel_duplicates,
             commands::duplicates::get_duplicates,
+            commands::duplicates::trash_duplicates,
         ])
         .setup(|app| {
             let title = title_bar::window_title(

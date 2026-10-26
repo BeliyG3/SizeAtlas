@@ -30,6 +30,17 @@ pub fn open_for_hash(path: &Path) -> io::Result<File> {
         .open(path)
 }
 
+/// Opens `path` for reading and keeps others from writing, renaming or deleting it while the
+/// file stays open (no `FILE_SHARE_WRITE`, no `FILE_SHARE_DELETE`). Fails with
+/// `ERROR_SHARING_VIOLATION` when another program has it open for writing or deleting.
+pub fn open_pinned(path: &Path) -> io::Result<File> {
+    OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .custom_flags(FILE_FLAG_SEQUENTIAL_SCAN)
+        .open(path)
+}
+
 /// The 128-bit id and the volume serial number of `file`, and its number of links.
 pub fn identity(file: &File) -> Identity {
     let handle = file.as_raw_handle() as HANDLE;

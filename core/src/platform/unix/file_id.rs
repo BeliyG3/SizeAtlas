@@ -15,6 +15,11 @@ pub fn open_for_hash(path: &Path) -> io::Result<File> {
         .open(path)
 }
 
+/// [`open_for_hash`]: Unix has no mandatory locks, nothing keeps others from changing the file.
+pub fn open_pinned(path: &Path) -> io::Result<File> {
+    open_for_hash(path)
+}
+
 /// The device and inode of `file`, and its number of links.
 pub fn identity(file: &File) -> Identity {
     match file.metadata() {

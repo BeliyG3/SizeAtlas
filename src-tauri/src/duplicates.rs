@@ -25,8 +25,11 @@ use crate::dto::{DuplicatesDto, EstimateDto, GroupDto, StatusDto, hex};
 use crate::error::CmdError;
 use crate::state::AppState;
 
+mod decide;
 mod job;
 mod roots;
+mod select;
+pub mod trash;
 
 use roots::Picked;
 
@@ -253,8 +256,20 @@ impl AppState {
 }
 
 #[cfg(test)]
+mod kept_tests;
+#[cfg(test)]
+mod queue_tests;
+#[cfg(test)]
+mod race_tests;
+#[cfg(test)]
 mod roots_tests;
 #[cfg(test)]
+mod stale_tests;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod trash_fixture;
+#[cfg(test)]
+mod trash_tests;
 #[cfg(test)]
 mod waits_tests;

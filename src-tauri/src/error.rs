@@ -31,6 +31,9 @@ pub enum CmdError {
     /// marker in an old Temp item), or it is no longer a row of either clean-up mode (its app
     /// runs now, a restart is pending, or it never was one).
     Protected,
+    /// A trash of duplicates moved nothing: no copy would stay outside the excluded folders, or
+    /// a copy to remove and the one that stays are the same file.
+    LastCopy,
     /// The user declined the system prompt (the UAC prompt of a restart as administrator).
     Cancelled,
     Io {

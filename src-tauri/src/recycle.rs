@@ -2,7 +2,6 @@
 //! one change of the tree and one saved scan.
 
 use std::fs;
-use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -45,17 +44,51 @@ pub fn run_plan(
     allowed: impl Fn(&TrashItem) -> Result<(), CmdError>,
     trash_one: impl Fn(&Path) -> Result<(), String>,
     stop: &dyn Fn() -> bool,
-    mut report: impl FnMut(TrashProgressDto),
+    report: impl FnMut(TrashProgressDto),
 ) -> Result<TrashDto, CmdError> {
+    check_plan(state, &plan)?;
+    let (moved, _) = move_plan(
+        state, cache_dir, generation, plan, allowed, trash_one, stop, report,
+    );
+    Ok(moved)
+}
+
+/// The ids (in the planned tree) of the items of a plan that left the disk: moved, or gone
+/// already.
+pub(crate) type Journal = Vec<u32>;
+
+/// The first check of [`run_plan`]: every item not gone from the disk is still what the scan
+/// saw, else `Changed` (or the error reading it).
+pub(crate) fn check_plan(state: &AppState, plan: &TrashPlan) -> Result<(), CmdError> {
+    for item in plan.items.iter().filter(|item| !gone(&item.path)) {
+        check(
+            item,
+            &state.settled_times(&plan.root, &item.path, item.mtime),
+        )?;
+    }
+    Ok(())
+}
+
+/// [`run_plan`] after [`check_plan`]: the items one by one, then the tree and its saved scan.
+/// Also returns the ids of the items that left the disk. Once the app starts closing the rest
+/// stays, as for a stop (`stopped`).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn move_plan(
+    state: &AppState,
+    cache_dir: &Path,
+    generation: u64,
+    plan: TrashPlan,
+    allowed: impl Fn(&TrashItem) -> Result<(), CmdError>,
+    trash_one: impl Fn(&Path) -> Result<(), String>,
+    stop: &dyn Fn() -> bool,
+    mut report: impl FnMut(TrashProgressDto),
+) -> (TrashDto, Journal) {
     let check = |item: &TrashItem| {
         check(
             item,
             &state.settled_times(&plan.root, &item.path, item.mtime),
         )
     };
-    for item in plan.items.iter().filter(|item| !gone(&item.path)) {
-        check(item)?;
-    }
     let total = plan.items.len() as u32;
     let mut pacer = Pacer::default();
     // What left the disk, here or before (`already`), for the tree and the running scan.
@@ -66,10 +99,7 @@ pub fn run_plan(
     let mut failed = Vec::new();
     let mut stopped = false;
     for (done, item) in plan.items.iter().enumerate() {
-        if state.closing() {
-            break;
-        }
-        if stop() {
+        if state.closing() || stop() {
             stopped = true;
             break;
         }
@@ -100,10 +130,7 @@ pub fn run_plan(
         if let Err(error) = allowed(item) {
             // The re-check of a clean-up row gives up once a stop is asked: the item was not
             // tried, so it is no failure.
-            if state.closing() {
-                break;
-            }
-            if stop() {
+            if state.closing() || stop() {
                 stopped = true;
                 break;
             }
@@ -170,7 +197,8 @@ pub fn run_plan(
             }
         };
     }
-    Ok(TrashDto {
+    let journal = trashed.iter().map(|t| t.id).collect();
+    let moved = TrashDto {
         removed: trashed.len() as u32 - already,
         gone: already,
         size,
@@ -178,7 +206,8 @@ pub fn run_plan(
         warning,
         stopped,
         cancelled: false,
-    })
+    };
+    (moved, journal)
 }
 
 /// [`run_plan`] for `ids` of the tree with `generation` at revision `rev`, planned here; `Busy`
@@ -220,19 +249,6 @@ pub fn run(
     )
 }
 
-/// `NoTrash` unless `can_recycle` (`sizeatlas_core::can_recycle`) says the item goes to the trash
-/// rather than being deleted for good, judged by the larger of its size on disk and its length.
-pub fn bin_takes(
-    item: &TrashItem,
-    can_recycle: impl Fn(&Path, u64) -> bool,
-) -> Result<(), CmdError> {
-    if can_recycle(&item.path, item.size.max(item.len)) {
-        Ok(())
-    } else {
-        Err(CmdError::NoTrash)
-    }
-}
-
 /// The progress of a trash request at most this often: thousands of small items must not flood
 /// the UI with events.
 const PACE: Duration = Duration::from_millis(100);
@@ -251,31 +267,13 @@ impl Pacer {
     }
 }
 
-/// The trash of the OS: the Recycle Bin on Windows, the Trash on macOS (through NSFileManager,
-/// which needs no permission to control Finder), the freedesktop trash on Linux. A panic in the
-/// crate (it unwraps some system calls) is an error of this item, not of the app.
-// ponytail: between `check` and this call the item can still change (the crate takes a path);
-// the gap is short and the trash can be undone. See README, "Moving to the trash". The same
-// short gap after `recheck` remains for `purge::delete`, which cannot be undone; closing it
-// needs handle-based deletes.
-pub fn move_to_trash(path: &Path) -> Result<(), String> {
-    panic::catch_unwind(AssertUnwindSafe(|| {
-        #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
-        let mut context = trash::TrashContext::default();
-        #[cfg(target_os = "macos")]
-        {
-            use trash::macos::{DeleteMethod, TrashContextExtMacos};
-            context.set_delete_method(DeleteMethod::NsFileManager);
-        }
-        context.delete(path).map_err(|e| e.to_string())
-    }))
-    .unwrap_or_else(|_| Err("the trash of the system failed".to_owned()))
-}
-
 mod disk;
 pub mod membership;
 mod purge;
 pub mod requests;
+mod system;
+
+pub use system::{bin_takes, move_to_trash};
 
 #[cfg(test)]
 mod compaction_tests;

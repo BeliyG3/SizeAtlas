@@ -237,3 +237,31 @@ fn a_save_of_another_root_does_not_wait_for_a_trash_but_its_own_does() {
     done(running);
     assert!(ready(state.begin_write(&a)).is_some());
 }
+
+fn roots(of: &[(&str, &str)]) -> Vec<(String, String)> {
+    of.iter()
+        .map(|(root, volume)| ((*root).to_owned(), (*volume).to_owned()))
+        .collect()
+}
+
+#[test]
+fn a_batch_ticket_leaves_only_its_root() {
+    let state = AppState::default();
+    let mut tickets = (state.enqueue_batch(1, &roots(&[("/a", "v1"), ("/b", "v2")]))).unwrap();
+    assert!(state.trash_pending("/a") && state.trash_pending("/b"));
+    drop(tickets.remove(0));
+    assert!(!state.trash_pending("/a"));
+    assert!(state.trash_pending("/b"));
+    assert!(state.start(1), "the rest of the batch still runs");
+}
+
+#[test]
+fn a_stopped_batch_counts_once() {
+    let state = AppState::default();
+    let batch = (state.enqueue_batch(1, &roots(&[("/a", "v1"), ("/b", "v2")]))).unwrap();
+    let _other = state.enqueue_trash(2, "/c", "v2").unwrap();
+    assert_eq!(state.stop_volume_of(2), 2, "the batch counts once");
+    assert!(batch.iter().all(|t| t.stopped()), "the whole batch");
+    assert!(!state.start(1));
+    assert_eq!(state.stop_volume_of(1), 0);
+}

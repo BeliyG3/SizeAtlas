@@ -40,7 +40,7 @@ pub struct Stamp {
 }
 
 impl Stamp {
-    fn of(meta: &Metadata) -> Stamp {
+    pub(super) fn of(meta: &Metadata) -> Stamp {
         Stamp {
             len: meta.len(),
             mtime: mtime_of(meta),
@@ -78,7 +78,7 @@ pub(crate) fn full(
     whole(file, &|| cancel.load(Ordering::Relaxed), progress)
 }
 
-fn whole(
+pub(super) fn whole(
     file: &mut File,
     stop: &dyn Fn() -> bool,
     progress: &mut dyn FnMut(u64),
@@ -114,6 +114,18 @@ pub(crate) fn verify_after(file: &File, opened: Stamp) -> Result<(), Skip> {
 /// Opens the file at `path` to hash it, if it is the regular file of `len` bytes and time
 /// `mtime` that the scan saw, and its content is on this device (a cloud file is never opened).
 pub fn open_checked(path: &Path, len: u64, mtime: i64) -> Result<(File, Identity, Stamp), Skip> {
+    open_checked_with(path, len, mtime, |path| {
+        open_for_hash(path).map_err(|e| skip_of(&e))
+    })
+}
+
+/// [`open_checked`] that opens the file with `open`.
+pub(super) fn open_checked_with(
+    path: &Path,
+    len: u64,
+    mtime: i64,
+    open: impl FnOnce(&Path) -> Result<File, Skip>,
+) -> Result<(File, Identity, Stamp), Skip> {
     let meta = fs::symlink_metadata(path).map_err(|e| skip_of(&e))?;
     if !meta.file_type().is_file() {
         return Err(Skip::Failed);
@@ -121,7 +133,7 @@ pub fn open_checked(path: &Path, len: u64, mtime: i64) -> Result<(File, Identity
     if is_cloud(&meta) {
         return Err(Skip::Cloud);
     }
-    let file = open_for_hash(path).map_err(|e| skip_of(&e))?;
+    let file = open(path)?;
     // The handle's own view: the path may have been replaced since the check above.
     let meta = file.metadata().map_err(|e| skip_of(&e))?;
     if !meta.is_file() {

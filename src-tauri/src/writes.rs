@@ -3,7 +3,10 @@
 //! and the result of a scan of the volume waits for them. Every write also holds `busy` for
 //! reading, the exit gate (see `exit.rs`).
 //!
-//! Order, always: volume → root → `busy`. Who holds `busy` waits for no other tokio lock.
+//! Order, always: volume → root → `busy`. Who holds `busy` waits for no other tokio lock. A
+//! request that needs several volumes (a batch of duplicates) takes its places in all their
+//! queues in one step (`reserve_turns`), so two batches queue on their shared volumes in one
+//! order and never wait for each other in a cycle; then its roots in ascending order.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -36,6 +39,8 @@ pub struct Locks {
     volumes: LockMap,
     /// The volume of each root, asked once per session.
     volume_of_root: Mutex<HashMap<String, String>>,
+    /// Held while a batch takes its places in the queues of its volumes (`reserve_turns`).
+    reserving: Mutex<()>,
 }
 
 fn lock_of(locks: &LockMap, key: &str) -> Arc<tokio::sync::Mutex<()>> {
@@ -43,15 +48,15 @@ fn lock_of(locks: &LockMap, key: &str) -> Arc<tokio::sync::Mutex<()>> {
     locks.entry(key.to_owned()).or_default().clone()
 }
 
-/// A write of one root: hold it until the saved scan is written. Fields drop in their order,
+/// A write of roots: hold it until the saved scans are written. Fields drop in their order,
 /// the reverse of the order they were taken in.
 pub struct WriteGuard {
     #[expect(dead_code, reason = "held until dropped")]
     busy: OwnedRwLockReadGuard<()>,
     #[expect(dead_code, reason = "held until dropped")]
-    root: OwnedMutexGuard<()>,
+    root: Vec<OwnedMutexGuard<()>>,
     #[expect(dead_code, reason = "held until dropped")]
-    volume: Option<OwnedMutexGuard<()>>,
+    volume: Vec<OwnedMutexGuard<()>>,
 }
 
 impl AppState {
@@ -81,16 +86,35 @@ impl AppState {
         lock_of(&self.0.locks.volumes, volume).lock_owned()
     }
 
+    /// The places of a batch in the queues of `volumes`, each volume once, taken in one step:
+    /// every turn is polled once (which queues it) while `reserving` is held, so batches queue
+    /// on their shared volumes in one order. Sorted only so the order is the same every time.
+    pub fn reserve_turns(&self, volumes: &[String]) -> Vec<Turn> {
+        let mut volumes: Vec<&String> = volumes.iter().collect();
+        volumes.sort();
+        volumes.dedup();
+        let reserving = &self.0.locks.reserving;
+        let _reserving = reserving.lock().unwrap_or_else(PoisonError::into_inner);
+        (volumes.into_iter())
+            .map(|volume| Turn::reserve(self.volume_turn(volume)))
+            .collect()
+    }
+
     /// Permission to write the saved scan of `root` or change its tree: waits for the write of
     /// that root in progress, refused once the app is closing.
     pub async fn begin_write(&self, root: &str) -> Result<WriteGuard, CmdError> {
-        self.write_after(root, None).await
+        self.begin_writes(&[root.to_owned()]).await
+    }
+
+    /// `begin_write` of several roots: each once, in ascending order, then `busy` once.
+    pub async fn begin_writes(&self, roots: &[String]) -> Result<WriteGuard, CmdError> {
+        self.write_after(roots, Vec::new()).await
     }
 
     /// `begin_write` for the result of a scan, after the removals of its volume.
     pub async fn begin_scan_write(&self, root: &str) -> Result<WriteGuard, CmdError> {
         let volume = self.volume_turn(&self.volume_of(root)).await;
-        self.write_after(root, Some(volume)).await
+        self.write_after(&[root.to_owned()], vec![volume]).await
     }
 
     /// Waits until no removal of the volume of `root` runs.
@@ -100,10 +124,16 @@ impl AppState {
 
     async fn write_after(
         &self,
-        root: &str,
-        volume: Option<OwnedMutexGuard<()>>,
+        roots: &[String],
+        volume: Vec<OwnedMutexGuard<()>>,
     ) -> Result<WriteGuard, CmdError> {
-        let root = lock_of(&self.0.locks.roots, root).lock_owned().await;
+        let mut roots: Vec<&String> = roots.iter().collect();
+        roots.sort();
+        roots.dedup();
+        let mut root = Vec::with_capacity(roots.len());
+        for at in roots {
+            root.push(lock_of(&self.0.locks.roots, at).lock_owned().await);
+        }
         let busy = self.0.busy.clone().read_owned().await;
         // Read with `busy` held: `on_exit_request` holds it for writing while it allows the exit.
         if self.closing() {
@@ -136,6 +166,7 @@ impl Turn {
     }
 
     /// Waits for the turn.
+    #[cfg(test)]
     pub async fn wait(self) -> OwnedMutexGuard<()> {
         match (self.got, self.wait) {
             (Some(got), _) => got,
@@ -143,6 +174,37 @@ impl Turn {
             (None, None) => unreachable!("a turn either waits or has come"),
         }
     }
+}
+
+/// Waits for all `turns` together (each has its place already, see `AppState::reserve_turns`).
+/// Each time one comes `stopped` is asked: then every turn is let go and `None` returned.
+// ponytail: the wait for a turn that has not come is not interrupted by a stop; wake it with a
+// `Notify` in the stop if that delay shows.
+pub async fn wait_turns(
+    mut turns: Vec<Turn>,
+    stopped: impl Fn() -> bool,
+) -> Option<Vec<OwnedMutexGuard<()>>> {
+    let go = std::future::poll_fn(|cx| {
+        let mut all = true;
+        for turn in &mut turns {
+            if let Some(wait) = &mut turn.wait
+                && let Poll::Ready(got) = wait.as_mut().poll(cx)
+            {
+                turn.got = Some(got);
+                turn.wait = None;
+            }
+            all &= turn.got.is_some();
+        }
+        if stopped() {
+            Poll::Ready(false)
+        } else if all {
+            Poll::Ready(true)
+        } else {
+            Poll::Pending
+        }
+    })
+    .await;
+    go.then(|| turns.into_iter().filter_map(|turn| turn.got).collect())
 }
 
 /// Polls `f` once: `None` while it waits.

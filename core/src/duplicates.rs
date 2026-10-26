@@ -9,6 +9,7 @@ pub mod cache;
 mod candidates;
 pub mod group;
 pub mod hash;
+mod held;
 mod pipeline;
 mod pool;
 pub mod results;
@@ -16,6 +17,7 @@ mod zones;
 
 pub use crate::platform::{FileId, Identity};
 pub use hash::Skip;
+pub use held::{Held, rehash_held};
 pub use pipeline::{Event, Outcome, Phase, Prepared, Progress, Stats, Unread, prepare, search};
 
 /// Smaller files are never compared: they free too little to be worth reading.
@@ -99,6 +101,8 @@ mod tests_candidates;
 mod tests_group;
 #[cfg(test)]
 mod tests_hash;
+#[cfg(test)]
+mod tests_held;
 #[cfg(test)]
 mod tests_links;
 #[cfg(test)]

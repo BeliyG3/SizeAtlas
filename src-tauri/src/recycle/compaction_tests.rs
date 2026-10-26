@@ -44,6 +44,20 @@ fn a_refused_last_request_compacts_what_the_one_before_left() {
 }
 
 #[test]
+fn a_last_request_stopped_while_it_waited_compacts_what_the_one_before_left() {
+    let state = AppState::default();
+    let (_dir, g) = open(&state);
+    let (cache, log) = (tempfile::tempdir().unwrap(), Log::default());
+    let r1 = confirm(&state, 1, g, &[&["sub"]]);
+    let r2 = confirm(&state, 2, g, &[&["top.bin"]]);
+    done(start(&state, cache.path(), r1, logged(&log)));
+    assert_eq!(state.tree(g).unwrap().dead, 3, "R2 is still registered");
+    assert_eq!(state.stop_volume_of(2), 1);
+    assert!(done(start(&state, cache.path(), r2, logged(&log))).cancelled);
+    assert_eq!(state.summary(g), Err(CmdError::StaleId), "compacted");
+}
+
+#[test]
 fn the_last_request_does_not_compact_while_the_app_closes() {
     let state = AppState::default();
     let (_dir, g) = open(&state);

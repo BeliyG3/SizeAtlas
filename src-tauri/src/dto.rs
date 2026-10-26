@@ -16,7 +16,7 @@ mod duplicates;
 #[cfg(test)]
 mod duplicates_tests;
 
-pub use duplicates::{DuplicatesDto, EstimateDto, GroupDto, StatusDto, hex};
+pub use duplicates::{DuplicatesDto, EstimateDto, GroupDto, RefDto, StatusDto, hex};
 
 mod growth;
 
