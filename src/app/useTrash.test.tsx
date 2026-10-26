@@ -225,18 +225,24 @@ describe("useTrash while it moves items", () => {
 
     const running = useRenderTrash(roots, 7, vi.fn(), push);
     expect([running.busy, running.root, running.menuTrash]).toEqual([true, "/root", null]);
-    expect(running.moving?.generation).toBe(1);
-    expect([...(running.moving?.ids ?? [])]).toEqual([7]);
+    expect(running.moving.map((r) => [r.generation, r.ids, r.purge])).toEqual([[1, [7], false]]);
     expect(running.trashNote).toBe("trash.busy");
     expect(running.window).toBeNull();
     (running.status as ReactElement<{ onStop: () => void }>).props.onStop();
     expect(api.cancelTrash).toHaveBeenCalledWith(vi.mocked(api.trash).mock.calls[0][0]);
 
-    finish({ removed: 1, failed: [], warning: null, stopped: false, cancelled: false });
+    finish({
+      removed: 1,
+      failed: [],
+      warning: null,
+      stopped: false,
+      gone: 0,
+      cancelled: false,
+    });
     await flush();
     expect(push).toHaveBeenCalledWith("trash.doneOne");
     const after = useRenderTrash(roots, 7, vi.fn(), push);
-    expect([after.busy, after.moving, after.status]).toEqual([false, null, null]);
+    expect([after.busy, after.moving, after.status]).toEqual([false, [], null]);
   });
 
   it("shows a window with Stop for more than 20 items, and no Stop in the status bar", async () => {
@@ -268,6 +274,7 @@ describe("useTrash in the clean-up lists", () => {
     failed: [],
     warning: null,
     stopped: false,
+    gone: 0,
     cancelled: false,
   };
   /** One render of the hook, as the app shell does. */

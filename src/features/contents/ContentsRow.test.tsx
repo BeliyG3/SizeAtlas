@@ -192,6 +192,7 @@ describe("ContentsRow", () => {
   it.each([
     ["trash", "moving…"],
     ["purge", "deleting…"],
+    ["queued", "queued…"],
   ] as const)("dims a row that goes (%s) and says how after its name", (moving, tag) => {
     const html = renderToStaticMarkup(
       <I18nProvider>

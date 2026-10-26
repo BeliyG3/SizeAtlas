@@ -24,6 +24,8 @@ vi.mock("react", async (original) => ({
   ...(await import("./hookRuntime")).rt.hooks,
 }));
 vi.mock("../../api/client", () => ({ api: { getList: vi.fn() } }));
+// The mocked `useContext` answers every context with a function: nothing is being removed.
+vi.mock("../trash/moving", () => ({ useMoving: () => () => undefined }));
 vi.mock("../../i18n/react", () => ({
   useT: () => ({
     t: (key: string, params?: Record<string, unknown>) =>

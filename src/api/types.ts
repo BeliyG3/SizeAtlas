@@ -277,6 +277,8 @@ export interface TrashResult {
   warning: CmdError | null;
   /** Stopped by `cancelTrash` before every item was tried: the rest stayed where it was. */
   stopped: boolean;
+  /** Items that were gone from the disk already (an earlier request took them, or someone else): no error. */
+  gone: number;
   /** Never started (Stop of its volume, or the app closed, while it waited): nothing was tried. */
   cancelled: boolean;
 }

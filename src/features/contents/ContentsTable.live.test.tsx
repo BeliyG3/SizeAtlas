@@ -74,6 +74,8 @@ vi.mock("react", async (original) => ({
 vi.mock("../../api/client", () => ({
   api: { getChildren: vi.fn(), getPosition: vi.fn() },
 }));
+// The mocked `useContext` answers every context with a function: nothing is being removed.
+vi.mock("../trash/moving", () => ({ useMoving: () => () => undefined }));
 vi.mock("../../i18n/react", () => ({ useT: () => ({ t: (key: string) => key }) }));
 
 const f = { id: 11, name: "f.txt", size: 300, isDir: false } as Item;

@@ -93,7 +93,8 @@ export function trashProgressText(
 
 /**
  * Messages after a request of `preview` that removed its items `how`: what went (its size from
- * the preview), where a stop left it, what stayed and why, and a change that was not saved.
+ * the preview), where a stop left it, what stayed and why, what was gone already, and a change
+ * that was not saved. A request that never started has no messages.
  */
 export function trashReport(
   result: TrashResult,
@@ -104,6 +105,8 @@ export function trashReport(
   size: Size,
   how: Removal = "trash",
 ): string[] {
+  // Never started: nothing was tried, nothing to say.
+  if (result.cancelled) return [];
   const purge = how === "purge";
   const keys = purge ? "purge" : "trash";
   // The count of what went, under the name its texts give it.
@@ -143,6 +146,12 @@ export function trashReport(
     const items = count(result.removed);
     messages.push(t("trash.done", { count: result.removed, items, size: size(preview.size) }));
   }
+  if (result.gone > 0)
+    messages.push(t("trash.gone", { count: result.gone, items: count(result.gone) }));
   if (result.warning) messages.push(errorText(result.warning));
   return messages;
 }
+
+/** "Cancelled 2 queued removals.": what Stop of a request took off the queue of its volume. */
+export const cancelledText = (cancelled: number, t: Translate, count: Count) =>
+  t("trash.cancelledQueued", { count: cancelled, items: count(cancelled) });

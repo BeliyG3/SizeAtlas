@@ -80,6 +80,7 @@ const done: TrashResult = {
   failed: [],
   warning: null,
   stopped: false,
+  gone: 0,
   cancelled: false,
 };
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -154,6 +155,16 @@ describe("useTrash with numbered requests", () => {
     });
     const own = { request: 5000, done: 1, total: 3, current: "/root/file" };
     hooks.progress?.(own);
+    expect((Shell().status as Status).props.progress).toEqual(own);
+  });
+
+  it("keeps the progress of its request when an event of another one comes after", async () => {
+    vi.mocked(api.trash).mockReturnValue(new Promise(() => {}));
+    await confirmed();
+    Shell();
+    const own = { request: 5000, done: 2, total: 3, current: "/root/file" };
+    hooks.progress?.(own);
+    hooks.progress?.({ request: 4999, done: 0, total: 9, current: "/other" });
     expect((Shell().status as Status).props.progress).toEqual(own);
   });
 

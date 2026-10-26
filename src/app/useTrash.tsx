@@ -110,7 +110,7 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
         const count = (n: number) => formatCount(n, lang);
         for (const text of trashReport(result, preview, t, errorText, count, size, how)) push(text);
       }, onError)
-      .finally(running.end);
+      .finally(() => running.end(request));
   };
   // The views are memoized: stable handlers call the latest `ask`.
   const latest = useRef(ask);
