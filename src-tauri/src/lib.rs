@@ -16,6 +16,7 @@ mod sources;
 mod state;
 mod title_bar;
 mod worker;
+mod writes;
 
 use exit::ExitDecision;
 use state::AppState;

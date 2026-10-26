@@ -10,10 +10,12 @@ use std::time::{Duration, Instant};
 use sizeatlas_core::scanner::{Progress, ScanOutcome, scan};
 use sizeatlas_core::tree::ListOrder;
 use tempfile::TempDir;
+use tokio::sync::OwnedMutexGuard;
 
 use super::{listed_mtime, modified};
 use crate::error::CmdError;
 use crate::state::{AppState, TrashItem};
+use crate::writes::WriteGuard;
 
 /// root/top.bin and root/sub/{x.bin, y.bin}, scanned and open; returns the folder and the
 /// generation of its tree.
@@ -76,6 +78,14 @@ pub fn rev(state: &AppState, generation: u64) -> u64 {
 pub fn real(dir: &TempDir, names: &[&str]) -> PathBuf {
     let canonical = dunce::canonicalize(dir.path()).unwrap();
     names.iter().fold(canonical, |path, name| path.join(name))
+}
+
+/// The locks a trash request of `root` holds while it runs: the turn of its volume, then the
+/// root's write.
+pub fn hold_like_a_trash(state: &AppState, root: &str) -> (OwnedMutexGuard<()>, WriteGuard) {
+    let turn = tauri::async_runtime::block_on(state.volume_turn(&state.volume_of(root)));
+    let write = tauri::async_runtime::block_on(state.begin_write(root)).unwrap();
+    (turn, write)
 }
 
 /// Every item may go (the system's trash check is `bin_takes` with `sizeatlas_core::can_recycle`).

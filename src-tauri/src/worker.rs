@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use sizeatlas_core::scanner::FolderScan;
 use sizeatlas_core::tree::Tree;
-use tokio::sync::OwnedMutexGuard;
 
 use crate::baseline;
 use crate::dto::ProgressDto;
@@ -16,6 +15,7 @@ use crate::jobs;
 use crate::queue::{FolderTarget, ScanJob};
 use crate::sources;
 use crate::state::AppState;
+use crate::writes::WriteGuard;
 
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -39,10 +39,11 @@ pub type Notify = Arc<dyn Fn(Notice) + Send + Sync>;
 pub async fn run(state: AppState, cache_dir: PathBuf, first: ScanJob, notify: Notify) {
     let mut next = Some(first);
     while let Some(job) = next {
-        // A trash holds `busy` from its check to its saved scan: a walk meanwhile would see some
-        // of its items gone and others not.
-        // ponytail: jobs of every root wait for any trash, not only those of its root.
-        state.writes_done().await;
+        // A trash holds the turn of its volume from its check to its saved scan: a walk meanwhile
+        // would see some of its items gone and others not. Trashes on other volumes go on.
+        // ponytail: one worker, so a scan of another volume still waits behind this one; a worker
+        // per volume if that wait shows.
+        state.volume_idle(&job.root).await;
         notify(Notice::RootsChanged);
         let done = match &job.folder {
             None => scan_one(&state, &cache_dir, &job, &notify).await,
@@ -79,7 +80,7 @@ async fn scan_one(
         return Ok(()); // cancelled
     };
     // Refused only when the app started closing before the walk ended: the scan is dropped.
-    let Ok(write) = state.begin_write().await else {
+    let Ok(write) = state.begin_scan_write(&job.root).await else {
         // Not on the async runtime: dropping millions of nodes takes a while.
         tauri::async_runtime::spawn_blocking(move || drop(tree));
         return Ok(());
@@ -104,10 +105,11 @@ fn install_and_save(
     cache_dir: &Path,
     job: &ScanJob,
     mut tree: Tree,
-    write: OwnedMutexGuard<()>,
+    write: WriteGuard,
     notify: &Notify,
 ) -> Result<(), CmdError> {
-    // Under `write`: no trash runs meanwhile, every one that ran during the walk is noted.
+    // Under `write`: no trash of the volume runs meanwhile, every one that ran during the walk
+    // is noted.
     trashed::remove(&mut tree, &trashed::gone(job));
     let tree = Arc::new(tree);
     let comparable = baseline::comparable(cache_dir, &job.root, true);
@@ -124,7 +126,7 @@ fn install_and_save(
         Err(_) => baseline::forgo(state, &job.root),
     };
     drop(write);
-    // After `busy` is released: dropping millions of nodes must not delay closing.
+    // After `write` is released: dropping millions of nodes must not delay closing.
     drop(replaced);
     drop(tree);
     if compared {
@@ -151,7 +153,7 @@ async fn refresh_one(
         return Ok(()); // cancelled
     };
     // Refused only when the app started closing before the walk ended: the refresh is dropped.
-    let Ok(write) = state.begin_write().await else {
+    let Ok(write) = state.begin_scan_write(&job.root).await else {
         return Ok(());
     };
     let (state, cache_dir, job, folder, notify) = (
@@ -177,7 +179,7 @@ fn apply_refresh(
     job: &ScanJob,
     folder: &FolderTarget,
     found: FolderScan,
-    write: OwnedMutexGuard<()>,
+    write: WriteGuard,
     notify: &Notify,
 ) -> Result<(), CmdError> {
     // Measured after the walk and outside the lock, so "unaccounted" compares numbers of one time.

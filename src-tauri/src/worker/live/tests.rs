@@ -100,7 +100,7 @@ fn live_batches_are_browsable_stable_and_not_saved_until_finished() {
         }
     })
     .unwrap();
-    let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+    let write = tauri::async_runtime::block_on(state.begin_scan_write(&job.root)).unwrap();
     finish(&state, cache.path(), &job, generation, write, &notify).unwrap();
     assert!(!state.summary(generation).unwrap().scanning);
     assert_eq!(sources::cached_scans(cache.path()).len(), 1);

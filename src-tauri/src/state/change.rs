@@ -174,8 +174,13 @@ impl OpenRoot {
 
 /// `&mut` to a shared tree without copying it: waits until no read holds it. The caller holds
 /// the write lock, so no new read can take the tree meanwhile, and every read waits: nobody may
-/// hold an `Arc<Tree>` for long outside `busy` (long work on a tree, such as computing its
-/// baseline, holds `busy`, which a trash and every saved scan also take).
+/// hold an `Arc<Tree>` for long outside the write of its root (long work on a tree, such as
+/// computing its baseline, holds that write, which a trash and every saved scan of the root also
+/// take). Exceptions without the write: the batches of a live first scan (`change_scan` in
+/// `worker/live.rs`), `close_path`, and `plan_rows`/`trash_plan` when a trash is confirmed (a
+/// short read of the `Arc`).
+// ponytail: the clean-up walk of a confirmation (about 0.6 s) may delay `tree_mut` of the same
+// root; walk a copy of the rows if that delay shows.
 // ponytail: a read that took the data lock again while holding the tree would make this wait
 // forever; none does: reads take the lock only to clone the `Arc`, and `crate::baseline` drops
 // its tree before `set_baseline`. Keep it that way. After READ_WARN the wait is reported on

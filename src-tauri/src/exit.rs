@@ -9,9 +9,6 @@
 
 use std::sync::atomic::Ordering;
 
-use tokio::sync::OwnedMutexGuard;
-
-use crate::error::CmdError;
 use crate::state::AppState;
 
 pub const RUNNING: u8 = 0;
@@ -22,30 +19,14 @@ pub const ALLOWED: u8 = 2;
 pub enum ExitDecision {
     Allow,
     Prevent,
-    /// Prevent now, wait for `busy`, then exit.
+    /// Prevent now, wait for the writes, then exit.
     PreventAndWait,
 }
 
 impl AppState {
-    /// Permission to write or delete a saved scan: waits for the write in progress, refused
-    /// once the app is closing. Hold the guard until the file is written.
-    pub async fn begin_write(&self) -> Result<OwnedMutexGuard<()>, CmdError> {
-        let write = self.0.busy.clone().lock_owned().await;
-        // Read with `busy` held: `on_exit_request` holds it while it allows the exit.
-        if self.0.exit.load(Ordering::Acquire) != RUNNING {
-            return Err(CmdError::Busy);
-        }
-        Ok(write)
-    }
-
     /// The app started closing: long work stops before its next step.
     pub fn closing(&self) -> bool {
         self.0.exit.load(Ordering::Acquire) != RUNNING
-    }
-
-    /// Waits until no saved scan is being written and no trash runs: both hold `busy`.
-    pub async fn writes_done(&self) {
-        drop(self.0.busy.lock().await);
     }
 
     /// Decides what to do with a close or exit request. Runs under the queue lock, which
@@ -57,7 +38,7 @@ impl AppState {
             WAITING => ExitDecision::Prevent,
             _ => {
                 scans.stop_all();
-                match self.0.busy.try_lock() {
+                match self.0.busy.try_write() {
                     Ok(_idle) => {
                         // Still holding `busy`: no write can start before ALLOWED is visible.
                         self.0.exit.store(ALLOWED, Ordering::Release);
@@ -72,16 +53,22 @@ impl AppState {
         }
     }
 
+    /// Waits until no write holds `busy`, then allows the exit. Writes that wait for `busy`
+    /// meanwhile see the exit allowed and are refused.
     pub async fn wait_until_idle(&self) {
-        let _idle = self.0.busy.lock().await;
+        let _idle = self.0.busy.write().await;
         self.0.exit.store(ALLOWED, Ordering::Release);
     }
 
-    /// Last resort for `RunEvent::Exit` when the exit bypassed `on_exit_request`.
+    /// Last resort for `RunEvent::Exit` when the exit bypassed `on_exit_request`; blocks, so not
+    /// on the async runtime. Closing first: writes that wait for `busy` meanwhile are refused.
     pub fn block_until_idle(&self) {
         if self.0.exit.load(Ordering::Acquire) != ALLOWED {
+            self.0.exit.store(WAITING, Ordering::Release);
             self.scans().stop_all();
-            let _idle = self.0.busy.blocking_lock();
+            // Stopping the trash requests goes here once they are registered.
+            let _idle = self.0.busy.blocking_write();
+            self.0.exit.store(ALLOWED, Ordering::Release);
         }
     }
 }

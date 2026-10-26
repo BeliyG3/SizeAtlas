@@ -11,6 +11,7 @@ use crate::queue::ScanJob;
 use crate::recycle::membership::{self, Disposal};
 use crate::state::{AppState, TrashItem};
 use crate::worker::{self, Notice, Notify};
+use crate::writes::Turn;
 use crate::{baseline, jobs, recycle, sources};
 
 const ROOTS_CHANGED: &str = "roots-changed";
@@ -118,7 +119,7 @@ pub async fn trash(
     ids: Vec<u32>,
     cleanup: Option<bool>,
 ) -> Result<TrashDto, CmdError> {
-    removing(&app, &state, move |state, dir, report| {
+    removing(&app, &state, generation, move |state, dir, report| {
         let bin = sizeatlas_core::can_recycle;
         let trash_one = recycle::move_to_trash;
         if cleanup == Some(true) {
@@ -148,24 +149,30 @@ pub async fn delete_for_good(
     rev: u64,
     ids: Vec<u32>,
 ) -> Result<TrashDto, CmdError> {
-    removing(&app, &state, move |state, dir, report| {
+    removing(&app, &state, generation, move |state, dir, report| {
         let purge = Disposal::Purge;
         membership::run_rows(state, dir, generation, rev, &ids, purge, report)
     })
     .await
 }
 
-/// Runs a trash or delete request `run` with `begin_write` held, its progress as
-/// `trash-progress` events.
+/// Runs a trash or delete request `run` on the tree `generation` in the turn of its volume and
+/// with its root's write held, its progress as `trash-progress` events.
 async fn removing(
     app: &AppHandle,
     state: &State<'_, AppState>,
+    generation: u64,
     run: impl FnOnce(&AppState, &Path, &dyn Fn(TrashProgressDto)) -> Result<TrashDto, CmdError>
     + Send
     + 'static,
 ) -> Result<TrashDto, CmdError> {
     state.reset_trash_stop();
-    let write = state.begin_write().await?;
+    // The tree is let go at once (see `state::change::tree_mut`).
+    let root = state.tree(generation)?.name(0).to_owned();
+    // Queued at once: the removals of one volume run in the order they came.
+    let turn = Turn::reserve(state.volume_turn(&state.volume_of(&root)));
+    let volume = turn.wait().await;
+    let write = state.begin_write(&root).await?;
     let dir = cache_dir(app)?;
     let state = state.inner().clone();
     let events = app.clone();
@@ -175,6 +182,7 @@ async fn removing(
         };
         let result = run(&state, &dir, &report);
         drop(write);
+        drop(volume);
         result
     })
     .await?;
@@ -203,8 +211,8 @@ pub async fn cancel_scan(
 }
 
 /// Adds a saved scan as a root, or replaces the open one in place (see `jobs::open_cached`).
-/// Waits for a trash or a saved scan being written, not for scans nor for its baseline, which
-/// comes later with another `roots-changed`.
+/// Waits for a trash or a saved scan of the root being written, not for scans nor for its
+/// baseline, which comes later with another `roots-changed`.
 #[tauri::command]
 pub async fn open_cached(
     app: AppHandle,
@@ -249,7 +257,7 @@ pub async fn forget_scan(
     state: State<'_, AppState>,
     root: String,
 ) -> Result<(), CmdError> {
-    let write = state.begin_write().await?;
+    let write = state.begin_write(&root).await?;
     let dir = cache_dir(&app)?;
     let state = state.inner().clone();
     let result = tauri::async_runtime::spawn_blocking(move || {

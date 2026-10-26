@@ -1,6 +1,10 @@
 //! OS-specific size measurement and traversal rules.
 
 #[cfg(unix)]
+use std::os::unix::fs::MetadataExt as _;
+use std::path::Path;
+
+#[cfg(unix)]
 mod unix;
 #[cfg(unix)]
 pub use unix::*;
@@ -38,6 +42,16 @@ pub fn bin_free(space: BinSpace) -> u64 {
     space.capacity.saturating_sub(space.used)
 }
 
+/// A key shared by every path of one volume, `None` when it cannot be told (the path is
+/// gone, or the system does not say). Windows: the folder where the volume is mounted (`C:\`,
+/// a mounted folder, `\\server\share\`); Unix: the device of the path.
+pub fn volume_key(path: &Path) -> Option<String> {
+    #[cfg(windows)]
+    return volume_mount(path).map(|mount| mount.to_string_lossy().into_owned());
+    #[cfg(unix)]
+    return Some(format!("dev:{}", std::fs::metadata(path).ok()?.dev()));
+}
+
 /// macOS `SF_DATALESS` (`<sys/stat.h>`): the item's content lives only in the cloud (iCloud
 /// Drive), and reading or listing it makes macOS download it. Reading the flag downloads nothing.
 const SF_DATALESS: u32 = 0x4000_0000;
@@ -50,7 +64,25 @@ fn is_dataless(st_flags: u32) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{BinSpace, bin_free, is_dataless};
+    use super::{BinSpace, bin_free, is_dataless, volume_key};
+
+    #[test]
+    fn volume_key_is_shared_by_folders_of_one_volume() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("a"), dir.path().join("b"));
+        std::fs::create_dir(&a).unwrap();
+        std::fs::create_dir(&b).unwrap();
+        let key = volume_key(&a);
+        assert!(key.is_some());
+        assert_eq!(key, volume_key(&b));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_volume_key_of_a_windows_folder_is_its_drive() {
+        let windows = std::path::Path::new(r"C:\Windows");
+        assert_eq!(volume_key(windows), Some(r"C:\".into()));
+    }
 
     #[test]
     fn the_free_room_of_a_bin_is_never_below_zero() {
