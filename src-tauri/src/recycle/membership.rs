@@ -53,31 +53,45 @@ pub enum Disposal<'a> {
 /// Moves or deletes one item; the error is the system's message.
 pub type TrashOne<'a> = dyn Fn(&Path) -> Result<(), String> + 'a;
 
-/// Deletes the clean-up rows `ids` as `disposal` says.
-/// Nothing goes unless every item is a row of a mode by a fresh context ([`rows_of`]). Then, per
-/// item and right before it goes, the disk re-check (`recheck` with the never places of that
-/// context and the time now) and the trash check; else as `recycle::run_reporting`.
-#[allow(clippy::too_many_arguments)]
+/// The plan of the clean-up rows `ids` (`AppState::trash_plan`), refused as a whole
+/// (`Protected`) unless every item is a row of a mode by a fresh context ([`rows_of`]): nothing
+/// of such a request waits in the queue of its volume.
+pub fn plan_rows(
+    state: &AppState,
+    generation: u64,
+    rev: u64,
+    ids: &[u32],
+) -> Result<TrashPlan, CmdError> {
+    let plan = state.trash_plan(generation, rev, ids)?;
+    let ctx = (state.0.context)(Path::new(&plan.root));
+    rows_of(state, generation, &plan, &ctx)?;
+    Ok(plan)
+}
+
+/// Deletes the clean-up rows of `plan` (from [`plan_rows`]) as `disposal` says.
+/// Nothing goes unless every item is still a row of a mode by a context made now ([`rows_of`]:
+/// an app started while the request waited refuses it). Then, per item and right before it
+/// goes, the disk re-check (`recheck` with the never places of that context and the time now)
+/// and the trash check; else as `recycle::run_plan`.
 pub fn run_rows(
     state: &AppState,
     cache_dir: &Path,
     generation: u64,
-    rev: u64,
-    ids: &[u32],
+    plan: TrashPlan,
     disposal: Disposal,
+    stop: &dyn Fn() -> bool,
     report: impl FnMut(TrashProgressDto),
 ) -> Result<TrashDto, CmdError> {
-    let plan = state.trash_plan(generation, rev, ids)?;
     // ponytail: processes and a pending restart are read once per request, so an app started
     // during a long request is seen by the next one (its files in use fail as `Io`); read them
     // again per app-owned row if long requests matter.
     let ctx = (state.0.context)(Path::new(&plan.root));
     let rows = rows_of(state, generation, &plan, &ctx)?;
     let guard = Guard::new(ctx.os, &ctx.known);
-    let stop = || state.trash_stopped() || state.closing();
+    let stopping = || stop() || state.closing();
     let allowed = |item: &TrashItem| {
         let reason = *rows.get(&item.id).ok_or(CmdError::Protected)?;
-        recheck(&item.path, reason, &guard, now_ns(), &stop).map_err(refused)?;
+        recheck(&item.path, reason, &guard, now_ns(), &stopping).map_err(refused)?;
         match disposal {
             Disposal::Trash { bin, .. } => bin_takes(item, bin),
             Disposal::Purge => Ok(()),
@@ -88,7 +102,7 @@ pub fn run_rows(
         Disposal::Purge => purge::delete(path),
     };
     run_plan(
-        state, cache_dir, generation, plan, allowed, trash_one, report,
+        state, cache_dir, generation, plan, allowed, trash_one, stop, report,
     )
 }
 

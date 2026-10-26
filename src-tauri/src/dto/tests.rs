@@ -344,11 +344,12 @@ fn trash_results_use_camel_case() {
         }],
         warning: Some(CmdError::CacheNotSaved),
         stopped: true,
+        cancelled: false,
     };
     assert_eq!(
         serde_json::to_value(done).unwrap(),
         json!({"removed": 1, "failed": [{"path": "C:\\x", "error": {"code": "NoTrash"}}],
-            "warning": {"code": "CacheNotSaved"}, "stopped": true})
+            "warning": {"code": "CacheNotSaved"}, "stopped": true, "cancelled": false})
     );
     let preview = TrashPreviewDto {
         count: 1,
@@ -372,7 +373,15 @@ fn trash_results_use_camel_case() {
         current: None,
     };
     assert_eq!(
-        serde_json::to_value(progress).unwrap(),
+        serde_json::to_value(&progress).unwrap(),
         json!({"done": 2, "total": 5, "current": null})
+    );
+    let event = TrashProgressEventDto {
+        request: 7,
+        progress,
+    };
+    assert_eq!(
+        serde_json::to_value(event).unwrap(),
+        json!({"request": 7, "done": 2, "total": 5, "current": null})
     );
 }

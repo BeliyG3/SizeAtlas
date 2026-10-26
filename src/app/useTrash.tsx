@@ -49,7 +49,7 @@ interface Args {
 
 /**
  * Everything about removing items, kept out of the app shell: the marked rows of the table, the
- * preview for the confirmation, the request (one at a time: the backend's Stop is shared), its
+ * preview for the confirmation, the request (one at a time for now), its
  * progress (`useTrashRun`) and its report. Items go to the trash; rows of a clean-up list also
  * for good (`onPurge`), after the two questions of `PurgeDialog`. `root` is the root it removes
  * items of: no refresh there meanwhile. `onTrash`, `onPurge` and `onMarks` are stable, for the
@@ -97,13 +97,15 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
       return;
     }
     const { generation, root, rev, ids, preview, how } = asking;
-    running.start({ generation, root, ids, preview, purge: how === "purge" });
-    const request =
+    const request = running.start({ generation, root, ids, preview, purge: how === "purge" });
+    const removal =
       how === "purge"
-        ? api.deleteForGood(generation, rev, ids)
-        : api.trash(generation, rev, ids, how === "cleanup");
-    request
+        ? api.deleteForGood(request, generation, rev, ids)
+        : api.trash(request, generation, rev, ids, how === "cleanup");
+    removal
       .then((result) => {
+        // Stopped while it waited: nothing was tried, nothing to report.
+        if (result.cancelled) return;
         onTrashed();
         const count = (n: number) => formatCount(n, lang);
         for (const text of trashReport(result, preview, t, errorText, count, size, how)) push(text);

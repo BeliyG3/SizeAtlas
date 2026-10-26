@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, onTrashProgress } from "../../api/client";
 import type { TrashPreview, TrashProgress } from "../../api/types";
 import type { Moving } from "./moving";
@@ -20,8 +20,12 @@ export interface TrashRun {
  * rows it moves.
  */
 export function useTrashRun(onError: (e: unknown) => void) {
-  const [run, setRun] = useState<(TrashRun & { stopping: boolean }) | null>(null);
+  const [run, setRun] = useState<(TrashRun & { request: number; stopping: boolean }) | null>(null);
+  // The progress of any request; only that of `run` is shown.
   const [progress, setProgress] = useState<TrashProgress | null>(null);
+  // The number of the next request: the first from the clock, so a reloaded view never reuses
+  // one that may still run in the backend.
+  const nextRequest = useRef<number | null>(null);
   // Set with the request, not derived from it: Stop does not change the rows.
   const [moving, setMoving] = useState<Moving | null>(null);
   useEffect(() => {
@@ -35,24 +39,30 @@ export function useTrashRun(onError: (e: unknown) => void) {
     };
   }, []);
 
-  const start = (next: TrashRun) => {
+  /** Shows `next` as the running request; returns its number for the backend. */
+  const start = (next: TrashRun): number => {
+    const request = nextRequest.current ?? Date.now();
+    nextRequest.current = request + 1;
     setProgress(null);
-    setRun({ ...next, stopping: false });
+    setRun({ ...next, request, stopping: false });
     setMoving({ generation: next.generation, ids: new Set(next.ids), purge: next.purge });
+    return request;
   };
   const end = () => {
     setRun(null);
     setMoving(null);
   };
   const stop = () => {
+    if (!run) return;
     setRun((r) => r && { ...r, stopping: true });
-    api.cancelTrash().catch(onError);
+    api.cancelTrash(run.request).catch(onError);
   };
 
   let status: ReactNode = null;
   let floating: ReactNode = null;
   if (run) {
-    const shown = progress ?? { done: 0, total: run.preview.count, current: null };
+    const own = progress?.request === run.request ? progress : null;
+    const shown = own ?? { request: run.request, done: 0, total: run.preview.count, current: null };
     const big = run.preview.count > WINDOW_ITEMS;
     const line = { progress: shown, stopping: run.stopping, purge: run.purge };
     status = <TrashStatus {...line} onStop={big ? null : stop} />;

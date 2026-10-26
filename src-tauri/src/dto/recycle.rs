@@ -46,6 +46,22 @@ pub struct TrashDto {
     pub warning: Option<CmdError>,
     /// Stopped by `cancel_trash` before every item was tried: the rest stayed where it was.
     pub stopped: bool,
+    /// Never started: stopped by `cancel_trash` of its volume, or the app closed, while it
+    /// waited. Nothing was tried.
+    pub cancelled: bool,
+}
+
+impl TrashDto {
+    /// A request that never started.
+    pub fn cancelled() -> TrashDto {
+        TrashDto {
+            removed: 0,
+            failed: Vec::new(),
+            warning: None,
+            stopped: true,
+            cancelled: true,
+        }
+    }
 }
 
 /// How far a trash request got: `done` of `total` items were tried; `current` goes next (none
@@ -56,4 +72,12 @@ pub struct TrashProgressDto {
     pub done: u32,
     pub total: u32,
     pub current: Option<String>,
+}
+
+/// A `trash-progress` event: the progress of the request with the number `request` the UI gave.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct TrashProgressEventDto {
+    pub request: u64,
+    #[serde(flatten)]
+    pub progress: TrashProgressDto,
 }

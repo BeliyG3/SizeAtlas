@@ -6,13 +6,14 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use sizeatlas_core::cleanup::Refusal;
 use sizeatlas_core::tree::ListKind;
 
 use super::fixture::{deleting, id, open};
-use super::membership::{Disposal, TrashOne, refused, run_rows};
-use super::run;
+use super::membership::{Disposal, TrashOne, plan_rows, refused, run_rows};
+use super::run_reporting;
 use crate::dto::{TrashDto, TrashProgressDto};
 use crate::error::CmdError;
 use crate::state::cleanup_tests::{CHROME, LOCAL, Machine, TEMP, machine};
@@ -30,30 +31,32 @@ impl Machine {
         self.tree().path(self.id(rel))
     }
 
-    /// `rels` deleted as `disposal` says, with `report` getting the progress.
+    /// `rels` deleted as `disposal` says until `stop`, with `report` getting the progress.
     pub(super) fn run(
         &self,
         rels: &[&str],
         disposal: Disposal,
+        stop: &dyn Fn() -> bool,
         report: impl FnMut(TrashProgressDto),
     ) -> Result<TrashDto, CmdError> {
         let ids: Vec<u32> = rels.iter().map(|rel| self.id(rel)).collect();
         let rev = self.tree().rev;
         let cache = tempfile::tempdir().unwrap();
-        let state = &self.state;
+        let (state, generation) = (&self.state, self.generation);
+        let plan = plan_rows(state, generation, rev, &ids)?;
         run_rows(
             state,
             cache.path(),
-            self.generation,
-            rev,
-            &ids,
+            generation,
+            plan,
             disposal,
+            stop,
             report,
         )
     }
 
     pub(super) fn delete(&self, rels: &[&str], disposal: Disposal) -> Result<TrashDto, CmdError> {
-        self.run(rels, disposal, |_| ())
+        self.run(rels, disposal, &|| false, |_| ())
     }
 }
 
@@ -168,10 +171,13 @@ fn a_row_the_bin_cannot_take_stays() {
 #[test]
 fn a_stop_during_the_walk_of_a_row_leaves_it() {
     let m = machine();
-    let state = m.state.clone();
+    let stop = AtomicBool::new(false);
     // The first progress comes after the loop's own stop check, right before the re-check.
-    let stop = |_: TrashProgressDto| state.stop_trash();
-    let done = m.run(&[CACHE], to_trash(&never), stop).unwrap();
+    let stopping = |_: TrashProgressDto| stop.store(true, Ordering::Relaxed);
+    let stopped = || stop.load(Ordering::Relaxed);
+    let done = m
+        .run(&[CACHE], to_trash(&never), &stopped, stopping)
+        .unwrap();
     assert_eq!((done.removed, done.failed, done.stopped), (0, vec![], true));
     assert!(m.path(CACHE).exists());
 }
@@ -185,12 +191,18 @@ fn a_refusal_while_stopping_counts_as_stopped() {
         id(&state, generation, &["top.bin"]),
         id(&state, generation, &["sub"]),
     ];
+    let stop = AtomicBool::new(false);
     // As the re-check gives up when a stop is asked.
     let stopping = |_: &TrashItem| {
-        state.stop_trash();
+        stop.store(true, Ordering::Relaxed);
         Err(refused(Refusal::Stopped))
     };
-    let done = run(&state, cache.path(), generation, 0, &ids, stopping, never).unwrap();
+    let stopped = || stop.load(Ordering::Relaxed);
+    let (dir, ignore) = (cache.path(), |_| ());
+    let done = run_reporting(
+        &state, dir, generation, 0, &ids, stopping, never, &stopped, ignore,
+    )
+    .unwrap();
     assert_eq!((done.removed, done.failed, done.stopped), (0, vec![], true));
 }
 

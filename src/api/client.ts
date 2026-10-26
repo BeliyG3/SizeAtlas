@@ -44,18 +44,23 @@ export const api = {
   /**
    * Moves items of one tree to the trash; nothing moves if one changed on disk since the scan.
    * `cleanup`: rows of a clean-up list, checked again on disk first; an item that is no row of
-   * either list refuses the whole request (`Protected`).
+   * either list refuses the whole request (`Protected`). `request` is the number the UI gives
+   * it: its progress carries it, `cancelTrash` names it. Waits for the requests of its volume
+   * confirmed before it.
    */
-  trash: (generation: number, rev: number, ids: number[], cleanup: boolean) =>
-    invoke<TrashResult>("trash", { generation, rev, ids, cleanup }),
+  trash: (request: number, generation: number, rev: number, ids: number[], cleanup: boolean) =>
+    invoke<TrashResult>("trash", { request, generation, rev, ids, cleanup }),
   /**
    * Deletes rows of the clean-up lists for good, with the checks of `trash(…, true)`; progress
    * and Stop as for the trash.
    */
-  deleteForGood: (generation: number, rev: number, ids: number[]) =>
-    invoke<TrashResult>("delete_for_good", { generation, rev, ids }),
-  /** Stops the running trash or delete request before its next item; what went is not brought back. */
-  cancelTrash: () => invoke<void>("cancel_trash"),
+  deleteForGood: (request: number, generation: number, rev: number, ids: number[]) =>
+    invoke<TrashResult>("delete_for_good", { request, generation, rev, ids }),
+  /**
+   * Stops the trash or delete request `request` before its next item and cancels the requests
+   * waiting on its volume; what went is not brought back. Resolves to the number cancelled.
+   */
+  cancelTrash: (request: number) => invoke<number>("cancel_trash", { request }),
   /** Without a root: the running scan. A waiting root leaves the queue. */
   cancelScan: (root?: string) => invoke<void>("cancel_scan", { path: root ?? null }),
   /** Adds the saved scan as a root, or replaces the open one in place; the same scan open already is kept. */

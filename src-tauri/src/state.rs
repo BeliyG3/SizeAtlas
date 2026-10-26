@@ -14,6 +14,7 @@ use crate::details::MAX_DETAILS;
 use crate::dto::{CrumbDto, RootsDto, Summary};
 use crate::error::CmdError;
 use crate::queue::ScanQueue;
+use crate::recycle::requests::Requests;
 use crate::writes::{Locks, VolumeFn, default_volume_of};
 
 /// A scanned or loaded root. Its generation names the root and this version of its tree.
@@ -64,8 +65,9 @@ pub struct Shared {
     pub volume_of: VolumeFn,
     /// See `exit.rs`.
     pub exit: AtomicU8,
-    /// Stop asked for the running trash request (see `AppState::stop_trash`).
-    pub trash_stop: AtomicBool,
+    /// The trash requests confirmed and not yet ended, each with its stop (see
+    /// `recycle::requests`). Taken after `scans` and `data` when more are needed.
+    pub requests: Mutex<Requests>,
     /// The context of the clean-up modes, built for each walk that needs it.
     pub context: ContextFn,
     /// The last clean-up walk, shared by the lists until the tree changes (see `state/cleanup.rs`).
@@ -104,7 +106,7 @@ impl AppState {
             volume_of,
             scans: Mutex::default(),
             exit: AtomicU8::new(crate::exit::RUNNING),
-            trash_stop: AtomicBool::new(false),
+            requests: Mutex::default(),
             context,
             walked: Mutex::default(),
         }))

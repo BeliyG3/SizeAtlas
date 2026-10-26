@@ -22,7 +22,9 @@ pub use lists::{FoundDto, ListDto, ListItemDto};
 
 mod recycle;
 
-pub use recycle::{TrashDto, TrashFailureDto, TrashPreviewDto, TrashProgressDto};
+pub use recycle::{
+    TrashDto, TrashFailureDto, TrashPreviewDto, TrashProgressDto, TrashProgressEventDto,
+};
 
 /// Milliseconds since the Unix epoch. Core times are nanoseconds, which a JS number cannot
 /// hold exactly.

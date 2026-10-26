@@ -277,10 +277,14 @@ export interface TrashResult {
   warning: CmdError | null;
   /** Stopped by `cancelTrash` before every item was tried: the rest stayed where it was. */
   stopped: boolean;
+  /** Never started (Stop of its volume, or the app closed, while it waited): nothing was tried. */
+  cancelled: boolean;
 }
 
 /** How far a trash request got: `done` of `total` items were tried; `current` goes next (null once it ended). */
 export interface TrashProgress {
+  /** The request it is of, as given to `trash` or `deleteForGood`. */
+  request: number;
   done: number;
   total: number;
   current: string | null;

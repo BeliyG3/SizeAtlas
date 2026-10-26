@@ -153,6 +153,7 @@ describe("trashReport", () => {
     failed: [],
     warning: null,
     stopped: false,
+    cancelled: false,
     ...more,
   });
   const report = (result: TrashResult, n: number, tr = t) =>

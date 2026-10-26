@@ -81,7 +81,7 @@ export const itemName = (path: string): string => path.split(/[\\/]/).filter(Boo
 
 /** "Moving to the trash: 3 of 120" (`purge`: "Deleting permanently: …"): the item that goes now among all. */
 export function trashProgressText(
-  progress: TrashProgress,
+  progress: Omit<TrashProgress, "request">,
   t: Translate,
   count: Count,
   purge = false,

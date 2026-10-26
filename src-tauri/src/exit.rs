@@ -66,7 +66,8 @@ impl AppState {
         if self.0.exit.load(Ordering::Acquire) != ALLOWED {
             self.0.exit.store(WAITING, Ordering::Release);
             self.scans().stop_all();
-            // Stopping the trash requests goes here once they are registered.
+            // The running ones stop before their next item, the waiting ones never start.
+            self.stop_all();
             let _idle = self.0.busy.blocking_write();
             self.0.exit.store(ALLOWED, Ordering::Release);
         }

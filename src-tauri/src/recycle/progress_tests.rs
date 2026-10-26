@@ -2,10 +2,11 @@
 
 use std::path::Path;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use super::fixture::{anywhere, deleting, id, open, real};
-use super::{Pacer, run, run_reporting};
+use super::{Pacer, run_reporting};
 use crate::dto::TrashProgressDto;
 use crate::sources;
 use crate::state::AppState;
@@ -44,6 +45,7 @@ fn progress_names_the_first_item_and_ends_with_all_of_them() {
         &ids,
         anywhere,
         deleting(&log),
+        &|| false,
         |p| events.push(p),
     )
     .unwrap();
@@ -80,9 +82,10 @@ fn a_stop_keeps_what_went_and_leaves_the_rest() {
         id(&state, generation, &["sub", "y.bin"]),
     ];
     let deletes = deleting(&log);
+    let stop = AtomicBool::new(false);
     // The user presses Stop while the first item moves.
     let stopping = |path: &Path| {
-        state.stop_trash();
+        stop.store(true, Ordering::Relaxed);
         deletes(path)
     };
     let mut events = Vec::new();
@@ -94,6 +97,7 @@ fn a_stop_keeps_what_went_and_leaves_the_rest() {
         &ids,
         anywhere,
         stopping,
+        &|| stop.load(Ordering::Relaxed),
         |p| events.push(p),
     )
     .unwrap();
@@ -130,8 +134,9 @@ fn a_stop_before_the_first_item_moves_nothing() {
     let (_dir, generation) = open(&state);
     let (cache, log) = (tempfile::tempdir().unwrap(), Mutex::new(Vec::new()));
     let top = id(&state, generation, &["top.bin"]);
-    state.stop_trash();
-    let done = run(
+    let stop = AtomicBool::new(true);
+    let stopped = || stop.load(Ordering::Relaxed);
+    let done = run_reporting(
         &state,
         cache.path(),
         generation,
@@ -139,12 +144,14 @@ fn a_stop_before_the_first_item_moves_nothing() {
         &[top],
         anywhere,
         deleting(&log),
+        &stopped,
+        |_| (),
     )
     .unwrap();
     assert_eq!((done.removed, done.stopped), (0, true));
     assert!(log.lock().unwrap().is_empty());
-    state.reset_trash_stop();
-    let again = run(
+    stop.store(false, Ordering::Relaxed);
+    let again = run_reporting(
         &state,
         cache.path(),
         generation,
@@ -152,6 +159,8 @@ fn a_stop_before_the_first_item_moves_nothing() {
         &[top],
         anywhere,
         deleting(&log),
+        &stopped,
+        |_| (),
     );
     assert_eq!(again.map(|d| (d.removed, d.stopped)), Ok((1, false)));
 }

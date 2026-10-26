@@ -6,6 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use sizeatlas_core::tree::ListOrder;
 
+use super::disk::unchanged;
 use super::fixture::{anywhere, deleting, id, open, real, rev, settle};
 use super::*;
 
