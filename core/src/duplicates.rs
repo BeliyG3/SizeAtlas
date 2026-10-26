@@ -11,6 +11,7 @@ pub mod group;
 pub mod hash;
 mod pipeline;
 mod pool;
+pub mod results;
 mod zones;
 
 pub use crate::platform::{FileId, Identity};
@@ -100,6 +101,8 @@ mod tests_group;
 mod tests_hash;
 #[cfg(test)]
 mod tests_links;
+#[cfg(test)]
+mod tests_results;
 #[cfg(test)]
 mod tests_search;
 #[cfg(test)]
