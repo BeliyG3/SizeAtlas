@@ -56,6 +56,8 @@
   "banner.hintMac": "允许访问后，请重新启动 SizeAtlas 并重新扫描。",
   "banner.hintMacFda": "“完全磁盘访问权限”已开启。这些文件夹受 macOS 保护，任何应用都无法访问。",
   "banner.show": "显示",
+  "banner.dismiss": "隐藏",
+  "banner.chip": "无法读取的文件夹",
   "banner.hintOther": "以更高权限运行 SizeAtlas 即可包含这些文件夹。",
   "banner.restartElevated": "以管理员身份重新启动",
   "banner.openPrivacy": "打开“完全磁盘访问权限”设置",

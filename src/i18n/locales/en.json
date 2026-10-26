@@ -61,6 +61,8 @@
   "banner.hintMac": "After you allow access, restart SizeAtlas and rescan.",
   "banner.hintMacFda": "Full Disk Access is on. These are folders macOS protects from every app.",
   "banner.show": "Show",
+  "banner.dismiss": "Hide",
+  "banner.chip": "Folders that could not be read",
   "banner.hintOther": "Run SizeAtlas with more permissions to include them.",
   "banner.restartElevated": "Restart as administrator",
   "banner.openPrivacy": "Open Full Disk Access settings",

@@ -61,6 +61,8 @@
   "banner.hintMac": "Start SizeAtlas opnieuw nadat u toegang hebt gegeven, en scan opnieuw.",
   "banner.hintMacFda": "Volledige schijftoegang staat aan. Dit zijn mappen die macOS voor alle apps afschermt.",
   "banner.show": "Tonen",
+  "banner.dismiss": "Verbergen",
+  "banner.chip": "Mappen die niet gelezen konden worden",
   "banner.hintOther": "Voer SizeAtlas uit met meer rechten om ze mee te tellen.",
   "banner.restartElevated": "Opnieuw starten als administrator",
   "banner.openPrivacy": "Volledige schijftoegang openen",

@@ -71,6 +71,8 @@
   "banner.hintMac": "Po przyznaniu dostępu uruchom ponownie SizeAtlas i przeskanuj jeszcze raz.",
   "banner.hintMacFda": "Pełny dostęp do dysku jest włączony. To foldery, które macOS chroni przed wszystkimi aplikacjami.",
   "banner.show": "Pokaż",
+  "banner.dismiss": "Ukryj",
+  "banner.chip": "Foldery, których nie udało się odczytać",
   "banner.hintOther": "Uruchom SizeAtlas z wyższymi uprawnieniami, aby je uwzględnić.",
   "banner.restartElevated": "Uruchom ponownie jako administrator",
   "banner.openPrivacy": "Otwórz ustawienia pełnego dostępu do dysku",

@@ -66,6 +66,8 @@
   "banner.hintMac": "Après avoir autorisé l’accès, redémarrez SizeAtlas et relancez l’analyse.",
   "banner.hintMacFda": "L’accès complet au disque est activé. macOS protège ces dossiers de toutes les apps.",
   "banner.show": "Afficher",
+  "banner.dismiss": "Masquer",
+  "banner.chip": "Dossiers qui n'ont pas pu être lus",
   "banner.hintOther": "Exécutez SizeAtlas avec davantage d’autorisations pour les inclure.",
   "banner.restartElevated": "Redémarrer en tant qu’administrateur",
   "banner.openPrivacy": "Ouvrir les réglages « Accès complet au disque »",

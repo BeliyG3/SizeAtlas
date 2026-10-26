@@ -56,6 +56,8 @@
   "banner.hintMac": "アクセスを許可したら、SizeAtlas を再起動して再スキャンしてください。",
   "banner.hintMacFda": "フルディスクアクセスはオンです。これらのフォルダーは macOS によって保護されているため、どのアプリからもアクセスできません。",
   "banner.show": "表示",
+  "banner.dismiss": "非表示",
+  "banner.chip": "読み取れなかったフォルダー",
   "banner.hintOther": "これらを含めるには、より高い権限で SizeAtlas を実行してください。",
   "banner.restartElevated": "管理者として再起動",
   "banner.openPrivacy": "フルディスクアクセスの設定を開く",

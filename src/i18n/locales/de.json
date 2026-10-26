@@ -61,6 +61,8 @@
   "banner.hintMac": "Starten Sie SizeAtlas neu, nachdem Sie den Zugriff erlaubt haben, und scannen Sie erneut.",
   "banner.hintMacFda": "Festplattenvollzugriff ist aktiviert. Diese Ordner schützt macOS vor allen Apps.",
   "banner.show": "Anzeigen",
+  "banner.dismiss": "Ausblenden",
+  "banner.chip": "Ordner, die nicht gelesen werden konnten",
   "banner.hintOther": "Führen Sie SizeAtlas mit mehr Berechtigungen aus, um sie einzubeziehen.",
   "banner.restartElevated": "Als Administrator neu starten",
   "banner.openPrivacy": "Festplattenvollzugriff öffnen",

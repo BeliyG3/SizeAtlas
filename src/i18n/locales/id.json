@@ -56,6 +56,8 @@
   "banner.hintMac": "Setelah mengizinkan akses, mulai ulang SizeAtlas dan pindai ulang.",
   "banner.hintMacFda": "Akses Disk Penuh aktif. Folder ini dilindungi macOS dari semua app.",
   "banner.show": "Tampilkan",
+  "banner.dismiss": "Sembunyikan",
+  "banner.chip": "Folder yang tidak dapat dibaca",
   "banner.hintOther": "Jalankan SizeAtlas dengan izin yang lebih tinggi untuk menyertakannya.",
   "banner.restartElevated": "Mulai ulang sebagai administrator",
   "banner.openPrivacy": "Buka pengaturan Akses Disk Penuh",

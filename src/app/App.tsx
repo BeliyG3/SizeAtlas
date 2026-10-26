@@ -4,9 +4,9 @@ import { ROOT_ID, type ScanError } from "../api/types";
 import { ExportContext } from "../features/export/source";
 import { useExport } from "../features/export/useExport";
 import { AppMenuBar } from "../features/menubar/AppMenuBar";
-import { AccessBanner } from "../features/shell/AccessBanner";
 import { chooseFolder } from "../features/shell/chooseFolder";
 import { StatusBar } from "../features/shell/StatusBar";
+import { useAccess } from "../features/shell/useAccess";
 import { Toolbar } from "../features/shell/Toolbar";
 import { expectedBytes, forgettable, savedScan } from "../features/shell/source";
 import { NoticeContext } from "../features/toasts/notices";
@@ -73,6 +73,14 @@ export function App() {
     roots.restoring,
   );
   const summary = entries.find((e) => e.root === selection?.root)?.summary ?? null;
+  const access = useAccess(summary, {
+    push,
+    errorText,
+    onShow: () => {
+      showMode("unreadable");
+      if (summary) selectRoot(summary.root);
+    },
+  });
   const inTree = useMemo(() => new Set(entries.map((e) => e.root)), [entries]);
   const waiting = useMemo(() => fullScanRoots(roots.roots), [roots.roots]);
   const fullScans = useMemo(() => runningFullScanRoots(roots.roots), [roots.roots]);
@@ -202,18 +210,7 @@ export function App() {
       {update.offered && (
         <UpdateBanner release={update.offered} onDismiss={update.dismiss} onError={pushError} />
       )}
-      {summary && summary.accessErrors > 0 && (
-        <AccessBanner
-          count={summary.accessErrors}
-          root={summary.root}
-          push={push}
-          errorText={errorText}
-          onShow={() => {
-            showMode("unreadable");
-            selectRoot(summary.root);
-          }}
-        />
-      )}
+      {access.banner}
       <main className="workspace">
         <ExportContext value={exporter.register}>
           <NoticeContext value={notices}>
@@ -262,6 +259,7 @@ export function App() {
                 expected: running.folder === null ? expectedBytes(sources, running.root) : null,
               }
         }
+        access={access.chip}
         trash={trash.status}
       />
       {trash.window}
