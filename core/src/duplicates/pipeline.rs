@@ -131,7 +131,9 @@ pub fn prepare(roots: &[SearchRoot], opts: &Options) -> Prepared {
 
 /// Reads the files of `prepared` and gives every group the whole-file hash confirms to `emit`,
 /// with progress at most every [`pool::PACE`]. Hashes come from and go to `cache`. Once
-/// `cancel` is set no file starts and no group is given.
+/// `cancel` is set no file starts, and a publisher that has seen it gives no group (the check
+/// and the emit are under one lock); a group given while another thread sets `cancel` may
+/// still arrive, so the caller drops late groups by its job id.
 pub fn search(
     prepared: Prepared,
     cache: &Mutex<HashCache>,
@@ -139,27 +141,11 @@ pub fn search(
     emit: &(dyn Fn(Event) + Sync),
 ) -> Outcome {
     let (disks, keys) = prepared.volumes.into_iter().map(|(k, d)| (d, k)).unzip();
+    let search = Search::new(disks, keys, cache, cancel, emit);
+    #[cfg(test)]
     let search = Search {
-        disks,
-        keys,
-        cache,
-        cancel,
-        emit,
-        progress: Mutex::new((
-            Progress {
-                phase: Phase::Prefix,
-                files_done: 0,
-                files_total: 0,
-                bytes_done: 0,
-                bytes_total: 0,
-            },
-            Pacer::default(),
-        )),
-        unread: Mutex::default(),
-        stats: Mutex::default(),
-        publish: Mutex::new(()),
-        #[cfg(test)]
         after_read: prepared.after_read,
+        ..search
     };
     search.run(prepared.buckets);
     emit(Event::Progress(lock(&search.progress).0));
@@ -201,7 +187,36 @@ struct Search<'a> {
     after_read: Option<fn(&Path)>,
 }
 
-impl Search<'_> {
+impl<'a> Search<'a> {
+    fn new(
+        disks: Vec<DiskKind>,
+        keys: Vec<String>,
+        cache: &'a Mutex<HashCache>,
+        cancel: &'a AtomicBool,
+        emit: &'a (dyn Fn(Event) + Sync),
+    ) -> Search<'a> {
+        let progress = Progress {
+            phase: Phase::Prefix,
+            files_done: 0,
+            files_total: 0,
+            bytes_done: 0,
+            bytes_total: 0,
+        };
+        Search {
+            disks,
+            keys,
+            cache,
+            cancel,
+            emit,
+            progress: Mutex::new((progress, Pacer::default())),
+            unread: Mutex::default(),
+            stats: Mutex::default(),
+            publish: Mutex::new(()),
+            #[cfg(test)]
+            after_read: None,
+        }
+    }
+
     fn run(&self, buckets: Vec<Vec<(Location, Candidate)>>) {
         let paths = buckets.iter().map(Vec::len).sum::<usize>() as u64;
         let long = buckets
@@ -243,16 +258,14 @@ impl Search<'_> {
         })
     }
 
-    /// Changes the progress, and gives it if one is due.
+    /// Changes the progress, and gives it if one is due. It is given under the lock, so events
+    /// keep their order; `emit` never comes back here, and no other lock is held around it.
     fn advance(&self, change: impl FnOnce(&mut Progress)) {
         let now = Instant::now();
-        let due = {
-            let mut g = lock(&self.progress);
-            change(&mut g.0);
-            g.1.due(now).then_some(g.0)
-        };
-        if let Some(progress) = due {
-            (self.emit)(Event::Progress(progress));
+        let mut g = lock(&self.progress);
+        change(&mut g.0);
+        if g.1.due(now) {
+            (self.emit)(Event::Progress(g.0));
         }
     }
 

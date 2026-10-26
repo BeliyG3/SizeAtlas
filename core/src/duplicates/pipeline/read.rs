@@ -33,12 +33,15 @@ impl Search<'_> {
     }
 
     /// The whole-file hash of `item`; `None` when the search was cancelled. Its bytes count as
-    /// done also when the read fails, so that the bytes done reach the total.
+    /// done also when the read fails, so that the bytes done reach the total; a cancelled read
+    /// counts only what it read.
     pub(super) fn full(&self, item: &Item) -> Result<Option<Hash>, Skip> {
         let mut read = 0;
         let hash = self.read_full(item, &mut read);
-        let rest = item.object.paths[0].len.saturating_sub(read);
-        self.advance(|p| p.bytes_done += rest);
+        if hash != Ok(None) {
+            let rest = item.object.paths[0].len.saturating_sub(read);
+            self.advance(|p| p.bytes_done += rest);
+        }
         hash
     }
 
@@ -71,13 +74,20 @@ impl Search<'_> {
     }
 
     /// The file did not change while it was read.
-    fn checked(&self, file: &File, stamp: Stamp, item: &Item) -> Result<(), Skip> {
+    fn checked(
+        &self,
+        file: &File,
+        stamp: Stamp,
+        #[cfg_attr(
+            not(test),
+            expect(unused_variables, reason = "only the test hook needs it")
+        )]
+        item: &Item,
+    ) -> Result<(), Skip> {
         #[cfg(test)]
         if let Some(hook) = self.after_read {
             hook(&item.object.paths[0].path);
         }
-        #[cfg(not(test))]
-        let _ = item;
         verify_after(file, stamp)
     }
 
@@ -110,5 +120,59 @@ impl Search<'_> {
         if let Some(h) = full {
             cache.put_full(volume, id, len, mtime, h);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::sync::atomic::AtomicBool;
+
+    use super::super::{Item, Search, lock};
+    use crate::duplicates::DiskKind;
+    use crate::duplicates::group::{Location, Object, PathRef};
+    use crate::duplicates::hash::open_checked;
+    use crate::duplicates::tests::{MIB, cache, data, dir, put};
+    use crate::scanner::mtime_of;
+
+    #[test]
+    fn a_cancelled_full_read_counts_no_bytes_it_did_not_read() {
+        let d = dir();
+        let path = put(d.path(), "a", &data(3 * MIB));
+        let (len, mtime) = (3 * MIB as u64, mtime_of(&fs::metadata(&path).unwrap()));
+        let (_, identity, _) = open_checked(&path, len, mtime).unwrap();
+        let at = PathRef { root: 0, node: 1 };
+        let paths = vec![Location {
+            at,
+            path,
+            len,
+            mtime,
+            size: len,
+            volume: 0,
+        }];
+        let object = Object {
+            paths,
+            id: identity.id,
+            nlink: 1,
+            protected: false,
+            synced: false,
+            seed: true,
+        };
+        let item = Item {
+            object,
+            seen: identity.id,
+            full: None,
+        };
+        let (cache, cancel) = (cache(), AtomicBool::new(true));
+        let emit = |_| {};
+        let search = Search::new(
+            vec![DiskKind::Hdd],
+            vec!["v".into()],
+            &cache,
+            &cancel,
+            &emit,
+        );
+        assert_eq!(search.full(&item), Ok(None));
+        assert_eq!(lock(&search.progress).0.bytes_done, 0);
     }
 }
