@@ -102,11 +102,20 @@ fn the_last_resort_exit_lets_no_queued_request_start() {
     let saving = write_of(&state, "/a").unwrap();
     let blocking = state.clone();
     let last_resort = std::thread::spawn(move || blocking.block_until_idle());
+    // The exit waits for `busy` (no read can be had) once it has queued for it.
+    let start = std::time::Instant::now();
+    while state.0.busy.try_read().is_ok() {
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
+            "the exit never waited"
+        );
+        std::thread::yield_now();
+    }
+    assert!(state.closing(), "closing before the wait");
+    assert!(matches!(state.enqueue("/c".into()), Err(CmdError::Busy)));
+    let mut queued = std::pin::pin!(state.begin_write("/b"));
+    assert!(ready(queued.as_mut()).is_none(), "waits for the exit");
     drop(saving);
     last_resort.join().unwrap();
-    // Closing came first: a request that waited meanwhile, or comes now, is refused.
-    assert!(matches!(
-        ready(state.begin_write("/b")),
-        Some(Err(CmdError::Busy))
-    ));
+    assert!(matches!(ready(queued.as_mut()), Some(Err(CmdError::Busy))));
 }

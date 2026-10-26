@@ -264,6 +264,13 @@ fn a_scan_does_not_wait_for_a_trash_on_another_volume() {
     let (a, cache) = (folder(), tempfile::tempdir().unwrap());
     let state = AppState::with_volumes(Arc::new(|_| "x".to_owned()));
     let _trashing = tauri::async_runtime::block_on(state.volume_turn("y"));
-    run_queue(&state, cache.path(), state.enqueue(root_of(&a)).unwrap());
+    let job = state.enqueue(root_of(&a)).unwrap();
+    let (done, scanned) = std::sync::mpsc::channel();
+    let (worker_state, dir) = (state.clone(), cache.path().to_path_buf());
+    std::thread::spawn(move || done.send(run_queue(&worker_state, &dir, job)));
+    // A safety net only: the scan never waits for the trash on "y".
+    scanned
+        .recv_timeout(Duration::from_secs(10))
+        .expect("the scan waited for a trash on another volume");
     assert_eq!(open_roots(&state), [root_of(&a)]);
 }

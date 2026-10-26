@@ -1,7 +1,5 @@
 //! OS-specific size measurement and traversal rules.
 
-#[cfg(unix)]
-use std::os::unix::fs::MetadataExt as _;
 use std::path::Path;
 
 #[cfg(unix)]
@@ -44,12 +42,12 @@ pub fn bin_free(space: BinSpace) -> u64 {
 
 /// A key shared by every path of one volume, `None` when it cannot be told (the path is
 /// gone, or the system does not say). Windows: the folder where the volume is mounted (`C:\`,
-/// a mounted folder, `\\server\share\`); Unix: the device of the path.
+/// a mounted folder, `\\server\share\`); Unix: the device of the path (macOS `/`: of the Data volume, see `unix::volume_dev`).
 pub fn volume_key(path: &Path) -> Option<String> {
     #[cfg(windows)]
     return volume_mount(path).map(|mount| mount.to_string_lossy().into_owned());
     #[cfg(unix)]
-    return Some(format!("dev:{}", std::fs::metadata(path).ok()?.dev()));
+    return unix::volume_dev(path).map(|dev| format!("dev:{dev}"));
 }
 
 /// macOS `SF_DATALESS` (`<sys/stat.h>`): the item's content lives only in the cloud (iCloud
@@ -75,6 +73,14 @@ mod tests {
         let key = volume_key(&a);
         assert!(key.is_some());
         assert_eq!(key, volume_key(&b));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_root_and_users_share_a_volume_key() {
+        let key = |path: &str| volume_key(std::path::Path::new(path));
+        assert!(key("/").is_some());
+        assert_eq!(key("/"), key("/Users"));
     }
 
     #[cfg(windows)]

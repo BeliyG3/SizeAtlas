@@ -66,6 +66,8 @@ impl AppState {
             return volume.clone();
         }
         // Outside the lock: asking the system may take a while (a network share).
+        // ponytail: once per root, but on the async runtime, so a slow first answer of a network
+        // share holds a runtime thread; ask in `spawn_blocking` if that shows.
         let volume = (self.0.volume_of)(Path::new(root));
         let mut known = known.lock().unwrap_or_else(PoisonError::into_inner);
         known.entry(root.to_owned()).or_insert(volume).clone()
