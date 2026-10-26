@@ -178,7 +178,7 @@
   "trash.binFull": "Keranjang Sampah hanya bisa menampung {free} lagi. Windows akan menghapus permanen file terlama di dalamnya.",
   "trash.doneCleanup": "Dipindahkan ke tempat sampah: {size}. Kosongkan tempat sampah untuk membebaskan ruang.",
   "trash.queued": "mengantre…",
-  "trash.already": "Sudah sedang dihapus.",
+  "trash.already": "Sedang dihapus.",
   "trash.notRemoved": "Tidak ada yang dihapus: item berubah sementara itu.",
   "trash.gone_other": "{items} item sudah tidak ada.",
   "trash.cancelledQueued_other": "{items} penghapusan dalam antrean dibatalkan.",

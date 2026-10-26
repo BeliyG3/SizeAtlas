@@ -181,7 +181,7 @@
   "trash.already": "已在移除中。",
   "trash.notRemoved": "未移除任何内容：其间项目已更改。",
   "trash.gone_other": "{items} 个项目已不存在。",
-  "trash.cancelledQueued_other": "已取消 {items} 个排队中的移除。",
+  "trash.cancelledQueued_other": "已取消 {items} 项排队中的移除操作。",
   "purge.ask": "要永久删除吗？",
   "purge.cannotUndo": "此操作无法撤消：文件不会进入回收站。",
   "purge.confirm": "永久删除",
