@@ -50,9 +50,21 @@ impl AppState {
     /// not being scanned and it has more dead nodes than live ones; returns whether it did (the
     /// tree has a new generation: the caller computes its baseline again). The caller holds the
     /// root's write; the requests of a root leave their compaction to the end of the last one.
+    /// Asked first under the read lock: with nothing to compact it waits for no read of the tree.
     pub fn compact_if_idle(&self, root: &str) -> bool {
-        self.change_where(|r| r.tree.name(0) == root, false, |_, _| Some(()))
-            .is_some_and(|(_, compacted)| compacted)
+        self.compaction_due(root)
+            && self
+                .change_where(|r| r.tree.name(0) == root, false, |_, _| Some(()))
+                .is_some_and(|(_, compacted)| compacted)
+    }
+
+    /// The tree of the open root `root` would be compacted by `compact_if_idle` now.
+    pub fn compaction_due(&self, root: &str) -> bool {
+        let data = self.read_data();
+        data.find(root).is_some_and(|at| {
+            let tree = &data.roots[at].tree;
+            tree.dead > tree.live && !tree.node(0).has(SCANNING) && !self.trash_pending(root)
+        })
     }
 
     /// Runs `change` on the tree of the scan `scan` (see `OpenRoot::scan`), in place, under the

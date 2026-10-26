@@ -164,13 +164,39 @@ pub async fn run_request(
         };
         let root = ticket.root.clone();
         drop(ticket);
-        // Its ids changed: the baseline is computed again.
-        if !state.closing() && state.compact_if_idle(&root) {
-            baseline::refresh(&state, &cache_dir, &root);
-        }
+        compact(&state, &cache_dir, &root);
         drop(write);
         drop(volume);
         result
     })
     .await?
+}
+
+/// A request whose plan was refused leaves the queue: its turn, then its ticket. Was it the last
+/// request of its root, the tree is compacted if it is due, as at the end of `run_request`,
+/// under the root's write (none once the app is closing).
+pub async fn leave(state: AppState, cache_dir: PathBuf, ticket: Ticket, turn: Turn) {
+    let root = ticket.root.clone();
+    drop(turn);
+    drop(ticket);
+    // Asked first: the write would wait for a request of the root that runs.
+    if !state.compaction_due(&root) {
+        return;
+    }
+    let Ok(write) = state.begin_write(&root).await else {
+        return;
+    };
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        compact(&state, &cache_dir, &root);
+        drop(write);
+    })
+    .await;
+}
+
+/// The deferred compaction of `root`, its last request gone; the caller holds the root's write.
+/// Its ids changed: the baseline is computed again. Not once the app is closing.
+fn compact(state: &AppState, cache_dir: &Path, root: &str) {
+    if !state.closing() && state.compact_if_idle(root) {
+        baseline::refresh(state, cache_dir, root);
+    }
 }

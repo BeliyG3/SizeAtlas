@@ -264,6 +264,8 @@ mod purge;
 pub mod requests;
 
 #[cfg(test)]
+mod compaction_tests;
+#[cfg(test)]
 mod during_tests;
 #[cfg(test)]
 pub(crate) mod fixture;

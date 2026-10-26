@@ -16,7 +16,7 @@ use tempfile::TempDir;
 use tokio::sync::OwnedMutexGuard;
 
 use super::disk::{listed_mtime, modified};
-use super::requests::{Ticket, Work, run_request};
+use super::requests::{Ticket, Work, leave, run_request};
 use super::run_plan;
 use crate::dto::TrashDto;
 use crate::error::CmdError;
@@ -255,6 +255,12 @@ pub fn start(state: &AppState, cache: &Path, request: Confirmed, trash_one: Tras
         )
     });
     thread::spawn(move || block_on(run_request(state, cache, ticket, turn, work)))
+}
+
+/// `request` with its plan refused after all, as the command `trash` lets it go.
+pub fn refuse(state: &AppState, cache: &Path, request: Confirmed) {
+    let (state, cache) = (state.clone(), cache.to_owned());
+    block_on(leave(state, cache, request.ticket, request.turn));
 }
 
 pub fn done(running: Running) -> TrashDto {

@@ -37,6 +37,17 @@ fn rescan_with_a_new_file(state: &AppState, dir: &Path) -> u64 {
     state.install_tree(tree)
 }
 
+/// Gives the file at `path` another modification time, as a change outside SizeAtlas does.
+fn change_time(path: &Path) {
+    File::options()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000))
+        .unwrap();
+    settle(path);
+}
+
 #[test]
 fn a_request_planned_before_a_rescan_goes_by_its_paths() {
     let state = AppState::default();
@@ -75,13 +86,7 @@ fn a_file_changed_before_its_queued_request_runs_stays() {
     let plan = plan(&state, g, &[&["sub", "x.bin"], &["top.bin"]]);
     rescan_with_a_new_file(&state, dir.path());
     let top = real(&dir, &["top.bin"]);
-    File::options()
-        .write(true)
-        .open(&top)
-        .unwrap()
-        .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000))
-        .unwrap();
-    settle(&top);
+    change_time(&top);
     let refused = run_plan(
         &state,
         cache.path(),
@@ -120,4 +125,28 @@ fn an_item_whose_folder_went_in_an_earlier_request_is_already_gone() {
     assert_eq!(*log.lock().unwrap(), [real(&dir, &["sub"])]);
     let last = last.expect("a progress at the end");
     assert_eq!((last.done, last.total), (1, 1));
+}
+
+#[test]
+fn one_gone_and_one_changed_refuse_the_request() {
+    let state = AppState::default();
+    let (dir, g) = open(&state);
+    let (cache, log) = (tempfile::tempdir().unwrap(), Mutex::new(Vec::new()));
+    let plan = plan(&state, g, &[&["sub", "x.bin"], &["top.bin"]]);
+    let (x, top) = (real(&dir, &["sub", "x.bin"]), real(&dir, &["top.bin"]));
+    fs::remove_file(&x).unwrap();
+    change_time(&top);
+    let refused = run_plan(
+        &state,
+        cache.path(),
+        g,
+        plan,
+        anywhere,
+        deleting(&log),
+        &|| false,
+        |_| (),
+    );
+    assert_eq!(refused, Err(CmdError::Changed));
+    assert!(log.lock().unwrap().is_empty() && top.exists());
+    assert_eq!(state.summary(g).unwrap().files, 3, "the tree is as it was");
 }

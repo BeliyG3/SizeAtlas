@@ -9,7 +9,7 @@ use super::roots::{cache_dir, changed};
 use crate::dto::{TrashDto, TrashProgressDto, TrashProgressEventDto};
 use crate::error::CmdError;
 use crate::recycle::membership::{self, Disposal};
-use crate::recycle::requests::{Work, run_request};
+use crate::recycle::requests::{Work, leave, run_request};
 use crate::recycle::{self, run_plan};
 use crate::state::{AppState, TrashItem, TrashPlan};
 use crate::writes::Turn;
@@ -121,13 +121,11 @@ async fn removing(
     let ticket = state.enqueue_trash(request, &root, &volume)?;
     let turn = Turn::reserve(state.volume_turn(&ticket.volume));
     let planning = state.clone();
-    // A refused plan drops the turn, then the ticket; the UI reads the roots again, as after
-    // any request.
+    // A refused plan leaves the queue; the UI reads the roots again, as after any request.
     let plan = match tauri::async_runtime::spawn_blocking(move || plan(&planning)).await? {
         Ok(plan) => plan,
         Err(error) => {
-            drop(turn);
-            drop(ticket);
+            leave(state, dir, ticket, turn).await;
             changed(app);
             return Err(error);
         }
