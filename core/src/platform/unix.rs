@@ -4,6 +4,10 @@ use std::path::{Path, PathBuf};
 
 use crate::tree::{SizeMode, flags};
 
+mod file_id;
+
+pub use file_id::{identity, open_for_hash};
+
 /// macOS: the Data volume, reached from `/` through firmlinks (/Users, /Applications...).
 const MAC_DATA: &str = "/System/Volumes/Data";
 

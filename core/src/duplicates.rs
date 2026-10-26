@@ -1,11 +1,18 @@
 //! Duplicate files across every open root: candidates picked from the scanned trees (zones,
-//! filter seeds, buckets by length), before any file is read.
+//! filter seeds, buckets by length), before any file is read; then files opened with their
+//! identity checked, hashed, and merged into groups.
 
 use crate::cleanup::{Known, Os};
 use crate::tree::{Query, Tree};
 
+pub mod cache;
 mod candidates;
+pub mod group;
+pub mod hash;
 mod zones;
+
+pub use crate::platform::{FileId, Identity};
+pub use hash::Skip;
 
 /// Smaller files are never compared: they free too little to be worth reading.
 pub const MIN_LEN: u64 = 4096;
@@ -82,5 +89,9 @@ pub fn estimate(roots: &[SearchRoot], opts: &Options) -> Estimate {
 
 #[cfg(test)]
 mod tests_candidates;
+#[cfg(test)]
+mod tests_group;
+#[cfg(test)]
+mod tests_hash;
 #[cfg(test)]
 mod tests_zones;

@@ -13,11 +13,13 @@ use windows_sys::Win32::Storage::FileSystem::{
 
 use crate::tree::{SizeMode, flags};
 
+mod file_id;
 mod item;
 mod reboot;
 mod recycle_bin;
 mod registry;
 
+pub use file_id::{identity, open_for_hash};
 #[cfg(test)]
 pub use item::tag_for_test;
 pub use item::{change_time, device, is_cloud, is_foreign, reparse, volume_mount};

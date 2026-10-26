@@ -12,6 +12,29 @@ mod windows;
 #[cfg(windows)]
 pub use windows::*;
 
+/// The identity of a file within its volume: Windows the volume serial number and the 128-bit
+/// file id, Unix the device and the inode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct FileId {
+    pub volume: u64,
+    pub file: u128,
+}
+
+impl FileId {
+    /// `None` for the id 0, which the system gives when it has none.
+    pub fn new(volume: u64, file: u128) -> Option<FileId> {
+        (file != 0).then_some(FileId { volume, file })
+    }
+}
+
+/// Who an open file is: its id (`None` when it could not be read) and its number of links
+/// (`u64::MAX` when unknown, so that it counts as linked from elsewhere).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Identity {
+    pub id: Option<FileId>,
+    pub nlink: u64,
+}
+
 /// What a walk that deletes may do with an entry that may be a reparse point.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reparse {
