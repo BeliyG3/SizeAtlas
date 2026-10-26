@@ -325,7 +325,7 @@ mod trash;
 /// The scanned "drive" of the clean-up tests, shared with the tests of deleting rows.
 #[cfg(test)]
 pub(crate) use self::lists::cleanup_tests;
-pub use self::trash::{TrashItem, TrashPlan, Trashed, settle_parent};
+pub use self::trash::{TrashItem, TrashPlan, Trashed, current_id, settle_parent};
 
 #[cfg(test)]
 mod tests;

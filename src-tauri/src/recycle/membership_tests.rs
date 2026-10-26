@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use sizeatlas_core::cleanup::Refusal;
+use sizeatlas_core::scanner::{Progress, ScanOutcome, scan};
 use sizeatlas_core::tree::ListKind;
 
 use super::fixture::{deleting, id, open};
@@ -17,7 +18,7 @@ use super::run_reporting;
 use crate::dto::{TrashDto, TrashProgressDto};
 use crate::error::CmdError;
 use crate::state::cleanup_tests::{CHROME, LOCAL, Machine, TEMP, machine};
-use crate::state::{AppState, TrashItem};
+use crate::state::{AppState, TrashItem, TrashPlan};
 
 pub(super) const CACHE: &str = "Users/u/AppData/Local/Google/Chrome/User Data/Default/Cache";
 pub(super) const NODE_MODULES: &str = "Users/u/proj/node_modules";
@@ -204,6 +205,67 @@ fn a_refusal_while_stopping_counts_as_stopped() {
     )
     .unwrap();
     assert_eq!((done.removed, done.failed, done.stopped), (0, vec![], true));
+}
+
+/// The plan of the row `rel` of `m`, and the root of its tree.
+fn planned(m: &Machine, rel: &str) -> (TrashPlan, String) {
+    let plan = plan_rows(&m.state, m.generation, m.tree().rev, &[m.id(rel)]).unwrap();
+    let root = plan.root.clone();
+    (plan, root)
+}
+
+#[test]
+fn rows_follow_a_rescan_by_path() {
+    let m = machine();
+    let row = m.path(&cacache());
+    let (plan, root) = planned(&m, &cacache());
+    let ScanOutcome::Done(tree) = scan(
+        Path::new(&root),
+        &AtomicBool::new(false),
+        &Progress::default(),
+    )
+    .unwrap() else {
+        panic!("not cancelled")
+    };
+    m.state.install_tree(tree);
+    let cache = tempfile::tempdir().unwrap();
+    let (dir, ignore) = (cache.path(), |_| ());
+    let done = run_rows(
+        &m.state,
+        dir,
+        m.generation,
+        plan,
+        Disposal::Purge,
+        &|| false,
+        ignore,
+    );
+    assert_eq!(done.map(|done| done.removed), Ok(1));
+    assert!(!row.exists());
+    let (_, tree) = m.state.root_tree(&root).unwrap();
+    assert_eq!(tree.find_path(&row), None);
+}
+
+#[test]
+fn rows_of_a_closed_root_refuse() {
+    let m = machine();
+    let log = Mutex::new(Vec::new());
+    let deletes = deleting(&log);
+    let (plan, root) = planned(&m, &cacache());
+    assert!(m.state.close_path(&root));
+    let cache = tempfile::tempdir().unwrap();
+    let (dir, ignore) = (cache.path(), |_| ());
+    let disposal = to_trash(&deletes);
+    let refused = run_rows(
+        &m.state,
+        dir,
+        m.generation,
+        plan,
+        disposal,
+        &|| false,
+        ignore,
+    );
+    assert_eq!(refused, Err(CmdError::Protected));
+    assert!(log.lock().unwrap().is_empty());
 }
 
 #[test]

@@ -40,6 +40,9 @@ pub struct TrashFailureDto {
 #[serde(rename_all = "camelCase")]
 pub struct TrashDto {
     pub removed: u32,
+    /// Items that were gone from the disk already (an earlier request took them, or someone
+    /// else): no error, and no longer in the tree.
+    pub gone: u32,
     /// Items that stayed, and why.
     pub failed: Vec<TrashFailureDto>,
     /// `CacheNotSaved` when the change could not be saved.
@@ -56,6 +59,7 @@ impl TrashDto {
     pub fn cancelled() -> TrashDto {
         TrashDto {
             removed: 0,
+            gone: 0,
             failed: Vec::new(),
             warning: None,
             stopped: true,

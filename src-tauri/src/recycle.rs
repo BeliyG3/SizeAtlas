@@ -13,8 +13,8 @@ use crate::dto::{TrashDto, TrashFailureDto, TrashProgressDto};
 use crate::error::CmdError;
 use crate::queue::TrashedPath;
 use crate::state::{AppState, TrashItem, TrashPlan, Trashed};
-use crate::{baseline, jobs, sources};
-use disk::{check, listed_mtime, modified};
+use crate::{jobs, sources};
+use disk::{check, gone, listed_mtime, modified};
 
 /// Moves the items of `plan` (planned with `AppState::trash_plan` on the tree with `generation`)
 /// to the trash with `trash_one`: the OS trash, a permanent delete (`purge::delete`) or a
@@ -24,9 +24,12 @@ use disk::{check, listed_mtime, modified};
 /// root's write (see `requests::run_request`), so no refresh changes the tree meanwhile and
 /// closing the app waits for the saved scan.
 ///
-/// Nothing moves when an item changed on disk since the scan (`Changed`). A running full scan
-/// of a root that holds the items is told which went (`ScanQueue::note_trashed`). After that
-/// every item is checked again right before it goes; one that `allowed` refuses (`NoTrash`,
+/// Nothing moves when an item changed on disk since the scan (`Changed`); an item gone from the
+/// disk meanwhile is no change, it is counted as `gone` and taken out of the tree. The tree may
+/// have been rescanned or compacted since the plan: its items are found by path then (see
+/// `AppState::remove_trashed`). A running full scan of a root that holds the items is told which
+/// went (`ScanQueue::note_trashed`). After that every item is checked again right before it
+/// goes; one that `allowed` refuses (`NoTrash`,
 /// `Protected`, ...), that changed (`Changed`), cannot be read (`NoAccess`, `Io`) or that the OS
 /// refuses (`Io`) is reported and stays, the others go. Once the app starts closing, or `stop`
 /// says so (`stopped`), the items left stay where they are. A first scan's tree is not saved
@@ -44,13 +47,15 @@ pub fn run_plan(
     stop: &dyn Fn() -> bool,
     mut report: impl FnMut(TrashProgressDto),
 ) -> Result<TrashDto, CmdError> {
-    for item in &plan.items {
+    for item in plan.items.iter().filter(|item| !gone(&item.path)) {
         check(item)?;
     }
     let total = plan.items.len() as u32;
     let mut pacer = Pacer::default();
+    // What left the disk, here or before (`already`), for the tree and the running scan.
     let mut trashed = Vec::new();
-    let mut gone = Vec::new();
+    let mut noted = Vec::new();
+    let mut already = 0;
     let mut failed = Vec::new();
     let mut stopped = false;
     for (done, item) in plan.items.iter().enumerate() {
@@ -60,6 +65,22 @@ pub fn run_plan(
         if stop() {
             stopped = true;
             break;
+        }
+        if gone(&item.path) {
+            already += 1;
+            trashed.push(Trashed {
+                id: item.id,
+                path: item.path.clone(),
+                parent_before: None,
+                parent_listed: None,
+                parent_after: None,
+            });
+            noted.push(TrashedPath {
+                path: item.path.clone(),
+                parent_before: [None, None],
+                parent_after: None,
+            });
+            continue;
         }
         if pacer.due(Instant::now()) {
             report(TrashProgressDto {
@@ -97,12 +118,12 @@ pub fn run_plan(
             Ok(()) => {
                 trashed.push(Trashed {
                     id: item.id,
-                    parent: item.parent,
+                    path: item.path.clone(),
                     parent_before,
                     parent_listed,
                     parent_after: modified(&item.parent_path),
                 });
-                gone.push(TrashedPath {
+                noted.push(TrashedPath {
                     path: item.path.clone(),
                     parent_before: [parent_before, parent_listed],
                     parent_after: modified(&item.parent_path),
@@ -121,22 +142,15 @@ pub fn run_plan(
     });
     let mut warning = None;
     if !trashed.is_empty() {
-        state.note_trashed(gone);
+        state.note_trashed(noted);
         let volume = sources::volume_usage(Path::new(&plan.root));
-        warning = match state.remove_trashed(generation, &trashed, volume) {
+        warning = match state.remove_trashed(&plan.root, generation, &trashed, volume) {
             // A first scan's tree is saved once it is complete (`worker::live::finish`): saved
             // now, it would replace a complete saved scan with a partial one.
             Some(tree) if tree.node(0).has(flags::SCANNING) => None,
-            Some(tree) => {
-                let saved = jobs::save(&tree, cache_dir).err();
-                drop(tree);
-                // Compacted: its ids changed, so its baseline is computed again.
-                if state.tree(generation).is_err() {
-                    baseline::refresh(state, cache_dir, &plan.root);
-                }
-                saved
-            }
-            // Closed or reopened meanwhile: its saved scan still lists what went.
+            // Not compacted while its request is registered (`requests::run_request` compacts).
+            Some(tree) => jobs::save(&tree, cache_dir).err(),
+            // Closed meanwhile: its saved scan still lists what went.
             None => {
                 let _ = fs::remove_file(cache_path(cache_dir, Path::new(&plan.root)));
                 Some(CmdError::CacheNotSaved)
@@ -144,7 +158,8 @@ pub fn run_plan(
         };
     }
     Ok(TrashDto {
-        removed: trashed.len() as u32,
+        removed: trashed.len() as u32 - already,
+        gone: already,
         failed,
         warning,
         stopped,
@@ -256,6 +271,8 @@ pub(crate) mod fixture;
 mod membership_purge_tests;
 #[cfg(test)]
 mod membership_tests;
+#[cfg(test)]
+mod order_tests;
 #[cfg(test)]
 mod progress_tests;
 #[cfg(test)]

@@ -29,6 +29,12 @@ pub(super) fn check(item: &TrashItem) -> Result<(), CmdError> {
     }
 }
 
+/// Nothing is at `path` any more: an item that went meanwhile (another request took it or its
+/// folder, or it was deleted outside SizeAtlas) is no error, it is gone already.
+pub(super) fn gone(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_err_and(|e| e.kind() == io::ErrorKind::NotFound)
+}
+
 /// Whether the `stored` time of an item is the one it has: its `own` time or, only if that
 /// differs, the time of its entry in the listing of its folder. On Windows the listing can lag
 /// behind the item's own time, and a scan stores the listed time of a folder.

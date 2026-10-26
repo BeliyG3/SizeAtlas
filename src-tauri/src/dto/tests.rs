@@ -338,6 +338,7 @@ fn clean_up_reasons_and_info_use_camel_case() {
 fn trash_results_use_camel_case() {
     let done = TrashDto {
         removed: 1,
+        gone: 0,
         failed: vec![TrashFailureDto {
             path: "C:\\x".into(),
             error: CmdError::NoTrash,
@@ -348,7 +349,7 @@ fn trash_results_use_camel_case() {
     };
     assert_eq!(
         serde_json::to_value(done).unwrap(),
-        json!({"removed": 1, "failed": [{"path": "C:\\x", "error": {"code": "NoTrash"}}],
+        json!({"removed": 1, "gone": 0, "failed": [{"path": "C:\\x", "error": {"code": "NoTrash"}}],
             "warning": {"code": "CacheNotSaved"}, "stopped": true, "cancelled": false})
     );
     let preview = TrashPreviewDto {

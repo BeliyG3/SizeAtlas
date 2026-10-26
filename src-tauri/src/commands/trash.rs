@@ -121,8 +121,17 @@ async fn removing(
     let ticket = state.enqueue_trash(request, &root, &volume)?;
     let turn = Turn::reserve(state.volume_turn(&ticket.volume));
     let planning = state.clone();
-    // A refused plan drops the turn, then the ticket.
-    let plan = tauri::async_runtime::spawn_blocking(move || plan(&planning)).await??;
+    // A refused plan drops the turn, then the ticket; the UI reads the roots again, as after
+    // any request.
+    let plan = match tauri::async_runtime::spawn_blocking(move || plan(&planning)).await? {
+        Ok(plan) => plan,
+        Err(error) => {
+            drop(turn);
+            drop(ticket);
+            changed(app);
+            return Err(error);
+        }
+    };
     let events = app.clone();
     let work: Work = Box::new(move |state, dir, stop| {
         let report = |progress| {

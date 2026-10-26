@@ -29,12 +29,14 @@ fn closing_the_window_waits_for_the_moving_item_and_the_saved_scan() {
     ];
     let root = state.summary(generation).unwrap().root;
     let (worker, dir, trashed_root) = (state.clone(), cache.path().to_path_buf(), root.clone());
+    let (moving, moves) = mpsc::channel();
     let trashing = thread::spawn(move || {
         // As the `trash` command does: the whole request holds its volume's turn and its root.
         let write = hold_like_a_trash(&worker, &trashed_root);
         let log = Mutex::new(Vec::new());
         let deletes = deleting(&log);
         let slow = |path: &Path| {
+            let _ = moving.send(());
             thread::sleep(Duration::from_millis(300));
             deletes(path)
         };
@@ -42,7 +44,7 @@ fn closing_the_window_waits_for_the_moving_item_and_the_saved_scan() {
         drop(write);
         done
     });
-    thread::sleep(Duration::from_millis(100));
+    moves.recv().unwrap();
     assert_eq!(
         state.on_exit_request(),
         ExitDecision::PreventAndWait,

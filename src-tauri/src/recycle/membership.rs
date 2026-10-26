@@ -11,30 +11,37 @@ use sizeatlas_core::cleanup::{Context, Guard, Reason, Refusal, recheck};
 use super::{bin_takes, purge, run_plan};
 use crate::dto::{TrashDto, TrashProgressDto};
 use crate::error::CmdError;
-use crate::state::{AppState, TrashItem, TrashPlan};
+use crate::state::{AppState, TrashItem, TrashPlan, current_id};
 
 /// The trash check of an item by its path and size (`sizeatlas_core::can_recycle`).
 pub type BinCheck<'a> = dyn Fn(&Path, u64) -> bool + 'a;
 
-/// The reason of each item of `plan`, found by a new walk of the tree with `ctx`: an app started
-/// since the list was made, or a restart now pending, turns its rows into info, so they are no
-/// rows here. `Protected` for the whole request when an item is a row of neither mode.
+/// The reason of each item of `plan` (made on the tree with `generation`), by the id the plan
+/// has, found by a new walk with `ctx` of the root's tree now (rescanned or compacted since: its
+/// items by path, see `current_id`): an app started since the list was made, or a restart now
+/// pending, turns its rows into info, so they are no rows here. `Protected` for the whole
+/// request when an item is a row of neither mode, or the root was closed. An item the tree no
+/// longer has gets none: gone from the disk it is gone already, else `run_plan`'s `allowed`
+/// refuses it.
 pub fn rows_of(
     state: &AppState,
     generation: u64,
     plan: &TrashPlan,
     ctx: &Context,
 ) -> Result<HashMap<u32, Reason>, CmdError> {
-    let found = state.tree(generation)?.cleanup(ctx);
+    let (now, tree) = state.root_tree(&plan.root).ok_or(CmdError::Protected)?;
+    let found = tree.cleanup(ctx);
     let rows: HashMap<u32, Reason> = (found.cleanup.iter())
         .chain(&found.review)
         .map(|row| (row.id, row.reason))
         .collect();
-    let reason = |item: &TrashItem| rows.get(&item.id).map(|&reason| (item.id, reason));
-    plan.items
-        .iter()
-        .map(|item| reason(item).ok_or(CmdError::Protected))
-        .collect()
+    let mut reasons = HashMap::new();
+    for item in &plan.items {
+        if let Some(id) = current_id(&tree, now, generation, item.id, &item.path) {
+            reasons.insert(item.id, *rows.get(&id).ok_or(CmdError::Protected)?);
+        }
+    }
+    Ok(reasons)
 }
 
 /// Where clean-up rows go. One choice sets both the check and the delete, so the trash path can

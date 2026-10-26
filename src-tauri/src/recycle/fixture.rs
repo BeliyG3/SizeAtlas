@@ -154,6 +154,12 @@ pub fn on_volumes() -> AppState {
     }))
 }
 
+/// [`deleting`] that records into `log`, for a request on a thread of its own.
+pub fn logged(log: &Log) -> TrashOne {
+    let log = log.clone();
+    Box::new(move |path| deleting(&log)(path))
+}
+
 pub fn root_of(state: &AppState, generation: u64) -> String {
     state.tree(generation).unwrap().name(0).to_owned()
 }

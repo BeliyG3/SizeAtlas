@@ -10,8 +10,8 @@ use std::time::Duration;
 use tauri::async_runtime::block_on;
 
 use super::fixture::{
-    HANG, Log, TrashOne, confirm, deleting, done, gate, hold_like_a_trash, id, on_volumes, open,
-    open_on, real, root_of, start,
+    HANG, Log, TrashOne, confirm, deleting, done, gate, hold_like_a_trash, id, logged, on_volumes,
+    open, open_on, real, root_of, start,
 };
 use crate::error::CmdError;
 use crate::exit::ExitDecision;
@@ -220,6 +220,26 @@ fn closing_with_only_queued_requests_exits_at_once() {
     drop(turn);
     assert!(done(waiting).cancelled);
     assert!(gate.log().is_empty());
+}
+
+#[test]
+fn compaction_waits_for_the_last_request_of_its_root() {
+    let state = AppState::default();
+    let (dir, g) = open(&state);
+    let (cache, log) = (tempfile::tempdir().unwrap(), Log::default());
+    let r1 = confirm(&state, 1, g, &[&["sub"]]);
+    let r2 = confirm(&state, 2, g, &[&["top.bin"]]);
+    done(start(&state, cache.path(), r1, logged(&log)));
+    assert!(
+        state.summary(g).is_ok(),
+        "not compacted: R2 is planned on it"
+    );
+    assert_eq!(state.tree(g).unwrap().dead, 3);
+    done(start(&state, cache.path(), r2, logged(&log)));
+    let (sub, top) = (real(&dir, &["sub"]), real(&dir, &["top.bin"]));
+    assert_eq!(*log.lock().unwrap(), [sub, top]);
+    assert_eq!(state.summary(g), Err(CmdError::StaleId), "compacted");
+    assert_eq!(state.summaries()[0].files, 0);
 }
 
 #[test]

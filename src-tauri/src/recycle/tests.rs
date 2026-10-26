@@ -94,11 +94,9 @@ fn an_item_changed_on_disk_moves_nothing() {
     );
     assert!(real(&dir, &["top.bin"]).exists());
     fs::remove_file(&x).unwrap();
-    assert_eq!(
-        trash(),
-        Err(CmdError::Changed),
-        "an item that is gone has changed too"
-    );
+    let done = trash().expect("an item that is gone is no change");
+    assert_eq!((done.removed, done.gone), (1, 1));
+    assert!(!real(&dir, &["top.bin"]).exists());
 }
 
 #[test]

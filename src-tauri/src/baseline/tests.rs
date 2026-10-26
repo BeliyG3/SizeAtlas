@@ -12,6 +12,7 @@ use super::*;
 use crate::jobs;
 use crate::queue::ScanJob;
 use crate::recycle::{self, fixture};
+use crate::state::Trashed;
 use crate::worker::{self, Notify};
 
 /// root/top.bin and root/sub/{x.bin, y.bin}, with times the listings already show (a trash
@@ -60,6 +61,18 @@ fn item(state: &AppState, generation: u64, dir: &TempDir, path: &str) -> (u32, u
         .find_path(&Path::new(&root_of(dir)).join(path))
         .expect("item exists");
     (id, tree.node(id).size)
+}
+
+/// The item at `path` of the tree with `generation` as a trash reports it gone, the times of
+/// its folder unknown.
+fn trashed(state: &AppState, generation: u64, dir: &TempDir, path: &str) -> Trashed {
+    Trashed {
+        id: item(state, generation, dir, path).0,
+        path: Path::new(&root_of(dir)).join(path),
+        parent_before: None,
+        parent_listed: None,
+        parent_after: None,
+    }
 }
 
 fn files_of(dir: &TempDir, cache: &Path) -> ScanFiles {
@@ -147,22 +160,12 @@ fn compaction_recomputes_the_baseline() {
     let (dir, cache) = (folder(), tempfile::tempdir().unwrap());
     let state = AppState::default();
     let generation = scanned_twice(&state, &dir, cache.path());
-    let (sub, _) = item(&state, generation, &dir, "sub");
     let (_, top_size) = item(&state, generation, &dir, "top.bin");
-    let log = Mutex::new(Vec::new());
-    let rev = fixture::rev(&state, generation);
+    let request = fixture::confirm(&state, 1, generation, &[&["sub"]]);
 
-    // sub, x.bin and y.bin die, root and top.bin stay: the tree is compacted.
-    recycle::run(
-        &state,
-        cache.path(),
-        generation,
-        rev,
-        &[sub],
-        fixture::anywhere,
-        fixture::deleting(&log),
-    )
-    .unwrap();
+    // sub, x.bin and y.bin die, root and top.bin stay: the end of the request compacts the tree.
+    let trash_one = fixture::logged(&fixture::Log::default());
+    fixture::done(fixture::start(&state, cache.path(), request, trash_one));
     let compacted = self::generation(&state);
     assert_ne!(compacted, generation);
     let baseline = state.baseline(compacted).expect("recomputed");

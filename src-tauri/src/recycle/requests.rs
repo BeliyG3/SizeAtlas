@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, MutexGuard, PoisonError};
 
+use crate::baseline;
 use crate::dto::TrashDto;
 use crate::error::CmdError;
 use crate::state::AppState;
@@ -125,15 +126,8 @@ impl AppState {
         }
     }
 
-    /// A request of `root` is registered. May be asked with the lock of `data` held, never the
-    /// other way round.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "asked by the deferred compaction, which comes next"
-        )
-    )]
+    /// A request of `root` is registered: its tree is not compacted (see `compact_if_idle`).
+    /// May be asked with the lock of `data` held, never the other way round.
     pub(crate) fn trash_pending(&self, root: &str) -> bool {
         self.requests().0.iter().any(|e| e.root == root)
     }
@@ -146,8 +140,10 @@ pub type Work =
 
 /// Runs `work` in the turn of the volume (`turn`, reserved when the request was confirmed) with
 /// the root's write held. A request stopped while it waited, or once the app is closing, tries
-/// nothing (`TrashDto::cancelled`). The ticket goes after the saved scan, then the write, then
-/// the turn; the tree is not held while items go (`work` reads it when it needs it).
+/// nothing (`TrashDto::cancelled`). The ticket goes after the saved scan; then, the last
+/// request of its root gone and the app not closing, the tree is compacted if it is due
+/// (`AppState::compact_if_idle`) and its baseline computed again; then the write goes, then the
+/// turn. The tree is not held while items go (`work` reads it when it needs it).
 pub async fn run_request(
     state: AppState,
     cache_dir: PathBuf,
@@ -166,7 +162,12 @@ pub async fn run_request(
         } else {
             Ok(TrashDto::cancelled())
         };
+        let root = ticket.root.clone();
         drop(ticket);
+        // Its ids changed: the baseline is computed again.
+        if !state.closing() && state.compact_if_idle(&root) {
+            baseline::refresh(&state, &cache_dir, &root);
+        }
         drop(write);
         drop(volume);
         result
