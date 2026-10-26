@@ -279,6 +279,8 @@ export interface TrashResult {
   stopped: boolean;
   /** Items that were gone from the disk already (an earlier request took them, or someone else): no error. */
   gone: number;
+  /** Size on disk of the items that moved. */
+  size: number;
   /** Never started (Stop of its volume, or the app closed, while it waited): nothing was tried. */
   cancelled: boolean;
 }

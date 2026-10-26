@@ -56,6 +56,7 @@ pub fn run_plan(
     let mut trashed = Vec::new();
     let mut noted = Vec::new();
     let mut already = 0;
+    let mut size = 0u64;
     let mut failed = Vec::new();
     let mut stopped = false;
     for (done, item) in plan.items.iter().enumerate() {
@@ -116,6 +117,7 @@ pub fn run_plan(
         };
         match trash_one(&item.path) {
             Ok(()) => {
+                size = size.saturating_add(item.size);
                 trashed.push(Trashed {
                     id: item.id,
                     path: item.path.clone(),
@@ -160,6 +162,7 @@ pub fn run_plan(
     Ok(TrashDto {
         removed: trashed.len() as u32 - already,
         gone: already,
+        size,
         failed,
         warning,
         stopped,

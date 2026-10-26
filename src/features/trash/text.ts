@@ -93,7 +93,7 @@ export function trashProgressText(
 
 /**
  * Messages after a request of `preview` that removed its items `how`: what went (its size from
- * the preview), where a stop left it, what stayed and why, what was gone already, and a change
+ * the result), where a stop left it, what stayed and why, what was gone already, and a change
  * that was not saved. A request that never started has no messages.
  */
 export function trashReport(
@@ -139,12 +139,12 @@ export function trashReport(
     );
   } else if (result.removed > 0 && how !== "trash") {
     // What a clean-up is for: the space, and whether it is free yet.
-    messages.push(t(purge ? "purge.done" : "trash.doneCleanup", { size: size(preview.size) }));
+    messages.push(t(purge ? "purge.done" : "trash.doneCleanup", { size: size(result.size) }));
   } else if (result.removed === 1 && preview.paths.length === 1) {
     messages.push(t("trash.doneOne", { name: itemName(preview.paths[0]) }));
   } else if (result.removed > 0) {
     const items = count(result.removed);
-    messages.push(t("trash.done", { count: result.removed, items, size: size(preview.size) }));
+    messages.push(t("trash.done", { count: result.removed, items, size: size(result.size) }));
   }
   if (result.gone > 0)
     messages.push(t("trash.gone", { count: result.gone, items: count(result.gone) }));

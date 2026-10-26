@@ -155,6 +155,7 @@ describe("trashReport", () => {
     warning: null,
     stopped: false,
     gone: 0,
+    size: 1200,
     cancelled: false,
     ...more,
   });
@@ -235,8 +236,9 @@ describe("trashReport", () => {
 
   it("says that items were gone already, after the main message, or alone", () => {
     expect(report(done(0, { gone: 2 }), 2)).toEqual(["2 items were already gone."]);
-    expect(report(done(3, { gone: 1 }), 4)).toEqual([
-      "Moved 3 items to the trash (1200 B).",
+    // The size is of what moved, not of the preview (1200 B).
+    expect(report(done(3, { gone: 1, size: 900 }), 4)).toEqual([
+      "Moved 3 items to the trash (900 B).",
       "1 item was already gone.",
     ]);
   });

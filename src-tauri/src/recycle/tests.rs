@@ -93,9 +93,12 @@ fn an_item_changed_on_disk_moves_nothing() {
         "checked before anything moves"
     );
     assert!(real(&dir, &["top.bin"]).exists());
+    let top_size = state.trash_plan(generation, 0, &ids[..1]).unwrap().items[0].size;
     fs::remove_file(&x).unwrap();
     let done = trash().expect("an item that is gone is no change");
     assert_eq!((done.removed, done.gone), (1, 1));
+    assert!(top_size > 0);
+    assert_eq!(done.size, top_size, "only the item that moved");
     assert!(!real(&dir, &["top.bin"]).exists());
 }
 

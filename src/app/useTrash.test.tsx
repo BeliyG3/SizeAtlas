@@ -237,6 +237,7 @@ describe("useTrash while it moves items", () => {
       warning: null,
       stopped: false,
       gone: 0,
+      size: 0,
       cancelled: false,
     });
     await flush();
@@ -275,6 +276,7 @@ describe("useTrash in the clean-up lists", () => {
     warning: null,
     stopped: false,
     gone: 0,
+    size: 0,
     cancelled: false,
   };
   /** One render of the hook, as the app shell does. */

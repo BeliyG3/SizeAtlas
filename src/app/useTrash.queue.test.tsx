@@ -81,6 +81,7 @@ const done: TrashResult = {
   warning: null,
   stopped: false,
   gone: 0,
+  size: 0,
   cancelled: false,
 };
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
