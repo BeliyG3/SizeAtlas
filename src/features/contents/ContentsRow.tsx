@@ -10,6 +10,13 @@ import { markHow, type MarkHow } from "./marks";
 import { pathTitle } from "./pathTitle";
 import { ROW_HEIGHT } from "./pages";
 import { ScanMark } from "../tree/RootMarks";
+import type { RemovingState } from "../trash/runs";
+
+const MOVING_TAG = {
+  queued: "trash.queued",
+  trash: "trash.moving",
+  purge: "purge.deleting",
+} as const;
 
 interface Props {
   index: number;
@@ -29,8 +36,8 @@ interface Props {
   folderPath?: string;
   selected: boolean;
   cursor: boolean;
-  /** It is being moved to the trash, or deleted for good: dimmed, with a tag that says which. */
-  moving?: "trash" | "purge";
+  /** It is being moved to the trash, deleted for good, or waits for its turn: dimmed, with a tag that says which. */
+  moving?: RemovingState;
   /** `how`: what Ctrl and Shift make of the click (see `markHow`). */
   onClick: (index: number, how: MarkHow) => void;
   onOpen: (index: number) => void;
@@ -140,9 +147,7 @@ export const ContentsRow = memo(function ContentsRow({
           {item.name}
         </span>
         {deleted && <span className="tag">{t("change.deleted")}</span>}
-        {moving && (
-          <span className="tag">{t(moving === "purge" ? "purge.deleting" : "trash.moving")}</span>
-        )}
+        {moving && <span className="tag">{t(MOVING_TAG[moving])}</span>}
         {item.scanning && <ScanMark status="scanning" files={undefined} />}
         {waiting && <span className="tag">{t("tree.pending")}</span>}
         {item.accessError && <span className="tag">{t("tree.noAccess")}</span>}

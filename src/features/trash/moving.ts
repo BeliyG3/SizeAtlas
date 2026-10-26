@@ -1,21 +1,11 @@
 import { createContext, useContext } from "react";
+import { removingState, type RemovingState, type Run } from "./runs";
 
-/** The items of the running trash request, by tree: their rows are dimmed until it ends. */
-export interface Moving {
-  generation: number;
-  ids: ReadonlySet<number>;
-  /** They are deleted for good, not moved to the trash. */
-  purge: boolean;
-}
+/** The removal requests, started or waiting: their rows are dimmed until each one ends. */
+export const MovingContext = createContext<readonly Run[]>([]);
 
-export const MovingContext = createContext<Moving | null>(null);
-
-const NONE: ReadonlySet<number> = new Set();
-
-/** How the rows of the tree with `generation` go now: to the trash, for good, or not at all. */
-export function useMoving(generation: number): (id: number) => "trash" | "purge" | undefined {
-  const moving = useContext(MovingContext);
-  const ids = moving?.generation === generation ? moving.ids : NONE;
-  const how = moving?.purge ? "purge" : "trash";
-  return (id) => (ids.has(id) ? how : undefined);
+/** How the rows of the tree with `generation` go now: waiting, to the trash, for good, or not at all. */
+export function useMoving(generation: number): (id: number) => RemovingState | undefined {
+  const runs = useContext(MovingContext);
+  return (id) => removingState(runs, generation, id);
 }

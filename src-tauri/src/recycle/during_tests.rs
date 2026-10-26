@@ -11,7 +11,7 @@ use sizeatlas_core::cache::{self, cache_path};
 use sizeatlas_core::scanner::mtime_of;
 use sizeatlas_core::tree::{DirRec, FileRec, NO_PARENT, flags};
 
-use super::fixture::{anywhere, deleting, id, open, real, rev, settle};
+use super::fixture::{anywhere, deleting, hold_like_a_trash, id, open, real, rev, settle};
 use super::{bin_takes, run};
 use crate::error::CmdError;
 use crate::exit::ExitDecision;
@@ -28,13 +28,15 @@ fn closing_the_window_waits_for_the_moving_item_and_the_saved_scan() {
         id(&state, generation, &["sub", "x.bin"]),
     ];
     let root = state.summary(generation).unwrap().root;
-    let (worker, dir) = (state.clone(), cache.path().to_path_buf());
+    let (worker, dir, trashed_root) = (state.clone(), cache.path().to_path_buf(), root.clone());
+    let (moving, moves) = mpsc::channel();
     let trashing = thread::spawn(move || {
-        // As the `trash` command does: the whole request holds `busy`.
-        let write = tauri::async_runtime::block_on(worker.begin_write()).unwrap();
+        // As the `trash` command does: the whole request holds its volume's turn and its root.
+        let write = hold_like_a_trash(&worker, &trashed_root);
         let log = Mutex::new(Vec::new());
         let deletes = deleting(&log);
         let slow = |path: &Path| {
+            let _ = moving.send(());
             thread::sleep(Duration::from_millis(300));
             deletes(path)
         };
@@ -42,7 +44,7 @@ fn closing_the_window_waits_for_the_moving_item_and_the_saved_scan() {
         drop(write);
         done
     });
-    thread::sleep(Duration::from_millis(100));
+    moves.recv().unwrap();
     assert_eq!(
         state.on_exit_request(),
         ExitDecision::PreventAndWait,
@@ -261,8 +263,8 @@ fn a_root_opened_again_during_the_trash_waits_for_it_and_keeps_its_saved_scan() 
     jobs::save(&state.tree(generation).unwrap(), cache.path()).unwrap();
     let file = cache_path(cache.path(), Path::new(&root));
     let top = id(&state, generation, &["top.bin"]);
-    // As the `trash` command does: the whole request holds `busy`.
-    let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+    // As the `trash` command does: the whole request holds its root (an open waits for it).
+    let write = tauri::async_runtime::block_on(state.begin_write(&root)).unwrap();
     let (opened, opening) = mpsc::channel();
     let deletes = deleting(&log);
     let reopening = |path: &Path| {
@@ -275,7 +277,7 @@ fn a_root_opened_again_during_the_trash_waits_for_it_and_keeps_its_saved_scan() 
                 .send(tauri::async_runtime::block_on(summary))
                 .unwrap();
         });
-        // An open that does not wait for `busy` ends meanwhile.
+        // An open that does not wait for the root ends meanwhile.
         thread::sleep(Duration::from_millis(500));
         done
     };

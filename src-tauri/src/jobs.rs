@@ -119,7 +119,7 @@ fn write_scan(
 /// Adds the saved scan of `root` as a root, or replaces the open one in place; when the open
 /// root is that very scan, it stays as it is and its summary comes back. A baseline still
 /// pending comes later (`baseline::refresh_later`): comparing reads another saved scan. The
-/// caller holds `begin_write` (see `open_cached_waiting`).
+/// caller holds the write of `root` (see `open_cached_waiting`).
 pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Summary, CmdError> {
     state.refuse_cached(root)?;
     let file = cache_path(cache_dir, Path::new(root));
@@ -149,18 +149,19 @@ pub fn open_cached(state: &AppState, cache_dir: &Path, root: &str) -> Result<Sum
     Ok(summary)
 }
 
-/// `open_cached` once `busy` is free, holding it meanwhile, as every change of the open trees:
-/// a trash, a saved scan being written and a forget of the root end before the saved scan is
-/// read, so it lists what they left and none of them replaces or deletes it meanwhile.
-// ponytail: `busy` is held while the file is read, so a trash, a scan's save or closing the
-// app waits for a large saved scan to load; read first and re-check `scanned_at` under `busy`
-// if that wait shows.
+/// `open_cached` once no write of `root` runs, holding the root's write meanwhile, as every
+/// change of its tree: a trash, a saved scan being written and a forget of the root end before
+/// the saved scan is read, so it lists what they left and none of them replaces or deletes it
+/// meanwhile.
+// ponytail: it waits only for its own root, but holds the write while the file is read, so a
+// trash or a scan's save of this root, or closing the app, waits for a large saved scan to
+// load; read first and re-check `scanned_at` under the write if that wait shows.
 pub async fn open_cached_waiting(
     state: AppState,
     cache_dir: PathBuf,
     root: String,
 ) -> Result<Summary, CmdError> {
-    let write = state.begin_write().await?;
+    let write = state.begin_write(&root).await?;
     tauri::async_runtime::spawn_blocking(move || {
         let opened = open_cached(&state, &cache_dir, &root);
         drop(write);
@@ -177,7 +178,7 @@ pub fn close_root(state: &AppState, root: &str) {
 }
 
 /// Deletes the saved scans of `root` and closes the root, stopping its scan first. The caller
-/// holds `begin_write`, so a scan of this root that is being saved is written before the
+/// holds the root's write, so a scan of this root that is being saved is written before the
 /// file goes, and is not installed again afterwards.
 pub fn forget(state: &AppState, cache_dir: &Path, root: &str) -> Result<(), CmdError> {
     close_root(state, root);

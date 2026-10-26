@@ -4,6 +4,21 @@ use std::path::{Path, PathBuf};
 
 use crate::tree::{SizeMode, flags};
 
+/// macOS: the Data volume, reached from `/` through firmlinks (/Users, /Applications...).
+const MAC_DATA: &str = "/System/Volumes/Data";
+
+/// The device of the volume of `path`. On macOS a scan of `/` walks the Data volume too (see
+/// `Volume::of`), so `/` gets the device of the Data volume, which `/Users` has.
+pub(super) fn volume_dev(path: &Path) -> Option<u64> {
+    if cfg!(target_os = "macos")
+        && path == Path::new("/")
+        && let Ok(data) = std::fs::metadata(MAC_DATA)
+    {
+        return Some(data.dev());
+    }
+    std::fs::metadata(path).ok().map(|meta| meta.dev())
+}
+
 /// The file system being scanned; directories on other devices are not entered.
 pub struct Volume {
     pub cluster: u64,
@@ -23,7 +38,7 @@ impl Volume {
         if cfg!(target_os = "macos") && root == Path::new("/") {
             // User data lives on the Data volume and is reachable from `/` through firmlinks
             // (/Users, /Applications…). Its own mount point is skipped to avoid counting it twice.
-            let data = PathBuf::from("/System/Volumes/Data");
+            let data = PathBuf::from(MAC_DATA);
             if let Ok(m) = std::fs::symlink_metadata(&data) {
                 volume.extra_dev = Some(m.dev());
                 volume.skip = Some(data);

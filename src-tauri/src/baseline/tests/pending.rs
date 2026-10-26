@@ -3,7 +3,6 @@
 use sizeatlas_core::tree::{ListKind, ListOrder};
 
 use super::*;
-use crate::state::Trashed;
 
 /// Whether the summary, a folder's listing and the "grew most" list of the root with
 /// `generation` say that its baseline is being computed; they agree.
@@ -47,22 +46,18 @@ fn a_compacted_tree_is_pending_until_compared() {
     let (dir, cache) = (folder(), tempfile::tempdir().unwrap());
     let state = AppState::default();
     let generation = scanned_twice(&state, &dir, cache.path());
-    let (sub, _) = item(&state, generation, &dir, "sub");
-    let trashed = Trashed {
-        id: sub,
-        parent: 0,
-        parent_before: None,
-        parent_listed: None,
-        parent_after: None,
-    };
+    let sub = trashed(&state, generation, &dir, "sub");
 
     // sub, x.bin and y.bin die, root and top.bin stay: the tree is compacted.
-    state.remove_trashed(generation, &[trashed], None).unwrap();
+    let root = root_of(&dir);
+    state
+        .remove_trashed(&root, generation, &[sub], None)
+        .unwrap();
     let compacted = self::generation(&state);
     assert_ne!(compacted, generation);
     assert!(state.baseline(compacted).is_none());
     assert!(pending(&state, compacted));
-    assert!(refresh(&state, cache.path(), &root_of(&dir)));
+    assert!(refresh(&state, cache.path(), &root));
     assert!(!pending(&state, compacted));
     assert!(state.baseline(compacted).is_some());
 }
@@ -120,15 +115,8 @@ fn without_a_previous_scan_nothing_is_pending() {
 
     // A compaction has nothing to compare again either.
     let before = generation(&state);
-    let (sub, _) = item(&state, before, &dir, "sub");
-    let trashed = Trashed {
-        id: sub,
-        parent: 0,
-        parent_before: None,
-        parent_listed: None,
-        parent_after: None,
-    };
-    state.remove_trashed(before, &[trashed], None).unwrap();
+    let sub = trashed(&state, before, &dir, "sub");
+    state.remove_trashed(&root, before, &[sub], None).unwrap();
     assert_ne!(generation(&state), before, "the tree is compacted");
     assert!(!pending(&state, generation(&state)));
 

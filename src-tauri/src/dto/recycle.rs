@@ -40,12 +40,35 @@ pub struct TrashFailureDto {
 #[serde(rename_all = "camelCase")]
 pub struct TrashDto {
     pub removed: u32,
+    /// Items that were gone from the disk already (an earlier request took them, or someone
+    /// else): no error, and no longer in the tree.
+    pub gone: u32,
+    /// Size on disk of the items that moved (without those gone already or that stayed).
+    pub size: u64,
     /// Items that stayed, and why.
     pub failed: Vec<TrashFailureDto>,
     /// `CacheNotSaved` when the change could not be saved.
     pub warning: Option<CmdError>,
     /// Stopped by `cancel_trash` before every item was tried: the rest stayed where it was.
     pub stopped: bool,
+    /// Never started: stopped by `cancel_trash` of its volume, or the app closed, while it
+    /// waited. Nothing was tried.
+    pub cancelled: bool,
+}
+
+impl TrashDto {
+    /// A request that never started.
+    pub fn cancelled() -> TrashDto {
+        TrashDto {
+            removed: 0,
+            gone: 0,
+            size: 0,
+            failed: Vec::new(),
+            warning: None,
+            stopped: true,
+            cancelled: true,
+        }
+    }
 }
 
 /// How far a trash request got: `done` of `total` items were tried; `current` goes next (none
@@ -56,4 +79,12 @@ pub struct TrashProgressDto {
     pub done: u32,
     pub total: u32,
     pub current: Option<String>,
+}
+
+/// A `trash-progress` event: the progress of the request with the number `request` the UI gave.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct TrashProgressEventDto {
+    pub request: u64,
+    #[serde(flatten)]
+    pub progress: TrashProgressDto,
 }

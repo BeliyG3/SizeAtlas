@@ -3,7 +3,6 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use sizeatlas_core::tree::{Tree, VolumeUsage, flags};
 use sizeatlas_core::{bin_free, bin_space};
@@ -28,7 +27,6 @@ pub struct TrashItem {
     /// Logical length: a cloud placeholder or a compressed file takes less on disk, but the trash
     /// limit is checked against the larger of the two.
     pub len: u64,
-    pub parent: u32,
     pub parent_path: PathBuf,
     /// Modification time of the parent the tree had when the request was planned.
     pub parent_mtime: i64,
@@ -43,11 +41,14 @@ pub struct TrashPlan {
     pub items: Vec<TrashItem>,
 }
 
-/// An item that went to the trash, with the time of its folder just before and just after.
-#[derive(Clone, Copy, Debug)]
+/// An item that went to the trash (or was gone already), with the time of its folder just
+/// before and just after (`None` for an item that was gone).
+#[derive(Clone, Debug)]
 pub struct Trashed {
+    /// Its id in the tree it was planned on, and its path, to find it after a rescan or a
+    /// compaction (see [`current_id`]).
     pub id: u32,
-    pub parent: u32,
+    pub path: PathBuf,
     /// The folder's own time just before.
     pub parent_before: Option<i64>,
     /// Its time in the listing of its own parent just before, read only when the own time was
@@ -57,21 +58,6 @@ pub struct Trashed {
 }
 
 impl AppState {
-    /// Asks the running trash request to stop before its next item; the items moved stay moved.
-    pub fn stop_trash(&self) {
-        self.0.trash_stop.store(true, Ordering::Release);
-    }
-
-    pub fn trash_stopped(&self) -> bool {
-        self.0.trash_stop.load(Ordering::Acquire)
-    }
-
-    /// A new trash request starts unstopped: called before it waits for `begin_write`, so a stop
-    /// asked while it waits still counts.
-    pub fn reset_trash_stop(&self) {
-        self.0.trash_stop.store(false, Ordering::Release);
-    }
-
     /// The items `ids` of the tree with `generation` at revision `rev`. `StaleId` unless every id
     /// is a live node of that very revision and none is the root (a first scan's tree changes its
     /// revision all the time but keeps its ids: any revision of it will do); `LossyName` when a
@@ -106,7 +92,6 @@ impl AppState {
                 mtime: node.mtime,
                 size: node.size,
                 len: node.len,
-                parent: node.parent,
                 parent_path: tree.path(node.parent),
                 parent_mtime: tree.node(node.parent).mtime,
             });
@@ -150,25 +135,30 @@ impl AppState {
         })
     }
 
-    /// Takes the items that went to the trash out of the tree with `generation` and gives their
-    /// folders the time they have now, but only a folder whose time just before (its own, or
-    /// as its parent listed it) was the one the tree knew: a folder changed outside SizeAtlas
-    /// keeps its old time, so moving it to the trash later still fails the check. Returns the
-    /// changed tree, to save; `None` if the root was closed or replaced meanwhile.
+    /// Takes the items that went to the trash, planned on the tree with `generation`, out of the
+    /// tree of the open root `root` (by [`current_id`]: it may have been rescanned or compacted
+    /// since) and gives their folders the time they have now, but only a folder whose time just
+    /// before (its own, or as its parent listed it) was the one the tree knew: a folder changed
+    /// outside SizeAtlas keeps its old time, so moving it to the trash later still fails the
+    /// check. An item the tree no longer has is skipped. Returns the changed tree, to save;
+    /// `None` if the root was closed meanwhile.
     pub fn remove_trashed(
         &self,
+        root: &str,
         generation: u64,
         trashed: &[Trashed],
         volume: Option<VolumeUsage>,
     ) -> Option<Arc<Tree>> {
-        self.change_tree(generation, |tree| {
+        self.change_root(root, |tree, now| {
             for t in trashed {
-                if tree.get(t.id).is_some() {
-                    tree.remove(t.id);
-                }
+                let Some(id) = current_id(tree, now, generation, t.id, &t.path) else {
+                    continue;
+                };
+                let parent = tree.node(id).parent;
+                tree.remove(id);
                 settle_parent(
                     tree,
-                    t.parent,
+                    parent,
                     [t.parent_before, t.parent_listed],
                     t.parent_after,
                 );
@@ -177,6 +167,25 @@ impl AppState {
             Some(())
         })
     }
+}
+
+/// The live node of a tree with `tree_generation` that is the item `id` at `path` of a plan made
+/// on the tree with `planned_generation`: `id` while the generation is the same and the node
+/// lives, else the node at `path` (a rescan or a compaction renumbered the tree, or a refresh
+/// replaced the node). Never the root.
+pub fn current_id(
+    tree: &Tree,
+    tree_generation: u64,
+    planned_generation: u64,
+    id: u32,
+    path: &Path,
+) -> Option<u32> {
+    if tree_generation == planned_generation && tree.get(id).is_some() {
+        Some(id)
+    } else {
+        tree.find_path(path)
+    }
+    .filter(|&id| id != 0)
 }
 
 /// Gives the live folder `parent` of an item that went to the trash its time `after`, but only

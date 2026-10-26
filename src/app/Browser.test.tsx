@@ -3,8 +3,13 @@ import type { Roots, Summary } from "../api/types";
 import { itemMenuActions } from "./itemActions";
 import { rootEntries, runningFullScanRoots } from "./roots";
 
-function menu(roots: Roots, generation = 2, trashingRoot: string | null = null) {
-  return itemMenuActions(rootEntries(roots), generation, runningFullScanRoots(roots), trashingRoot);
+function menu(roots: Roots, generation = 2, trashingRoots: ReadonlySet<string> = new Set()) {
+  return itemMenuActions(
+    rootEntries(roots),
+    generation,
+    runningFullScanRoots(roots),
+    trashingRoots,
+  );
 }
 
 describe("Browser item scan actions", () => {
@@ -80,11 +85,11 @@ describe("Browser item scan actions", () => {
       ],
       queue: [],
     };
-    expect(menu(roots, 2, "/scan")).toEqual({
+    expect(menu(roots, 2, new Set(["/scan"]))).toEqual({
       refresh: false,
       scanFolder: true,
       refreshNote: "trash.busy",
     });
-    expect(menu(roots, 1, "/scan")).toEqual({ refresh: true, scanFolder: true });
+    expect(menu(roots, 1, new Set(["/scan"]))).toEqual({ refresh: true, scanFolder: true });
   });
 });

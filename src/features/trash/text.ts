@@ -81,7 +81,7 @@ export const itemName = (path: string): string => path.split(/[\\/]/).filter(Boo
 
 /** "Moving to the trash: 3 of 120" (`purge`: "Deleting permanently: …"): the item that goes now among all. */
 export function trashProgressText(
-  progress: TrashProgress,
+  progress: Omit<TrashProgress, "request">,
   t: Translate,
   count: Count,
   purge = false,
@@ -93,7 +93,8 @@ export function trashProgressText(
 
 /**
  * Messages after a request of `preview` that removed its items `how`: what went (its size from
- * the preview), where a stop left it, what stayed and why, and a change that was not saved.
+ * the result), where a stop left it, what stayed and why, what was gone already, and a change
+ * that was not saved. A request that never started has no messages.
  */
 export function trashReport(
   result: TrashResult,
@@ -104,6 +105,8 @@ export function trashReport(
   size: Size,
   how: Removal = "trash",
 ): string[] {
+  // Never started: nothing was tried, nothing to say.
+  if (result.cancelled) return [];
   const purge = how === "purge";
   const keys = purge ? "purge" : "trash";
   // The count of what went, under the name its texts give it.
@@ -136,13 +139,19 @@ export function trashReport(
     );
   } else if (result.removed > 0 && how !== "trash") {
     // What a clean-up is for: the space, and whether it is free yet.
-    messages.push(t(purge ? "purge.done" : "trash.doneCleanup", { size: size(preview.size) }));
+    messages.push(t(purge ? "purge.done" : "trash.doneCleanup", { size: size(result.size) }));
   } else if (result.removed === 1 && preview.paths.length === 1) {
     messages.push(t("trash.doneOne", { name: itemName(preview.paths[0]) }));
   } else if (result.removed > 0) {
     const items = count(result.removed);
-    messages.push(t("trash.done", { count: result.removed, items, size: size(preview.size) }));
+    messages.push(t("trash.done", { count: result.removed, items, size: size(result.size) }));
   }
+  if (result.gone > 0)
+    messages.push(t("trash.gone", { count: result.gone, items: count(result.gone) }));
   if (result.warning) messages.push(errorText(result.warning));
   return messages;
 }
+
+/** "Cancelled 2 queued removals.": what Stop of a request took off the queue of its volume. */
+export const cancelledText = (cancelled: number, t: Translate, count: Count) =>
+  t("trash.cancelledQueued", { count: cancelled, items: count(cancelled) });

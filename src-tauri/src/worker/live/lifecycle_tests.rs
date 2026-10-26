@@ -42,7 +42,7 @@ fn closing_a_live_root_does_not_allow_a_batch_to_reopen_it() {
                 LiveEvent::FolderDone { id, tree: late },
                 &notify,
             );
-            let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+            let write = tauri::async_runtime::block_on(state.begin_scan_write(&job.root)).unwrap();
             finish(&state, cache.path(), &job, scan, write, &notify).unwrap();
             closed = true;
         }
@@ -95,7 +95,7 @@ fn exit_after_live_completion_waits_for_the_cache_write() {
         session.publish(&state, &job, event, &notify)
     })
     .unwrap();
-    let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+    let write = tauri::async_runtime::block_on(state.begin_scan_write(&job.root)).unwrap();
     assert_eq!(state.on_exit_request(), ExitDecision::PreventAndWait);
     finish(
         &state,

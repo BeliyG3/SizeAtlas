@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TrashPreview, TrashResult } from "../../api/types";
 import { translate, type Params } from "../../i18n";
 import {
+  cancelledText,
   itemName,
   purgeAgain,
   purgeMessage,
@@ -153,6 +154,9 @@ describe("trashReport", () => {
     failed: [],
     warning: null,
     stopped: false,
+    gone: 0,
+    size: 1200,
+    cancelled: false,
     ...more,
   });
   const report = (result: TrashResult, n: number, tr = t) =>
@@ -230,6 +234,19 @@ describe("trashReport", () => {
     ]);
   });
 
+  it("says that items were gone already, after the main message, or alone", () => {
+    expect(report(done(0, { gone: 2 }), 2)).toEqual(["2 items were already gone."]);
+    // The size is of what moved, not of the preview (1200 B).
+    expect(report(done(3, { gone: 1, size: 900 }), 4)).toEqual([
+      "Moved 3 items to the trash (900 B).",
+      "1 item was already gone.",
+    ]);
+  });
+
+  it("has no messages for a request that never started", () => {
+    expect(report(done(0, { cancelled: true, stopped: true }), 3)).toEqual([]);
+  });
+
   it("speaks Russian with its plural forms", () => {
     const ru = (key: string, params?: Params) => translate("ru", key, params);
     expect(report(done(5), 5, ru)).toEqual(["Перемещено в корзину: 5 объектов (1200 B)."]);
@@ -237,6 +254,13 @@ describe("trashReport", () => {
     expect(report(done(3, { stopped: true }), 21, ru)).toEqual([
       "Остановлено: в корзину перемещено 3 из 21 объекта.",
     ]);
+  });
+});
+
+describe("cancelledText", () => {
+  it("counts the queued removals Stop took off the queue", () => {
+    expect(cancelledText(1, t, count)).toBe("Cancelled 1 queued removal.");
+    expect(cancelledText(1200, t, count)).toBe("Cancelled 1,200 queued removals.");
   });
 });
 

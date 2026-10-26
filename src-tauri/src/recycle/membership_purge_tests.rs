@@ -3,6 +3,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::fixture::link;
 use super::membership::Disposal;
@@ -55,14 +56,20 @@ fn a_link_inside_a_row_goes_as_a_link_and_its_target_stays() {
 #[test]
 fn a_stop_between_items_leaves_the_rest() {
     let m = machine();
-    let state = m.state.clone();
+    let stop = AtomicBool::new(false);
     let paths = [m.path(CACHE), m.path(&cacache())];
     let stop_after = |path: &Path| {
-        state.stop_trash();
+        stop.store(true, Ordering::Relaxed);
         purge::delete(path)
     };
+    let stopped = || stop.load(Ordering::Relaxed);
     let done = m
-        .delete(&[CACHE, &cacache()], to_trash(&stop_after))
+        .run(
+            &[CACHE, &cacache()],
+            to_trash(&stop_after),
+            &stopped,
+            |_| (),
+        )
         .unwrap();
     assert_eq!((done.removed, done.failed, done.stopped), (1, vec![], true));
     assert_eq!(paths.iter().filter(|p| p.exists()).count(), 1);

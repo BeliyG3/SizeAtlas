@@ -2,56 +2,41 @@
 //! one change of the tree and one saved scan.
 
 use std::fs;
-use std::io;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 use sizeatlas_core::cache::cache_path;
-use sizeatlas_core::scanner::mtime_of;
 use sizeatlas_core::tree::flags;
 
 use crate::dto::{TrashDto, TrashFailureDto, TrashProgressDto};
 use crate::error::CmdError;
 use crate::queue::TrashedPath;
 use crate::state::{AppState, TrashItem, TrashPlan, Trashed};
-use crate::{baseline, jobs, sources};
+use crate::{jobs, sources};
+use disk::{check, gone, listed_mtime, modified};
 
-/// Moves `ids` of the tree with `generation` (at revision `rev`) to the trash with `trash_one`:
-/// the OS trash, a permanent delete (`purge::delete`) or a stand-in in tests. `allowed(item)`
-/// says whether the item may go: [`bin_takes`] for the trash (it would go to the trash rather
-/// than be deleted for good), plus the clean-up re-check for clean-up rows (see
-/// `membership::run_rows`). The caller holds `begin_write`, so no refresh changes the tree
-/// meanwhile and closing the app waits for the saved scan.
+/// Moves the items of `plan` (planned with `AppState::trash_plan` on the tree with `generation`)
+/// to the trash with `trash_one`: the OS trash, a permanent delete (`purge::delete`) or a
+/// stand-in in tests. `allowed(item)` says whether the item may go: [`bin_takes`] for the trash
+/// (it would go to the trash rather than be deleted for good), plus the clean-up re-check for
+/// clean-up rows (see `membership::run_rows`). The caller holds the turn of the volume and the
+/// root's write (see `requests::run_request`), so no refresh changes the tree meanwhile and
+/// closing the app waits for the saved scan.
 ///
-/// Nothing moves when a running scan still lists an item (`Busy`, see
-/// `AppState::trash_refused`) or when an item changed on disk since the scan (`Changed`). A
-/// running full scan of a root that holds the items is told which went
-/// (`ScanQueue::note_trashed`). After that every item is checked again right before it goes;
-/// one that `allowed` refuses (`NoTrash`, `Protected`, ...), that changed (`Changed`), cannot be
-/// read (`NoAccess`, `Io`) or that the OS refuses (`Io`) is reported and stays, the others go.
-/// Once the app starts closing, or `AppState::stop_trash` asks for it (`stopped`), the items
-/// left stay where they are. A first scan's tree is not saved here.
+/// Nothing moves when an item changed on disk since the scan (`Changed`); an item gone from the
+/// disk meanwhile is no change, it is counted as `gone` and taken out of the tree. The tree may
+/// have been rescanned or compacted since the plan: its items are found by path then (see
+/// `AppState::remove_trashed`). A running full scan of a root that holds the items is told which
+/// went (`ScanQueue::note_trashed`). After that every item is checked again right before it
+/// goes; one that `allowed` refuses (`NoTrash`,
+/// `Protected`, ...), that changed (`Changed`), cannot be read (`NoAccess`, `Io`) or that the OS
+/// refuses (`Io`) is reported and stays, the others go. Once the app starts closing, or `stop`
+/// says so (`stopped`), the items left stay where they are. A first scan's tree is not saved
+/// here.
 ///
 /// `report` gets the progress before each item (paced, see `Pacer`) and once at the end.
 #[allow(clippy::too_many_arguments)]
-pub fn run_reporting(
-    state: &AppState,
-    cache_dir: &Path,
-    generation: u64,
-    rev: u64,
-    ids: &[u32],
-    allowed: impl Fn(&TrashItem) -> Result<(), CmdError>,
-    trash_one: impl Fn(&Path) -> Result<(), String>,
-    report: impl FnMut(TrashProgressDto),
-) -> Result<TrashDto, CmdError> {
-    let plan = state.trash_plan(generation, rev, ids)?;
-    run_plan(
-        state, cache_dir, generation, plan, allowed, trash_one, report,
-    )
-}
-
-/// [`run_reporting`] for a request already planned with `AppState::trash_plan`.
 pub fn run_plan(
     state: &AppState,
     cache_dir: &Path,
@@ -59,24 +44,50 @@ pub fn run_plan(
     plan: TrashPlan,
     allowed: impl Fn(&TrashItem) -> Result<(), CmdError>,
     trash_one: impl Fn(&Path) -> Result<(), String>,
+    stop: &dyn Fn() -> bool,
     mut report: impl FnMut(TrashProgressDto),
 ) -> Result<TrashDto, CmdError> {
-    for item in &plan.items {
+    let check = |item: &TrashItem| {
+        check(
+            item,
+            &state.settled_times(&plan.root, &item.path, item.mtime),
+        )
+    };
+    for item in plan.items.iter().filter(|item| !gone(&item.path)) {
         check(item)?;
     }
     let total = plan.items.len() as u32;
     let mut pacer = Pacer::default();
+    // What left the disk, here or before (`already`), for the tree and the running scan.
     let mut trashed = Vec::new();
-    let mut gone = Vec::new();
+    let mut noted = Vec::new();
+    let mut already = 0;
+    let mut size = 0u64;
     let mut failed = Vec::new();
     let mut stopped = false;
     for (done, item) in plan.items.iter().enumerate() {
         if state.closing() {
             break;
         }
-        if state.trash_stopped() {
+        if stop() {
             stopped = true;
             break;
+        }
+        if gone(&item.path) {
+            already += 1;
+            trashed.push(Trashed {
+                id: item.id,
+                path: item.path.clone(),
+                parent_before: None,
+                parent_listed: None,
+                parent_after: None,
+            });
+            noted.push(TrashedPath {
+                path: item.path.clone(),
+                parent_before: [None, None],
+                parent_after: None,
+            });
+            continue;
         }
         if pacer.due(Instant::now()) {
             report(TrashProgressDto {
@@ -92,7 +103,7 @@ pub fn run_plan(
             if state.closing() {
                 break;
             }
-            if state.trash_stopped() {
+            if stop() {
                 stopped = true;
                 break;
             }
@@ -112,17 +123,23 @@ pub fn run_plan(
         };
         match trash_one(&item.path) {
             Ok(()) => {
+                size = size.saturating_add(item.size);
+                let parent_after = modified(&item.parent_path);
+                // A later request of the root planned with the folder's time before this.
+                if let (Some(before), Some(after)) = (parent_before, parent_after) {
+                    state.note_settled(&plan.root, &item.parent_path, before, after);
+                }
                 trashed.push(Trashed {
                     id: item.id,
-                    parent: item.parent,
+                    path: item.path.clone(),
                     parent_before,
                     parent_listed,
-                    parent_after: modified(&item.parent_path),
+                    parent_after,
                 });
-                gone.push(TrashedPath {
+                noted.push(TrashedPath {
                     path: item.path.clone(),
                     parent_before: [parent_before, parent_listed],
-                    parent_after: modified(&item.parent_path),
+                    parent_after,
                 });
             }
             Err(os_message) => failed.push(TrashFailureDto {
@@ -138,22 +155,15 @@ pub fn run_plan(
     });
     let mut warning = None;
     if !trashed.is_empty() {
-        state.note_trashed(gone);
+        state.note_trashed(noted);
         let volume = sources::volume_usage(Path::new(&plan.root));
-        warning = match state.remove_trashed(generation, &trashed, volume) {
+        warning = match state.remove_trashed(&plan.root, generation, &trashed, volume) {
             // A first scan's tree is saved once it is complete (`worker::live::finish`): saved
             // now, it would replace a complete saved scan with a partial one.
             Some(tree) if tree.node(0).has(flags::SCANNING) => None,
-            Some(tree) => {
-                let saved = jobs::save(&tree, cache_dir).err();
-                drop(tree);
-                // Compacted: its ids changed, so its baseline is computed again.
-                if state.tree(generation).is_err() {
-                    baseline::refresh(state, cache_dir, &plan.root);
-                }
-                saved
-            }
-            // Closed or reopened meanwhile: its saved scan still lists what went.
+            // Not compacted while its request is registered (`requests::run_request` compacts).
+            Some(tree) => jobs::save(&tree, cache_dir).err(),
+            // Closed meanwhile: its saved scan still lists what went.
             None => {
                 let _ = fs::remove_file(cache_path(cache_dir, Path::new(&plan.root)));
                 Some(CmdError::CacheNotSaved)
@@ -161,14 +171,38 @@ pub fn run_plan(
         };
     }
     Ok(TrashDto {
-        removed: trashed.len() as u32,
+        removed: trashed.len() as u32 - already,
+        gone: already,
+        size,
         failed,
         warning,
         stopped,
+        cancelled: false,
     })
 }
 
-/// `run_reporting` without the progress.
+/// [`run_plan`] for `ids` of the tree with `generation` at revision `rev`, planned here; `Busy`
+/// while a running scan still lists an item (see `AppState::trash_refused`).
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+pub fn run_reporting(
+    state: &AppState,
+    cache_dir: &Path,
+    generation: u64,
+    rev: u64,
+    ids: &[u32],
+    allowed: impl Fn(&TrashItem) -> Result<(), CmdError>,
+    trash_one: impl Fn(&Path) -> Result<(), String>,
+    stop: &dyn Fn() -> bool,
+    report: impl FnMut(TrashProgressDto),
+) -> Result<TrashDto, CmdError> {
+    let plan = state.trash_plan(generation, rev, ids)?;
+    run_plan(
+        state, cache_dir, generation, plan, allowed, trash_one, stop, report,
+    )
+}
+
+/// `run_reporting` without the progress and never stopped.
 #[cfg(test)]
 pub fn run(
     state: &AppState,
@@ -179,9 +213,10 @@ pub fn run(
     allowed: impl Fn(&TrashItem) -> Result<(), CmdError>,
     trash_one: impl Fn(&Path) -> Result<(), String>,
 ) -> Result<TrashDto, CmdError> {
+    let never = || false;
     let ignore = |_| ();
     run_reporting(
-        state, cache_dir, generation, rev, ids, allowed, trash_one, ignore,
+        state, cache_dir, generation, rev, ids, allowed, trash_one, &never, ignore,
     )
 }
 
@@ -216,47 +251,6 @@ impl Pacer {
     }
 }
 
-/// The item still is what the scan saw: the same kind, the same modification time (its own,
-/// or as its folder lists it: the scan takes a folder's time from the listing).
-// ponytail: an item changed after the scan whose folder listing still shows the old time
-// passes; the trash can be undone and the confirmation shows the path and the scan date. A
-// clean-up row, which may be deleted for good, does not rely on this: `recheck` walks it on
-// disk right before (see `membership::run_rows`).
-fn check(item: &TrashItem) -> Result<(), CmdError> {
-    match fs::symlink_metadata(&item.path) {
-        Ok(meta)
-            if meta.is_dir() == item.is_dir
-                && unchanged(item.mtime, mtime_of(&meta), || listed_mtime(&item.path)) =>
-        {
-            Ok(())
-        }
-        Ok(_) => Err(CmdError::Changed),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Err(CmdError::Changed),
-        Err(e) => Err(CmdError::io(&item.path, e)),
-    }
-}
-
-/// Whether the `stored` time of an item is the one it has: its `own` time or, only if that
-/// differs, the time of its entry in the listing of its folder. On Windows the listing can lag
-/// behind the item's own time, and a scan stores the listed time of a folder.
-fn unchanged(stored: i64, own: i64, listed: impl FnOnce() -> Option<i64>) -> bool {
-    own == stored || listed() == Some(stored)
-}
-
-fn modified(path: &Path) -> Option<i64> {
-    fs::symlink_metadata(path).ok().map(|meta| mtime_of(&meta))
-}
-
-/// Modification time of `path` as the listing of its folder has it.
-fn listed_mtime(path: &Path) -> Option<i64> {
-    let (folder, name) = (path.parent()?, path.file_name()?);
-    let entry = fs::read_dir(folder)
-        .ok()?
-        .flatten()
-        .find(|e| e.file_name() == name)?;
-    entry.metadata().ok().map(|meta| mtime_of(&meta))
-}
-
 /// The trash of the OS: the Recycle Bin on Windows, the Trash on macOS (through NSFileManager,
 /// which needs no permission to control Finder), the freedesktop trash on Linux. A panic in the
 /// crate (it unwraps some system calls) is an error of this item, not of the app.
@@ -278,9 +272,13 @@ pub fn move_to_trash(path: &Path) -> Result<(), String> {
     .unwrap_or_else(|_| Err("the trash of the system failed".to_owned()))
 }
 
+mod disk;
 pub mod membership;
 mod purge;
+pub mod requests;
 
+#[cfg(test)]
+mod compaction_tests;
 #[cfg(test)]
 mod during_tests;
 #[cfg(test)]
@@ -290,7 +288,11 @@ mod membership_purge_tests;
 #[cfg(test)]
 mod membership_tests;
 #[cfg(test)]
+mod order_tests;
+#[cfg(test)]
 mod progress_tests;
+#[cfg(test)]
+mod requests_tests;
 #[cfg(test)]
 mod scan_tests;
 #[cfg(test)]

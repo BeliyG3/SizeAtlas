@@ -59,10 +59,10 @@ interface Props {
   job: QueueEntry | null;
   /** Roots inside a running full scan: refresh and child scans are unavailable. */
   fullScans: ReadonlySet<string>;
-  /** A trash or delete request runs: no other can start. */
-  trashing: boolean;
-  /** The root it moves items of: its folders cannot be refreshed meanwhile. */
-  trashingRoot: string | null;
+  /** Whether a trash or delete request already has one of these items (started or waiting). */
+  isRemoving: (generation: number, ids: readonly number[]) => boolean;
+  /** The roots requests move items of: their folders cannot be refreshed meanwhile. */
+  trashingRoots: ReadonlySet<string>;
   /** Removes the root from the tree and stops its scan; its saved scan stays. */
   onCloseRoot: (root: string) => void;
   onForget: (root: string) => void;
@@ -101,8 +101,8 @@ export function Browser({
   busyRoots,
   job,
   fullScans,
-  trashing,
-  trashingRoot,
+  isRemoving,
+  trashingRoots,
   onCloseRoot,
   onForget,
   onCancelScan,
@@ -161,13 +161,14 @@ export function Browser({
       : null;
 
   const itemMenu = menu?.kind === "item" ? menu : null;
-  const itemActions = itemMenuActions(entries, itemMenu?.generation, fullScans, trashingRoot);
+  const itemActions = itemMenuActions(entries, itemMenu?.generation, fullScans, trashingRoots);
   const itemRev =
     entries.find((e) => itemMenu && e.summary?.generation === itemMenu.generation)?.summary?.rev ??
     null;
   const menuItems = itemMenu ? menuIds(itemMenu.target) : NO_IDS;
   const refused = useTrashRefused(job, itemMenu?.generation ?? null, itemRev, menuItems);
-  const itemTrash = trashAvailability(trashing, job !== null, refused);
+  const removing = itemMenu !== null && isRemoving(itemMenu.generation, menuItems);
+  const itemTrash = trashAvailability(removing, job !== null, refused);
   const trashNote =
     itemMenu && availabilityNoteKey(itemTrash, menuItems.length, itemMenu.target.isDir);
   let content: ReactNode;

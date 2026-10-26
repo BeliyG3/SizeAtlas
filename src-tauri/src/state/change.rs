@@ -20,7 +20,7 @@ const READ_WARN: Duration = Duration::from_secs(5);
 
 impl AppState {
     /// Runs `change` on the tree of the root with `generation`, as `change_scan` does for a scan.
-    /// A trash asks for the very tree it checked its items in.
+    #[cfg(test)]
     pub fn change_tree(
         &self,
         generation: u64,
@@ -31,12 +31,47 @@ impl AppState {
             false,
             |tree, _| change(tree),
         )
+        .map(|(tree, _)| tree)
+    }
+
+    /// Runs `change` on the tree of the open root with the canonical path `root`, whatever its
+    /// generation now (a trash planned before a rescan or a compaction finds its items by path,
+    /// see `state::trash::current_id`); as `change_scan` otherwise.
+    pub fn change_root(
+        &self,
+        root: &str,
+        change: impl FnOnce(&mut Tree, u64) -> Option<()>,
+    ) -> Option<Arc<Tree>> {
+        self.change_where(|r| r.tree.name(0) == root, false, change)
+            .map(|(tree, _)| tree)
+    }
+
+    /// Compacts the tree of the open root `root` if no trash request of it is registered, it is
+    /// not being scanned and it has more dead nodes than live ones; returns whether it did (the
+    /// tree has a new generation: the caller computes its baseline again). The caller holds the
+    /// root's write; the requests of a root leave their compaction to the end of the last one.
+    /// Asked first under the read lock: with nothing to compact it waits for no read of the tree.
+    pub fn compact_if_idle(&self, root: &str) -> bool {
+        self.compaction_due(root)
+            && self
+                .change_where(|r| r.tree.name(0) == root, false, |_, _| Some(()))
+                .is_some_and(|(_, compacted)| compacted)
+    }
+
+    /// The tree of the open root `root` would be compacted by `compact_if_idle` now.
+    pub fn compaction_due(&self, root: &str) -> bool {
+        let data = self.read_data();
+        data.find(root).is_some_and(|at| {
+            let tree = &data.roots[at].tree;
+            tree.dead > tree.live && !tree.node(0).has(SCANNING) && !self.trash_pending(root)
+        })
     }
 
     /// Runs `change` on the tree of the scan `scan` (see `OpenRoot::scan`), in place, under the
     /// write lock; `change` also gets the generation the tree has now and returns `None` when it
     /// changed nothing. After a change, a tree with more dead nodes than live ones is compacted
-    /// and gets a new generation. Returns the changed tree, to save; `None` when nothing changed
+    /// and gets a new generation, unless a trash request of its root is registered (see
+    /// `compact_if_idle`). Returns the changed tree, to save; `None` when nothing changed
     /// or the root was rescanned or closed. After a compaction of a root that has a baseline or
     /// waits for one, the caller computes it again (`crate::baseline`): it is pending until then.
     /// The change that ends a first scan goes through `end_scan`.
@@ -46,6 +81,7 @@ impl AppState {
         change: impl FnOnce(&mut Tree, u64) -> Option<()>,
     ) -> Option<Arc<Tree>> {
         self.change_where(|r| r.scan == scan, false, change)
+            .map(|(tree, _)| tree)
     }
 
     /// `change_scan` for the change that ends a first scan. Its baseline is pending afterwards
@@ -57,14 +93,16 @@ impl AppState {
         change: impl FnOnce(&mut Tree) -> Option<()>,
     ) -> Option<Arc<Tree>> {
         self.change_where(|r| r.scan == scan, comparable, |tree, _| change(tree))
+            .map(|(tree, _)| tree)
     }
 
+    /// The changed tree and whether it was compacted.
     fn change_where(
         &self,
         find: impl Fn(&OpenRoot) -> bool,
         comparable: bool,
         change: impl FnOnce(&mut Tree, u64) -> Option<()>,
-    ) -> Option<Arc<Tree>> {
+    ) -> Option<(Arc<Tree>, bool)> {
         let (changed, old) = {
             let mut data = self.write_data();
             let at = data.roots.iter().position(find)?;
@@ -74,8 +112,11 @@ impl AppState {
             change(tree, generation)?;
             let scanning = tree.node(0).has(SCANNING);
             // FolderGone removes a listed folder during a first scan. Keep the remaining ids
-            // stable until the scan finishes; only then may compaction renumber them.
-            let old = (tree.dead > tree.live && !scanning).then(|| tree.compact());
+            // stable until the scan finishes; only then may compaction renumber them. Nor while a
+            // trash request of the root is registered: the queued ones keep their ids (see
+            // `state::trash::current_id`), the end of the last one compacts (`compact_if_idle`).
+            let due = tree.dead > tree.live && !scanning && !self.trash_pending(tree.name(0));
+            let old = due.then(|| tree.compact());
             if old.is_some() {
                 data.generation += 1;
                 data.roots[at].generation = data.generation;
@@ -92,11 +133,12 @@ impl AppState {
             }
             (data.roots[at].tree.clone(), old)
         };
+        let compacted = old.is_some();
         // Dropping millions of nodes takes a while: neither under the lock nor before closing.
         if let Some(old) = old {
             thread::spawn(move || drop(old));
         }
-        Some(changed)
+        Some((changed, compacted))
     }
 
     /// Gives the root with `generation` the baseline computed from its tree at revision `rev`,
@@ -174,8 +216,13 @@ impl OpenRoot {
 
 /// `&mut` to a shared tree without copying it: waits until no read holds it. The caller holds
 /// the write lock, so no new read can take the tree meanwhile, and every read waits: nobody may
-/// hold an `Arc<Tree>` for long outside `busy` (long work on a tree, such as computing its
-/// baseline, holds `busy`, which a trash and every saved scan also take).
+/// hold an `Arc<Tree>` for long outside the write of its root (long work on a tree, such as
+/// computing its baseline, holds that write, which a trash and every saved scan of the root also
+/// take). Exceptions without the write: the batches of a live first scan (`change_scan` in
+/// `worker/live.rs`), `close_path`, and `plan_rows`/`trash_plan` when a trash is confirmed (a
+/// short read of the `Arc`).
+// ponytail: the clean-up walk of a confirmation (about 0.6 s) may delay `tree_mut` of the same
+// root; walk a copy of the rows if that delay shows.
 // ponytail: a read that took the data lock again while holding the tree would make this wait
 // forever; none does: reads take the lock only to clone the `Arc`, and `crate::baseline` drops
 // its tree before `set_baseline`. Keep it that way. After READ_WARN the wait is reported on

@@ -10,4 +10,6 @@ pub mod scanner;
 pub mod tree;
 pub mod treemap;
 
-pub use platform::{BinSpace, bin_free, bin_space, can_recycle, change_time, reboot_pending};
+pub use platform::{
+    BinSpace, bin_free, bin_space, can_recycle, change_time, reboot_pending, volume_key,
+};

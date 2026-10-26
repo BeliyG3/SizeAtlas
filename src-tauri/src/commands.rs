@@ -1,5 +1,6 @@
 //! Thin Tauri wrappers for reads; logic lives in `state`. Commands that change the open roots
-//! are in `roots`, those that act on one item on disk in `items`, the CSV export in `export`.
+//! are in `roots`, the removals in `trash`, those that act on one item on disk in `items`, the
+//! CSV export in `export`.
 
 use sizeatlas_core::tree::{ListKind, ListOrder};
 use tauri::{State, Window};
@@ -15,6 +16,7 @@ use crate::state::AppState;
 pub mod export;
 pub mod items;
 pub mod roots;
+pub mod trash;
 
 #[tauri::command]
 pub async fn get_summary(state: State<'_, AppState>, generation: u64) -> Result<Summary, CmdError> {

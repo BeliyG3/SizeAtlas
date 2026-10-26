@@ -1,6 +1,6 @@
 //! The baseline of an open root: its tree compared with the full scan before the last one.
 //! Computed without the data lock (reading the saved scan may take seconds) but while holding
-//! `busy`, as every other long work on an open tree, then given to the root.
+//! the root's write, as every other long work on an open tree, then given to the root.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -28,17 +28,17 @@ pub fn load_baseline(files: &ScanFiles, current: &Tree) -> Option<Baseline> {
 
 /// Computes the baseline of the open root `root` and gives it to the root, again if its tree
 /// changed meanwhile. A first scan still running gets none: its end computes it. Returns whether
-/// the root's baseline changed. The caller holds `begin_write` (see `state::change::tree_mut`).
+/// the root's baseline changed. The caller holds the root's write (see `state::change::tree_mut`).
 pub fn refresh(state: &AppState, cache_dir: &Path, root: &str) -> bool {
     let files = scan_files(cache_dir, Path::new(root));
     give(state, root, |tree| load_baseline(&files, tree))
 }
 
-/// `refresh` in the background, for a saved scan just opened: waits for `busy`, which a trash,
-/// a saved scan being written and the end of a scan hold, so it runs between them. Returns
-/// whether the baseline changed; `false` once the app is closing.
+/// `refresh` in the background, for a saved scan just opened: waits for the root's write, which
+/// a trash, a saved scan being written and the end of a scan hold, so it runs between them.
+/// Returns whether the baseline changed; `false` once the app is closing.
 pub async fn refresh_later(state: AppState, cache_dir: PathBuf, root: String) -> bool {
-    let Ok(write) = state.begin_write().await else {
+    let Ok(write) = state.begin_write(&root).await else {
         return false;
     };
     tauri::async_runtime::spawn_blocking(move || {

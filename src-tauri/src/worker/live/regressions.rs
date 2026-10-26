@@ -29,7 +29,7 @@ fn cache_open_is_busy_before_and_after_live_root_publication() {
     })
     .unwrap();
     let scan = session.scan.unwrap();
-    let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+    let write = tauri::async_runtime::block_on(state.begin_scan_write(&job.root)).unwrap();
     finish(&state, cache.path(), &job, scan, write, &notify).unwrap();
     assert_eq!(
         jobs::open_cached(&state, cache.path(), &job.root),

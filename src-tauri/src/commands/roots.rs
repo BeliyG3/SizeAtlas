@@ -5,17 +5,16 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::dto::{RootsDto, ScanErrorDto, SourcesDto, Summary, TrashDto, TrashProgressDto};
+use crate::dto::{RootsDto, ScanErrorDto, SourcesDto, Summary};
 use crate::error::CmdError;
 use crate::queue::ScanJob;
-use crate::recycle::membership::{self, Disposal};
-use crate::state::{AppState, TrashItem};
+use crate::state::AppState;
 use crate::worker::{self, Notice, Notify};
-use crate::{baseline, jobs, recycle, sources};
+use crate::{baseline, jobs, sources};
 
 const ROOTS_CHANGED: &str = "roots-changed";
 
-fn cache_dir(app: &AppHandle) -> Result<PathBuf, CmdError> {
+pub(super) fn cache_dir(app: &AppHandle) -> Result<PathBuf, CmdError> {
     app.path()
         .app_data_dir()
         .map(|dir| dir.join("scans"))
@@ -25,7 +24,7 @@ fn cache_dir(app: &AppHandle) -> Result<PathBuf, CmdError> {
         })
 }
 
-fn changed(app: &AppHandle) {
+pub(super) fn changed(app: &AppHandle) {
     let _ = app.emit(ROOTS_CHANGED, ());
 }
 
@@ -104,91 +103,6 @@ pub async fn refresh_folder(
     Ok(())
 }
 
-/// Moves items of one tree to the trash after checking them against the disk (see
-/// `recycle::run_reporting`); refused while a running scan still lists one of them. With
-/// `cleanup: true` (from the clean-up modes) the items must be clean-up rows and each is walked
-/// again before it goes (see `recycle::membership::run_rows`). Reports `trash-progress`
-/// meanwhile; `cancel_trash` stops it before the next item.
-#[tauri::command]
-pub async fn trash(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    generation: u64,
-    rev: u64,
-    ids: Vec<u32>,
-    cleanup: Option<bool>,
-) -> Result<TrashDto, CmdError> {
-    removing(&app, &state, move |state, dir, report| {
-        let bin = sizeatlas_core::can_recycle;
-        let trash_one = recycle::move_to_trash;
-        if cleanup == Some(true) {
-            let disposal = Disposal::Trash {
-                bin: &bin,
-                trash_one: &trash_one,
-            };
-            membership::run_rows(state, dir, generation, rev, &ids, disposal, report)
-        } else {
-            let allowed = |item: &TrashItem| recycle::bin_takes(item, bin);
-            recycle::run_reporting(
-                state, dir, generation, rev, &ids, allowed, trash_one, report,
-            )
-        }
-    })
-    .await
-}
-
-/// Deletes clean-up rows of one tree for good (`recycle::purge::delete`), with the checks of
-/// `trash` with `cleanup: true` but no trash check. An id that is no clean-up row refuses the
-/// whole request (`Protected`). Progress and `cancel_trash` as `trash`.
-#[tauri::command]
-pub async fn delete_for_good(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    generation: u64,
-    rev: u64,
-    ids: Vec<u32>,
-) -> Result<TrashDto, CmdError> {
-    removing(&app, &state, move |state, dir, report| {
-        let purge = Disposal::Purge;
-        membership::run_rows(state, dir, generation, rev, &ids, purge, report)
-    })
-    .await
-}
-
-/// Runs a trash or delete request `run` with `begin_write` held, its progress as
-/// `trash-progress` events.
-async fn removing(
-    app: &AppHandle,
-    state: &State<'_, AppState>,
-    run: impl FnOnce(&AppState, &Path, &dyn Fn(TrashProgressDto)) -> Result<TrashDto, CmdError>
-    + Send
-    + 'static,
-) -> Result<TrashDto, CmdError> {
-    state.reset_trash_stop();
-    let write = state.begin_write().await?;
-    let dir = cache_dir(app)?;
-    let state = state.inner().clone();
-    let events = app.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let report = |progress: TrashProgressDto| {
-            let _ = events.emit("trash-progress", progress);
-        };
-        let result = run(&state, &dir, &report);
-        drop(write);
-        result
-    })
-    .await?;
-    changed(app);
-    result
-}
-
-/// Stops the running trash request before its next item; the items moved stay in the trash.
-#[tauri::command]
-pub async fn cancel_trash(state: State<'_, AppState>) -> Result<(), CmdError> {
-    state.stop_trash();
-    Ok(())
-}
-
 /// Stops the scan of `path`: cancels it if it runs, drops it if it waits. Without a path,
 /// cancels the running scan.
 #[tauri::command]
@@ -203,8 +117,8 @@ pub async fn cancel_scan(
 }
 
 /// Adds a saved scan as a root, or replaces the open one in place (see `jobs::open_cached`).
-/// Waits for a trash or a saved scan being written, not for scans nor for its baseline, which
-/// comes later with another `roots-changed`.
+/// Waits for a trash or a saved scan of the root being written, not for scans nor for its
+/// baseline, which comes later with another `roots-changed`.
 #[tauri::command]
 pub async fn open_cached(
     app: AppHandle,
@@ -249,7 +163,7 @@ pub async fn forget_scan(
     state: State<'_, AppState>,
     root: String,
 ) -> Result<(), CmdError> {
-    let write = state.begin_write().await?;
+    let write = state.begin_write(&root).await?;
     let dir = cache_dir(&app)?;
     let state = state.inner().clone();
     let result = tauri::async_runtime::spawn_blocking(move || {

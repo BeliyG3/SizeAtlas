@@ -159,7 +159,7 @@ fn closing_the_app_after_a_walk_still_installs_and_saves_it() {
     let state = AppState::default();
     let job = state.enqueue(root_of(&a)).unwrap().unwrap();
     let tree = jobs::walk(&job).unwrap().expect("not cancelled yet");
-    let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+    let write = tauri::async_runtime::block_on(state.begin_scan_write(&job.root)).unwrap();
     assert_eq!(state.on_exit_request(), ExitDecision::PreventAndWait);
     assert!(job.cancelled(), "closing stops the walk");
     let notify: Notify = Arc::new(|_| {});
@@ -232,7 +232,7 @@ fn opening_does_not_wait_for_a_scan_nor_closing_for_a_write() {
     let _scanning = state.enqueue(root_of(&b)).unwrap();
     let opening = jobs::open_cached_waiting(state.clone(), cache.path().into(), root_of(&a));
     let summary = tauri::async_runtime::block_on(opening).unwrap();
-    let _saving = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+    let _saving = tauri::async_runtime::block_on(state.begin_write(&summary.root)).unwrap();
     jobs::close_root(&state, &summary.root);
     assert!(state.summaries().is_empty());
 }
@@ -241,8 +241,9 @@ fn opening_does_not_wait_for_a_scan_nor_closing_for_a_write() {
 fn a_queued_scan_waits_for_a_trash_that_runs() {
     let (a, cache) = (folder(), tempfile::tempdir().unwrap());
     let state = AppState::default();
-    // A trash holds `busy` from its check to its saved scan.
-    let trashing = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+    // A trash holds the turn of its volume from its check to its saved scan.
+    let trashing =
+        tauri::async_runtime::block_on(state.volume_turn(&state.volume_of(&root_of(&a))));
     let job = state.enqueue(root_of(&a)).unwrap();
     let progress = job.as_ref().unwrap().progress.clone();
     let (worker_state, dir) = (state.clone(), cache.path().to_path_buf());
@@ -255,5 +256,21 @@ fn a_queued_scan_waits_for_a_trash_that_runs() {
     );
     drop(trashing);
     worker.join().unwrap();
+    assert_eq!(open_roots(&state), [root_of(&a)]);
+}
+
+#[test]
+fn a_scan_does_not_wait_for_a_trash_on_another_volume() {
+    let (a, cache) = (folder(), tempfile::tempdir().unwrap());
+    let state = AppState::with_volumes(Arc::new(|_| "x".to_owned()));
+    let _trashing = tauri::async_runtime::block_on(state.volume_turn("y"));
+    let job = state.enqueue(root_of(&a)).unwrap();
+    let (done, scanned) = std::sync::mpsc::channel();
+    let (worker_state, dir) = (state.clone(), cache.path().to_path_buf());
+    std::thread::spawn(move || done.send(run_queue(&worker_state, &dir, job)));
+    // A safety net only: the scan never waits for the trash on "y".
+    scanned
+        .recv_timeout(Duration::from_secs(10))
+        .expect("the scan waited for a trash on another volume");
     assert_eq!(open_roots(&state), [root_of(&a)]);
 }

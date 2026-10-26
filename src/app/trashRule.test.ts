@@ -19,13 +19,13 @@ describe("trashAvailability", () => {
   it("allows the trash without a running job", () => {
     expect(trashAvailability(false, false, undefined)).toEqual({ enabled: true, reason: null });
   });
-  it("refuses during another trash request and says so, not that a scan runs", () => {
+  it("refuses items a request already has and says so, not that a scan runs", () => {
     expect(trashAvailability(true, false, undefined)).toEqual({
       enabled: false,
-      reason: "trashing",
+      reason: "removing",
     });
-    expect(trashAvailability(true, true, true)).toEqual({ enabled: false, reason: "trashing" });
-    expect(availabilityNoteKey(trashAvailability(true, true, true), 1, true)).toBe("trash.busy");
+    expect(trashAvailability(true, true, true)).toEqual({ enabled: false, reason: "removing" });
+    expect(availabilityNoteKey(trashAvailability(true, true, true), 1, true)).toBe("trash.already");
     expect(availabilityNoteKey(trashAvailability(false, true, true), 1, true)).toBe(
       "trash.scanningFolder",
     );

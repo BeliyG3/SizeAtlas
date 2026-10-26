@@ -11,30 +11,37 @@ use sizeatlas_core::cleanup::{Context, Guard, Reason, Refusal, recheck};
 use super::{bin_takes, purge, run_plan};
 use crate::dto::{TrashDto, TrashProgressDto};
 use crate::error::CmdError;
-use crate::state::{AppState, TrashItem, TrashPlan};
+use crate::state::{AppState, TrashItem, TrashPlan, current_id};
 
 /// The trash check of an item by its path and size (`sizeatlas_core::can_recycle`).
 pub type BinCheck<'a> = dyn Fn(&Path, u64) -> bool + 'a;
 
-/// The reason of each item of `plan`, found by a new walk of the tree with `ctx`: an app started
-/// since the list was made, or a restart now pending, turns its rows into info, so they are no
-/// rows here. `Protected` for the whole request when an item is a row of neither mode.
+/// The reason of each item of `plan` (made on the tree with `generation`), by the id the plan
+/// has, found by a new walk with `ctx` of the root's tree now (rescanned or compacted since: its
+/// items by path, see `current_id`): an app started since the list was made, or a restart now
+/// pending, turns its rows into info, so they are no rows here. `Protected` for the whole
+/// request when an item is a row of neither mode, or the root was closed. An item the tree no
+/// longer has gets none: gone from the disk it is gone already, else `run_plan`'s `allowed`
+/// refuses it.
 pub fn rows_of(
     state: &AppState,
     generation: u64,
     plan: &TrashPlan,
     ctx: &Context,
 ) -> Result<HashMap<u32, Reason>, CmdError> {
-    let found = state.tree(generation)?.cleanup(ctx);
+    let (now, tree) = state.root_tree(&plan.root).ok_or(CmdError::Protected)?;
+    let found = tree.cleanup(ctx);
     let rows: HashMap<u32, Reason> = (found.cleanup.iter())
         .chain(&found.review)
         .map(|row| (row.id, row.reason))
         .collect();
-    let reason = |item: &TrashItem| rows.get(&item.id).map(|&reason| (item.id, reason));
-    plan.items
-        .iter()
-        .map(|item| reason(item).ok_or(CmdError::Protected))
-        .collect()
+    let mut reasons = HashMap::new();
+    for item in &plan.items {
+        if let Some(id) = current_id(&tree, now, generation, item.id, &item.path) {
+            reasons.insert(item.id, *rows.get(&id).ok_or(CmdError::Protected)?);
+        }
+    }
+    Ok(reasons)
 }
 
 /// Where clean-up rows go. One choice sets both the check and the delete, so the trash path can
@@ -53,31 +60,45 @@ pub enum Disposal<'a> {
 /// Moves or deletes one item; the error is the system's message.
 pub type TrashOne<'a> = dyn Fn(&Path) -> Result<(), String> + 'a;
 
-/// Deletes the clean-up rows `ids` as `disposal` says.
-/// Nothing goes unless every item is a row of a mode by a fresh context ([`rows_of`]). Then, per
-/// item and right before it goes, the disk re-check (`recheck` with the never places of that
-/// context and the time now) and the trash check; else as `recycle::run_reporting`.
-#[allow(clippy::too_many_arguments)]
+/// The plan of the clean-up rows `ids` (`AppState::trash_plan`), refused as a whole
+/// (`Protected`) unless every item is a row of a mode by a fresh context ([`rows_of`]): nothing
+/// of such a request waits in the queue of its volume.
+pub fn plan_rows(
+    state: &AppState,
+    generation: u64,
+    rev: u64,
+    ids: &[u32],
+) -> Result<TrashPlan, CmdError> {
+    let plan = state.trash_plan(generation, rev, ids)?;
+    let ctx = (state.0.context)(Path::new(&plan.root));
+    rows_of(state, generation, &plan, &ctx)?;
+    Ok(plan)
+}
+
+/// Deletes the clean-up rows of `plan` (from [`plan_rows`]) as `disposal` says.
+/// Nothing goes unless every item is still a row of a mode by a context made now ([`rows_of`]:
+/// an app started while the request waited refuses it). Then, per item and right before it
+/// goes, the disk re-check (`recheck` with the never places of that context and the time now)
+/// and the trash check; else as `recycle::run_plan`.
 pub fn run_rows(
     state: &AppState,
     cache_dir: &Path,
     generation: u64,
-    rev: u64,
-    ids: &[u32],
+    plan: TrashPlan,
     disposal: Disposal,
+    stop: &dyn Fn() -> bool,
     report: impl FnMut(TrashProgressDto),
 ) -> Result<TrashDto, CmdError> {
-    let plan = state.trash_plan(generation, rev, ids)?;
     // ponytail: processes and a pending restart are read once per request, so an app started
     // during a long request is seen by the next one (its files in use fail as `Io`); read them
     // again per app-owned row if long requests matter.
     let ctx = (state.0.context)(Path::new(&plan.root));
     let rows = rows_of(state, generation, &plan, &ctx)?;
     let guard = Guard::new(ctx.os, &ctx.known);
-    let stop = || state.trash_stopped() || state.closing();
+    let stopping = || stop() || state.closing();
     let allowed = |item: &TrashItem| {
         let reason = *rows.get(&item.id).ok_or(CmdError::Protected)?;
-        recheck(&item.path, reason, &guard, now_ns(), &stop).map_err(refused)?;
+        recheck(&item.path, reason, &guard, now_ns(), &stopping).map_err(refused)?;
         match disposal {
             Disposal::Trash { bin, .. } => bin_takes(item, bin),
             Disposal::Purge => Ok(()),
@@ -88,7 +109,7 @@ pub fn run_rows(
         Disposal::Purge => purge::delete(path),
     };
     run_plan(
-        state, cache_dir, generation, plan, allowed, trash_one, report,
+        state, cache_dir, generation, plan, allowed, trash_one, stop, report,
     )
 }
 

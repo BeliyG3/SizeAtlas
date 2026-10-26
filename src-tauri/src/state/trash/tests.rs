@@ -80,12 +80,15 @@ fn a_folder_takes_its_new_time_only_if_it_had_the_known_one_before() {
     let folder = |name: &str| tree.children(0).find(|&c| tree.name(c) == name).unwrap();
     let (a, b, c) = (folder("a"), folder("b"), folder("c"));
     let known = |id: u32| tree.node(id).mtime;
-    let gone = |id: u32, before: i64, listed: Option<i64>| Trashed {
-        id: tree.children(id).next().unwrap(),
-        parent: id,
-        parent_before: Some(before),
-        parent_listed: listed,
-        parent_after: Some(known(id) + 1_000),
+    let gone = |id: u32, before: i64, listed: Option<i64>| {
+        let file = tree.children(id).next().unwrap();
+        Trashed {
+            id: file,
+            path: tree.path(file),
+            parent_before: Some(before),
+            parent_listed: listed,
+            parent_after: Some(known(id) + 1_000),
+        }
     };
     let trashed = [
         gone(a, known(a), None),
@@ -95,7 +98,10 @@ fn a_folder_takes_its_new_time_only_if_it_had_the_known_one_before() {
         gone(c, known(c) + 7, Some(known(c) + 7)),
     ];
     let expected = [known(a) + 1_000, known(b) + 1_000, known(c)];
+    let root = tree.name(0).to_owned();
     let generation = state.install_tree(tree);
-    let tree = state.remove_trashed(generation, &trashed, None).unwrap();
+    let tree = state
+        .remove_trashed(&root, generation, &trashed, None)
+        .unwrap();
     assert_eq!([a, b, c].map(|id| tree.node(id).mtime), expected);
 }

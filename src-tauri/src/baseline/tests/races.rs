@@ -3,7 +3,6 @@
 use std::sync::mpsc;
 
 use super::*;
-use crate::state::Trashed;
 
 /// How long two threads that should both end may take; a deadlock takes forever.
 const ENDS_WITHIN: Duration = Duration::from_secs(20);
@@ -13,7 +12,7 @@ fn a_baseline_and_a_trash_of_the_same_tree_both_end() {
     let (dir, cache) = (folder(), tempfile::tempdir().unwrap());
     let state = AppState::default();
     let generation = scan(&state, &dir, cache.path());
-    let (top, _) = item(&state, generation, &dir, "top.bin");
+    let top = trashed(&state, generation, &dir, "top.bin");
     let (done, ended) = mpsc::channel();
     let (computing, computed) = mpsc::channel();
 
@@ -29,15 +28,11 @@ fn a_baseline_and_a_trash_of_the_same_tree_both_end() {
     });
     computed.recv().unwrap();
     // T2 removes an item of the same tree meanwhile: it waits under the write lock for T1.
+    let root = root_of(&dir);
     thread::spawn(move || {
-        let trashed = Trashed {
-            id: top,
-            parent: 0,
-            parent_before: None,
-            parent_listed: None,
-            parent_after: None,
-        };
-        state.remove_trashed(generation, &[trashed], None).unwrap();
+        state
+            .remove_trashed(&root, generation, &[top], None)
+            .unwrap();
         done.send("trash").unwrap();
     });
 
@@ -54,8 +49,8 @@ fn an_opened_scan_is_compared_afterwards_once_busy_is_free() {
     let root = root_of(&dir);
     jobs::close_root(&state, &root);
 
-    // Opening holds `busy` (see `jobs::open_cached_waiting`); comparing waits until it is free.
-    let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+    // Opening holds the root's write (see `jobs::open_cached_waiting`); comparing waits for it.
+    let write = tauri::async_runtime::block_on(state.begin_write(&root)).unwrap();
     let opened = jobs::open_cached(&state, cache.path(), &root).unwrap();
     assert!(
         state.baseline(opened.generation).is_none(),

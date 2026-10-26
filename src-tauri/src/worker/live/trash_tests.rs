@@ -90,7 +90,7 @@ fn a_first_scan_lets_finished_folders_and_root_files_go_but_not_pending_ones() {
     .unwrap();
     assert!(checked);
     let scan = session.scan.unwrap();
-    let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+    let write = tauri::async_runtime::block_on(state.begin_scan_write(&job.root)).unwrap();
     finish(&state, cache.path(), &job, scan, write, &notify).unwrap();
     let tree = state.tree(scan).unwrap();
     assert_totals(&tree);
@@ -144,7 +144,7 @@ fn an_item_a_rescan_listed_before_it_went_is_not_in_the_installed_tree() {
     )
     .unwrap();
     assert_eq!(done.removed, 1);
-    let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+    let write = tauri::async_runtime::block_on(state.begin_scan_write(&job.root)).unwrap();
     let notify: Notify = Arc::new(|_| {});
     install_and_save(&state, cache.path(), &job, walked, write, &notify).unwrap();
     let summary = state.summaries()[0].clone();
@@ -202,7 +202,8 @@ fn a_file_trashed_during_a_first_scan_stays_out_of_the_finished_tree() {
             };
             wait(&|| !state.summaries().is_empty());
             // Before the walk ends: the scan cannot finish until this write is released.
-            let write = tauri::async_runtime::block_on(state.begin_write()).unwrap();
+            let write =
+                tauri::async_runtime::block_on(state.begin_scan_write(&root_of(&dir))).unwrap();
             let summary = state.summaries()[0].clone();
             let a_done = || {
                 let tree = state.tree(summary.generation).unwrap();

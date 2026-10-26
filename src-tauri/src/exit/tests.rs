@@ -1,7 +1,13 @@
 use super::*;
+use crate::error::CmdError;
+use crate::writes::{WriteGuard, ready};
 
-fn write(state: &AppState) -> Result<OwnedMutexGuard<()>, CmdError> {
-    tauri::async_runtime::block_on(state.begin_write())
+fn write(state: &AppState) -> Result<WriteGuard, CmdError> {
+    write_of(state, "/r")
+}
+
+fn write_of(state: &AppState, root: &str) -> Result<WriteGuard, CmdError> {
+    tauri::async_runtime::block_on(state.begin_write(root))
 }
 
 #[test]
@@ -47,7 +53,7 @@ fn a_waiting_write_is_refused_once_closing() {
     let state = AppState::default();
     let saving = write(&state).unwrap();
     let other = state.clone();
-    // Waits for `busy` (or gets there after the exit decision): either way it must not write.
+    // Waits for the root (or gets there after the exit decision): either way it must not write.
     let waiting = std::thread::spawn(move || write(&other).map(drop));
     assert_eq!(state.on_exit_request(), ExitDecision::PreventAndWait);
     drop(saving);
@@ -60,7 +66,7 @@ fn a_waiting_write_is_refused_once_closing() {
 fn exit_fallback_does_not_wait_once_allowed() {
     let state = AppState::default();
     assert_eq!(state.on_exit_request(), ExitDecision::Allow);
-    let _held = state.0.busy.try_lock().unwrap();
+    let _held = state.0.busy.try_read().unwrap();
     let (done, finished) = std::sync::mpsc::channel();
     let worker = state.clone();
     std::thread::spawn(move || {
@@ -73,4 +79,43 @@ fn exit_fallback_does_not_wait_once_allowed() {
             .is_ok(),
         "block_until_idle waited for `busy` although exit was already allowed"
     );
+}
+
+#[test]
+fn the_exit_waits_for_the_writes_of_every_root() {
+    let state = AppState::default();
+    let (a, b) = (
+        write_of(&state, "/a").unwrap(),
+        write_of(&state, "/b").unwrap(),
+    );
+    assert_eq!(state.on_exit_request(), ExitDecision::PreventAndWait);
+    drop(a);
+    assert!(ready(state.wait_until_idle()).is_none(), "/b still writes");
+    drop(b);
+    assert!(ready(state.wait_until_idle()).is_some());
+    assert_eq!(state.on_exit_request(), ExitDecision::Allow);
+}
+
+#[test]
+fn the_last_resort_exit_lets_no_queued_request_start() {
+    let state = AppState::default();
+    let saving = write_of(&state, "/a").unwrap();
+    let blocking = state.clone();
+    let last_resort = std::thread::spawn(move || blocking.block_until_idle());
+    // The exit waits for `busy` (no read can be had) once it has queued for it.
+    let start = std::time::Instant::now();
+    while state.0.busy.try_read().is_ok() {
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
+            "the exit never waited"
+        );
+        std::thread::yield_now();
+    }
+    assert!(state.closing(), "closing before the wait");
+    assert!(matches!(state.enqueue("/c".into()), Err(CmdError::Busy)));
+    let mut queued = std::pin::pin!(state.begin_write("/b"));
+    assert!(ready(queued.as_mut()).is_none(), "waits for the exit");
+    drop(saving);
+    last_resort.join().unwrap();
+    assert!(matches!(ready(queued.as_mut()), Some(Err(CmdError::Busy))));
 }

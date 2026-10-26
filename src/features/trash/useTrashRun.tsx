@@ -1,33 +1,27 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, onTrashProgress } from "../../api/client";
-import type { TrashPreview, TrashProgress } from "../../api/types";
-import type { Moving } from "./moving";
-import { TrashStatus, TrashWindow, WINDOW_ITEMS } from "./TrashProgress";
-
-/** The request that runs: its tree and root, the items asked for and their preview. */
-export interface TrashRun {
-  generation: number;
-  root: string;
-  ids: readonly number[];
-  preview: TrashPreview;
-  /** The items are deleted for good, not moved to the trash. */
-  purge: boolean;
-}
+import { applyProgress, shownRuns, type Run, type TrashRun } from "./runs";
+import { formatCount } from "../../format";
+import { useT } from "../../i18n/react";
+import { cancelledText } from "./text";
+import { TrashStatus, TrashWindow, TrashWindows, WINDOW_ITEMS } from "./TrashProgress";
 
 /**
- * The running trash (or delete) request as the user sees it: its progress (from
- * `trash-progress`) in the status bar and, for many items, in a window of its own, Stop, and the
- * rows it moves.
+ * The removal requests as the user sees them (`Run`): the progress of each (from
+ * `trash-progress`), its Stop, and the rows they move. The status bar shows the first two that
+ * started and how many more there are; a request of many items also gets a window of its own.
  */
-export function useTrashRun(onError: (e: unknown) => void) {
-  const [run, setRun] = useState<(TrashRun & { stopping: boolean }) | null>(null);
-  const [progress, setProgress] = useState<TrashProgress | null>(null);
-  // Set with the request, not derived from it: Stop does not change the rows.
-  const [moving, setMoving] = useState<Moving | null>(null);
+export function useTrashRun(onError: (e: unknown) => void, push: (text: string) => void) {
+  const { t, lang } = useT();
+  const [runs, setRuns] = useState<readonly Run[]>([]);
+  // The number of the next request: the first from the clock, so a reloaded view never reuses
+  // one that may still run in the backend.
+  const nextRequest = useRef<number | null>(null);
   useEffect(() => {
     let live = true;
+    // An event of a request that is no run (ended, or not ours) changes nothing.
     const unlisten = onTrashProgress((p) => {
-      if (live) setProgress(p);
+      if (live) setRuns((rs) => applyProgress(rs, p));
     });
     return () => {
       live = false;
@@ -35,28 +29,58 @@ export function useTrashRun(onError: (e: unknown) => void) {
     };
   }, []);
 
-  const start = (next: TrashRun) => {
-    setProgress(null);
-    setRun({ ...next, stopping: false });
-    setMoving({ generation: next.generation, ids: new Set(next.ids), purge: next.purge });
+  /** Adds `next` as a request that waits; returns its number for the backend. */
+  const start = (next: TrashRun): number => {
+    const request = nextRequest.current ?? Date.now();
+    nextRequest.current = request + 1;
+    setRuns((rs) => [...rs, { ...next, request, progress: null, stopping: false }]);
+    return request;
   };
-  const end = () => {
-    setRun(null);
-    setMoving(null);
-  };
-  const stop = () => {
-    setRun((r) => r && { ...r, stopping: true });
-    api.cancelTrash().catch(onError);
+  const end = (request: number) => setRuns((rs) => rs.filter((r) => r.request !== request));
+  const stop = (request: number) => {
+    setRuns((rs) => rs.map((r) => (r.request === request ? { ...r, stopping: true } : r)));
+    // Stop also cancels the waiting requests of that volume: say how many.
+    api.cancelTrash(request).then((n) => {
+      if (n > 0) push(cancelledText(n, t, (c) => formatCount(c, lang)));
+    }, onError);
   };
 
-  let status: ReactNode = null;
-  let floating: ReactNode = null;
-  if (run) {
-    const shown = progress ?? { done: 0, total: run.preview.count, current: null };
-    const big = run.preview.count > WINDOW_ITEMS;
-    const line = { progress: shown, stopping: run.stopping, purge: run.purge };
-    status = <TrashStatus {...line} onStop={big ? null : stop} />;
-    if (big) floating = <TrashWindow {...line} onStop={stop} />;
-  }
-  return { root: run?.root ?? null, start, end, moving, status, window: floating };
+  // A request that waits has no progress yet: it shows nowhere but on its rows.
+  const { shown, more } = shownRuns(runs);
+  const big = (r: Run) => r.preview.count > WINDOW_ITEMS;
+  const line = (r: Run) => ({
+    progress: r.progress ?? { request: r.request, done: 0, total: r.preview.count, current: null },
+    stopping: r.stopping,
+    purge: r.purge,
+  });
+  const status: ReactNode =
+    shown.length === 0 ? null : (
+      <>
+        {shown.map((r) => (
+          <TrashStatus
+            key={r.request}
+            {...line(r)}
+            root={r.root}
+            onStop={big(r) ? null : () => stop(r.request)}
+          />
+        ))}
+        {more > 0 && (
+          // Isolated, so a right-to-left interface still reads "+N".
+          <bdi dir="ltr" className="dim">
+            {`+${formatCount(more, lang)}`}
+          </bdi>
+        )}
+      </>
+    );
+  const windows = runs.filter((r) => r.progress !== null && big(r));
+  const floating: ReactNode =
+    windows.length === 0 ? null : (
+      <TrashWindows>
+        {windows.map((r) => (
+          <TrashWindow key={r.request} {...line(r)} onStop={() => stop(r.request)} />
+        ))}
+      </TrashWindows>
+    );
+  const roots = useMemo(() => new Set(runs.map((r) => r.root)), [runs]);
+  return { roots, start, end, moving: runs, status, windows: floating };
 }

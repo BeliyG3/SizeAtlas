@@ -16,6 +16,7 @@ mod sources;
 mod state;
 mod title_bar;
 mod worker;
+mod writes;
 
 use exit::ExitDecision;
 use state::AppState;
@@ -77,9 +78,9 @@ pub fn run() {
             commands::roots::list_roots,
             commands::roots::scan,
             commands::roots::refresh_folder,
-            commands::roots::trash,
-            commands::roots::delete_for_good,
-            commands::roots::cancel_trash,
+            commands::trash::trash,
+            commands::trash::delete_for_good,
+            commands::trash::cancel_trash,
             commands::roots::cancel_scan,
             commands::roots::open_cached,
             commands::roots::close_root,

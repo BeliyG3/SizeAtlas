@@ -186,7 +186,7 @@ pub(super) async fn scan_first(
     let walked = walked.map_err(CmdError::from).and_then(|r| r);
     let complete = matches!(walked, Ok(LiveOutcome::Done)) && !job.discard.load(Ordering::Relaxed);
     let write = if complete {
-        state.begin_write().await.ok()
+        state.begin_scan_write(&job.root).await.ok()
     } else {
         None
     };
@@ -214,7 +214,7 @@ fn finish(
     dir: &Path,
     job: &ScanJob,
     scan: u64,
-    write: OwnedMutexGuard<()>,
+    write: WriteGuard,
     notify: &Notify,
 ) -> Result<(), CmdError> {
     let volume = sources::volume_usage(Path::new(&job.root));

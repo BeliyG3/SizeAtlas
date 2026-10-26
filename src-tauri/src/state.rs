@@ -14,6 +14,8 @@ use crate::details::MAX_DETAILS;
 use crate::dto::{CrumbDto, RootsDto, Summary};
 use crate::error::CmdError;
 use crate::queue::ScanQueue;
+use crate::recycle::requests::Requests;
+use crate::writes::{Locks, VolumeFn, default_volume_of};
 
 /// A scanned or loaded root. Its generation names the root and this version of its tree.
 struct OpenRoot {
@@ -54,13 +56,18 @@ pub struct Shared {
     data: RwLock<Data>,
     /// The running scan and the roots waiting for it. Taken before `data` when both are needed.
     scans: Mutex<ScanQueue>,
-    /// Held while a saved scan is written, deleted or read (see `begin_write`); closing waits
-    /// for it.
-    pub busy: Arc<tokio::sync::Mutex<()>>,
+    /// The exit gate: every write holds it for reading (see `writes.rs`), the exit decisions
+    /// take it for writing (see `exit.rs`).
+    pub busy: Arc<tokio::sync::RwLock<()>>,
+    /// The locks of the roots and of the volumes (see `writes.rs`).
+    pub locks: Locks,
+    /// The volume of a root, asked once per root (see `AppState::volume_of`).
+    pub volume_of: VolumeFn,
     /// See `exit.rs`.
     pub exit: AtomicU8,
-    /// Stop asked for the running trash request (see `AppState::stop_trash`).
-    pub trash_stop: AtomicBool,
+    /// The trash requests confirmed and not yet ended, each with its stop (see
+    /// `recycle::requests`). Taken after `scans` and `data` when more are needed.
+    pub requests: Mutex<Requests>,
     /// The context of the clean-up modes, built for each walk that needs it.
     pub context: ContextFn,
     /// The last clean-up walk, shared by the lists until the tree changes (see `state/cleanup.rs`).
@@ -79,15 +86,27 @@ impl Default for AppState {
 impl AppState {
     /// A state whose clean-up modes see the machine through `context`.
     pub fn with_context(context: ContextFn) -> Self {
+        AppState::new(context, default_volume_of())
+    }
+
+    /// A state whose roots are on the volumes `volume_of` tells.
+    #[cfg(test)]
+    pub fn with_volumes(volume_of: VolumeFn) -> Self {
+        AppState::new(default_context(), volume_of)
+    }
+
+    fn new(context: ContextFn, volume_of: VolumeFn) -> Self {
         AppState(Arc::new(Shared {
             data: RwLock::new(Data {
                 generation: 0,
                 roots: Vec::new(),
             }),
-            busy: Arc::new(tokio::sync::Mutex::new(())),
+            busy: Arc::new(tokio::sync::RwLock::new(())),
+            locks: Locks::default(),
+            volume_of,
             scans: Mutex::default(),
             exit: AtomicU8::new(crate::exit::RUNNING),
-            trash_stop: AtomicBool::new(false),
+            requests: Mutex::default(),
             context,
             walked: Mutex::default(),
         }))
@@ -306,7 +325,7 @@ mod trash;
 /// The scanned "drive" of the clean-up tests, shared with the tests of deleting rows.
 #[cfg(test)]
 pub(crate) use self::lists::cleanup_tests;
-pub use self::trash::{TrashItem, TrashPlan, Trashed, settle_parent};
+pub use self::trash::{TrashItem, TrashPlan, Trashed, current_id, settle_parent};
 
 #[cfg(test)]
 mod tests;
