@@ -14,39 +14,48 @@ pub(super) fn ago(days: i64) -> i64 {
 }
 
 /// A file, or a folder when the path ends with a separator. 10 bytes, 30 days old.
-pub(super) struct Item {
+pub(crate) struct Item {
     path: String,
     size: u64,
+    /// The logical length; `size` unless set.
+    len: Option<u64>,
     mtime: i64,
     flags: u8,
 }
 
-pub(super) fn it(path: impl Into<String>) -> Item {
+pub(crate) fn it(path: impl Into<String>) -> Item {
     Item {
         path: path.into(),
         size: 10,
+        len: None,
         mtime: ago(30),
         flags: 0,
     }
 }
 
 impl Item {
-    pub(super) fn path(&self) -> &str {
+    pub(crate) fn path(&self) -> &str {
         &self.path
     }
-    pub(super) fn size(self, size: u64) -> Item {
+    pub(crate) fn size(self, size: u64) -> Item {
         Item { size, ..self }
     }
-    pub(super) fn mtime(self, mtime: i64) -> Item {
+    pub(crate) fn len(self, len: u64) -> Item {
+        Item {
+            len: Some(len),
+            ..self
+        }
+    }
+    pub(crate) fn mtime(self, mtime: i64) -> Item {
         Item { mtime, ..self }
     }
-    pub(super) fn flags(self, flags: u8) -> Item {
+    pub(crate) fn flags(self, flags: u8) -> Item {
         Item { flags, ..self }
     }
 }
 
 /// A tree under `root` holding `items` and every folder on their way (30 days old).
-pub(super) fn build(root: &str, items: Vec<Item>) -> Tree {
+pub(crate) fn build(root: &str, items: Vec<Item>) -> Tree {
     let dir = |id, parent, name: &str| DirRec {
         id,
         parent,
@@ -84,7 +93,7 @@ pub(super) fn build(root: &str, items: Vec<Item>) -> Tree {
             recs[id].files.push(FileRec {
                 name: name.into(),
                 size: item.size,
-                len: item.size,
+                len: item.len.unwrap_or(item.size),
                 mtime: item.mtime,
                 flags: item.flags,
                 ino: None,
@@ -160,7 +169,7 @@ pub(super) fn roaming(rest: &str) -> String {
     format!(r"Users\u\AppData\Roaming\{rest}")
 }
 
-pub(super) fn win() -> Context {
+pub(crate) fn win() -> Context {
     let s = |s: &str| s.to_owned();
     Context {
         os: Os::Windows,

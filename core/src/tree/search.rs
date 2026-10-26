@@ -1,8 +1,8 @@
 //! Search of a subtree by name (substrings, masks `*`, `?` and extensions, case-insensitive)
 //! and by conditions on size, modified date, type and files/folders (see `filters`).
 
-use super::Tree;
 use super::lists::TopN;
+use super::{Node, Tree};
 
 mod filters;
 pub use filters::{Filters, Kind};
@@ -86,6 +86,12 @@ impl Query {
 
     pub fn filters(&self) -> &Filters {
         &self.filters
+    }
+
+    /// Whether a node named `name` seeds a duplicate search: the name words, the date, type and
+    /// files/folders conditions hold. Size is left out; the search applies it to the lengths.
+    pub fn seeds(&self, node: &Node, name: &str, now_ns: i64) -> bool {
+        self.filters.accepts_but_size(node, now_ns) && self.matches(name, node.is_dir())
     }
 
     /// Whether the name fits the name words, masks and extensions (not the conditions).

@@ -12,10 +12,10 @@ mod age;
 mod build;
 mod caches;
 mod markers;
-mod names;
+pub(crate) mod names;
 mod never;
-mod paths;
-mod pattern;
+pub(crate) mod paths;
+pub(crate) mod pattern;
 mod recheck;
 mod report;
 mod rules;
@@ -24,7 +24,7 @@ mod table;
 mod temp;
 mod unix_rules;
 mod walk;
-mod zones;
+pub(crate) mod zones;
 
 pub use age::{is_old, newest_mtime};
 pub use never::{Guard, Trail, is_protected_name};
@@ -232,7 +232,7 @@ mod recheck_time_tests;
 #[cfg(all(test, unix))]
 mod recheck_unix_tests;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 #[cfg(test)]
 mod tests_never;
 #[cfg(test)]

@@ -65,6 +65,8 @@ pub enum At {
     XdgCache,
     /// The root of the file system (Unix only).
     FsRoot,
+    /// The root of any drive letter (Windows only).
+    AnyVolume,
     /// The override, else the tool's default for the OS.
     NugetHttp,
     PipCache,
@@ -133,6 +135,7 @@ impl At {
                 _ => vec![],
             },
             At::FsRoot => return if win { vec![] } else { vec![vec![]] },
+            At::AnyVolume => return if win { vec![vec!["?:"]] } else { vec![] },
             At::NugetHttp => vec![or(
                 &k.env.nuget_http,
                 if win {

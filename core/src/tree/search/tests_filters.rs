@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::categories::Category;
+use crate::tree::Node;
 const KB: u64 = 1 << 10;
 const MB: u64 = 1 << 20;
 const GB: u64 = 1 << 30;
@@ -299,4 +300,25 @@ fn conditions_alone_make_a_query() {
     assert!(Query::parse("  ").is_none());
     // Conditions do not touch the name test.
     assert!(q(">1GB type:video").matches("anything", true));
+}
+
+#[test]
+fn seeds_ignore_size_conditions() {
+    let node = Node {
+        size: 5000,
+        len: 5000,
+        category: Category::Images as u8,
+        flags: crate::tree::flags::ALIVE,
+        ..Node::default()
+    };
+    assert!(q(">1GB holiday").seeds(&node, "holiday.jpg", 0));
+    assert!(!q(">1GB holiday").seeds(&node, "trip.jpg", 0));
+    assert!(!q("type:video").seeds(&node, "holiday.jpg", 0));
+}
+
+#[test]
+fn fits_size_is_inclusive() {
+    let f = filters(">=5000");
+    assert!(f.fits_size(5000));
+    assert!(!f.fits_size(4999));
 }

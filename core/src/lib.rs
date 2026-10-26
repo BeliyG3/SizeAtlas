@@ -5,6 +5,7 @@ pub mod cache;
 pub mod categories;
 pub mod cleanup;
 pub mod details;
+pub mod duplicates;
 mod platform;
 pub mod scanner;
 pub mod tree;

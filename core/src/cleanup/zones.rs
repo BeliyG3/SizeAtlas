@@ -22,7 +22,7 @@ const COMMON: &[Entry] = &[
 
 const WINDOWS: &[Entry] = &[(At::Home, &["AppData"])];
 
-const MAC: &[Entry] = &[
+pub(crate) const MAC: &[Entry] = &[
     (At::Home, &["Library"]),
     (At::FsRoot, &["Applications"]),
     (At::FsRoot, &["Library"]),
@@ -32,7 +32,7 @@ const MAC: &[Entry] = &[
     (At::FsRoot, &["private"]),
 ];
 
-const LINUX: &[Entry] = &[
+pub(crate) const LINUX: &[Entry] = &[
     (At::FsRoot, &["usr"]),
     (At::FsRoot, &["opt"]),
     (At::FsRoot, &["snap"]),
@@ -41,7 +41,7 @@ const LINUX: &[Entry] = &[
 ];
 
 /// Zone names at any depth, ignoring case.
-const NAMES: &[&str] = &[
+pub(crate) const NAMES: &[&str] = &[
     "$Recycle.Bin",
     "System Volume Information",
     "Program Files",

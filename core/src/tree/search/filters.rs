@@ -82,11 +82,18 @@ impl Filters {
     /// Whether the node passes every condition, `now_ns` being the current time like
     /// `Node::mtime`. An unknown modified time (0) passes neither date condition.
     pub(super) fn accepts(&self, node: &Node, now_ns: i64) -> bool {
+        self.fits_size(node.size) && self.accepts_but_size(node, now_ns)
+    }
+
+    /// Whether `bytes` lies within the size bounds (both inclusive).
+    pub fn fits_size(&self, bytes: u64) -> bool {
+        self.min_size.is_none_or(|m| bytes >= m) && self.max_size.is_none_or(|m| bytes <= m)
+    }
+
+    /// [`Filters::accepts`] without the size bounds.
+    pub(super) fn accepts_but_size(&self, node: &Node, now_ns: i64) -> bool {
         let is_dir = node.is_dir();
-        if self.min_size.is_some_and(|m| node.size < m)
-            || self.max_size.is_some_and(|m| node.size > m)
-            || self.kind == Some(if is_dir { Kind::Files } else { Kind::Folders })
-        {
+        if self.kind == Some(if is_dir { Kind::Files } else { Kind::Folders }) {
             return false;
         }
         if !self.types.is_empty()
