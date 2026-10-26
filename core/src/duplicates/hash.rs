@@ -50,7 +50,6 @@ impl Stamp {
 
 /// BLAKE3 of the first [`PREFIX`] bytes of a file of `len` bytes, and that same hash as the
 /// hash of the whole file when the file is no longer than the prefix.
-#[cfg_attr(not(test), expect(dead_code, reason = "the search pipeline calls it"))]
 pub(crate) fn prefix(file: &mut File, len: u64) -> io::Result<(Hash, Option<Hash>)> {
     let mut buf = [0u8; PREFIX];
     let n = len.min(PREFIX as u64) as usize;
@@ -61,7 +60,6 @@ pub(crate) fn prefix(file: &mut File, len: u64) -> io::Result<(Hash, Option<Hash
 }
 
 /// BLAKE3 of the last [`TAIL`] bytes of a file of `len` bytes.
-#[cfg_attr(not(test), expect(dead_code, reason = "the search pipeline calls it"))]
 pub(crate) fn tail(file: &mut File, len: u64) -> io::Result<Hash> {
     let mut buf = [0u8; TAIL];
     let n = len.min(TAIL as u64);
@@ -72,7 +70,6 @@ pub(crate) fn tail(file: &mut File, len: u64) -> io::Result<Hash> {
 
 /// BLAKE3 of the whole file, read from its start in reads of [`BUFFER`]; `progress` gets the
 /// bytes of each read. `None` when `cancel` is set before a read.
-#[cfg_attr(not(test), expect(dead_code, reason = "the search pipeline calls it"))]
 pub(crate) fn full(
     file: &mut File,
     cancel: &AtomicBool,
@@ -164,7 +161,7 @@ const LOCKED: &[i32] = &[32, 33];
 #[cfg(not(windows))]
 const LOCKED: &[i32] = &[];
 
-fn skip_of(e: &io::Error) -> Skip {
+pub(super) fn skip_of(e: &io::Error) -> Skip {
     match e.kind() {
         io::ErrorKind::NotFound => Skip::Changed,
         io::ErrorKind::PermissionDenied => Skip::NoAccess,
@@ -182,7 +179,7 @@ fn same_time(stored: i64, own: i64, path: &Path) -> bool {
     own == stored || (cfg!(windows) && listed_mtime(path) == Some(stored))
 }
 
-fn listed_mtime(path: &Path) -> Option<i64> {
+pub(super) fn listed_mtime(path: &Path) -> Option<i64> {
     let (folder, name) = (path.parent()?, path.file_name()?);
     let entry = fs::read_dir(folder)
         .ok()?

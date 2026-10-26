@@ -103,7 +103,6 @@ impl Group {
 /// object. Equal ids on different volumes (a cloned volume keeps its serial number), or of
 /// different lengths (a server reusing ids across the file systems of a share), are told apart
 /// by nothing, so their objects get no id; a path without an id is an object of its own.
-#[cfg_attr(not(test), expect(dead_code, reason = "the search pipeline calls it"))]
 pub(crate) fn merge_by_id(opened: Vec<(Location, Identity, Candidate)>) -> Vec<Object> {
     let mut objects: Vec<Object> = Vec::new();
     let mut found: HashMap<(u16, FileId), usize> = HashMap::new();

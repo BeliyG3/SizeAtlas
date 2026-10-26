@@ -27,7 +27,6 @@ pub(crate) struct Candidate {
 }
 
 /// Every candidate of `roots`.
-#[cfg_attr(not(test), expect(dead_code, reason = "the search pipeline calls it"))]
 pub(crate) fn candidates(roots: &[SearchRoot], opts: &Options) -> Vec<Candidate> {
     collect(roots, opts).0
 }

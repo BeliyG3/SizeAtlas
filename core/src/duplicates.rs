@@ -9,10 +9,13 @@ pub mod cache;
 mod candidates;
 pub mod group;
 pub mod hash;
+mod pipeline;
+mod pool;
 mod zones;
 
 pub use crate::platform::{FileId, Identity};
 pub use hash::Skip;
+pub use pipeline::{Event, Outcome, Phase, Prepared, Progress, Stats, Unread, prepare, search};
 
 /// Smaller files are never compared: they free too little to be worth reading.
 pub const MIN_LEN: u64 = 4096;
@@ -88,10 +91,18 @@ pub fn estimate(roots: &[SearchRoot], opts: &Options) -> Estimate {
 }
 
 #[cfg(test)]
+mod tests;
+#[cfg(test)]
 mod tests_candidates;
 #[cfg(test)]
 mod tests_group;
 #[cfg(test)]
 mod tests_hash;
+#[cfg(test)]
+mod tests_links;
+#[cfg(test)]
+mod tests_search;
+#[cfg(test)]
+mod tests_unread;
 #[cfg(test)]
 mod tests_zones;

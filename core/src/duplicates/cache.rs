@@ -26,10 +26,6 @@ pub struct HashCache {
     volumes: HashMap<String, HashMap<FileId, Entry>>,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the search pipeline calls them")
-)]
 impl HashCache {
     /// What is known of the file `id` of `volume`, if it still has `len` and `mtime`.
     pub(crate) fn get(&self, volume: &str, id: FileId, len: u64, mtime: i64) -> Option<Hashes> {
