@@ -190,6 +190,7 @@
   "trash.doneCleanup": "Naar de prullenbak verplaatst: {size}. Leeg de prullenbak om de ruimte vrij te maken.",
   "trash.queued": "in wachtrij…",
   "trash.already": "Wordt al verwijderd.",
+  "trash.notRemoved": "Er is niets verwijderd: de items zijn intussen gewijzigd.",
   "trash.gone_one": "{items} item bestond al niet meer.",
   "trash.gone_other": "{items} items bestonden al niet meer.",
   "trash.cancelledQueued_one": "{items} wachtende verwijdering geannuleerd.",

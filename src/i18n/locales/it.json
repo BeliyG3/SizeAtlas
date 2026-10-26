@@ -201,6 +201,7 @@
   "trash.doneCleanup": "Spostato nel cestino: {size}. Svuotalo per liberare lo spazio.",
   "trash.queued": "in coda…",
   "trash.already": "Già in corso di rimozione.",
+  "trash.notRemoved": "Non è stato rimosso nulla: nel frattempo gli elementi sono cambiati.",
   "trash.gone_one": "{items} elemento non esisteva più.",
   "trash.gone_many": "{items} di elementi non esistevano più.",
   "trash.gone_other": "{items} elementi non esistevano più.",

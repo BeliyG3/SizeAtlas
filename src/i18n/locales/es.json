@@ -201,6 +201,7 @@
   "trash.doneCleanup": "Movido a la papelera: {size}. Vacíala para liberar el espacio.",
   "trash.queued": "en cola…",
   "trash.already": "Ya se está quitando.",
+  "trash.notRemoved": "No se quitó nada: los elementos cambiaron mientras tanto.",
   "trash.gone_one": "{items} elemento ya no existía.",
   "trash.gone_many": "{items} de elementos ya no existían.",
   "trash.gone_other": "{items} elementos ya no existían.",

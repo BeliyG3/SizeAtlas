@@ -15,7 +15,7 @@ import { availabilityNoteKey, runningJob, trashAvailability, trashNoteKey } from
 import { useTrashRefused } from "./useTrashRefused";
 
 /** A request waiting for its confirmation. */
-interface Asking {
+interface Question {
   generation: number;
   root: string;
   rev: number;
@@ -23,8 +23,19 @@ interface Asking {
   preview: TrashPreview;
   /** Rows of a clean-up list: the backend checks them again; `purge` deletes them for good. */
   how: Removal;
+}
+
+interface Asking extends Question {
   /** One per question: a new request gets a new dialog, which starts at its first question. */
   serial: number;
+}
+
+const isStale = (e: unknown) => isCmdError(e) && e.code === "StaleId";
+
+/** The current revision of the tree with `generation` and the preview of `ids` at it. */
+async function fresh(generation: number, ids: number[]) {
+  const { rev } = await api.getSummary(generation);
+  return { rev, preview: await api.trashPreview(generation, rev, ids) };
 }
 
 /**
@@ -71,6 +82,14 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
   const questions = useRef(0);
   const job = useMemo(() => runningJob(roots), [roots]);
 
+  /** Opens the dialog for `next`, unless one is open: one question at a time. */
+  // ponytail: a question that comes while another is open is dropped; a queue of questions if
+  // that ever matters.
+  const show = (next: Question) => {
+    const serial = ++questions.current;
+    setAsking((shown) => shown ?? { ...next, serial });
+  };
+
   /** Asks to remove `ids` of the tree with `generation` `how`, showing what would go. */
   const ask = (generation: number, ids: readonly number[], how: Removal) => {
     const entry = entries.find((e) => e.summary?.generation === generation);
@@ -81,43 +100,71 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
     }
     const { rev } = entry.summary;
     const list = [...ids];
-    api.trashPreview(generation, rev, list).then(
-      // One question at a time: one asked at the same moment does not replace it.
-      (preview) => {
-        const serial = ++questions.current;
-        const next = { generation, root: entry.root, rev, ids: list, preview, how, serial };
-        setAsking((shown) => shown ?? next);
-      },
-      // A preview is busy only while a scan still lists an item: say so as the menus do.
-      (e: unknown) => {
-        if (isCmdError(e) && e.code === "Busy") push(t(trashNoteKey(list.length)));
-        else onError(e);
-      },
-    );
+    api
+      .trashPreview(generation, rev, list)
+      .then((preview) => ({ rev, preview }))
+      // A request of the root ended after this view: preview at the revision it left.
+      .catch((e: unknown) => (isStale(e) ? fresh(generation, list) : Promise.reject(e)))
+      .then(
+        ({ rev, preview }) => show({ generation, root: entry.root, rev, ids: list, preview, how }),
+        // A preview is busy only while a scan still lists an item: say so as the menus do.
+        (e: unknown) => {
+          if (isCmdError(e) && e.code === "Busy") push(t(trashNoteKey(list.length)));
+          else onError(e);
+        },
+      );
   };
-  const confirm = () => {
-    if (!asking) return;
-    setAsking(null);
-    const { generation, root, rev, ids, preview, how } = asking;
-    // The preview may have come after another request took these items.
-    if (isRemoving(generation, ids)) {
-      push(t("trash.already"));
-      return;
-    }
+  /** Sends the confirmed `asked`; refused as out of date, it is looked at again (`retry`). */
+  const send = (asked: Question) => {
+    const { generation, root, rev, ids, preview, how } = asked;
     const request = running.start({ generation, root, ids, preview, purge: how === "purge" });
     const removal =
       how === "purge"
         ? api.deleteForGood(request, generation, rev, ids)
         : api.trash(request, generation, rev, ids, how === "cleanup");
     removal
-      .then((result) => {
-        // Stopped while it waited: nothing was tried, nothing to report.
-        if (result.cancelled) return;
-        onTrashed();
-        const count = (n: number) => formatCount(n, lang);
-        for (const text of trashReport(result, preview, t, errorText, count, size, how)) push(text);
-      }, onError)
+      .then(
+        (result) => {
+          // Stopped while it waited: nothing was tried, nothing to report.
+          if (result.cancelled) return;
+          onTrashed();
+          const count = (n: number) => formatCount(n, lang);
+          for (const text of trashReport(result, preview, t, errorText, count, size, how))
+            push(text);
+        },
+        (e: unknown) => (isStale(e) ? retry(asked) : onError(e)),
+      )
+      // After a retry: its rows stay marked until the next request has them.
       .finally(() => running.end(request));
+  };
+  /**
+   * `asked` was refused as out of date: another request of its root ended while the dialog was
+   * open. Previewed again, the same count and size go at once; anything else is asked again,
+   * never sent unseen. Items gone (or a tree compacted meanwhile): nothing was removed, say so.
+   */
+  const retry = (asked: Question) =>
+    fresh(asked.generation, asked.ids)
+      .then(({ rev, preview }) => {
+        // The same revision would be refused again: no loop.
+        if (rev === asked.rev) throw new Error("still out of date");
+        const same = preview.count === asked.preview.count && preview.size === asked.preview.size;
+        if (same) send({ ...asked, rev, preview });
+        else show({ ...asked, rev, preview });
+      })
+      .catch((e: unknown) => {
+        push(t("trash.notRemoved"));
+        // The view is out of date too: the roots are read again.
+        if (isStale(e)) onError(e);
+      });
+  const confirm = () => {
+    if (!asking) return;
+    setAsking(null);
+    // The preview may have come after another request took these items.
+    if (isRemoving(asking.generation, asking.ids)) {
+      push(t("trash.already"));
+      return;
+    }
+    send(asking);
   };
   // The views are memoized: stable handlers call the latest `ask`.
   const latest = useRef(ask);

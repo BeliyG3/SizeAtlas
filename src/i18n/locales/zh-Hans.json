@@ -179,6 +179,7 @@
   "trash.doneCleanup": "已移到回收站：{size}。清空回收站即可释放空间。",
   "trash.queued": "排队中…",
   "trash.already": "已在移除中。",
+  "trash.notRemoved": "未移除任何内容：其间项目已更改。",
   "trash.gone_other": "{items} 个项目已不存在。",
   "trash.cancelledQueued_other": "已取消 {items} 个排队中的移除。",
   "purge.ask": "要永久删除吗？",

@@ -212,6 +212,7 @@
   "trash.doneCleanup": "Переміщено до кошика: {size}. Очистьте кошик, щоб звільнити місце.",
   "trash.queued": "у черзі…",
   "trash.already": "Уже видаляється.",
+  "trash.notRemoved": "Нічого не видалено: елементи тим часом змінилися.",
   "trash.gone_one": "{items} елемент уже відсутній.",
   "trash.gone_few": "{items} елементи вже відсутні.",
   "trash.gone_many": "{items} елементів уже відсутні.",

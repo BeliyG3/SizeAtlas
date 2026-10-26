@@ -201,6 +201,7 @@
   "trash.doneCleanup": "Movido para a lixeira: {size}. Esvazie a lixeira para liberar o espaço.",
   "trash.queued": "na fila…",
   "trash.already": "Já está sendo removido.",
+  "trash.notRemoved": "Nada foi removido: os itens mudaram nesse meio-tempo.",
   "trash.gone_one": "{items} item já não existia.",
   "trash.gone_many": "{items} de itens já não existiam.",
   "trash.gone_other": "{items} itens já não existiam.",

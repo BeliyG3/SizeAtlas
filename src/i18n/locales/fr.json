@@ -201,6 +201,7 @@
   "trash.doneCleanup": "Déplacé vers la corbeille : {size}. Videz-la pour libérer l’espace.",
   "trash.queued": "en attente…",
   "trash.already": "Déjà en cours de suppression.",
+  "trash.notRemoved": "Rien n’a été supprimé : les éléments ont changé entre-temps.",
   "trash.gone_one": "{items} élément n’existait déjà plus.",
   "trash.gone_many": "{items} d’éléments n’existaient déjà plus.",
   "trash.gone_other": "{items} éléments n’existaient déjà plus.",

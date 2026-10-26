@@ -190,6 +190,7 @@
   "trash.doneCleanup": "Moved to the trash: {size}. Empty the trash to free the space.",
   "trash.queued": "queued…",
   "trash.already": "Already being removed.",
+  "trash.notRemoved": "Nothing was removed: the items changed meanwhile.",
   "trash.gone_one": "{items} item was already gone.",
   "trash.gone_other": "{items} items were already gone.",
   "trash.cancelledQueued_one": "Cancelled {items} queued removal.",

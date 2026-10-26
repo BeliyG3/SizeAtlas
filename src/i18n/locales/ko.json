@@ -179,6 +179,7 @@
   "trash.doneCleanup": "휴지통으로 이동함: {size}. 공간을 확보하려면 휴지통을 비우세요.",
   "trash.queued": "대기 중…",
   "trash.already": "이미 제거하는 중입니다.",
+  "trash.notRemoved": "아무것도 제거되지 않았습니다. 그 사이에 항목이 변경되었습니다.",
   "trash.gone_other": "항목 {items}개는 이미 없었습니다.",
   "trash.cancelledQueued_other": "대기 중인 제거 {items}건을 취소했습니다.",
   "purge.ask": "영구 삭제하시겠습니까?",

@@ -179,6 +179,7 @@
   "trash.doneCleanup": "Đã chuyển vào thùng rác: {size}. Hãy dọn sạch thùng rác để giải phóng dung lượng.",
   "trash.queued": "đang chờ…",
   "trash.already": "Đang được xóa rồi.",
+  "trash.notRemoved": "Không có gì bị xóa: các mục đã thay đổi trong lúc đó.",
   "trash.gone_other": "{items} mục đã không còn.",
   "trash.cancelledQueued_other": "Đã hủy {items} lượt xóa đang chờ.",
   "purge.ask": "Xóa vĩnh viễn?",

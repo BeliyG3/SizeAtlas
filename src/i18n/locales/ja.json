@@ -179,6 +179,7 @@
   "trash.doneCleanup": "ごみ箱に移動しました: {size}。空き領域を増やすには、ごみ箱を空にしてください。",
   "trash.queued": "待機中…",
   "trash.already": "すでに削除中です。",
+  "trash.notRemoved": "何も削除されませんでした。その間に項目が変更されました。",
   "trash.gone_other": "{items} 個の項目はすでに存在しませんでした。",
   "trash.cancelledQueued_other": "待機中の削除 {items} 件を取り消しました。",
   "purge.ask": "完全に削除しますか?",

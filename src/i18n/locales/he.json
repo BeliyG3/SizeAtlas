@@ -201,6 +201,7 @@
   "trash.doneCleanup": "הועבר לפח: {size}. רוקנו את הפח כדי לפנות את המקום.",
   "trash.queued": "בתור…",
   "trash.already": "כבר בתהליך הסרה.",
+  "trash.notRemoved": "לא הוסר דבר: הפריטים השתנו בינתיים.",
   "trash.gone_one": "{items} פריט כבר לא היה קיים.",
   "trash.gone_two": "{items} פריטים כבר לא היו קיימים.",
   "trash.gone_other": "{items} פריטים כבר לא היו קיימים.",

@@ -190,6 +190,7 @@
   "trash.doneCleanup": "रद्दी में ले जाया गया: {size}। जगह खाली करने के लिए रद्दी खाली करें।",
   "trash.queued": "कतार में…",
   "trash.already": "पहले से हटाया जा रहा है।",
+  "trash.notRemoved": "कुछ भी नहीं हटाया गया: इस बीच आइटम बदल गए।",
   "trash.gone_one": "{items} आइटम पहले ही मौजूद नहीं था।",
   "trash.gone_other": "{items} आइटम पहले ही मौजूद नहीं थे।",
   "trash.cancelledQueued_one": "कतार में लगा {items} हटाने का अनुरोध रद्द किया गया।",

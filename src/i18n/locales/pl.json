@@ -212,6 +212,7 @@
   "trash.doneCleanup": "Przeniesiono do kosza: {size}. Opróżnij kosz, aby zwolnić miejsce.",
   "trash.queued": "w kolejce…",
   "trash.already": "Już trwa usuwanie.",
+  "trash.notRemoved": "Nic nie usunięto: elementy w międzyczasie się zmieniły.",
   "trash.gone_one": "{items} element już nie istniał.",
   "trash.gone_few": "{items} elementy już nie istniały.",
   "trash.gone_many": "{items} elementów już nie istniało.",

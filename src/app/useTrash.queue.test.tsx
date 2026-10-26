@@ -1,7 +1,7 @@
 import { Children, type ReactElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
-import type { Roots, Summary, TrashProgress, TrashResult } from "../api/types";
+import type { Roots, Summary, TrashPreview, TrashProgress, TrashResult } from "../api/types";
 import { TrashStatus } from "../features/trash/TrashProgress";
 import { rootEntries } from "./roots";
 import { useTrash } from "./useTrash";
@@ -44,8 +44,9 @@ vi.mock("../api/client", () => ({
     deleteForGood: vi.fn(),
     trashRefused: vi.fn(),
     cancelTrash: vi.fn(),
+    getSummary: vi.fn(),
   },
-  isCmdError: () => false,
+  isCmdError: (e: unknown) => typeof e === "object" && e !== null && "code" in e,
   onTrashProgress: (cb: (p: TrashProgress) => void) => {
     hooks.progress = cb;
     return Promise.resolve(() => {});
@@ -86,6 +87,15 @@ const done: TrashResult = {
   cancelled: false,
 };
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const shown: TrashPreview = {
+  count: 3,
+  size: 10,
+  scannedAt: 1,
+  paths: ["/root/file"],
+  binSize: 0,
+  binFree: null,
+};
+const stale = { code: "StaleId" };
 
 /** One render of the hook, as the app shell does. */
 function Shell(push = vi.fn()) {
@@ -131,14 +141,8 @@ beforeEach(() => {
   vi.spyOn(Date, "now").mockReturnValue(5000);
   vi.mocked(api.trashRefused).mockResolvedValue(false);
   vi.mocked(api.cancelTrash).mockResolvedValue(0);
-  vi.mocked(api.trashPreview).mockResolvedValue({
-    count: 3,
-    size: 10,
-    scannedAt: 1,
-    paths: ["/root/file"],
-    binSize: 0,
-    binFree: null,
-  });
+  vi.mocked(api.getSummary).mockResolvedValue({ ...summary, rev: 5 });
+  vi.mocked(api.trashPreview).mockResolvedValue(shown);
 });
 
 describe("useTrash with numbered requests", () => {
@@ -308,5 +312,61 @@ describe("useTrash with numbered requests", () => {
     finish[1](done);
     await flush();
     expect(lines().map(label)).toEqual([5000, 5002]);
+  });
+});
+
+// Another request of the root ended while the dialog was open: its revision is out of date.
+describe("useTrash when the tree changed under a question", () => {
+  const dialog = () =>
+    Shell().dialog as ReactElement<{ preview: TrashPreview; onConfirm: () => void }>;
+
+  it("sends the same items again at the new revision when they are as shown", async () => {
+    vi.mocked(api.trash).mockRejectedValueOnce(stale).mockResolvedValueOnce(done);
+    const push = vi.fn();
+    await confirmed(push);
+    await flush();
+    expect(vi.mocked(api.trash).mock.calls).toEqual([
+      [5000, 1, 4, [7], false],
+      [5001, 1, 5, [7], false],
+    ]);
+    expect(api.trashPreview).toHaveBeenLastCalledWith(1, 5, [7]);
+    expect(Shell(push).dialog).toBeNull();
+    expect(push).not.toHaveBeenCalledWith("trash.notRemoved");
+    expect(Shell().moving).toEqual([]);
+  });
+
+  it("asks again when the items are no longer as shown, and sends only after that", async () => {
+    vi.mocked(api.trash).mockRejectedValueOnce(stale).mockResolvedValueOnce(done);
+    vi.mocked(api.trashPreview)
+      .mockResolvedValueOnce(shown)
+      .mockResolvedValueOnce({ ...shown, size: 7 });
+    await confirmed();
+    await flush();
+    expect(api.trash).toHaveBeenCalledOnce();
+    expect(dialog().props.preview.size).toBe(7);
+    dialog().props.onConfirm();
+    expect(api.trash).toHaveBeenLastCalledWith(5001, 1, 5, [7], false);
+  });
+
+  it("says nothing was removed when the items are gone", async () => {
+    vi.mocked(api.trash).mockRejectedValue(stale);
+    vi.mocked(api.trashPreview).mockResolvedValueOnce(shown).mockRejectedValueOnce(stale);
+    const push = vi.fn();
+    await confirmed(push);
+    await flush();
+    expect(api.trash).toHaveBeenCalledOnce();
+    expect(push).toHaveBeenCalledWith("trash.notRemoved");
+    expect(Shell(push).dialog).toBeNull();
+    expect(Shell().moving).toEqual([]);
+  });
+
+  it("asks at the new revision when the preview was out of date", async () => {
+    vi.mocked(api.trash).mockResolvedValue(done);
+    vi.mocked(api.trashPreview).mockRejectedValueOnce(stale).mockResolvedValueOnce(shown);
+    Shell().onTrash(1, [7]);
+    await flush();
+    expect(api.trashPreview).toHaveBeenLastCalledWith(1, 5, [7]);
+    dialog().props.onConfirm();
+    expect(api.trash).toHaveBeenCalledExactlyOnceWith(5000, 1, 5, [7], false);
   });
 });
