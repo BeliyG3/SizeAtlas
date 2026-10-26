@@ -4,6 +4,7 @@ import { AccessBanner } from "./AccessBanner";
 import { AccessChip } from "./AccessChip";
 import { useAccessDismissed } from "./accessDismissed";
 import { useAccessState } from "./accessState";
+import { useRestartElevated } from "./elevation";
 
 interface Options {
   push: (text: string) => void;
@@ -23,9 +24,11 @@ export function useAccess(
 ): { banner: ReactNode; chip: ReactNode } {
   const state = useAccessState();
   const { isDismissed, dismiss } = useAccessDismissed();
+  // One restart for the banner and the popover: pressed in one, it is busy in both.
+  const restart = useRestartElevated(summary?.root ?? "", options.push, options.errorText);
   if (!summary || summary.accessErrors === 0) return { banner: null, chip: null };
 
-  const info = { count: summary.accessErrors, root: summary.root, state, ...options };
+  const info = { count: summary.accessErrors, state, restart, ...options };
   const banner = state.actionable === true && !isDismissed(summary.root, summary.scannedAt) && (
     <AccessBanner {...info} onDismiss={() => dismiss(summary.root, summary.scannedAt)} />
   );

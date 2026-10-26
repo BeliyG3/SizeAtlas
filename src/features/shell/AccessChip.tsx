@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { formatCount } from "../../format";
 import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
-import { focusLeft, holdsFocus } from "../search/FiltersButton";
+import { closeOnEscape, focusLeft, holdsFocus } from "../search/FiltersButton";
 import { AccessInfo, type AccessProps } from "./AccessInfo";
 
 /** The gap between the chip and the popover above it, in px. */
@@ -53,17 +53,12 @@ export function AccessChip(props: AccessProps) {
       if (!(target instanceof Node)) return;
       if (!box.current?.contains(target) && !button.current?.contains(target)) close();
     };
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.stopPropagation();
-      close();
-    };
     window.addEventListener("pointerdown", press, true);
-    window.addEventListener("keydown", key);
+    window.addEventListener("blur", close);
     window.addEventListener("resize", close);
     return () => {
       window.removeEventListener("pointerdown", press, true);
-      window.removeEventListener("keydown", key);
+      window.removeEventListener("blur", close);
       window.removeEventListener("resize", close);
     };
   }, [at, close]);
@@ -80,6 +75,7 @@ export function AccessChip(props: AccessProps) {
         aria-expanded={at !== null}
         aria-controls={at !== null ? id : undefined}
         onClick={() => (at === null ? open() : close())}
+        onKeyDown={(e) => at !== null && closeOnEscape(e, close)}
       >
         <span aria-hidden="true">⚠</span> {count}
       </button>
@@ -93,6 +89,7 @@ export function AccessChip(props: AccessProps) {
             aria-label={label}
             tabIndex={-1}
             style={{ bottom: at.bottom, insetInlineEnd: at.end }}
+            onKeyDown={(e) => closeOnEscape(e, close)}
             // Tab out of the popover closes it, as in the filters panel.
             onBlur={(e) =>
               e.relatedTarget !== button.current &&

@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import { useStored } from "../../settings/storage";
 
 const KEY = "sizeatlas.access.dismissed";
@@ -24,6 +23,15 @@ export function parseDismissed(raw: string | null): Dismissed {
 
 const serialize = (value: Dismissed) => JSON.stringify(value);
 
+export const withDismissed = (
+  dismissed: Dismissed,
+  root: string,
+  scannedAt: number,
+): Dismissed => ({
+  ...dismissed,
+  [root]: scannedAt,
+});
+
 export const isScanDismissed = (dismissed: Dismissed, root: string, scannedAt: number) =>
   dismissed[root] === scannedAt;
 
@@ -35,9 +43,7 @@ export function useAccessDismissed() {
   const [dismissed, setDismissed] = useStored(KEY, parseDismissed, serialize);
   const isDismissed = (root: string, scannedAt: number) =>
     isScanDismissed(dismissed, root, scannedAt);
-  const dismiss = useCallback(
-    (root: string, scannedAt: number) => setDismissed({ ...dismissed, [root]: scannedAt }),
-    [dismissed, setDismissed],
-  );
+  const dismiss = (root: string, scannedAt: number) =>
+    setDismissed(withDismissed(dismissed, root, scannedAt));
   return { isDismissed, dismiss };
 }

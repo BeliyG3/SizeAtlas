@@ -2,7 +2,7 @@ import { api, isCmdError } from "../../api/client";
 import { formatCount } from "../../format";
 import { useT } from "../../i18n/react";
 import type { AccessState } from "./accessState";
-import { useRestartElevated } from "./elevation";
+import type { Restart } from "./elevation";
 
 /** How to get access to unreadable folders on each platform. */
 const HINT = {
@@ -13,9 +13,9 @@ const HINT = {
 
 export interface AccessProps {
   count: number;
-  /** The root the notice is about: the one rescanned after a restart. */
-  root: string;
   state: AccessState;
+  /** The restart as administrator, one for the banner and the popover (see `useRestartElevated`). */
+  restart: Restart;
   push: (text: string) => void;
   errorText: (e: unknown) => string;
   /** Lists the unreadable folders of `root`. */
@@ -23,10 +23,9 @@ export interface AccessProps {
 }
 
 /** The text about unreadable folders and the buttons to act on it: the body of the banner and of the popover of the chip. */
-export function AccessInfo({ count, root, state, push, errorText, onShow }: AccessProps) {
+export function AccessInfo({ count, state, restart, push, errorText, onShow }: AccessProps) {
   const { t, lang } = useT();
   const { os, elevated, fullDiskAccess } = state;
-  const restart = useRestartElevated(root, push, errorText);
 
   /** The message of the system alone: the path of an `Io` error means nothing here. */
   const osText = (e: unknown) => (isCmdError(e) && e.code === "Io" ? e.osMessage : errorText(e));

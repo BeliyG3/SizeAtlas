@@ -73,6 +73,13 @@
   color: var(--warn-text);
 }
 
+/* The global button hover would turn it grey: it keeps its colours and brightens. */
+.statusbar .access-chip:hover:not(:disabled),
+.statusbar .access-chip:active:not(:disabled) {
+  background: var(--warn-bg);
+  filter: brightness(1.15);
+}
+
 .access-popover {
   position: fixed;
   display: flex;
