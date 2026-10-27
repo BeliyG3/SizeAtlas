@@ -17,8 +17,6 @@ import { useUpdateCheck } from "../features/update/useUpdateCheck";
 import { useCommittedQuery } from "../features/search/useCommittedQuery";
 import { useSearchKey } from "../features/search/useSearchKey";
 import { MODE_KEY, parseMode, type Mode } from "../features/lists/modes";
-import type { DupMenuTrash } from "../features/duplicates/DuplicatesView";
-import { menuTrashFor } from "../features/duplicates/keep";
 import { DUP_QUERY_KEY, parseDupQuery } from "../features/duplicates/query";
 import { readStored, useStored, writeStored } from "../settings/storage";
 import { formatCount } from "../format";
@@ -26,6 +24,7 @@ import { useT } from "../i18n/react";
 import { Browser } from "./Browser";
 import { busyRoots, fullScanRoots, rootEntries, runningFullScanRoots } from "./roots";
 import { useChangeKeys } from "./useChangeKeys";
+import { useDupWiring } from "./useDupWiring";
 import { useTrash } from "./useTrash";
 import { useRoots } from "./useRoots";
 import { useSelection } from "./useSelection";
@@ -162,19 +161,12 @@ export function App() {
     (selectedRoot !== null && fullScans.has(selectedRoot))
       ? null
       : () => refreshFolder(shownGeneration, shownFolder);
-  // The tree's selection is hidden in the duplicates mode: Delete and Scan › Move to the trash
-  // take the copies picked there, through a trash of their own that keeps one.
-  const [dupTrash, setDupTrash] = useState<DupMenuTrash>({ run: null, note: null });
-  const menuTrash = menuTrashFor(mode, trash.menuTrash, dupTrash.run);
-  const trashNote = menuTrashFor(mode, trash.trashNote, dupTrash.note);
-  const duplicates = {
+  const { duplicates, menuTrash, trashNote } = useDupWiring(mode, trash, {
+    ...notices,
     field: query,
     onCommit: commit,
-    runs: trash.runs,
-    push,
-    errorText,
-    onMenuTrash: setDupTrash,
-  };
+    onTrashed: roots.refreshRootsNow,
+  });
   const exporter = useExport(push, fail);
   useChangeKeys({
     onRefresh: () => refreshCurrent?.(),

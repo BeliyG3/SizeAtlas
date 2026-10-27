@@ -39,6 +39,8 @@ export interface DupWiring {
   runs: DupRuns;
   push: (text: string) => void;
   errorText: (e: unknown) => string;
+  /** Shows the trees without the removed copies at once. */
+  onTrashed: () => void;
   /** Told whenever the trash of the copies picked changes (stable). */
   onMenuTrash: (menu: DupMenuTrash) => void;
 }
@@ -57,7 +59,7 @@ const NOTHING: DupMenuTrash = { run: null, note: null };
 
 /** The duplicates mode: the search above, the groups on the left, the copies of one on the right. */
 export function DuplicatesView(props: Props) {
-  const { query, field, onCommit, runs, push, errorText, onMenuTrash } = props;
+  const { query, field, onCommit, runs, push, errorText, onTrashed, onMenuTrash } = props;
   const { entries, isRemoving, onFail } = props;
   const { t } = useT();
   const [system, setSystem] = useStored(DUP_SYSTEM_KEY, parseDupSystem, serializeShown);
@@ -78,6 +80,8 @@ export function DuplicatesView(props: Props) {
     push,
     errorText,
     onError: onFail,
+    onTrashed,
+    running,
     refresh,
   });
   const [queue] = useState(() => createThumbQueue());

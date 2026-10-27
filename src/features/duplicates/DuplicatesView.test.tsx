@@ -49,6 +49,7 @@ function render(committed: string, field: string) {
       runs: { start: vi.fn(), end: vi.fn() },
       push,
       errorText: String,
+      onTrashed: vi.fn(),
       onMenuTrash,
       entries,
       isRemoving: () => false,

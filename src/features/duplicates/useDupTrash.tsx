@@ -27,6 +27,10 @@ interface Args {
   onError: (e: unknown) => void;
   /** Reads the result again: the request changed it, or found it out of date. */
   refresh: () => void;
+  /** Shows the trees without the removed copies at once, even while a first scan paces updates. */
+  onTrashed: () => void;
+  /** A search runs: the backend refuses the trash (`Busy`), so the confirmation says why first. */
+  running: boolean;
 }
 
 interface Asking {
@@ -64,6 +68,8 @@ export function useDupTrash({
   errorText,
   onError,
   refresh,
+  onTrashed,
+  running,
 }: Args) {
   const { t, lang } = useT();
   const size = useSize();
@@ -72,7 +78,10 @@ export function useDupTrash({
   const questions = useRef(0);
   const removing = (refs: readonly DupRef[]) => refs.some((r) => isRemoving(r.generation, [r.id]));
 
-  /** The preview of `ids` of a tree at its current revision; a closed tree is out of date. */
+  /**
+   * The preview of `ids` of a tree at its current revision; a tree closed meanwhile (also while
+   * its revision is read again) is out of date.
+   */
   const preview = (generation: number, ids: number[]) => {
     const rev = entries.find((e) => e.summary?.generation === generation)?.summary?.rev;
     if (rev === undefined) return Promise.reject({ code: "StaleId" });
@@ -82,7 +91,10 @@ export function useDupTrash({
         // A request of the tree ended after the view read it: preview at the revision it left.
         .catch((e: unknown) =>
           isCode(e, "StaleId")
-            ? api.getSummary(generation).then((s) => api.trashPreview(generation, s.rev, ids))
+            ? api.getSummary(generation).then(
+                (s) => api.trashPreview(generation, s.rev, ids),
+                () => Promise.reject({ code: "StaleId" }),
+              )
             : Promise.reject(e),
         )
     );
@@ -121,6 +133,9 @@ export function useDupTrash({
       .trashDuplicates(request, refs)
       .then(
         (result) => {
+          // Stopped while it waited: nothing was tried, nothing changed.
+          if (result.cancelled) return;
+          onTrashed();
           const count = (n: number) => formatCount(n, lang);
           for (const text of trashReport(result, preview, t, errorText, count, size, "trash"))
             push(text);
@@ -131,12 +146,19 @@ export function useDupTrash({
         runs.end(request);
         setTrashing((n) => n - 1);
         refresh();
-      });
+      })
+      // A report that fails to be told must not end as an unhandled rejection.
+      .catch(onError);
   };
 
   const confirm = () => {
     if (!asking) return;
     setAsking(null);
+    // A search may have started while the dialog was open: say so before the backend refuses.
+    if (running) {
+      push(t("dup.searching"));
+      return;
+    }
     // Another request may have taken one of the copies while the dialog was open.
     if (removing(asking.copies.flatMap((c) => c.refs))) {
       push(t("trash.already"));

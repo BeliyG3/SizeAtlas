@@ -51,6 +51,8 @@ const runs = { start: vi.fn(() => 41), end: vi.fn() };
 const push = vi.fn();
 const onError = vi.fn();
 const refresh = vi.fn();
+const onTrashed = vi.fn();
+let running = false;
 let removing: (generation: number, ids: readonly number[]) => boolean = () => false;
 let shown: ReturnType<typeof useDupTrash>;
 // Called like a component, as React would: the hooks run in the same order every pass.
@@ -63,6 +65,8 @@ const Shell = () =>
     errorText: String,
     onError,
     refresh,
+    onTrashed,
+    running,
   });
 
 function render() {
@@ -77,7 +81,7 @@ function render() {
 }
 
 const settle = async () => {
-  for (let i = 0; i < 5; i++) await Promise.resolve();
+  for (let i = 0; i < 10; i++) await Promise.resolve();
   render();
 };
 
@@ -98,6 +102,7 @@ beforeEach(() => {
   rt.state.slots = [];
   vi.clearAllMocks();
   removing = () => false;
+  running = false;
   vi.mocked(api.trashPreview).mockImplementation((g, _rev, ids) =>
     Promise.resolve(preview(ids.length + g * 10)),
   );
@@ -123,6 +128,7 @@ describe("useDupTrash", () => {
     expect(api.deleteForGood).not.toHaveBeenCalled();
     await settle();
     expect(push).toHaveBeenCalledWith("trash.done");
+    expect(onTrashed).toHaveBeenCalledOnce();
     expect(runs.end).toHaveBeenCalledWith(41);
     expect(refresh).toHaveBeenCalled();
   });
@@ -158,9 +164,12 @@ describe("useDupTrash", () => {
     expect(onError).toHaveBeenCalledWith({ code: "LastCopy" });
     vi.mocked(api.trashDuplicates).mockResolvedValueOnce({ ...result, cancelled: true });
     push.mockClear();
+    onTrashed.mockClear();
     await askAndConfirm([one]);
     await settle();
+    expect(api.trashDuplicates).toHaveBeenCalledTimes(2);
     expect(push).not.toHaveBeenCalled();
+    expect(onTrashed).not.toHaveBeenCalled();
   });
 
   it("does not ask for a copy a request has already", () => {
@@ -193,5 +202,51 @@ describe("useDupTrash", () => {
     expect(push).toHaveBeenCalledWith("trash.already");
     expect(runs.start).not.toHaveBeenCalled();
     expect(api.trashDuplicates).not.toHaveBeenCalled();
+  });
+
+  it("previews again at the revision a tree has now when the view lagged behind it", async () => {
+    vi.mocked(api.trashPreview).mockRejectedValueOnce({ code: "StaleId" });
+    vi.mocked(api.getSummary).mockResolvedValue({ generation: 1, rev: 6 } as Summary);
+    render();
+    shown.ask([one]);
+    await settle();
+    expect(api.getSummary).toHaveBeenCalledWith(1);
+    expect(api.trashPreview).toHaveBeenLastCalledWith(1, 6, [1]);
+    expect(dialog()).not.toBeNull();
+  });
+
+  it("says nothing was removed when the tree closed while it was read again", async () => {
+    vi.mocked(api.trashPreview).mockRejectedValueOnce({ code: "StaleId" });
+    vi.mocked(api.getSummary).mockRejectedValue(new Error("no such tree"));
+    render();
+    shown.ask([one]);
+    await settle();
+    expect(push).toHaveBeenCalledWith("trash.notRemoved");
+    expect(refresh).toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(dialog()).toBeNull();
+  });
+
+  it("sends nothing when a search started while the dialog was open, and says why", async () => {
+    render();
+    shown.ask([one]);
+    await settle();
+    running = true;
+    render();
+    dialog()!.props.onConfirm();
+    render();
+    expect(push).toHaveBeenCalledWith("dup.searching");
+    expect(runs.start).not.toHaveBeenCalled();
+    expect(api.trashDuplicates).not.toHaveBeenCalled();
+  });
+
+  it("hands a report that fails to the error handler", async () => {
+    push.mockImplementationOnce(() => {
+      throw new Error("toast failed");
+    });
+    await askAndConfirm([one]);
+    await settle();
+    expect(onError).toHaveBeenCalledWith(new Error("toast failed"));
+    expect(runs.end).toHaveBeenCalledWith(41);
   });
 });
