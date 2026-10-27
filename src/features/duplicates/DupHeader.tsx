@@ -12,8 +12,10 @@ interface Props {
   /** The words of the search field and the switch: what Find would search for. */
   query: string;
   system: boolean;
-  /** "In all open drives": off searches the folder selected in the tree. */
+  /** "In all open drives and folders": off searches the folder selected in the tree. */
   everywhere: boolean;
+  /** Find sends a folder: not with the switch on, nor before the selected root has a tree. */
+  scoped: boolean;
   /** A Find is being sent: Find is off until it is taken. */
   finding?: boolean;
   onSystem: (system: boolean) => void;
@@ -27,7 +29,7 @@ const REASONS: readonly (keyof DupUnread)[] = ["cloud", "changed", "noAccess", "
 
 /**
  * Above the groups: the total, the progress with Cancel or Find (Continue after a search that
- * did not finish), the folder searched, what is out of date, left out or unread, and the
+ * did not finish), the folder searched and where Find searches now, what is out of date, left out or unread, and the
  * switches of the system folders and of every open drive.
  */
 export function DupHeader({
@@ -37,6 +39,7 @@ export function DupHeader({
   query,
   system,
   everywhere,
+  scoped,
   finding = false,
   onSystem,
   onEverywhere,
@@ -64,6 +67,13 @@ export function DupHeader({
   // What the shown result left out; before any, what a search would leave out now.
   const skipped = (job > 0 ? answer?.skipped : estimate?.skipped) ?? [];
   const scope = job > 0 ? answer?.scope : estimate?.scope;
+  // Where Find searches now, once that is not what the line above says.
+  let next = null;
+  if (!running && !scoped) {
+    if (!everywhere || (job > 0 && answer?.scope != null)) next = t("dup.findWhere");
+  } else if (!running && job > 0 && estimate?.scope != null && estimate.scope !== answer?.scope) {
+    next = t("dup.next", { path: estimate.scope });
+  }
 
   let progress = null;
   if (running && status) {
@@ -137,6 +147,7 @@ export function DupHeader({
         </label>
       </p>
       {scope && <p className="dim">{t("dup.scope", { path: scope })}</p>}
+      {next && <p className="dim">{next}</p>}
       {unfinished && <p className="dim">{t("dup.unfinished")}</p>}
       {stale && <p className="dup-warn">{t("dup.stale")}</p>}
       {skipped.length > 0 && (

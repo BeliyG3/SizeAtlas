@@ -3,8 +3,13 @@
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
+use super::candidates::candidates;
 use super::group::Group;
 use super::tests::*;
+use super::tests_zones::{file, opts, root};
+use super::{Options, SearchRoot};
+use crate::cleanup::Os;
+use crate::cleanup::tests::{build, it, win};
 use crate::tree::Tree;
 
 /// The node at the relative path `rel` (`/`-separated) of `tree`.
@@ -66,4 +71,54 @@ fn a_file_or_a_missing_node_gives_nothing() {
     let tree = scan_of(d.path());
     assert!(from(&tree, at(&tree, "a/x.jpg")).is_empty());
     assert!(from(&tree, tree.len() as u32).is_empty());
+}
+
+/// Whether each candidate of `tree` walked from the folder at `rel` is protected with
+/// `include_zones` on, and how many candidates it has with it off.
+fn protected_from(tree: &Tree, rel: &str) -> (Vec<bool>, usize) {
+    let known = win().known;
+    let roots = [SearchRoot {
+        start: at(tree, rel),
+        ..root(tree)
+    }];
+    let with = opts(Os::Windows, &known);
+    let without = Options {
+        include_zones: false,
+        ..with
+    };
+    let found = candidates(&roots, &with)
+        .iter()
+        .map(|c| c.protected)
+        .collect();
+    (found, candidates(&roots, &without).len())
+}
+
+#[test]
+fn a_folder_inside_a_zone_gives_protected_copies_with_zones_included() {
+    let tree = build(
+        r"E:\",
+        vec![
+            file(r"node_modules\a\x.png"),
+            file(r"node_modules\a\y.png"),
+            file(r"Photos\z.png"),
+        ],
+    );
+    assert_eq!(
+        protected_from(&tree, "node_modules/a"),
+        (vec![true, true], 0)
+    );
+    assert_eq!(protected_from(&tree, "Photos"), (vec![false], 1));
+}
+
+#[test]
+fn a_venv_above_the_folder_makes_its_files_a_zone() {
+    let tree = build(
+        r"D:\",
+        vec![
+            it(r"work\env\pyvenv.cfg"),
+            file(r"work\env\lib\x.png"),
+            file(r"work\env\lib\y.png"),
+        ],
+    );
+    assert_eq!(protected_from(&tree, "work/env/lib"), (vec![true, true], 0));
 }

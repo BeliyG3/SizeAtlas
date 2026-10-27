@@ -122,12 +122,20 @@ describe("the folder searched", () => {
     // The first Find is taken before the next one is sent.
     for (let i = 0; i < 5; i++) await Promise.resolve();
     expect(header().props.everywhere).toBe(false);
+    expect(header().props.scoped).toBe(true);
     header().props.onEverywhere(true);
     render("type:image", "type:image", false, photos);
     expect(header().props.everywhere).toBe(true);
+    expect(header().props.scoped).toBe(false);
     expect(api.estimateDuplicates).toHaveBeenLastCalledWith("type:image", false, null);
     header().props.onFind();
     expect(api.findDuplicates).toHaveBeenLastCalledWith("type:image", false, null);
+  });
+
+  it("is every open drive without a tree of the selected root", () => {
+    render("type:image", "type:image", false, null);
+    expect(header().props.everywhere).toBe(false);
+    expect(header().props.scoped).toBe(false);
   });
 });
 

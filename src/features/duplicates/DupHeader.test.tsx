@@ -27,6 +27,7 @@ const header = (more: Partial<Props>) =>
     query: "type:image",
     system: false,
     everywhere: false,
+    scoped: true,
     onSystem,
     onEverywhere,
     onFind,
@@ -204,11 +205,46 @@ describe("the header of the duplicates", () => {
     const state = applyAnswer(null, answer({ job: 1, complete: true, scope: "/old" }));
     const tree = header({ state, status: status({ job: 1 }), estimate: estimate({ scope: null }) });
     expect(text(tree)).toContain('dup.scope {"path":"/old"}');
-    // The result of every open drive names no folder, whatever Find would search now.
+    // The result of every open drive names no folder.
     const all = applyAnswer(null, answer({ job: 1, complete: true }));
     expect(text(header({ state: all, estimate: estimate({ scope: "/" }) }))).not.toContain(
       "dup.scope",
     );
+  });
+
+  it("says where Find searches once that is not the folder of the result", () => {
+    const state = applyAnswer(null, answer({ job: 1, complete: true, scope: "/old" }));
+    const at = (scope: string | null, more: Partial<Props> = {}) =>
+      text(header({ state, status: status({ job: 1 }), estimate: estimate({ scope }), ...more }));
+    expect(at("/new")).toContain('dup.scope {"path":"/old"}');
+    expect(at("/new")).toContain('dup.next {"path":"/new"}');
+    expect(at("/old")).not.toContain("dup.next");
+    // A root being rescanned: the estimate names no folder, the skipped line names the root.
+    expect(at(null)).not.toContain("dup.next");
+    const all = applyAnswer(null, answer({ job: 1, complete: true }));
+    expect(text(header({ state: all, estimate: estimate({ scope: "/" }) }))).toContain(
+      'dup.next {"path":"/"}',
+    );
+  });
+
+  it("says Find searches every open drive once the switch is on after a folder result", () => {
+    const folder = applyAnswer(null, answer({ job: 1, complete: true, scope: "/old" }));
+    const on = { everywhere: true, scoped: false, estimate: estimate({ scope: null }) };
+    expect(text(header({ state: folder, ...on }))).toContain("dup.findWhere");
+    const all = applyAnswer(null, answer({ job: 1, complete: true }));
+    expect(text(header({ state: all, ...on }))).not.toContain("dup.findWhere");
+    expect(text(header(on))).not.toContain("dup.findWhere");
+  });
+
+  it("says Find searches every open drive when no folder can be sent", () => {
+    const none = { scoped: false, estimate: estimate({ scope: null }) };
+    expect(text(header(none))).toContain("dup.findWhere");
+    // With the switch off, even after a search of every open drive.
+    const all = applyAnswer(null, answer({ job: 1, complete: true }));
+    expect(text(header({ state: all, ...none }))).toContain("dup.findWhere");
+    const running = applyAnswer(null, answer({ job: 1, running: true, scope: "/old" }));
+    const tree = header({ state: running, status: status({ job: 1, running: true }), ...none });
+    expect(text(tree)).not.toContain("dup.findWhere");
   });
 
   it("offers Continue only for the same folder", () => {

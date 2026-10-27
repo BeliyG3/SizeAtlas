@@ -215,7 +215,7 @@ export function GroupDetail(props: Props) {
         defaultSize={170}
         label={t("split.preview")}
         collapse={mimeOf(group.name) ? undefined : "first"}
-        first={<PreviewPicture group={group} picture={picture} onFull={onFull} />}
+        first={<PreviewPicture group={group} picture={picture} />}
         second={table}
       />
     </div>

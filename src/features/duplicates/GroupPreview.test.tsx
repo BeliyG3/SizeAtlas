@@ -6,6 +6,7 @@ import { rt } from "../lists/hookRuntime";
 import { copy, group } from "./dup.testSupport";
 import { GroupTitle, PreviewPicture } from "./GroupPreview";
 import type { Picture } from "./viewer/useImageUrl";
+import { ZoomView } from "./viewer/ZoomView";
 
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
@@ -86,9 +87,9 @@ describe("the title of a group", () => {
     const { GroupTitle, PreviewPicture, ItemIcon } = await onWindows();
     const g = group("a");
     expect(buttons(GroupTitle, g)).toHaveLength(4);
-    const area = PreviewPicture({ group: g, picture: { state: "loading" }, onFull });
+    const area = PreviewPicture({ group: g, picture: { state: "loading" } });
     expect(elements(area).some((e) => e.type === ItemIcon)).toBe(true);
-    expect(elements(area).some((e) => e.type === "img")).toBe(false);
+    expect(elements(area).some((e) => e.type === "img" || e.type === ZoomView)).toBe(false);
   });
 
   it("offers_only_opening_without_a_picture", async () => {
@@ -145,13 +146,11 @@ describe("the title of a group", () => {
 describe("the picture of a group", () => {
   const ready: Picture = { state: "ready", url: "blob:one" };
 
-  it("opens_full_screen_on_a_double_click", () => {
-    const img = elements(PreviewPicture({ group: group("a"), picture: ready, onFull })).find(
-      (e) => e.type === "img",
+  it("zooms_and_pans_the_picture_in_place", () => {
+    const zoom = elements(PreviewPicture({ group: group("a"), picture: ready })).find(
+      (e) => e.type === ZoomView,
     )!;
-    expect((img.props as { src?: string }).src).toBe("blob:one");
-    img.props.onDoubleClick!();
-    expect(onFull).toHaveBeenCalledOnce();
+    expect((zoom.props as { url?: string }).url).toBe("blob:one");
   });
 
   it("shows the icon of the category without a picture, or when it cannot be decoded", () => {
@@ -159,12 +158,12 @@ describe("the picture of a group", () => {
     const g = group("a");
     const area = (picture: Picture) => {
       rt.state.at = 0;
-      return elements(PreviewPicture({ group: g, picture, onFull }));
+      return elements(PreviewPicture({ group: g, picture }));
     };
     expect(area({ state: "none" }).some((e) => e.type === ItemIcon)).toBe(true);
-    const img = area(ready).find((e) => e.type === "img")!;
-    (img.props as { onError: () => void }).onError();
+    const zoom = area(ready).find((e) => e.type === ZoomView)!;
+    (zoom.props as { onError: () => void }).onError();
     expect(area(ready).some((e) => e.type === ItemIcon)).toBe(true);
-    expect(area({ state: "ready", url: "blob:two" }).some((e) => e.type === "img")).toBe(true);
+    expect(area({ state: "ready", url: "blob:two" }).some((e) => e.type === ZoomView)).toBe(true);
   });
 });

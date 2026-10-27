@@ -9,6 +9,7 @@ import { Icon } from "../icons/Icon";
 import { WINDOWS } from "./platform";
 import { mimeOf } from "./thumbs";
 import type { Picture } from "./viewer/useImageUrl";
+import { ZoomView } from "./viewer/ZoomView";
 
 interface TitleProps {
   group: DupGroup;
@@ -73,27 +74,20 @@ export function GroupTitle({ group, target, onFull, onWindow, onFail }: TitlePro
 interface PictureProps {
   group: DupGroup;
   picture: Picture;
-  /** A double click on the picture. */
-  onFull: () => void;
 }
 
 /**
- * The picture of a group, centered and never blown up; the icon of its category until it comes,
- * when there is none, and when the webview cannot decode it.
+ * The picture of a group, fitted and never blown up, to zoom and pan in place; the icon of its
+ * category until it comes, when there is none, and when the webview cannot decode it.
  */
-export function PreviewPicture({ group, picture, onFull }: PictureProps) {
+export function PreviewPicture({ group, picture }: PictureProps) {
   const [broken, setBroken] = useState<string | null>(null);
   const url = picture.state === "ready" && picture.url !== broken ? picture.url : null;
   return (
     <div className="dup-preview">
       {url ? (
-        <img
-          className="dup-picture"
-          src={url}
-          alt=""
-          onDoubleClick={onFull}
-          onError={() => setBroken(url)}
-        />
+        // The name is in the title above: no label of its own.
+        <ZoomView url={url} label="" onError={() => setBroken(url)} />
       ) : (
         <ItemIcon isDir={false} category={group.category} />
       )}

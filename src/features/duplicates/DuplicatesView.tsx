@@ -194,6 +194,7 @@ export function DuplicatesView(props: Props) {
         query={text}
         system={system}
         everywhere={everywhere}
+        scoped={scope !== null}
         // The backend refuses a search while a trash of copies runs.
         finding={finding || runs.pending}
         onSystem={setSystem}

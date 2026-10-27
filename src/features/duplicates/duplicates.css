@@ -96,7 +96,7 @@
   gap: 4px;
 }
 
-/* The picture of the group above its copies: centered, never blown up. */
+/* The picture of the group above its copies (or the icon of its type), centered. */
 .dup-preview {
   display: flex;
   flex: 1;
@@ -104,12 +104,6 @@
   justify-content: center;
   min-block-size: 0;
   padding: 0 12px 6px;
-}
-
-.dup-picture {
-  max-inline-size: 100%;
-  max-block-size: 100%;
-  object-fit: contain;
 }
 
 .dup-preview > .icon {
