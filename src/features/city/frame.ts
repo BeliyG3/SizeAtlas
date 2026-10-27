@@ -10,7 +10,7 @@ export interface Box {
 
 /** The orbit controls' distance limits; `frame` stays inside them. */
 export const MIN_DISTANCE = 1;
-export const MAX_DISTANCE = 400;
+export const MAX_DISTANCE = 1500;
 /** Room left around a fitted box. */
 const MARGIN = 1.1;
 

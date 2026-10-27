@@ -235,6 +235,8 @@ function setUp(
   const onContextRestored = () => {
     lost = false;
     applied = { w: 0, h: 0, ratio: 0 };
+    // three resets the clear colour to black when it rebuilds its GL state.
+    applyTheme();
     events.onLost(false);
     invalidate();
   };
