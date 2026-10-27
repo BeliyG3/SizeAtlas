@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api, onDuplicatesStatus } from "../../api/client";
-import type { DupStatus } from "../../api/duplicates";
+import type { DupScope, DupStatus } from "../../api/duplicates";
 import { rt } from "../lists/hookRuntime";
 import { answer, estimate, group, status } from "./dup.testSupport";
 import { useDuplicates } from "./useDuplicates";
@@ -23,11 +23,11 @@ let shown: ReturnType<typeof useDuplicates>;
 const Shell = (props: Parameters<typeof useDuplicates>[0]) => useDuplicates(props);
 
 /** Renders the hook until its state and effects settle, as React would. */
-function render(rootsKey = "C:\\:1:3", query = "type:image") {
+function render(rootsKey = "C:\\:1:3", query = "type:image", scope: DupScope | null = null) {
   for (let pass = 0; pass < 20; pass++) {
     rt.state.at = 0;
     rt.state.dirty = false;
-    shown = Shell({ query, system: false, rootsKey, onFail });
+    shown = Shell({ query, system: false, scope, rootsKey, onFail });
     for (const run of rt.state.queue.splice(0)) run();
     if (!rt.state.dirty) return;
   }
@@ -117,6 +117,23 @@ describe("useDuplicates", () => {
     expect(api.findDuplicates).toHaveBeenCalledWith("*.png", false, null);
     await settle();
     expect(api.getDuplicates).toHaveBeenLastCalledWith(2, 5);
+  });
+
+  it("estimates again for another folder, and searches the folder only on Find", async () => {
+    const a: DupScope = { root: "C:\\", generation: 1, folder: 4 };
+    const b: DupScope = { root: "C:\\", generation: 1, folder: 9 };
+    render(undefined, undefined, a);
+    await Promise.resolve();
+    expect(api.estimateDuplicates).toHaveBeenLastCalledWith("type:image", false, a);
+    render(undefined, undefined, a);
+    expect(api.estimateDuplicates).toHaveBeenCalledTimes(1);
+    render(undefined, undefined, b);
+    expect(api.estimateDuplicates).toHaveBeenCalledTimes(2);
+    expect(api.estimateDuplicates).toHaveBeenLastCalledWith("type:image", false, b);
+    expect(api.findDuplicates).not.toHaveBeenCalled();
+    vi.mocked(api.findDuplicates).mockResolvedValue(3);
+    shown.find("type:image");
+    expect(api.findDuplicates).toHaveBeenCalledWith("type:image", false, b);
   });
 
   it("starts one search for a double click: Find waits for the first to be taken", async () => {

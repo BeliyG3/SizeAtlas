@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
+import type { DupScope } from "../api/duplicates";
 import type { QueueEntry, ScanProgress, Sources } from "../api/types";
 import { DEFAULT_SORT, type SortState } from "../features/contents/columns";
 import { DrivesPanel } from "../features/drives/DrivesPanel";
@@ -149,6 +150,14 @@ export function Browser({
       selection && { root: selection.root, generation: selection.generation, id: selection.folder },
     [selection],
   );
+  // What Find of the duplicates mode searches, unless it searches every open drive.
+  const dupFolder = useMemo<DupScope | null>(
+    () =>
+      selection && selection.generation !== null
+        ? { root: selection.root, generation: selection.generation, folder: selection.folder }
+        : null,
+    [selection],
+  );
   // Read at render, so an open root menu follows the root's state.
   const menuRoot = menu?.kind === "root" ? roots.find((r) => r.root === menu.root) : undefined;
   // The menu of a root that left the tree, or of an item of a tree that was replaced, is closed,
@@ -180,13 +189,14 @@ export function Browser({
     itemMenu && availabilityNoteKey(itemTrash, menuItems.length, itemMenu.target.isDir);
   let content: ReactNode;
   if (mode === "duplicates") {
-    // Of every open root, not of the selected one.
+    // Of the folder selected in the tree, or of every open root.
     content = (
       <DuplicatesView
         {...duplicates}
         query={query}
         entries={entries}
         isRemoving={isRemoving}
+        folder={dupFolder}
         onFail={onFail}
       />
     );

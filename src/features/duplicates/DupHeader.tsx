@@ -12,9 +12,12 @@ interface Props {
   /** The words of the search field and the switch: what Find would search for. */
   query: string;
   system: boolean;
+  /** "In all open drives": off searches the folder selected in the tree. */
+  everywhere: boolean;
   /** A Find is being sent: Find is off until it is taken. */
   finding?: boolean;
   onSystem: (system: boolean) => void;
+  onEverywhere: (everywhere: boolean) => void;
   /** Find, or Continue: a new search (counted files come from the cache). */
   onFind: () => void;
   onCancel: () => void;
@@ -24,7 +27,8 @@ const REASONS: readonly (keyof DupUnread)[] = ["cloud", "changed", "noAccess", "
 
 /**
  * Above the groups: the total, the progress with Cancel or Find (Continue after a search that
- * did not finish), what is out of date, left out or unread, and the system folders switch.
+ * did not finish), the folder searched, what is out of date, left out or unread, and the
+ * switches of the system folders and of every open drive.
  */
 export function DupHeader({
   estimate,
@@ -32,8 +36,10 @@ export function DupHeader({
   status,
   query,
   system,
+  everywhere,
   finding = false,
   onSystem,
+  onEverywhere,
   onFind,
   onCancel,
 }: Props) {
@@ -44,14 +50,20 @@ export function DupHeader({
   const job = state?.job ?? 0;
   const running = status?.running ?? answer?.running ?? false;
   const stale = job > 0 && (status?.stale ?? answer?.stale ?? false);
-  // Continue searches again for the same thing; after another query it would be a new search.
+  // Continue searches again for the same thing; after another query or folder it would be a new
+  // search. The estimate follows what Find would search: its folder is the one Find takes.
   const unfinished = job > 0 && !running && answer !== null && !answer.complete;
-  const resumable = unfinished && answer.query === query && answer.system === system;
+  const resumable =
+    unfinished &&
+    answer.query === query &&
+    answer.system === system &&
+    answer.scope === (estimate?.scope ?? null);
   const unread = answer?.unread;
   const unreadCount = unread ? REASONS.reduce((sum, r) => sum + unread[r], 0) : 0;
   const groups = state?.groups.size ?? 0;
   // What the shown result left out; before any, what a search would leave out now.
   const skipped = (job > 0 ? answer?.skipped : estimate?.skipped) ?? [];
+  const scope = job > 0 ? answer?.scope : estimate?.scope;
 
   let progress = null;
   if (running && status) {
@@ -114,7 +126,17 @@ export function DupHeader({
           />
           {t("dup.system")}
         </label>
+        <label className="dup-system">
+          <input
+            type="checkbox"
+            checked={everywhere}
+            disabled={running}
+            onChange={(e) => onEverywhere(e.currentTarget.checked)}
+          />
+          {t("dup.everywhere")}
+        </label>
       </p>
+      {scope && <p className="dim">{t("dup.scope", { path: scope })}</p>}
       {unfinished && <p className="dim">{t("dup.unfinished")}</p>}
       {stale && <p className="dup-warn">{t("dup.stale")}</p>}
       {skipped.length > 0 && (

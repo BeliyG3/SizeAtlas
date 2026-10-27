@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, onDuplicatesStatus } from "../../api/client";
-import type { DupEstimate, DupStatus, Duplicates } from "../../api/duplicates";
+import type { DupEstimate, DupScope, DupStatus, Duplicates } from "../../api/duplicates";
 import { applyAnswer, shouldFetch, type DupState } from "./groups";
 
 interface Options {
@@ -8,6 +8,8 @@ interface Options {
   query: string;
   /** "Include system folders". */
   system: boolean;
+  /** The folder searched; null for every open root. */
+  scope: DupScope | null;
   /** Changes whenever an open root does (opened, closed, rescanned, changed). */
   rootsKey: string;
   onFail: (e: unknown) => void;
@@ -27,9 +29,9 @@ function merged(next: DupStatus, shown: DupStatus | null): DupStatus | null {
  * The duplicates result the backend keeps, read by cursor: on mount (a search never starts by
  * itself, so a result outlives leaving the mode), when the roots change (the stale mark follows
  * them) and when a status says there is more. The estimate of what a search would compare
- * follows the query, the switch and the roots.
+ * follows the query, the switch, the folder and the roots.
  */
-export function useDuplicates({ query, system, rootsKey, onFail }: Options) {
+export function useDuplicates({ query, system, scope, rootsKey, onFail }: Options) {
   const [state, setState] = useState<DupState | null>(null);
   const [status, setStatus] = useState<DupStatus | null>(null);
   const [estimate, setEstimate] = useState<DupEstimate | null>(null);
@@ -96,7 +98,7 @@ export function useDuplicates({ query, system, rootsKey, onFail }: Options) {
 
   useEffect(() => {
     let live = true;
-    api.estimateDuplicates(query, system, null).then(
+    api.estimateDuplicates(query, system, scope).then(
       (next) => {
         if (live) setEstimate(next);
       },
@@ -107,7 +109,7 @@ export function useDuplicates({ query, system, rootsKey, onFail }: Options) {
     return () => {
       live = false;
     };
-  }, [query, system, rootsKey]);
+  }, [query, system, scope, rootsKey]);
 
   /** Searches for `words` (the text in the field, not the debounced query). */
   const find = useCallback(
@@ -120,7 +122,7 @@ export function useDuplicates({ query, system, rootsKey, onFail }: Options) {
         sending.current = false;
         if (life.live) setFinding(false);
       };
-      api.findDuplicates(words, system, null).then(
+      api.findDuplicates(words, system, scope).then(
         () => {
           sent();
           // The job's own status asks for its result; this read covers a status sent before it.
@@ -132,7 +134,7 @@ export function useDuplicates({ query, system, rootsKey, onFail }: Options) {
         },
       );
     },
-    [system, fetch],
+    [system, scope, fetch],
   );
   const cancel = useCallback(() => {
     api.cancelDuplicates().catch((e: unknown) => fail.current(e));

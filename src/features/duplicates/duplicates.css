@@ -36,6 +36,11 @@
   margin-inline-start: auto;
 }
 
+/* The switches sit together at the end of the line. */
+.dup-system + .dup-system {
+  margin-inline-start: 0;
+}
+
 .dup-warn {
   color: var(--warn-text);
 }

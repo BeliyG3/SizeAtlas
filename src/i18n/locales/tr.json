@@ -368,6 +368,8 @@
   "dup.phasePrefix": "Dosyaların başlangıçları karşılaştırılıyor: {done} / {total}",
   "dup.phaseFull": "Karşılaştırılıyor: {done} / {total} okundu",
   "dup.system": "Sistem klasörlerini dahil et",
+  "dup.everywhere": "Tüm açık sürücülerde",
+  "dup.scope": "Klasör: {path}",
   "dup.unfinished": "Arama tamamlanmadı.",
   "dup.stale": "Bu aramadan sonra dosyalar değişti. Güncellemek için yeniden arayın.",
   "dup.skipped": "{roots}: hâlâ taranıyor, dahil edilmedi.",

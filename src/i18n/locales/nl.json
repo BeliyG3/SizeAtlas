@@ -368,6 +368,8 @@
   "dup.phasePrefix": "Het begin van bestanden vergelijken: {done} van {total}",
   "dup.phaseFull": "Vergelijken: {done} van {total} gelezen",
   "dup.system": "Systeemmappen opnemen",
+  "dup.everywhere": "In alle geopende stations",
+  "dup.scope": "In {path}",
   "dup.unfinished": "De zoekopdracht is niet voltooid.",
   "dup.stale": "Bestanden zijn gewijzigd sinds deze zoekopdracht. Zoek opnieuw om bij te werken.",
   "dup.skipped": "{roots}: scan loopt nog, niet opgenomen.",

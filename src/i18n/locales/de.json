@@ -368,6 +368,8 @@
   "dup.phasePrefix": "Dateianfänge werden verglichen: {done} von {total}",
   "dup.phaseFull": "Vergleich: {done} von {total} gelesen",
   "dup.system": "Systemordner einbeziehen",
+  "dup.everywhere": "In allen geöffneten Laufwerken",
+  "dup.scope": "In {path}",
   "dup.unfinished": "Die Suche wurde nicht abgeschlossen.",
   "dup.stale": "Dateien haben sich seit dieser Suche geändert. Suchen Sie erneut, um die Ergebnisse zu aktualisieren.",
   "dup.skipped": "{roots}: Scan läuft noch, nicht enthalten.",

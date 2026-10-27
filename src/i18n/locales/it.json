@@ -397,6 +397,8 @@
   "dup.phasePrefix": "Confronto dell’inizio dei file: {done} di {total}",
   "dup.phaseFull": "Confronto: letti {done} di {total}",
   "dup.system": "Includi le cartelle di sistema",
+  "dup.everywhere": "In tutte le unità aperte",
+  "dup.scope": "In {path}",
   "dup.unfinished": "La ricerca non è stata completata.",
   "dup.stale": "I file sono cambiati dopo questa ricerca. Cerca di nuovo per aggiornarla.",
   "dup.skipped": "{roots}: scansione ancora in corso, fuori dalla ricerca.",

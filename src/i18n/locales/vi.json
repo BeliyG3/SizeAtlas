@@ -339,6 +339,8 @@
   "dup.phasePrefix": "Đang so sánh phần đầu của các tệp: {done}/{total}",
   "dup.phaseFull": "Đang so sánh: đã đọc {done}/{total}",
   "dup.system": "Bao gồm thư mục hệ thống",
+  "dup.everywhere": "Trong mọi ổ đĩa đang mở",
+  "dup.scope": "Trong {path}",
   "dup.unfinished": "Việc tìm kiếm chưa hoàn tất.",
   "dup.stale": "Các tệp đã thay đổi kể từ lần tìm này. Hãy tìm lại để cập nhật.",
   "dup.skipped": "{roots}: vẫn đang được quét nên không được tính.",

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
+import type { DupScope } from "../../api/duplicates";
 import type { RootStatus, Summary } from "../../api/types";
 import { useT } from "../../i18n/react";
 import { noMarks } from "../contents/marks";
@@ -22,7 +23,7 @@ import { emptyKey } from "./emptyState";
 import { GroupDetail, pickTargets, type CopyPick } from "./GroupDetail";
 import { GroupList } from "./GroupList";
 import { copyMarksKey, copyTrashNote } from "./keep";
-import { DUP_SYSTEM_KEY, parseDupSystem } from "./query";
+import { DUP_EVERYWHERE_KEY, DUP_SYSTEM_KEY, parseDupEverywhere, parseDupSystem } from "./query";
 import { createThumbQueue, mimeOf } from "./thumbs";
 import { useDupTrash, type DupRuns } from "./useDupTrash";
 import { useDuplicates } from "./useDuplicates";
@@ -65,6 +66,8 @@ interface Props extends DupWiring {
   entries: readonly { root: string; summary: Summary | null; status: RootStatus }[];
   /** Whether a request, started or waiting, has one of `ids` of the tree with `generation`. */
   isRemoving: (generation: number, ids: readonly number[]) => boolean;
+  /** The folder selected in the tree (stable while it stays selected); null without a tree. */
+  folder: DupScope | null;
   onFail: (e: unknown) => void;
 }
 
@@ -74,9 +77,14 @@ const parseGroupSort = (raw: string | null) => parseDupSort(raw, GROUP_SORTS, DE
 /** The duplicates mode: the search above, the groups on the left, the copies of one on the right. */
 export function DuplicatesView(props: Props) {
   const { query, field, onCommit, runs, push, errorText, onTrashed, onMenuTrash } = props;
-  const { entries, isRemoving, onFail } = props;
+  const { entries, isRemoving, folder, onFail } = props;
   const { t } = useT();
   const [system, setSystem] = useStored(DUP_SYSTEM_KEY, parseDupSystem, serializeShown);
+  const [everywhere, setEverywhere] = useStored(
+    DUP_EVERYWHERE_KEY,
+    parseDupEverywhere,
+    serializeShown,
+  );
   const rootsKey = useMemo(
     () =>
       entries
@@ -84,7 +92,8 @@ export function DuplicatesView(props: Props) {
         .join("\n"),
     [entries],
   );
-  const dups = useDuplicates({ query, system, rootsKey, onFail });
+  const scope = everywhere ? null : folder;
+  const dups = useDuplicates({ query, system, scope, rootsKey, onFail });
   const { state, status, estimate, finding, find, cancel, refresh } = dups;
   const running = status?.running ?? state?.answer.running ?? false;
   const dupTrash = useDupTrash({
@@ -184,9 +193,11 @@ export function DuplicatesView(props: Props) {
         status={status}
         query={text}
         system={system}
+        everywhere={everywhere}
         // The backend refuses a search while a trash of copies runs.
         finding={finding || runs.pending}
         onSystem={setSystem}
+        onEverywhere={setEverywhere}
         onFind={onFind}
         onCancel={cancel}
       />

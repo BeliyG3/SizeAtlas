@@ -397,6 +397,8 @@
   "dup.phasePrefix": "משווה את תחילת הקבצים: {done} מתוך {total}",
   "dup.phaseFull": "משווה: נקראו {done} מתוך {total}",
   "dup.system": "כולל תיקיות מערכת",
+  "dup.everywhere": "בכל הכוננים הפתוחים",
+  "dup.scope": "בתיקייה {path}",
   "dup.unfinished": "החיפוש לא הושלם.",
   "dup.stale": "קבצים השתנו מאז החיפוש הזה. חפשו שוב כדי לעדכן.",
   "dup.skipped": "{roots}: הסריקה עדיין מתבצעת, מחוץ לחיפוש.",

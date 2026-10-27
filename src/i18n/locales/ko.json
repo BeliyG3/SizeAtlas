@@ -339,6 +339,8 @@
   "dup.phasePrefix": "파일 앞부분 비교 중: {total}개 중 {done}개",
   "dup.phaseFull": "비교 중: {total} 중 {done} 읽음",
   "dup.system": "시스템 폴더 포함",
+  "dup.everywhere": "열려 있는 모든 드라이브에서",
+  "dup.scope": "{path} 폴더에서",
   "dup.unfinished": "검색이 완료되지 않았습니다.",
   "dup.stale": "이 검색 이후 파일이 변경되었습니다. 다시 찾아 업데이트하세요.",
   "dup.skipped": "{roots}: 아직 스캔 중이어서 포함되지 않았습니다.",

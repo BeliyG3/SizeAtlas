@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, onDuplicatesStatus } from "../../api/client";
 import { rt } from "../lists/hookRuntime";
+import type { DupScope } from "../../api/duplicates";
 import type { Summary } from "../../api/types";
 import { SplitPane } from "../shell/SplitPane";
 import { DupHeader } from "./DupHeader";
@@ -46,7 +47,7 @@ const lastMenu = () => onMenuTrash.mock.lastCall![0];
 let shown: ReactElement;
 
 /** `committed`: what the table got (it lags behind the field); `field`: the text in the field. */
-function render(committed: string, field: string, pending = false) {
+function render(committed: string, field: string, pending = false, folder: DupScope | null = null) {
   for (let pass = 0; pass < 20; pass++) {
     rt.state.at = 0;
     rt.state.dirty = false;
@@ -62,6 +63,7 @@ function render(committed: string, field: string, pending = false) {
       entries,
       isRemoving: () => false,
       onFail,
+      folder,
     }) as ReactElement;
     for (const run of rt.state.queue.splice(0)) run();
     if (!rt.state.dirty) return;
@@ -106,6 +108,26 @@ describe("Find in the duplicates mode", () => {
     expect(header().props.query).toBe("type:image");
     header().props.onFind();
     expect(api.findDuplicates).toHaveBeenCalledWith("type:image", false, null);
+  });
+});
+
+describe("the folder searched", () => {
+  const photos: DupScope = { root: "C:\\", generation: 1, folder: 7 };
+
+  it("is the folder selected in the tree, or every open drive with the switch on", async () => {
+    render("type:image", "type:image", false, photos);
+    expect(api.estimateDuplicates).toHaveBeenLastCalledWith("type:image", false, photos);
+    header().props.onFind();
+    expect(api.findDuplicates).toHaveBeenLastCalledWith("type:image", false, photos);
+    // The first Find is taken before the next one is sent.
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(header().props.everywhere).toBe(false);
+    header().props.onEverywhere(true);
+    render("type:image", "type:image", false, photos);
+    expect(header().props.everywhere).toBe(true);
+    expect(api.estimateDuplicates).toHaveBeenLastCalledWith("type:image", false, null);
+    header().props.onFind();
+    expect(api.findDuplicates).toHaveBeenLastCalledWith("type:image", false, null);
   });
 });
 

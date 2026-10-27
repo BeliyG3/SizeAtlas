@@ -339,6 +339,8 @@
   "dup.phasePrefix": "正在比较文件开头：{done} / {total}",
   "dup.phaseFull": "正在比较：已读取 {done} / {total}",
   "dup.system": "包括系统文件夹",
+  "dup.everywhere": "在所有已打开的驱动器中",
+  "dup.scope": "在 {path} 中",
   "dup.unfinished": "查找未完成。",
   "dup.stale": "自上次查找后文件已更改。请重新查找以更新。",
   "dup.skipped": "{roots}：仍在扫描，未计入。",

@@ -16,6 +16,7 @@ vi.mock("../../settings/react", () => ({ useSize: () => (n: number) => `${n} B` 
 const onFind = vi.fn();
 const onCancel = vi.fn();
 const onSystem = vi.fn();
+const onEverywhere = vi.fn();
 
 type Props = Parameters<typeof DupHeader>[0];
 const header = (more: Partial<Props>) =>
@@ -25,7 +26,9 @@ const header = (more: Partial<Props>) =>
     status: null,
     query: "type:image",
     system: false,
+    everywhere: false,
     onSystem,
+    onEverywhere,
     onFind,
     onCancel,
     ...more,
@@ -169,6 +172,54 @@ describe("the header of the duplicates", () => {
     );
     const tree = header({ state, status: status({ job: 1 }) });
     expect(text(tree)).toContain('dup.unread {"count":1234,"files":"1,234"');
+  });
+
+  it("switches the search to every open drive, but not while one runs", () => {
+    const boxes = (tree: ReactElement) =>
+      elements(tree).filter((e) => e.type === "label" && text(e).includes("dup.everywhere"));
+    const box = (tree: ReactElement) =>
+      elements(boxes(tree)[0]).find((e) => e.type === "input") as ReactElement<{
+        checked: boolean;
+        disabled: boolean;
+        onChange: (e: { currentTarget: { checked: boolean } }) => void;
+      }>;
+    const idle = header({ everywhere: true });
+    expect(boxes(idle)).toHaveLength(1);
+    expect(box(idle).props.checked).toBe(true);
+    expect(box(idle).props.disabled).toBe(false);
+    box(idle).props.onChange({ currentTarget: { checked: false } });
+    expect(onEverywhere).toHaveBeenCalledWith(false);
+    const running = header({
+      state: applyAnswer(null, answer({ job: 1, running: true })),
+      status: status({ job: 1, running: true }),
+    });
+    expect(box(running).props.disabled).toBe(true);
+  });
+
+  it("names the folder searched: of the estimate, then of the result", () => {
+    expect(text(header({ estimate: estimate({ scope: "/photos" }) }))).toContain(
+      'dup.scope {"path":"/photos"}',
+    );
+    expect(text(header({}))).not.toContain("dup.scope");
+    const state = applyAnswer(null, answer({ job: 1, complete: true, scope: "/old" }));
+    const tree = header({ state, status: status({ job: 1 }), estimate: estimate({ scope: null }) });
+    expect(text(tree)).toContain('dup.scope {"path":"/old"}');
+    // The result of every open drive names no folder, whatever Find would search now.
+    const all = applyAnswer(null, answer({ job: 1, complete: true }));
+    expect(text(header({ state: all, estimate: estimate({ scope: "/" }) }))).not.toContain(
+      "dup.scope",
+    );
+  });
+
+  it("offers Continue only for the same folder", () => {
+    const state = applyAnswer(null, answer({ job: 1, complete: false, scope: "/a" }));
+    const same = header({ state, status: status({ job: 1 }), estimate: estimate({ scope: "/a" }) });
+    expect(button(same, "dup.continue")).toBeDefined();
+    for (const scope of ["/b", null]) {
+      const other = header({ state, status: status({ job: 1 }), estimate: estimate({ scope }) });
+      expect(button(other, "dup.continue")).toBeUndefined();
+      expect(button(other, "dup.find")).toBeDefined();
+    }
   });
 
   it("names the roots still being scanned", () => {

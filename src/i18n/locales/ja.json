@@ -339,6 +339,8 @@
   "dup.phasePrefix": "ファイルの先頭部分を比較中: {total} 個中 {done} 個",
   "dup.phaseFull": "比較中: {total} 中 {done} を読み取り済み",
   "dup.system": "システムフォルダーを含める",
+  "dup.everywhere": "開いているすべてのドライブ",
+  "dup.scope": "{path} 内",
   "dup.unfinished": "検索は完了していません。",
   "dup.stale": "この検索のあとにファイルが変更されました。もう一度検索して更新してください。",
   "dup.skipped": "{roots}: スキャン中のため対象に含まれていません。",

@@ -426,6 +426,8 @@
   "dup.phasePrefix": "Porównywanie początków plików: {done} z {total}",
   "dup.phaseFull": "Porównywanie: odczytano {done} z {total}",
   "dup.system": "Uwzględnij foldery systemowe",
+  "dup.everywhere": "We wszystkich otwartych dyskach",
+  "dup.scope": "W folderze {path}",
   "dup.unfinished": "Wyszukiwanie nie zostało ukończone.",
   "dup.stale": "Pliki zmieniły się od tego wyszukiwania. Wyszukaj ponownie, aby odświeżyć wyniki.",
   "dup.skipped": "{roots}: nadal trwa skanowanie, nie uwzględniono.",

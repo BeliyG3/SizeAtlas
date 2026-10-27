@@ -339,6 +339,8 @@
   "dup.phasePrefix": "Membandingkan awal file: {done} dari {total}",
   "dup.phaseFull": "Membandingkan: {done} dari {total} dibaca",
   "dup.system": "Sertakan folder sistem",
+  "dup.everywhere": "Di semua drive yang dibuka",
+  "dup.scope": "Di {path}",
   "dup.unfinished": "Pencarian belum selesai.",
   "dup.stale": "File berubah sejak pencarian ini. Cari lagi untuk memperbarui.",
   "dup.skipped": "{roots}: masih dipindai dan tidak disertakan.",

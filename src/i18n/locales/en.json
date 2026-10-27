@@ -368,6 +368,8 @@
   "dup.phasePrefix": "Comparing the starts of files: {done} of {total}",
   "dup.phaseFull": "Comparing: {done} of {total} read",
   "dup.system": "Include system folders",
+  "dup.everywhere": "In all open drives",
+  "dup.scope": "In {path}",
   "dup.unfinished": "The search was not finished.",
   "dup.stale": "Files changed since this search. Find again to update it.",
   "dup.skipped": "{roots}: still being scanned, not included.",

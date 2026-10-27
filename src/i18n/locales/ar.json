@@ -484,6 +484,8 @@
   "dup.phasePrefix": "مقارنة بدايات الملفات: {done} من {total}",
   "dup.phaseFull": "جارٍ المقارنة: تمت قراءة {done} من {total}",
   "dup.system": "تضمين مجلدات النظام",
+  "dup.everywhere": "في كل محركات الأقراص المفتوحة",
+  "dup.scope": "في {path}",
   "dup.unfinished": "لم يكتمل البحث.",
   "dup.stale": "تغيّرت الملفات منذ هذا البحث. ابحث مرة أخرى لتحديثه.",
   "dup.skipped": "{roots}: لا يزال الفحص جاريًا، خارج البحث.",
