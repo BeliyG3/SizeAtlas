@@ -425,7 +425,7 @@
   "dup.phaseFull": "Porównywanie: odczytano {done} z {total}",
   "dup.system": "Uwzględnij foldery systemowe",
   "dup.unfinished": "Wyszukiwanie nie zostało ukończone.",
-  "dup.stale": "Pliki zmieniły się od tego wyszukiwania. Wyszukaj ponownie, aby je odświeżyć.",
+  "dup.stale": "Pliki zmieniły się od tego wyszukiwania. Wyszukaj ponownie, aby odświeżyć wyniki.",
   "dup.skipped": "{roots}: nadal trwa skanowanie, nie uwzględniono.",
   "dup.unread_one": "Nie udało się odczytać {files} pliku ({reasons}).",
   "dup.unread_few": "Nie udało się odczytać {files} plików ({reasons}).",

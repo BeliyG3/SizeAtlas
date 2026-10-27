@@ -388,7 +388,7 @@
   "dup.colRoot": "Sürücü veya klasör",
   "dup.protected": "Sistem klasörü — burada silinmez",
   "dup.hardlink": "Sabit bağlantı: diğer bağlantılar açık sürücülerin dışında",
-  "dup.synced": "Eşitleniyor: silerseniz tüm cihazlarınızdan silinir",
+  "dup.synced": "Eşitlendi: silerseniz tüm cihazlarınızdan silinir",
   "dup.noId": "Ayrı bir dosya olup olmadığı anlaşılamadı — burada silinmez",
   "dup.groupStale": "Güncel değil — yeniden arayın",
   "dup.lastCopy": "Sistem klasörlerinin dışında en az bir kopya kalmalı.",

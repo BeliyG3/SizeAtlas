@@ -368,7 +368,7 @@
   "dup.system": "Systeemmappen opnemen",
   "dup.unfinished": "De zoekopdracht is niet voltooid.",
   "dup.stale": "Bestanden zijn gewijzigd sinds deze zoekopdracht. Zoek opnieuw om bij te werken.",
-  "dup.skipped": "{roots}: wordt nog gescand en is niet opgenomen.",
+  "dup.skipped": "{roots}: scan loopt nog, niet opgenomen.",
   "dup.unread_one": "{files} bestand kon niet worden gelezen ({reasons}).",
   "dup.unread_other": "{files} bestanden konden niet worden gelezen ({reasons}).",
   "dup.reason.cloud": "alleen online: {count}",

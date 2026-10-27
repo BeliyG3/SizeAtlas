@@ -397,7 +397,7 @@
   "dup.system": "Incluir carpetas del sistema",
   "dup.unfinished": "La búsqueda no terminó.",
   "dup.stale": "Los archivos han cambiado desde esta búsqueda. Busca de nuevo para actualizarla.",
-  "dup.skipped": "{roots}: aún se está analizando y no se incluye.",
+  "dup.skipped": "{roots}: análisis aún en curso, fuera de esta búsqueda.",
   "dup.unread_one": "No se pudo leer {files} archivo ({reasons}).",
   "dup.unread_many": "No se pudieron leer {files} de archivos ({reasons}).",
   "dup.unread_other": "No se pudieron leer {files} archivos ({reasons}).",
