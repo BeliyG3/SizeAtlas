@@ -94,7 +94,7 @@ export function DuplicatesView(props: Props) {
   );
   const scope = everywhere ? null : folder;
   const dups = useDuplicates({ query, system, scope, rootsKey, onFail });
-  const { state, status, estimate, finding, find, cancel, refresh } = dups;
+  const { state, status, estimate, estimating, target, finding, find, cancel, refresh } = dups;
   const running = status?.running ?? state?.answer.running ?? false;
   const dupTrash = useDupTrash({
     entries,
@@ -189,6 +189,8 @@ export function DuplicatesView(props: Props) {
     <div className="dups">
       <DupHeader
         estimate={estimate}
+        estimating={estimating}
+        target={target}
         state={state}
         status={status}
         query={text}

@@ -22,6 +22,8 @@ type Props = Parameters<typeof DupHeader>[0];
 const header = (more: Partial<Props>) =>
   DupHeader({
     estimate: estimate(),
+    estimating: false,
+    target: null,
     state: null,
     status: null,
     query: "type:image",
@@ -197,39 +199,33 @@ describe("the header of the duplicates", () => {
     expect(box(running).props.disabled).toBe(true);
   });
 
-  it("names the folder searched: of the estimate, then of the result", () => {
-    expect(text(header({ estimate: estimate({ scope: "/photos" }) }))).toContain(
-      'dup.scope {"path":"/photos"}',
-    );
+  it("names the folder searched: where Find searches, then of the result", () => {
+    expect(text(header({ target: "/photos" }))).toContain('dup.scope {"path":"/photos"}');
     expect(text(header({}))).not.toContain("dup.scope");
     const state = applyAnswer(null, answer({ job: 1, complete: true, scope: "/old" }));
-    const tree = header({ state, status: status({ job: 1 }), estimate: estimate({ scope: null }) });
+    const tree = header({ state, status: status({ job: 1 }), target: null });
     expect(text(tree)).toContain('dup.scope {"path":"/old"}');
     // The result of every open drive names no folder.
     const all = applyAnswer(null, answer({ job: 1, complete: true }));
-    expect(text(header({ state: all, estimate: estimate({ scope: "/" }) }))).not.toContain(
-      "dup.scope",
-    );
+    expect(text(header({ state: all, target: "/" }))).not.toContain("dup.scope");
   });
 
   it("says where Find searches once that is not the folder of the result", () => {
     const state = applyAnswer(null, answer({ job: 1, complete: true, scope: "/old" }));
     const at = (scope: string | null, more: Partial<Props> = {}) =>
-      text(header({ state, status: status({ job: 1 }), estimate: estimate({ scope }), ...more }));
+      text(header({ state, status: status({ job: 1 }), target: scope, ...more }));
     expect(at("/new")).toContain('dup.scope {"path":"/old"}');
     expect(at("/new")).toContain('dup.next {"path":"/new"}');
     expect(at("/old")).not.toContain("dup.next");
     // A root being rescanned: the estimate names no folder, the skipped line names the root.
     expect(at(null)).not.toContain("dup.next");
     const all = applyAnswer(null, answer({ job: 1, complete: true }));
-    expect(text(header({ state: all, estimate: estimate({ scope: "/" }) }))).toContain(
-      'dup.next {"path":"/"}',
-    );
+    expect(text(header({ state: all, target: "/" }))).toContain('dup.next {"path":"/"}');
   });
 
   it("says Find searches every open drive once the switch is on after a folder result", () => {
     const folder = applyAnswer(null, answer({ job: 1, complete: true, scope: "/old" }));
-    const on = { everywhere: true, scoped: false, estimate: estimate({ scope: null }) };
+    const on = { everywhere: true, scoped: false, target: null };
     expect(text(header({ state: folder, ...on }))).toContain("dup.findWhere");
     const all = applyAnswer(null, answer({ job: 1, complete: true }));
     expect(text(header({ state: all, ...on }))).not.toContain("dup.findWhere");
@@ -237,7 +233,7 @@ describe("the header of the duplicates", () => {
   });
 
   it("says Find searches every open drive when no folder can be sent", () => {
-    const none = { scoped: false, estimate: estimate({ scope: null }) };
+    const none = { scoped: false, target: null };
     expect(text(header(none))).toContain("dup.findWhere");
     // With the switch off, even after a search of every open drive.
     const all = applyAnswer(null, answer({ job: 1, complete: true }));
@@ -249,13 +245,24 @@ describe("the header of the duplicates", () => {
 
   it("offers Continue only for the same folder", () => {
     const state = applyAnswer(null, answer({ job: 1, complete: false, scope: "/a" }));
-    const same = header({ state, status: status({ job: 1 }), estimate: estimate({ scope: "/a" }) });
+    const same = header({ state, status: status({ job: 1 }), target: "/a" });
     expect(button(same, "dup.continue")).toBeDefined();
     for (const scope of ["/b", null]) {
-      const other = header({ state, status: status({ job: 1 }), estimate: estimate({ scope }) });
+      const other = header({ state, status: status({ job: 1 }), target: scope });
       expect(button(other, "dup.continue")).toBeUndefined();
       expect(button(other, "dup.find")).toBeDefined();
     }
+  });
+
+  it("names the folder before its estimate lands, and dims the counts of the last one", () => {
+    const before = header({ estimate: null, estimating: true, target: "/w" });
+    expect(text(before)).toContain('dup.scope {"path":"/w"}');
+    const tree = header({ estimating: true, target: "/w/a" });
+    const dim = elements(tree).find((e) => (e.props as { className?: string }).className === "dim");
+    expect(text(dim)).toContain('dup.toCompare {"count":10,"files":"10","size":"40960 B"} …');
+    const current = header({ target: "/w/a" });
+    expect(text(current)).toContain("dup.toCompare");
+    expect(text(current)).not.toContain("…");
   });
 
   it("names the roots still being scanned", () => {

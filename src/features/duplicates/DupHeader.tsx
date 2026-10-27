@@ -6,6 +6,10 @@ import { totalFree, type DupState } from "./groups";
 
 interface Props {
   estimate: DupEstimate | null;
+  /** The estimate is of an older ask (another folder, query or switch): its counts are not current. */
+  estimating: boolean;
+  /** The folder Find searches now, by path (known before its estimate); null for every open root. */
+  target: string | null;
   state: DupState | null;
   /** The latest status: of the running search, or of the kept result. */
   status: DupStatus | null;
@@ -34,6 +38,8 @@ const REASONS: readonly (keyof DupUnread)[] = ["cloud", "changed", "noAccess", "
  */
 export function DupHeader({
   estimate,
+  estimating,
+  target,
   state,
   status,
   query,
@@ -54,26 +60,30 @@ export function DupHeader({
   const running = status?.running ?? answer?.running ?? false;
   const stale = job > 0 && (status?.stale ?? answer?.stale ?? false);
   // Continue searches again for the same thing; after another query or folder it would be a new
-  // search. The estimate follows what Find would search: its folder is the one Find takes.
+  // search. The target is the folder Find takes.
   const unfinished = job > 0 && !running && answer !== null && !answer.complete;
   const resumable =
-    unfinished &&
-    answer.query === query &&
-    answer.system === system &&
-    answer.scope === (estimate?.scope ?? null);
+    unfinished && answer.query === query && answer.system === system && answer.scope === target;
   const unread = answer?.unread;
   const unreadCount = unread ? REASONS.reduce((sum, r) => sum + unread[r], 0) : 0;
   const groups = state?.groups.size ?? 0;
   // What the shown result left out; before any, what a search would leave out now.
   const skipped = (job > 0 ? answer?.skipped : estimate?.skipped) ?? [];
-  const scope = job > 0 ? answer?.scope : estimate?.scope;
+  const scope = job > 0 ? answer?.scope : target;
   // Where Find searches now, once that is not what the line above says.
   let next = null;
   if (!running && !scoped) {
     if (!everywhere || (job > 0 && answer?.scope != null)) next = t("dup.findWhere");
-  } else if (!running && job > 0 && estimate?.scope != null && estimate.scope !== answer?.scope) {
-    next = t("dup.next", { path: estimate.scope });
+  } else if (!running && job > 0 && target !== null && target !== answer?.scope) {
+    next = t("dup.next", { path: target });
   }
+  const toCompare =
+    estimate &&
+    t("dup.toCompare", {
+      count: estimate.files,
+      files: count(estimate.files),
+      size: size(estimate.bytes),
+    });
 
   let progress = null;
   if (running && status) {
@@ -108,13 +118,11 @@ export function DupHeader({
                 size: size(totalFree(state?.groups.values() ?? [])),
               })}
             </b>
+          ) : estimating && toCompare ? (
+            // The last counts, until the ones of what Find searches now land.
+            <span className="dim">{`${toCompare} …`}</span>
           ) : (
-            estimate &&
-            t("dup.toCompare", {
-              count: estimate.files,
-              files: count(estimate.files),
-              size: size(estimate.bytes),
-            })
+            toCompare
           )}
         </span>
         {progress}

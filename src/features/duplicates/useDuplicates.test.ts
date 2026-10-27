@@ -12,6 +12,7 @@ vi.mock("../../api/client", () => ({
     estimateDuplicates: vi.fn(),
     findDuplicates: vi.fn(),
     cancelDuplicates: vi.fn(),
+    getCrumbs: vi.fn(),
   },
   onDuplicatesStatus: vi.fn(),
 }));
@@ -49,6 +50,12 @@ beforeEach(() => {
     return Promise.resolve(() => {});
   });
   vi.mocked(api.estimateDuplicates).mockResolvedValue(estimate());
+  vi.mocked(api.getCrumbs).mockImplementation((_, id) =>
+    Promise.resolve([
+      { id: 0, name: "C:\\", size: 0, rank: 0 },
+      { id, name: `f${id}`, size: 0, rank: 0 },
+    ]),
+  );
   vi.mocked(api.getDuplicates).mockResolvedValue(
     answer({ job: 2, version: 5, complete: true, groups: [group("a")] }),
   );
@@ -152,5 +159,59 @@ describe("useDuplicates", () => {
     vi.mocked(api.findDuplicates).mockResolvedValue(4);
     shown.find("type:image");
     expect(api.findDuplicates).toHaveBeenCalledTimes(2);
+  });
+
+  it("names the folder at once and dims the counts until its estimate lands", async () => {
+    const a: DupScope = { root: "C:\\", generation: 1, folder: 4 };
+    const b: DupScope = { root: "C:\\", generation: 1, folder: 9 };
+    vi.mocked(api.estimateDuplicates).mockResolvedValueOnce(estimate({ scope: "C:\\f4" }));
+    render(undefined, undefined, a);
+    await Promise.resolve();
+    await Promise.resolve();
+    render(undefined, undefined, a);
+    expect([shown.target, shown.estimating]).toEqual(["C:\\f4", false]);
+    const later: ((e: ReturnType<typeof estimate>) => void)[] = [];
+    vi.mocked(api.estimateDuplicates).mockImplementation(
+      () => new Promise((resolve) => later.push(resolve)),
+    );
+    render(undefined, undefined, b);
+    // The old counts are not the folder's: shown as on their way.
+    expect(shown.estimating).toBe(true);
+    expect(shown.estimate?.scope).toBe("C:\\f4");
+    await Promise.resolve();
+    render(undefined, undefined, b);
+    expect(api.getCrumbs).toHaveBeenLastCalledWith(1, 9);
+    expect([shown.target, shown.estimating]).toEqual(["C:\\f9", true]);
+    later[0](estimate({ scope: "C:\\f9", files: 3 }));
+    await Promise.resolve();
+    render(undefined, undefined, b);
+    expect([shown.target, shown.estimating, shown.estimate?.files]).toEqual(["C:\\f9", false, 3]);
+  });
+
+  it("drops an estimate of a folder no longer selected", async () => {
+    const a: DupScope = { root: "C:\\", generation: 1, folder: 4 };
+    const b: DupScope = { root: "C:\\", generation: 1, folder: 9 };
+    const later: ((e: ReturnType<typeof estimate>) => void)[] = [];
+    vi.mocked(api.estimateDuplicates).mockImplementation(
+      () => new Promise((resolve) => later.push(resolve)),
+    );
+    render(undefined, undefined, a);
+    render(undefined, undefined, b);
+    later[0](estimate({ scope: "C:\\f4", files: 1 }));
+    await Promise.resolve();
+    render(undefined, undefined, b);
+    expect(shown.estimate).toBeNull();
+    expect(shown.target).toBe("C:\\f9");
+    later[1](estimate({ scope: "C:\\f9", files: 2 }));
+    await Promise.resolve();
+    render(undefined, undefined, b);
+    expect([shown.estimate?.files, shown.estimating]).toEqual([2, false]);
+  });
+
+  it("names no folder for every open root", async () => {
+    render();
+    await settle();
+    expect([shown.target, shown.estimating]).toEqual([null, false]);
+    expect(api.getCrumbs).not.toHaveBeenCalled();
   });
 });

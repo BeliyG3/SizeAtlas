@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, onDuplicatesStatus } from "../../api/client";
 import type { DupEstimate, DupScope, DupStatus, Duplicates } from "../../api/duplicates";
+import { crumbsPath } from "../export/names";
 import { applyAnswer, shouldFetch, type DupState } from "./groups";
 
 interface Options {
@@ -29,12 +30,16 @@ function merged(next: DupStatus, shown: DupStatus | null): DupStatus | null {
  * The duplicates result the backend keeps, read by cursor: on mount (a search never starts by
  * itself, so a result outlives leaving the mode), when the roots change (the stale mark follows
  * them) and when a status says there is more. The estimate of what a search would compare
- * follows the query, the switch, the folder and the roots.
+ * follows the query, the switch, the folder and the roots; the path of the folder is read at once,
+ * so the line naming it does not wait for the estimate.
  */
 export function useDuplicates({ query, system, scope, rootsKey, onFail }: Options) {
   const [state, setState] = useState<DupState | null>(null);
   const [status, setStatus] = useState<DupStatus | null>(null);
-  const [estimate, setEstimate] = useState<DupEstimate | null>(null);
+  // The last estimate and what it was asked for: one of an older ask is not the current one.
+  const ask = JSON.stringify([query, system, scope, rootsKey]);
+  const [estimated, setEstimated] = useState<{ ask: string; estimate: DupEstimate } | null>(null);
+  const [folder, setFolder] = useState<{ scope: DupScope; path: string } | null>(null);
   // A Find sent and not answered yet: a second one would start a job that cancels the first.
   const [finding, setFinding] = useState(false);
   const sending = useRef(false);
@@ -99,8 +104,8 @@ export function useDuplicates({ query, system, scope, rootsKey, onFail }: Option
   useEffect(() => {
     let live = true;
     api.estimateDuplicates(query, system, scope).then(
-      (next) => {
-        if (live) setEstimate(next);
+      (estimate) => {
+        if (live) setEstimated({ ask, estimate });
       },
       (e: unknown) => {
         if (live) fail.current(e);
@@ -109,7 +114,29 @@ export function useDuplicates({ query, system, scope, rootsKey, onFail }: Option
     return () => {
       live = false;
     };
-  }, [query, system, scope, rootsKey]);
+  }, [query, system, scope, rootsKey, ask]);
+
+  // The same text the estimate names the folder with, without its walk of the folder.
+  useEffect(() => {
+    if (!scope) return;
+    let live = true;
+    api.getCrumbs(scope.generation, scope.folder).then(
+      (crumbs) => {
+        if (live) setFolder({ scope, path: crumbsPath(crumbs) });
+      },
+      // A folder out of date: its estimate tells.
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [scope]);
+  const estimate = estimated?.estimate ?? null;
+  const estimating = estimated?.ask !== ask;
+  /** The folder Find searches now, by path; null for every open root. */
+  let target = estimate?.scope ?? null;
+  if (estimating && !scope) target = null;
+  else if (estimating && folder?.scope === scope) target = folder.path;
 
   /** Searches for `words` (the text in the field, not the debounced query). */
   const find = useCallback(
@@ -140,5 +167,5 @@ export function useDuplicates({ query, system, scope, rootsKey, onFail }: Option
     api.cancelDuplicates().catch((e: unknown) => fail.current(e));
   }, []);
 
-  return { state, status, estimate, finding, find, cancel, refresh: fetch };
+  return { state, status, estimate, estimating, target, finding, find, cancel, refresh: fetch };
 }

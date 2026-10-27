@@ -85,9 +85,17 @@ pub struct Estimate {
 pub fn estimate(roots: &[SearchRoot], opts: &Options) -> Estimate {
     let (found, eligible) = candidates::collect(roots, opts);
     let seeded = found.iter().filter(|c| c.seed).count() as u64;
-    let groups = candidates::buckets(found);
-    let files = groups.iter().map(Vec::len).sum::<usize>() as u64;
-    let bytes = groups.iter().flatten().map(|c| c.len).sum();
+    // The buckets of `candidates::buckets`, counted from the lengths alone: sorting whole
+    // candidates and copying them out would take longer than the walk.
+    let mut lens: Vec<(u64, bool)> = found.iter().map(|c| (c.len, c.seed)).collect();
+    lens.sort_unstable();
+    let (mut files, mut bytes) = (0, 0);
+    for g in lens.chunk_by(|a, b| a.0 == b.0) {
+        if g.len() >= 2 && g.iter().any(|&(_, seed)| seed) {
+            files += g.len() as u64;
+            bytes += g[0].0 * g.len() as u64;
+        }
+    }
     Estimate {
         files,
         bytes,
@@ -108,6 +116,8 @@ mod tests_hash;
 mod tests_held;
 #[cfg(test)]
 mod tests_links;
+#[cfg(test)]
+mod tests_parallel;
 #[cfg(test)]
 mod tests_results;
 #[cfg(test)]

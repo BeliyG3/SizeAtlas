@@ -5,3 +5,7 @@ resolver = "3"
 # Hashing in a dev build would be several times slower than in a release one.
 [profile.dev.package.blake3]
 opt-level = 3
+
+# The duplicate estimate walks every node of a tree: unoptimized it would lag behind each selection.
+[profile.dev.package.sizeatlas-core]
+opt-level = 2

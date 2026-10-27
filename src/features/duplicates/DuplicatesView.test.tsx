@@ -23,6 +23,12 @@ vi.mock("../../api/client", () => ({
     estimateDuplicates: vi.fn(),
     findDuplicates: vi.fn(),
     cancelDuplicates: vi.fn(),
+    getCrumbs: vi.fn(() =>
+      Promise.resolve([
+        { id: 0, name: "/", size: 0, rank: 0 },
+        { id: 7, name: "photos", size: 0, rank: 0 },
+      ]),
+    ),
     trashPreview: vi.fn(),
     openViewer: vi.fn(() => Promise.resolve()),
   },
@@ -130,6 +136,14 @@ describe("the folder searched", () => {
     expect(api.estimateDuplicates).toHaveBeenLastCalledWith("type:image", false, null);
     header().props.onFind();
     expect(api.findDuplicates).toHaveBeenLastCalledWith("type:image", false, null);
+  });
+
+  it("is named in the header before its estimate lands", async () => {
+    vi.mocked(api.estimateDuplicates).mockReturnValue(new Promise(() => {}));
+    render("type:image", "type:image", false, photos);
+    await Promise.resolve();
+    render("type:image", "type:image", false, photos);
+    expect([header().props.target, header().props.estimating]).toEqual(["/photos", true]);
   });
 
   it("is every open drive without a tree of the selected root", () => {
