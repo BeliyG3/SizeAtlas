@@ -62,6 +62,12 @@ export function removingState(
 export const isRemoving = (runs: readonly Run[], generation: number, ids: readonly number[]) =>
   runs.some((run) => ids.some((id) => hasItem(run, generation, id)));
 
+/**
+ * Whether a request of duplicates (one with `more`) runs or waits: the backend refuses a search
+ * until it ends. Kept with the runs, so it outlives leaving the duplicates mode.
+ */
+export const dupPending = (runs: readonly Run[]) => runs.some((r) => r.more !== undefined);
+
 /** The runs that started, the first `max` of them, and how many more there are; waiting ones are not shown. */
 export function shownRuns(runs: readonly Run[], max = 2): { shown: Run[]; more: number } {
   const started = runs.filter((r) => r.progress !== null);

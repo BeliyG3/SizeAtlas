@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode
 import { api, isCmdError } from "../api/client";
 import { ROOT_ID, type Roots, type TrashPreview } from "../api/types";
 import { PurgeDialog } from "../features/trash/PurgeDialog";
-import { isRemoving as removesAny } from "../features/trash/runs";
+import { dupPending, isRemoving as removesAny } from "../features/trash/runs";
 import { trashReport, type Removal } from "../features/trash/text";
 import { TrashDialog } from "../features/trash/TrashDialog";
 import { useTrashRun } from "../features/trash/useTrashRun";
@@ -235,7 +235,7 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
   return {
     roots: running.roots,
     // The duplicates mode sends requests of its own (`useDupTrash`), shown as any other.
-    runs: { start: running.start, end: running.end },
+    runs: { start: running.start, end: running.end, pending: dupPending(running.moving) },
     isRemoving,
     moving: running.moving,
     status: running.status,

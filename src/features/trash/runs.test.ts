@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TrashProgress } from "../../api/types";
-import { applyProgress, isRemoving, removingState, shownRuns, type Run } from "./runs";
+import { applyProgress, dupPending, isRemoving, removingState, shownRuns, type Run } from "./runs";
 
 const run = (request: number, more: Partial<Run> = {}): Run => ({
   request,
@@ -85,6 +85,14 @@ describe("a request of duplicates over several trees", () => {
     expect(isRemoving(runs, 2, [3])).toBe(false);
     expect(isRemoving(runs, 1, [3])).toBe(true);
     expect(removingState(applyProgress(runs, at(1, 2)), 2, 8)).toBe("trash");
+  });
+});
+
+describe("dupPending", () => {
+  it("is true while a request of duplicates runs or waits, and only then", () => {
+    expect(dupPending([run(1)])).toBe(false);
+    expect(dupPending([run(1), run(2, { more: [] })])).toBe(true);
+    expect(dupPending([])).toBe(false);
   });
 });
 

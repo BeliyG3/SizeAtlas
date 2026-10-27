@@ -14,6 +14,8 @@ import { mergePreviews } from "./preview";
 export interface DupRuns {
   start: (run: TrashRun) => number;
   end: (request: number) => void;
+  /** A request of duplicates was sent and has no answer yet (`dupPending`): Find waits for it. */
+  pending: boolean;
 }
 
 interface Args {
@@ -58,7 +60,6 @@ function byTree(refs: readonly DupRef[]) {
  * dialog, then one request of all their paths (`trash_duplicates`, which keeps one copy and
  * never deletes for good), shown and stopped like any other. A request refused as out of date is
  * not sent again (the group changed): the result is read again and says "find again".
- * `trashing`: a request was sent and has no answer yet; Find waits for it (the backend refuses).
  */
 export function useDupTrash({
   entries,
@@ -74,7 +75,6 @@ export function useDupTrash({
   const { t, lang } = useT();
   const size = useSize();
   const [asking, setAsking] = useState<Asking | null>(null);
-  const [trashing, setTrashing] = useState(0);
   const questions = useRef(0);
   const removing = (refs: readonly DupRef[]) => refs.some((r) => isRemoving(r.generation, [r.id]));
 
@@ -128,7 +128,6 @@ export function useDupTrash({
     const refs = copies.flatMap((c) => c.refs);
     const [first, ...more] = byTree(refs);
     const request = runs.start({ ...first, preview, purge: false, more });
-    setTrashing((n) => n + 1);
     api
       .trashDuplicates(request, refs)
       .then(
@@ -144,7 +143,6 @@ export function useDupTrash({
       )
       .finally(() => {
         runs.end(request);
-        setTrashing((n) => n - 1);
         refresh();
       })
       // A report that fails to be told must not end as an unhandled rejection.
@@ -176,5 +174,5 @@ export function useDupTrash({
       onClose={() => setAsking(null)}
     />
   );
-  return { ask, trashing: trashing > 0, dialog };
+  return { ask, dialog };
 }

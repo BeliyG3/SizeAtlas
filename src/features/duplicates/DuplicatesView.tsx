@@ -146,7 +146,7 @@ export function DuplicatesView(props: Props) {
         query={text}
         system={system}
         // The backend refuses a search while a trash of copies runs.
-        finding={finding || dupTrash.trashing}
+        finding={finding || runs.pending}
         onSystem={setSystem}
         onFind={onFind}
         onCancel={cancel}

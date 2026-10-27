@@ -38,7 +38,7 @@ const lastMenu = () => onMenuTrash.mock.lastCall![0];
 let shown: ReactElement;
 
 /** `committed`: what the table got (it lags behind the field); `field`: the text in the field. */
-function render(committed: string, field: string) {
+function render(committed: string, field: string, pending = false) {
   for (let pass = 0; pass < 20; pass++) {
     rt.state.at = 0;
     rt.state.dirty = false;
@@ -46,7 +46,7 @@ function render(committed: string, field: string) {
       query: committed,
       field,
       onCommit,
-      runs: { start: vi.fn(), end: vi.fn() },
+      runs: { start: vi.fn(), end: vi.fn(), pending },
       push,
       errorText: String,
       onTrashed: vi.fn(),
@@ -83,6 +83,13 @@ describe("Find in the duplicates mode", () => {
     expect(onCommit).toHaveBeenCalledWith("*.png holiday");
     expect(api.findDuplicates).toHaveBeenCalledWith("*.png holiday", false);
     expect(api.estimateDuplicates).toHaveBeenLastCalledWith("type:image", false);
+  });
+
+  it("waits while a removal of copies runs, even one sent before the mode was entered", () => {
+    render("type:image", "type:image");
+    expect(header().props.finding).toBe(false);
+    render("type:image", "type:image", true);
+    expect(header().props.finding).toBe(true);
   });
 
   it("never searches every type from a value that has not caught up with the field", () => {

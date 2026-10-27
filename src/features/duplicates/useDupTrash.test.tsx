@@ -47,7 +47,7 @@ const result: TrashResult = {
   warning: null,
 };
 
-const runs = { start: vi.fn(() => 41), end: vi.fn() };
+const runs = { start: vi.fn(() => 41), end: vi.fn(), pending: false };
 const push = vi.fn();
 const onError = vi.fn();
 const refresh = vi.fn();
@@ -178,18 +178,6 @@ describe("useDupTrash", () => {
     shown.ask([one, other]);
     expect(push).toHaveBeenCalledWith("trash.already");
     expect(api.trashPreview).not.toHaveBeenCalled();
-  });
-
-  it("is trashing from the confirmation until the answer", async () => {
-    let answer: (result: TrashResult) => void = () => {};
-    vi.mocked(api.trashDuplicates).mockReturnValue(new Promise((done) => (answer = done)));
-    render();
-    expect(shown.trashing).toBe(false);
-    await askAndConfirm([one]);
-    expect(shown.trashing).toBe(true);
-    answer(result);
-    await settle();
-    expect(shown.trashing).toBe(false);
   });
 
   it("sends nothing when another request took a copy while the dialog was open", async () => {
