@@ -121,12 +121,14 @@ describe("the title of a group", () => {
     expect(JSON.stringify(tree)).toContain('dup.copies {\\"count\\":1234,\\"copies\\":\\"1,234\\"');
   });
 
-  it("keeps the name on one line that ends in an ellipsis", () => {
+  it("keeps the name on one line that ends in an ellipsis, the whole of it in a tooltip", () => {
     const tree = GroupTitle({ group: group("a"), target: undefined, onFull, onWindow, onFail });
     const named = elements(tree).find(
       (e) => (e.props as { className?: string }).className === "dup-name",
     );
-    expect(named).toBeDefined();
+    const props = named!.props as { title?: string; children?: unknown };
+    expect(props.title).toContain("dup.copies");
+    expect(props.title).toBe(props.children);
   });
 
   it("reports a failed opening", async () => {

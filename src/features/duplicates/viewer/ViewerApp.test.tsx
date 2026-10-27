@@ -140,6 +140,14 @@ describe("ViewerApp", () => {
     expect(zoomUrl()).toBe(`blob:${urls}`);
   });
 
+  it("reads nothing once it is gone", async () => {
+    for (const s of rt.state.slots) if (typeof s.cleanup === "function") s.cleanup();
+    // The listener of the cleaned-up effect still runs before its unlisten takes hold.
+    show(picture("a"));
+    await settle();
+    expect(api.getThumbnail).not.toHaveBeenCalled();
+  });
+
   it("drops the pending picture on a null", async () => {
     const a = deferred();
     vi.mocked(api.getThumbnail).mockReturnValueOnce(a.promise);

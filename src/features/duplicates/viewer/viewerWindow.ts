@@ -44,7 +44,11 @@ export function useViewerSync(selected: DupGroup | null): void {
   useEffect(() => {
     let off = false;
     let un: UnlistenFn | undefined;
-    onViewerReady(() => send(current.current)).then((u) => (off ? u() : (un = u)));
+    onViewerReady(() => {
+      // The listener of a cleaned-up effect, before its unlisten resolves.
+      if (off) return;
+      send(current.current);
+    }).then((u) => (off ? u() : (un = u)));
     return () => {
       off = true;
       un?.();

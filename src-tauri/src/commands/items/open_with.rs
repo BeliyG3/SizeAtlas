@@ -20,9 +20,11 @@ pub async fn show(window: &Window, path: PathBuf) -> Result<(), CmdError> {
     let hwnd = window.hwnd().map_err(CmdError::from)?.0 as isize;
     let (tx, rx) = tokio::sync::oneshot::channel();
     let target = path.clone();
-    std::thread::spawn(move || {
-        let _ = tx.send(sys::show(hwnd, &target));
-    });
+    std::thread::Builder::new()
+        .spawn(move || {
+            let _ = tx.send(sys::show(hwnd, &target));
+        })
+        .map_err(|e| super::io(&path, e))?;
     match rx.await {
         Ok(Ok(())) => Ok(()),
         Ok(Err(message)) => Err(super::io(&path, message)),

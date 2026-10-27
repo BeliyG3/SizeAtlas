@@ -97,4 +97,14 @@ describe("useViewerSync", () => {
     await Promise.resolve();
     expect(unlisten).toHaveBeenCalledTimes(1);
   });
+
+  it("sends nothing on a ready that comes after the cleanup", async () => {
+    render(group("a"));
+    unmount();
+    const before = sent().length;
+    // The listener of the cleaned-up effect still runs before its unlisten resolves.
+    ready();
+    expect(sent()).toHaveLength(before);
+    expect(sent().at(-1)).toBeNull();
+  });
 });

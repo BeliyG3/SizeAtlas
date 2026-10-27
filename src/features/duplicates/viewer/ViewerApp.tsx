@@ -58,6 +58,8 @@ export function ViewerApp() {
         });
     };
     onViewerShow((p) => {
+      // The listener of a cleaned-up effect, before its unlisten resolves.
+      if (off) return;
       latest = p;
       waiting = null;
       if (!p) put(null);

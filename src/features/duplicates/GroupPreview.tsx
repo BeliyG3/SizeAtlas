@@ -32,15 +32,17 @@ export function GroupTitle({ group, target, onFull, onWindow, onFail }: TitlePro
     if (at) void call(at.generation, at.id).catch(onFail);
   };
   const picture = mimeOf(group.name) !== null;
+  const title = t("dup.copies", {
+    count,
+    copies: formatCount(count, lang),
+    name: group.name,
+    size: size(group.size),
+  });
   return (
     <p className="dup-title">
-      <span className="dup-name" dir="auto">
-        {t("dup.copies", {
-          count,
-          copies: formatCount(count, lang),
-          name: group.name,
-          size: size(group.size),
-        })}
+      {/* Cut short beside the buttons: the tooltip has all of it. */}
+      <span className="dup-name" dir="auto" title={title}>
+        {title}
       </span>
       {group.stale && <span className="tag dup-warn">{t("dup.groupStale")}</span>}
       <span className="dup-actions">

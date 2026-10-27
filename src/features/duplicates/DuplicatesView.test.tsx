@@ -262,6 +262,28 @@ describe("the full-screen view", () => {
     expect(detail().props.group.key).toBe("a");
     expect(element(Lightbox)).toBeUndefined();
   });
+
+  it("keeps the group it opened on when a bigger one comes in", async () => {
+    vi.stubGlobal("document", { activeElement: null });
+    vi.mocked(api.getDuplicates).mockResolvedValue(
+      answer({ job: 1, version: 2, groups: [group("a", 30)] }),
+    );
+    render("type:image", "type:image");
+    await settle();
+    // Nothing picked: the first group is shown, and the full screen opens on it.
+    detail().props.onFull();
+    render("type:image", "type:image");
+    expect(element(Lightbox)!.props.group.key).toBe("a");
+
+    const told = vi.mocked(onDuplicatesStatus).mock.lastCall![0];
+    vi.mocked(api.getDuplicates).mockResolvedValue(
+      answer({ job: 1, version: 3, groups: [group("big", 99), group("a", 30)] }),
+    );
+    told(status({ job: 1, version: 3 }));
+    await settle();
+    expect(list().props.groups[0].key).toBe("big");
+    expect(element(Lightbox)!.props.group.key).toBe("a");
+  });
 });
 
 describe("the viewer window", () => {

@@ -216,7 +216,11 @@ export function DuplicatesView(props: Props) {
               onTrash={trash}
               onMenu={(at, x, y) => setMenu({ key, at, x, y })}
               picture={picture}
-              onFull={() => setFull(mimeOf(selected.name) !== null)}
+              onFull={() => {
+                // Pinned: a bigger group coming in during a search must not swap the picture.
+                setPicked(selected.key);
+                setFull(mimeOf(selected.name) !== null);
+              }}
               onWindow={() => void api.openViewer(t("dup.view.title"), dark).catch(onFail)}
               onFail={onFail}
             />
