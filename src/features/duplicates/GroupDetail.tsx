@@ -1,5 +1,5 @@
 import type { DupGroup } from "../../api/duplicates";
-import { formatDate } from "../../format";
+import { formatCount, formatDate } from "../../format";
 import { useT } from "../../i18n/react";
 import { useSize } from "../../settings/react";
 import { ROW_HEIGHT } from "../contents/pages";
@@ -23,13 +23,19 @@ export function GroupDetail({ group }: Props) {
   return (
     <div className="dup-detail">
       <p className="dup-title">
-        <span dir="auto">
-          {t("dup.copies", { count, name: group.name, size: size(group.size) })}
+        <span className="dup-name" dir="auto">
+          {t("dup.copies", {
+            count,
+            copies: formatCount(count, lang),
+            name: group.name,
+            size: size(group.size),
+          })}
         </span>
         {group.stale && <span className="tag dup-warn">{t("dup.groupStale")}</span>}
       </p>
-      {/* ponytail: every copy is rendered; virtualize if groups of thousands of copies show up. */}
-      <div className="contents dup-table" role="grid" aria-rowcount={count + 1} aria-colcount={4}>
+      {/* ponytail: every copy is rendered; virtualize if groups of thousands of copies show up.
+          A table: its rows take no keys yet. */}
+      <div className="contents dup-table" role="table" aria-rowcount={count + 1} aria-colcount={4}>
         <div className="chead" role="row" style={{ gridTemplateColumns: TEMPLATE }}>
           <span role="columnheader" className="label">
             {t("col.path")}
@@ -54,14 +60,14 @@ export function GroupDetail({ group }: Props) {
                 className={`crow${index % 2 ? " alt" : ""}`}
                 style={{ top: index * ROW_HEIGHT, gridTemplateColumns: TEMPLATE }}
               >
-                <span role="gridcell" data-col="path" dir="auto" title={copy.path}>
+                <span role="cell" data-col="path" dir="auto" title={copy.path}>
                   {copy.path}
                 </span>
-                <span role="gridcell">{formatDate(copy.mtime || null, lang)}</span>
-                <span role="gridcell" dir="auto" title={copy.root}>
+                <span role="cell">{formatDate(copy.mtime || null, lang)}</span>
+                <span role="cell" dir="auto" title={copy.root}>
                   {copy.root}
                 </span>
-                <span role="gridcell" className="tag" title={marks.join("\n")}>
+                <span role="cell" className="tag" title={marks.join("\n")}>
                   {marks.join(" · ")}
                 </span>
               </div>

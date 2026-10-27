@@ -135,6 +135,42 @@ describe("the header of the duplicates", () => {
     expect(text(tree)).not.toContain("dup.unfinished");
   });
 
+  it("names the roots the shown result left out, once there is one", () => {
+    const state = applyAnswer(null, answer({ job: 1, complete: true, skipped: ["D:\\"] }));
+    const tree = header({ state, status: status({ job: 1 }), estimate: estimate() });
+    expect(text(tree)).toContain('dup.skipped {"roots":"D:\\\\"}');
+  });
+
+  it("keeps one live region for the totals, always there and without the controls", () => {
+    for (const tree of [
+      header({ estimate: null }),
+      header({
+        state: applyAnswer(null, answer({ job: 1, running: true })),
+        status: status({ job: 1, running: true }),
+      }),
+    ]) {
+      const regions = elements(tree).filter(
+        (e) => (e.props as { role?: string }).role === "status",
+      );
+      expect(regions).toHaveLength(1);
+      const inside = elements((regions[0].props as { children?: ReactNode }).children);
+      expect(inside.some((e) => e.type === "button" || e.type === "input")).toBe(false);
+    }
+  });
+
+  it("writes the count of unread files with the number format of the language", () => {
+    const state = applyAnswer(
+      null,
+      answer({
+        job: 1,
+        complete: true,
+        unread: { cloud: 1234, changed: 0, noAccess: 0, failed: 0 },
+      }),
+    );
+    const tree = header({ state, status: status({ job: 1 }) });
+    expect(text(tree)).toContain('dup.unread {"count":1234,"files":"1,234"');
+  });
+
   it("names the roots still being scanned", () => {
     const tree = header({ estimate: estimate({ skipped: ["W:\\", "D:\\"] }) });
     expect(text(tree)).toContain('dup.skipped {"roots":"W:\\\\, D:\\\\"}');

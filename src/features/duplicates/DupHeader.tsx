@@ -50,7 +50,8 @@ export function DupHeader({
   const unread = answer?.unread;
   const unreadCount = unread ? REASONS.reduce((sum, r) => sum + unread[r], 0) : 0;
   const groups = state?.groups.size ?? 0;
-  const skipped = estimate?.skipped ?? [];
+  // What the shown result left out; before any, what a search would leave out now.
+  const skipped = (job > 0 ? answer?.skipped : estimate?.skipped) ?? [];
 
   let progress = null;
   if (running && status) {
@@ -74,27 +75,26 @@ export function DupHeader({
 
   return (
     <div className="dup-header">
-      {/* Announced when it settles, not at every progress of a running search. */}
-      <p className="dup-line" role={running ? undefined : "status"}>
-        {job > 0 ? (
-          <b>
-            {t("dup.summary", {
-              count: groups,
-              groups: count(groups),
-              size: size(totalFree(state?.groups.values() ?? [])),
-            })}
-          </b>
-        ) : (
-          estimate && (
-            <span>
-              {t("dup.toCompare", {
-                count: estimate.files,
-                files: count(estimate.files),
-                size: size(estimate.bytes),
+      <p className="dup-line">
+        {/* The totals only: the progress and the controls stay out of the live region. */}
+        <span role="status">
+          {job > 0 ? (
+            <b>
+              {t("dup.summary", {
+                count: groups,
+                groups: count(groups),
+                size: size(totalFree(state?.groups.values() ?? [])),
               })}
-            </span>
-          )
-        )}
+            </b>
+          ) : (
+            estimate &&
+            t("dup.toCompare", {
+              count: estimate.files,
+              files: count(estimate.files),
+              size: size(estimate.bytes),
+            })
+          )}
+        </span>
         {progress}
         {running ? (
           <button type="button" onClick={onCancel}>
@@ -124,6 +124,7 @@ export function DupHeader({
         <p className="dim">
           {t("dup.unread", {
             count: unreadCount,
+            files: count(unreadCount),
             reasons: REASONS.filter((r) => unread[r] > 0)
               .map((r) => t(`dup.reason.${r}`, { count: count(unread[r]) }))
               .join(", "),
