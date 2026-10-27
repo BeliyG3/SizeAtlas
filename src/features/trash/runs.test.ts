@@ -76,6 +76,18 @@ describe("isRemoving", () => {
   });
 });
 
+describe("a request of duplicates over several trees", () => {
+  const more = [{ generation: 2, root: "/other", ids: [8, 9] }];
+  it("removes the items of the other trees too, and its progress reaches them", () => {
+    const runs = [run(1, { ids: [3], more })];
+    expect(removingState(runs, 2, 9)).toBe("queued");
+    expect(isRemoving(runs, 2, [7, 8])).toBe(true);
+    expect(isRemoving(runs, 2, [3])).toBe(false);
+    expect(isRemoving(runs, 1, [3])).toBe(true);
+    expect(removingState(applyProgress(runs, at(1, 2)), 2, 8)).toBe("trash");
+  });
+});
+
 describe("shownRuns", () => {
   it("shows the first two that started and counts the rest, never a waiting one", () => {
     const started = (n: number) => run(n, { progress: at(n) });

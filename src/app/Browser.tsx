@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { QueueEntry, ScanProgress, Sources } from "../api/types";
 import { DEFAULT_SORT, type SortState } from "../features/contents/columns";
 import { DrivesPanel } from "../features/drives/DrivesPanel";
-import { DuplicatesView } from "../features/duplicates/DuplicatesView";
+import { DuplicatesView, type DupWiring } from "../features/duplicates/DuplicatesView";
 import { ItemMenu, menuIds, type MenuTarget } from "../features/menu/ItemMenu";
 import { RootMenu, type RootMenuTarget } from "../features/menu/RootMenu";
 import { ScanView } from "../features/scan/ScanView";
@@ -30,10 +30,8 @@ interface Props {
    * duplicates, whose search they filter.
    */
   query: string;
-  /** The text in the search field now: Find of the duplicates searches it. */
-  field: string;
-  /** Commits words to the search at once (as Enter does). */
-  onCommitQuery: (words: string) => void;
+  /** What only the duplicates mode needs. */
+  duplicates: DupWiring;
   /** Enter or a double click on a folder of the results: the search is over (stable). */
   onLeaveSearch: () => void;
   sources: Sources | null;
@@ -95,8 +93,7 @@ export function Browser({
   selection,
   mode,
   query,
-  field,
-  onCommitQuery,
+  duplicates,
   onLeaveSearch,
   sources,
   progress,
@@ -147,14 +144,6 @@ export function Browser({
       })),
     [entries, sources],
   );
-  // Any root opened, closed, rescanned or changed: the duplicates estimate and stale mark follow.
-  const rootsKey = useMemo(
-    () =>
-      entries
-        .map((e) => `${e.root}|${e.summary?.generation ?? ""}|${e.summary?.rev ?? ""}|${e.status}`)
-        .join("\n"),
-    [entries],
-  );
   const treeTarget = useMemo<TreeTarget | null>(
     () =>
       selection && { root: selection.root, generation: selection.generation, id: selection.folder },
@@ -194,10 +183,10 @@ export function Browser({
     // Of every open root, not of the selected one.
     content = (
       <DuplicatesView
+        {...duplicates}
         query={query}
-        field={field}
-        onCommit={onCommitQuery}
-        rootsKey={rootsKey}
+        entries={entries}
+        isRemoving={isRemoving}
         onFail={onFail}
       />
     );

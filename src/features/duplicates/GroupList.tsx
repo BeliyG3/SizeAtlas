@@ -1,13 +1,14 @@
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { DupGroup } from "../../api/duplicates";
 import { formatCount } from "../../format";
 import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import { useSize } from "../../settings/react";
-import { ItemIcon } from "../contents/ItemIcon";
 import { ROW_HEIGHT, visibleRange } from "../contents/pages";
 import { tableKeyDown, useViewport, type RowActions } from "../contents/tableView";
 import { scrollToRow } from "../contents/useCursor";
+import { Thumb } from "./Thumb";
+import type { ThumbQueue } from "./thumbs";
 import "../contents/contents.css";
 
 /** Icon, name, copies, size of a copy, what can be freed. */
@@ -19,12 +20,14 @@ interface Props {
   /** Key of the group whose copies are shown. */
   selected: string | null;
   onPick: (key: string) => void;
+  /** Thumbnails: only those of the rows on screen and of the selected group are asked for. */
+  queue: ThumbQueue;
 }
 
 const nothing = () => {};
 
 /** The groups of the result, one row each; the selected one is the cursor row. Virtual. */
-export function GroupList({ groups, selected, onPick }: Props) {
+export function GroupList({ groups, selected, onPick, queue }: Props) {
   const { t, lang } = useT();
   const size = useSize();
   const body = useRef<HTMLDivElement>(null);
@@ -32,6 +35,12 @@ export function GroupList({ groups, selected, onPick }: Props) {
   const { first, last } = visibleRange(scrollTop, viewport, groups.length);
   const at = groups.findIndex((g) => g.key === selected);
   const cursor = at < 0 ? null : at;
+  // After the rows asked for theirs (child effects run first): drop what scrolled away.
+  useEffect(() => {
+    const keys = new Set(groups.slice(first, last).map((g) => g.key));
+    if (selected !== null) keys.add(selected);
+    queue.keep(keys);
+  }, [queue, groups, first, last, selected]);
 
   const point = (index: number) => {
     if (groups.length === 0) return;
@@ -66,7 +75,7 @@ export function GroupList({ groups, selected, onPick }: Props) {
         onClick={() => point(index)}
       >
         <span role="gridcell" className="dup-icon">
-          <ItemIcon isDir={false} category={group.category} />
+          <Thumb group={group} queue={queue} />
         </span>
         <span role="gridcell" dir="auto" title={group.name}>
           {group.name}

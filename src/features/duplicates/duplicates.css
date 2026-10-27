@@ -78,3 +78,23 @@
   align-items: center;
   justify-content: center;
 }
+
+/* A thumbnail in the icon cell of a group row. */
+.dup-thumb {
+  inline-size: 20px;
+  block-size: 20px;
+  object-fit: contain;
+}
+
+/* The picture of the group above its copies. */
+.dup-preview {
+  flex: none;
+  padding: 0 12px 6px;
+}
+
+.dup-picture {
+  display: block;
+  max-inline-size: min(100%, 240px);
+  max-block-size: 160px;
+  object-fit: contain;
+}

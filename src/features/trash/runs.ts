@@ -8,6 +8,8 @@ export interface TrashRun {
   preview: TrashPreview;
   /** The items are deleted for good, not moved to the trash. */
   purge: boolean;
+  /** A request of duplicates: the items of its other trees (one request, one progress). */
+  more?: readonly { generation: number; root: string; ids: readonly number[] }[];
 }
 
 /** A removal request the user sees: its number, its progress and whether Stop was pressed. */
@@ -24,11 +26,16 @@ export type RemovingState = "queued" | "trash" | "purge";
 
 // The items of a run as a set, built once per run: its rows ask for each of them on every paint.
 const itemSets = new WeakMap<readonly number[], ReadonlySet<number>>();
-function hasItem(run: Run, id: number): boolean {
-  let set = itemSets.get(run.ids);
-  if (!set) itemSets.set(run.ids, (set = new Set(run.ids)));
+function inSet(ids: readonly number[], id: number): boolean {
+  let set = itemSets.get(ids);
+  if (!set) itemSets.set(ids, (set = new Set(ids)));
   return set.has(id);
 }
+
+/** Whether `run` removes the item `id` of the tree with `generation`, in any of its trees. */
+const hasItem = (run: Run, generation: number, id: number) =>
+  (run.generation === generation && inSet(run.ids, id)) ||
+  (run.more?.some((m) => m.generation === generation && inSet(m.ids, id)) ?? false);
 
 /** `runs` with the progress `p` set on the run it belongs to; an event of no known run changes nothing. */
 export function applyProgress(runs: readonly Run[], p: TrashProgress): readonly Run[] {
@@ -44,7 +51,7 @@ export function removingState(
 ): RemovingState | undefined {
   let state: RemovingState | undefined;
   for (const run of runs) {
-    if (run.generation !== generation || !hasItem(run, id)) continue;
+    if (!hasItem(run, generation, id)) continue;
     if (run.progress === null) state ??= "queued";
     else return run.purge ? "purge" : "trash";
   }
@@ -53,7 +60,7 @@ export function removingState(
 
 /** Whether a run of the tree with `generation` removes any of `ids`, started or waiting. */
 export const isRemoving = (runs: readonly Run[], generation: number, ids: readonly number[]) =>
-  runs.some((run) => run.generation === generation && ids.some((id) => hasItem(run, id)));
+  runs.some((run) => ids.some((id) => hasItem(run, generation, id)));
 
 /** The runs that started, the first `max` of them, and how many more there are; waiting ones are not shown. */
 export function shownRuns(runs: readonly Run[], max = 2): { shown: Run[]; more: number } {

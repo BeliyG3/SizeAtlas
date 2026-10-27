@@ -203,9 +203,21 @@ describe("App live scan action wiring", () => {
   it("never takes the hidden selection to the trash in the duplicates mode", () => {
     stored.mode = "duplicates";
     const { menu, keys } = render(false, "queued", 7);
+    // No copies can go (none picked, or a search runs): nothing, not the tree's trash.
     expect(menu.onTrash).toBeNull();
     keys.onDelete();
     expect(api.trashPreview).not.toHaveBeenCalled();
+    expect(api.trash).not.toHaveBeenCalled();
+  });
+
+  it("lets the duplicates mode tell what Delete and the menu do there", () => {
+    stored.mode = "duplicates";
+    render(false, "queued", 7);
+    const browser = findElement(App(), Browser);
+    const run = vi.fn();
+    setState.mockClear();
+    browser?.props.duplicates.onMenuTrash({ run, note: null });
+    expect(setState).toHaveBeenCalledWith({ run, note: null });
   });
 
   it("wires menu and Delete to the actual trash action while a rescan waits", () => {
@@ -257,7 +269,7 @@ describe("App search wiring", () => {
     stored.mode = "duplicates";
     render(false, "queued", 0);
     const browser = findElement(App(), Browser);
-    expect(browser?.props.field).toBe("type:image");
+    expect(browser?.props.duplicates.field).toBe("type:image");
     expect(browser?.props.query).toBe("type:image");
   });
 

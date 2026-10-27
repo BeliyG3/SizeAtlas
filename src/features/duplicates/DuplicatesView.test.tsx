@@ -2,9 +2,12 @@ import type { ReactElement, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../api/client";
 import { rt } from "../lists/hookRuntime";
+import type { Summary } from "../../api/types";
+import { SplitPane } from "../shell/SplitPane";
 import { DupHeader } from "./DupHeader";
-import { answer, estimate } from "./dup.testSupport";
-import { DuplicatesView } from "./DuplicatesView";
+import { answer, estimate, group } from "./dup.testSupport";
+import { DuplicatesView, type DupMenuTrash } from "./DuplicatesView";
+import { GroupDetail } from "./GroupDetail";
 
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
@@ -16,13 +19,22 @@ vi.mock("../../api/client", () => ({
     estimateDuplicates: vi.fn(),
     findDuplicates: vi.fn(),
     cancelDuplicates: vi.fn(),
+    trashPreview: vi.fn(),
   },
+  isCmdError: () => false,
   onDuplicatesStatus: vi.fn(() => Promise.resolve(() => {})),
 }));
 vi.mock("../../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
+vi.mock("../../settings/react", () => ({ useSize: () => String }));
 
 const onCommit = vi.fn();
 const onFail = vi.fn();
+const push = vi.fn();
+const onMenuTrash = vi.fn<(menu: DupMenuTrash) => void>();
+const entries = [
+  { root: "C:\\", summary: { generation: 1, rev: 4 } as Summary, status: "open" as const },
+];
+const lastMenu = () => onMenuTrash.mock.lastCall![0];
 let shown: ReactElement;
 
 /** `committed`: what the table got (it lags behind the field); `field`: the text in the field. */
@@ -34,7 +46,12 @@ function render(committed: string, field: string) {
       query: committed,
       field,
       onCommit,
-      rootsKey: "C:\\",
+      runs: { start: vi.fn(), end: vi.fn() },
+      push,
+      errorText: String,
+      onMenuTrash,
+      entries,
+      isRemoving: () => false,
       onFail,
     }) as ReactElement;
     for (const run of rt.state.queue.splice(0)) run();
@@ -72,5 +89,62 @@ describe("Find in the duplicates mode", () => {
     expect(header().props.query).toBe("type:image");
     header().props.onFind();
     expect(api.findDuplicates).toHaveBeenCalledWith("type:image", false);
+  });
+});
+
+const element = <P,>(type: (props: P) => ReactNode) =>
+  [(shown.props as { children: ReactNode }).children].flat().find((e): e is ReactElement<P> => {
+    return typeof e === "object" && e !== null && "type" in e && e.type === type;
+  });
+const detail = () =>
+  (element(SplitPane)!.props as { second: ReactElement<Parameters<typeof GroupDetail>[0]> }).second;
+const settle = async () => {
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  render("type:image", "type:image");
+};
+const marked = (ids: number[]) => ({
+  ...detail().props.pick,
+  marks: { ...detail().props.pick.marks, ids: new Set(ids) },
+  cursor: ids[0],
+});
+
+describe("the trash of copies", () => {
+  it("lets Delete outside the tables take the picked copies, and only those", async () => {
+    vi.mocked(api.getDuplicates).mockResolvedValue(
+      answer({ job: 1, version: 2, groups: [group("a")] }),
+    );
+    vi.mocked(api.trashPreview).mockReturnValue(new Promise(() => {}));
+    render("type:image", "type:image");
+    await settle();
+    expect(lastMenu().run).toBeNull();
+    detail().props.onPick(marked([1]));
+    render("type:image", "type:image");
+    lastMenu().run!();
+    expect(api.trashPreview).toHaveBeenCalledWith(1, 4, [2]);
+  });
+
+  it("offers nothing while a search runs, and says why", async () => {
+    vi.mocked(api.getDuplicates).mockResolvedValue(
+      answer({ job: 1, version: 2, running: true, groups: [group("a")] }),
+    );
+    render("type:image", "type:image");
+    await settle();
+    detail().props.onPick(marked([1]));
+    render("type:image", "type:image");
+    expect(lastMenu()).toEqual({ run: null, note: "dup.searching" });
+    detail().props.onTrash([1]);
+    expect(push).toHaveBeenCalledWith("dup.searching");
+    expect(api.trashPreview).not.toHaveBeenCalled();
+  });
+
+  it("never takes every copy of a group", async () => {
+    vi.mocked(api.getDuplicates).mockResolvedValue(
+      answer({ job: 1, version: 2, groups: [group("a")] }),
+    );
+    render("type:image", "type:image");
+    await settle();
+    detail().props.onTrash([0, 1]);
+    expect(push).toHaveBeenCalledWith("dup.lastCopy");
+    expect(api.trashPreview).not.toHaveBeenCalled();
   });
 });

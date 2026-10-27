@@ -452,5 +452,7 @@
   "dup.hardlink": "Hard link: other links are outside the open drives",
   "dup.synced": "Synced: deleting it deletes it on all your devices",
   "dup.noId": "Could not tell if this is a separate file — not deleted here",
-  "dup.groupStale": "Out of date — find again"
+  "dup.groupStale": "Out of date — find again",
+  "dup.lastCopy": "At least one copy outside the system folders has to stay.",
+  "dup.searching": "Wait for the search to end, or cancel it."
 }

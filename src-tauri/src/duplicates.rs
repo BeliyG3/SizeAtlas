@@ -268,6 +268,8 @@ mod roots_tests;
 #[cfg(test)]
 mod stale_tests;
 #[cfg(test)]
+mod status_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod thumb_tests;

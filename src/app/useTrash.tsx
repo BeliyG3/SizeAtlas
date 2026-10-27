@@ -234,6 +234,8 @@ export function useTrash({ roots, entries, selection, push, onTrashed, onError, 
     );
   return {
     roots: running.roots,
+    // The duplicates mode sends requests of its own (`useDupTrash`), shown as any other.
+    runs: { start: running.start, end: running.end },
     isRemoving,
     moving: running.moving,
     status: running.status,

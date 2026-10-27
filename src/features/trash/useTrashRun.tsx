@@ -81,6 +81,10 @@ export function useTrashRun(onError: (e: unknown) => void, push: (text: string) 
         ))}
       </TrashWindows>
     );
-  const roots = useMemo(() => new Set(runs.map((r) => r.root)), [runs]);
+  // A request of duplicates moves items of its other trees too.
+  const roots = useMemo(
+    () => new Set(runs.flatMap((r) => [r.root, ...(r.more ?? []).map((m) => m.root)])),
+    [runs],
+  );
   return { roots, start, end, moving: runs, status, windows: floating };
 }

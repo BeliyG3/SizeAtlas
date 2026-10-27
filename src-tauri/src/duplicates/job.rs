@@ -70,8 +70,8 @@ impl AppState {
     }
 }
 
-/// Ends the job, also by a panic: when it is still the current one, `running` is cleared and
-/// the last status (not running) is sent, outside the lock.
+/// Ends the job, also by a panic: when it is still the current one, `running` is cleared, the
+/// version bumped and the last status (not running) is sent, outside the lock.
 struct Ended<'a> {
     state: &'a AppState,
     job: u64,
@@ -91,6 +91,12 @@ impl Drop for Ended<'_> {
             }
             inner.running = None;
             inner.status.running = false;
+            // The end is a change of its own (also after a panic, which skips `finish`): every
+            // status or answer read while the job ran has an older version, so none of them
+            // shows the job running again.
+            if let Some(r) = inner.results.as_mut() {
+                r.version += 1;
+            }
             inner.status.version = inner.results.as_ref().map_or(0, |r| r.version);
             inner.status.stale = self.state.stale_in(&inner);
             inner.status.clone()
