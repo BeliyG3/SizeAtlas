@@ -180,6 +180,8 @@ fn city_encoding_adds_size_and_expanded_at_fixed_offsets() {
     assert_eq!(rects.len(), 6);
     for (r, rec) in rects.iter().zip(city_records(&bytes)) {
         assert_eq!(f32::from_le_bytes(rec[0..4].try_into().unwrap()), r.x);
+        assert_eq!(f32::from_le_bytes(rec[4..8].try_into().unwrap()), r.y);
+        assert_eq!(f32::from_le_bytes(rec[8..12].try_into().unwrap()), r.w);
         assert_eq!(f32::from_le_bytes(rec[12..16].try_into().unwrap()), r.h);
         assert_eq!(id_of(rec), r.id);
         assert_eq!(rec[20..23], [r.category, r.depth, u8::from(r.is_dir)]);

@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { CITY_RECORD_LEN, HEADER_LEN, parseCity } from "./bytes";
 
 function build(
-  records: { id: number; isDir: boolean; expanded: boolean; size: bigint }[],
+  records: {
+    id: number;
+    isDir: boolean;
+    expanded: boolean;
+    size: bigint;
+    category?: number;
+    depth?: number;
+  }[],
   generation = 7n,
   rev = 9n,
 ): ArrayBuffer {
@@ -16,8 +23,8 @@ function build(
     const at = HEADER_LEN + i * CITY_RECORD_LEN;
     [1.5, 2, 3, 4].forEach((v, k) => view.setFloat32(at + k * 4, v, true));
     view.setUint32(at + 16, r.id, true);
-    view.setUint8(at + 20, 3);
-    view.setUint8(at + 21, 1);
+    view.setUint8(at + 20, r.category ?? 3);
+    view.setUint8(at + 21, r.depth ?? 1);
     view.setUint8(at + 22, r.isDir ? 1 : 0);
     view.setUint8(at + 23, r.expanded ? 1 : 0);
     view.setBigUint64(at + 24, r.size, true);
@@ -29,8 +36,8 @@ describe("parseCity", () => {
   it("round-trips records with sizes and the expanded flag", () => {
     const data = parseCity(
       build([
-        { id: 0x01020304, isDir: true, expanded: true, size: 1000n },
-        { id: 2, isDir: false, expanded: false, size: 5n },
+        { id: 0x01020304, isDir: true, expanded: true, size: 1000n, category: 3, depth: 1 },
+        { id: 2, isDir: false, expanded: false, size: 5n, category: 6, depth: 4 },
       ]),
     );
     expect(data).toEqual({
@@ -56,8 +63,8 @@ describe("parseCity", () => {
           w: 3,
           h: 4,
           id: 2,
-          category: 3,
-          depth: 1,
+          category: 6,
+          depth: 4,
           isDir: false,
           expanded: false,
           size: 5,
