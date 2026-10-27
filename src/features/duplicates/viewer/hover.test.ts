@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HOVER_DELAY, HOVER_SIZE, placePopup, popupSize } from "./hover";
+import { HOVER_DELAY, HOVER_SIZE, fitPopup, placePopup, popupSize } from "./hover";
 
 const view = { w: 1000, h: 800 };
 const popup = { w: 320, h: 320 };
@@ -23,5 +23,13 @@ describe("hover zoom placement", () => {
     expect(popupSize(small)).toEqual(small);
     expect(popupSize(view)).toEqual(popup);
     expect(placePopup({ x: 100, y: 100 }, popupSize(small), small)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("takes the shape of the picture inside the limit, with no band around it", () => {
+    expect(fitPopup({ w: 1600, h: 900 }, popup)).toEqual({ w: 320, h: 180 });
+    expect(fitPopup({ w: 100, h: 400 }, popup)).toEqual({ w: 80, h: 320 });
+    expect(fitPopup({ w: 64, h: 32 }, { w: 200, h: 150 })).toEqual({ w: 200, h: 100 });
+    // No natural size (an SVG without one): the whole limit.
+    expect(fitPopup({ w: 0, h: 0 }, popup)).toEqual(popup);
   });
 });

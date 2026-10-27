@@ -13,6 +13,13 @@ export const popupSize = (view: Size): Size => ({
   h: Math.min(HOVER_SIZE, view.h),
 });
 
+/** The popup of a picture of `natural` size: its shape, as large as `limit` allows. */
+export const fitPopup = (natural: Size, limit: Size): Size => {
+  if (natural.w <= 0 || natural.h <= 0) return limit;
+  const scale = Math.min(limit.w / natural.w, limit.h / natural.h);
+  return { w: Math.round(natural.w * scale), h: Math.round(natural.h * scale) };
+};
+
 /** One axis: after the pointer by `gap`, before it when that would leave the view, then clamped. */
 const place = (at: number, popup: number, view: number, gap: number) => {
   const after = at + gap;

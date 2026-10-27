@@ -12,6 +12,8 @@ const ALLOWED: Record<string, string> = {
   ".col-drop": "drop line centred on a JS pointer coordinate",
   // Centred on the screen together with translate(-50%, -50%): mirrors onto itself.
   ".trash-windows": "centred on the window, symmetric",
+  // The transform and zoom.ts place the picture from the physical top-left: pictures are not text.
+  ".zoom-view img": "zoomed picture, physical coordinates in every direction",
   // dir="auto" makes `start` follow the name, not the interface: the side is set per direction.
   ":dir(ltr) :is(.panel-row, .legend, .bar-row) .ellipsis": "dir=auto name, LTR column side",
   ":dir(rtl) :is(.panel-row, .legend, .bar-row) .ellipsis": "dir=auto name, RTL column side",

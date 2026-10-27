@@ -8,8 +8,10 @@
 
 .zoom-view img {
   position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
+  /* Physical, not logical: the transform and zoom.ts work from the top-left in every direction
+     (right-to-left included); pictures are not text. */
+  top: 0;
+  left: 0;
   transform-origin: 0 0;
   max-inline-size: none;
   max-block-size: none;
@@ -27,7 +29,8 @@
   padding: 0;
   border: 0;
   color: #eee;
-  background: rgb(0 0 0 / 0.9);
+  /* Opaque: nothing of the window under it shows through. */
+  background: #000;
 }
 
 .lightbox[open] {
@@ -97,7 +100,6 @@
 .hover-zoom {
   position: fixed;
   z-index: 40;
-  object-fit: contain;
   pointer-events: none;
   background: var(--panel);
   border-radius: 4px;
