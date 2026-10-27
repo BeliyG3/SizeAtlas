@@ -10,6 +10,7 @@ import { DuplicatesView, type DupMenuTrash } from "./DuplicatesView";
 import { GroupDetail } from "./GroupDetail";
 import { GroupList } from "./GroupList";
 import { Lightbox } from "./viewer/Lightbox";
+import { useViewerSync } from "./viewer/viewerWindow";
 
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
@@ -22,12 +23,17 @@ vi.mock("../../api/client", () => ({
     findDuplicates: vi.fn(),
     cancelDuplicates: vi.fn(),
     trashPreview: vi.fn(),
+    openViewer: vi.fn(() => Promise.resolve()),
   },
   isCmdError: () => false,
   onDuplicatesStatus: vi.fn(() => Promise.resolve(() => {})),
 }));
 vi.mock("../../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
-vi.mock("../../settings/react", () => ({ useSize: () => String }));
+vi.mock("../../settings/react", () => ({
+  useSize: () => String,
+  useSettings: () => ({ resolved: "dark" }),
+}));
+vi.mock("./viewer/viewerWindow", () => ({ useViewerSync: vi.fn() }));
 
 const onCommit = vi.fn();
 const onFail = vi.fn();
@@ -255,5 +261,21 @@ describe("the full-screen view", () => {
     await settle();
     expect(detail().props.group.key).toBe("a");
     expect(element(Lightbox)).toBeUndefined();
+  });
+});
+
+describe("the viewer window", () => {
+  it("opens titled in the theme in effect, and follows the group shown", async () => {
+    vi.mocked(api.getDuplicates).mockResolvedValue(
+      answer({ job: 1, version: 2, groups: [group("a"), group("b")] }),
+    );
+    render("type:image", "type:image");
+    await settle();
+    expect(vi.mocked(useViewerSync).mock.lastCall![0]?.key).toBe("a");
+    detail().props.onWindow();
+    expect(api.openViewer).toHaveBeenCalledWith("dup.view.title", true);
+    list().props.onPick("b");
+    render("type:image", "type:image");
+    expect(vi.mocked(useViewerSync).mock.lastCall![0]?.key).toBe("b");
   });
 });

@@ -399,6 +399,8 @@
   "dup.view.position": "{n} of {total}",
   "dup.view.fit": "Fit",
   "dup.view.actual": "Actual size",
+  "dup.view.title": "Picture — SizeAtlas",
+  "dup.view.empty": "Select a group with a picture",
   "dup.lastCopy": "At least one copy outside the system folders has to stay.",
   "dup.searching": "Wait for the search to end, or cancel it."
 }

@@ -368,6 +368,8 @@
   "dup.view.position": "{n} / {total}",
   "dup.view.fit": "Vừa khung",
   "dup.view.actual": "Kích thước thực",
+  "dup.view.title": "Hình ảnh — SizeAtlas",
+  "dup.view.empty": "Chọn một nhóm có hình ảnh",
   "dup.lastCopy": "Phải giữ lại ít nhất một bản sao bên ngoài các thư mục hệ thống.",
   "dup.searching": "Hãy đợi tìm kiếm kết thúc, hoặc hủy nó."
 }

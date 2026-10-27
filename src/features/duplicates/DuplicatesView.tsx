@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { api } from "../../api/client";
 import type { RootStatus, Summary } from "../../api/types";
 import { useT } from "../../i18n/react";
 import { noMarks } from "../contents/marks";
 import { words } from "../search/useCommittedQuery";
 import { serializeShown } from "../../settings/settings";
+import { useSettings } from "../../settings/react";
 import { useStored } from "../../settings/storage";
 import { SplitPane } from "../shell/SplitPane";
 import {
@@ -27,6 +29,7 @@ import { useDuplicates } from "./useDuplicates";
 import { Lightbox } from "./viewer/Lightbox";
 import { picturePosition, stepPicture } from "./viewer/step";
 import { useImageUrl } from "./viewer/useImageUrl";
+import { useViewerSync } from "./viewer/viewerWindow";
 import "./duplicates.css";
 
 /** Width of the group list until its border is moved. */
@@ -102,6 +105,8 @@ export function DuplicatesView(props: Props) {
   // A change without the picked group shows the first one.
   const selected = groups.find((g) => g.key === picked) ?? groups[0] ?? null;
   const picture = useImageUrl(selected, queue);
+  useViewerSync(selected);
+  const dark = useSettings().resolved === "dark";
   // The full-screen view; it closes for good when the group shown has no picture type (or none).
   const [full, setFull] = useState(false);
   const [reveal, setReveal] = useState<{ key: string } | null>(null);
@@ -212,8 +217,7 @@ export function DuplicatesView(props: Props) {
               onMenu={(at, x, y) => setMenu({ key, at, x, y })}
               picture={picture}
               onFull={() => setFull(mimeOf(selected.name) !== null)}
-              // Not wired yet: the viewer window.
-              onWindow={() => {}}
+              onWindow={() => void api.openViewer(t("dup.view.title"), dark).catch(onFail)}
               onFail={onFail}
             />
           }

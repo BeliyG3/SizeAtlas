@@ -399,6 +399,8 @@
   "dup.view.position": "{total} में से {n}",
   "dup.view.fit": "फ़िट करें",
   "dup.view.actual": "वास्तविक आकार",
+  "dup.view.title": "चित्र — SizeAtlas",
+  "dup.view.empty": "चित्र वाला समूह चुनें",
   "dup.lastCopy": "सिस्टम फ़ोल्डरों के बाहर कम से कम एक प्रति बची रहनी चाहिए।",
   "dup.searching": "खोज पूरी होने तक रुकें, या उसे रद्द करें।"
 }

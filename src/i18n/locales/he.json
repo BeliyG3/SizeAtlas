@@ -430,6 +430,8 @@
   "dup.view.position": "{n} מתוך {total}",
   "dup.view.fit": "התאמה לחלון",
   "dup.view.actual": "גודל אמיתי",
+  "dup.view.title": "תמונה — SizeAtlas",
+  "dup.view.empty": "בחרו קבוצה עם תמונה",
   "dup.lastCopy": "לפחות עותק אחד מחוץ לתיקיות המערכת חייב להישאר.",
   "dup.searching": "המתינו לסיום החיפוש או בטלו אותו."
 }

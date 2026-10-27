@@ -461,6 +461,8 @@
   "dup.view.position": "{n} з {total}",
   "dup.view.fit": "Вписати",
   "dup.view.actual": "Реальний розмір",
+  "dup.view.title": "Зображення — SizeAtlas",
+  "dup.view.empty": "Виберіть групу із зображенням",
   "dup.lastCopy": "Принаймні одна копія поза системними папками має залишитися.",
   "dup.searching": "Зачекайте на завершення пошуку або скасуйте його."
 }

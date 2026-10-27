@@ -461,6 +461,8 @@
   "dup.view.position": "{n} из {total}",
   "dup.view.fit": "Вписать",
   "dup.view.actual": "Реальный размер",
+  "dup.view.title": "Картинка — SizeAtlas",
+  "dup.view.empty": "Выберите группу с картинкой",
   "dup.lastCopy": "Хотя бы одна копия вне системных папок должна остаться.",
   "dup.searching": "Дождитесь конца поиска или отмените его."
 }

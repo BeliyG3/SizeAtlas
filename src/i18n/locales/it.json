@@ -430,6 +430,8 @@
   "dup.view.position": "{n} di {total}",
   "dup.view.fit": "Adatta",
   "dup.view.actual": "Dimensioni reali",
+  "dup.view.title": "Immagine — SizeAtlas",
+  "dup.view.empty": "Scegli un gruppo con un’immagine",
   "dup.lastCopy": "Almeno una copia fuori dalle cartelle di sistema deve restare.",
   "dup.searching": "Attendi la fine della ricerca oppure annullala."
 }

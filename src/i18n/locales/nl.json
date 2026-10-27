@@ -399,6 +399,8 @@
   "dup.view.position": "{n} van {total}",
   "dup.view.fit": "Passend",
   "dup.view.actual": "Ware grootte",
+  "dup.view.title": "Afbeelding — SizeAtlas",
+  "dup.view.empty": "Selecteer een groep met een afbeelding",
   "dup.lastCopy": "Minstens één kopie buiten de systeemmappen moet blijven.",
   "dup.searching": "Wacht tot de zoekopdracht klaar is, of annuleer deze."
 }

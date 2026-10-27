@@ -368,6 +368,8 @@
   "dup.view.position": "{n} dari {total}",
   "dup.view.fit": "Paskan",
   "dup.view.actual": "Ukuran asli",
+  "dup.view.title": "Gambar — SizeAtlas",
+  "dup.view.empty": "Pilih grup yang berisi gambar",
   "dup.lastCopy": "Setidaknya satu salinan di luar folder sistem harus tetap ada.",
   "dup.searching": "Tunggu pencarian selesai, atau batalkan."
 }

@@ -368,6 +368,8 @@
   "dup.view.position": "{n} / {total}",
   "dup.view.fit": "全体表示",
   "dup.view.actual": "実際のサイズ",
+  "dup.view.title": "画像 — SizeAtlas",
+  "dup.view.empty": "画像のあるグループを選択してください",
   "dup.lastCopy": "システムフォルダー以外に、少なくとも 1 つのコピーを残す必要があります。",
   "dup.searching": "検索が終わるまで待つか、キャンセルしてください。"
 }

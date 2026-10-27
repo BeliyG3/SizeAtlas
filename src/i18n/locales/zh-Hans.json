@@ -368,6 +368,8 @@
   "dup.view.position": "{n} / {total}",
   "dup.view.fit": "适应窗口",
   "dup.view.actual": "实际大小",
+  "dup.view.title": "图片 — SizeAtlas",
+  "dup.view.empty": "请选择包含图片的组",
   "dup.lastCopy": "系统文件夹之外至少要保留一个副本。",
   "dup.searching": "请等待查找结束，或将其取消。"
 }

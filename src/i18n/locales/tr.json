@@ -399,6 +399,8 @@
   "dup.view.position": "{n} / {total}",
   "dup.view.fit": "Sığdır",
   "dup.view.actual": "Gerçek boyut",
+  "dup.view.title": "Resim — SizeAtlas",
+  "dup.view.empty": "Resim içeren bir grup seçin",
   "dup.lastCopy": "Sistem klasörlerinin dışında en az bir kopya kalmalı.",
   "dup.searching": "Aramanın bitmesini bekleyin veya iptal edin."
 }

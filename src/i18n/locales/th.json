@@ -368,6 +368,8 @@
   "dup.view.position": "{n} จาก {total}",
   "dup.view.fit": "พอดีหน้าจอ",
   "dup.view.actual": "ขนาดจริง",
+  "dup.view.title": "รูปภาพ — SizeAtlas",
+  "dup.view.empty": "เลือกกลุ่มที่มีรูปภาพ",
   "dup.lastCopy": "ต้องเหลือสำเนาอย่างน้อยหนึ่งชุดนอกโฟลเดอร์ระบบ",
   "dup.searching": "รอให้การค้นหาสิ้นสุด หรือยกเลิก"
 }

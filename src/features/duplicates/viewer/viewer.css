@@ -77,3 +77,18 @@
   flex: none;
   opacity: 0.8;
 }
+
+/* The viewer window: the picture over the whole page, nothing else. */
+.viewer-app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.viewer-empty {
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+}
