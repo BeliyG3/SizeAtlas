@@ -144,6 +144,12 @@ impl Tree {
         self.nodes[id as usize].flags |= flags::LOSSY_NAME;
     }
 
+    /// Test helper for crates that use the tree (the desktop app).
+    #[doc(hidden)]
+    pub fn mark_cloud_for_test(&mut self, id: u32) {
+        self.nodes[id as usize].flags |= flags::CLOUD;
+    }
+
     pub fn name(&self, id: u32) -> &str {
         &self.nodes[id as usize].name
     }

@@ -1,7 +1,8 @@
 //! Thumbnails: only live files of an open tree, only what the webview shows, nothing that
 //! would be huge to decode, and never a cloud file.
 
-use std::fs::{self, File};
+use std::fs::{self, OpenOptions};
+use std::path::Path;
 
 use tempfile::TempDir;
 
@@ -31,6 +32,11 @@ struct Shown {
 impl Shown {
     /// The files `(name, bytes)` in a scanned, open folder; a folder `sub` too.
     fn new(files: &[(&str, &[u8])]) -> Shown {
+        Shown::with(files, |_| {})
+    }
+
+    /// [`Shown::new`] with `before` run on the folder after the files are written, before the scan.
+    fn with(files: &[(&str, &[u8])], before: impl FnOnce(&Path)) -> Shown {
         let (state, _) = state();
         let dir = dir_named("thumb-");
         fs::create_dir(dir.path().join("sub")).unwrap();
@@ -39,6 +45,7 @@ impl Shown {
             fs::write(&path, bytes).unwrap();
             settle(&path);
         }
+        before(dir.path());
         let tree = scanned(dir.path());
         let root = tree.name(0).to_owned();
         let generation = state.install_tree(tree);
@@ -71,19 +78,12 @@ fn other_types_get_nothing() {
 
 #[test]
 fn a_file_over_32_mb_gets_nothing() {
-    let t = Shown::new(&[]);
-    let path = t.dir.path().join("big.png");
-    File::create(&path).unwrap().set_len(33 << 20).unwrap();
-    settle(&path);
-    let tree = scanned(t.dir.path());
-    let root = tree.name(0).to_owned();
-    let generation = t.state.install_tree(tree);
-    let node = id(&t.state, generation, &["big.png"]);
-    assert!(
-        thumbnail(&t.state, &root, generation, node)
-            .unwrap()
-            .is_empty()
-    );
+    // A valid header, so only the size limit can refuse it.
+    let t = Shown::with(&[("big.png", &png(10, 10))], |dir| {
+        let file = OpenOptions::new().write(true).open(dir.join("big.png"));
+        file.unwrap().set_len(33 << 20).unwrap();
+    });
+    assert!(t.of("big.png").unwrap().is_empty());
 }
 
 #[test]
@@ -119,22 +119,52 @@ fn a_known_name_needs_a_known_content_but_svg_and_avif_do_not() {
     assert!(!t.of("a.avif").unwrap().is_empty());
 }
 
+/// Sets the attributes of `path` (`FILE_ATTRIBUTE_*` bits).
+#[cfg(windows)]
+fn attributes(path: &Path, bits: u32) {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::SetFileAttributesW;
+
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+    // SAFETY: `wide` is a NUL-terminated path that lives through the call.
+    assert_ne!(unsafe { SetFileAttributesW(wide.as_ptr(), bits) }, 0);
+}
+
 #[cfg(windows)]
 #[test]
 fn an_offline_image_gets_nothing() {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Storage::FileSystem::{FILE_ATTRIBUTE_OFFLINE, SetFileAttributesW};
+    use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_OFFLINE;
 
+    // Offline after the scan: only the check at the open can catch it.
     let t = Shown::new(&[("a.png", &png(10, 10))]);
-    let wide: Vec<u16> = (t.dir.path().join("a.png").as_os_str().encode_wide())
-        .chain([0])
-        .collect();
-    // SAFETY: `wide` is a NUL-terminated path that lives through the call.
-    assert_ne!(
-        unsafe { SetFileAttributesW(wide.as_ptr(), FILE_ATTRIBUTE_OFFLINE) },
-        0
-    );
+    attributes(&t.dir.path().join("a.png"), FILE_ATTRIBUTE_OFFLINE);
     assert!(t.of("a.png").unwrap().is_empty());
+}
+
+#[test]
+fn an_image_the_scan_saw_in_the_cloud_gets_nothing() {
+    // Marked in the tree, an ordinary file on disk: only the flag of the node can refuse it.
+    let (state, _) = state();
+    let dir = dir_named("thumb-");
+    let path = dir.path().join("a.png");
+    fs::write(&path, png(10, 10)).unwrap();
+    settle(&path);
+    let mut tree = scanned(dir.path());
+    let root = tree.name(0).to_owned();
+    let node = tree.children(0).next().unwrap();
+    let generation = state.install_tree(tree.clone());
+    assert!(
+        !thumbnail(&state, &root, generation, node)
+            .unwrap()
+            .is_empty()
+    );
+    tree.mark_cloud_for_test(node);
+    let generation = state.install_tree(tree);
+    assert!(
+        thumbnail(&state, &root, generation, node)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -174,4 +204,40 @@ fn an_old_generation_is_stale() {
         thumbnail(&t.state, "elsewhere", t.generation, node),
         Err(CmdError::StaleId)
     );
+}
+
+#[test]
+fn a_cursor_or_a_gif_frame_over_40_megapixels_gets_nothing() {
+    let mut cur = vec![0, 0, 2, 0, 1, 0, 16, 16, 0, 0, 1, 0, 32, 0];
+    let bomb = png(8000, 6000);
+    cur.extend((bomb.len() as u32).to_le_bytes());
+    cur.extend(22u32.to_le_bytes());
+    cur.extend(&bomb);
+    let mut gif = b"GIF89a".to_vec();
+    gif.extend([1, 0, 1, 0, 0, 0, 0, 0x2C, 0, 0, 0, 0]);
+    gif.extend(8000u16.to_le_bytes());
+    gif.extend(6000u16.to_le_bytes());
+    gif.push(0);
+    let t = Shown::new(&[("a.ico", &cur), ("a.avif", &cur), ("a.gif", &gif)]);
+    for name in ["a.ico", "a.avif", "a.gif"] {
+        assert!(t.of(name).unwrap().is_empty(), "{name}");
+    }
+}
+
+#[test]
+fn a_bomb_is_refused_with_its_header_in_the_head_or_after_it() {
+    // The size lies in the first 64 KB, with a large body behind it.
+    let mut near = png(8000, 6000);
+    near.resize(1 << 20, 0);
+    // A JPEG whose frame header comes after 100 KB of metadata.
+    let mut far = vec![0xFF, 0xD8, 0xFF, 0xE1];
+    far.extend(((100u32 << 10) as u16).to_be_bytes());
+    far.resize(100 << 10, 0);
+    far.extend([0xFF, 0xC0, 0, 11, 8]);
+    far.extend(6000u16.to_be_bytes());
+    far.extend(8000u16.to_be_bytes());
+    far.extend([3, 0, 0, 0]);
+    let t = Shown::new(&[("near.png", &near), ("far.jpg", &far)]);
+    assert!(t.of("near.png").unwrap().is_empty());
+    assert!(t.of("far.jpg").unwrap().is_empty());
 }

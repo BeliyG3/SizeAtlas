@@ -13,7 +13,9 @@ pub const MAX_PIXELS: u64 = 40_000_000;
 
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\n";
 const JPEG: &[u8] = &[0xFF, 0xD8, 0xFF];
+/// An icon file; a cursor (`CUR`) has the same layout.
 const ICO: &[u8] = &[0, 0, 1, 0];
+const CUR: &[u8] = &[0, 0, 2, 0];
 
 fn is_gif(d: &[u8]) -> bool {
     d.starts_with(b"GIF87a") || d.starts_with(b"GIF89a")
@@ -23,31 +25,37 @@ fn is_webp(d: &[u8]) -> bool {
     d.starts_with(b"RIFF") && d.get(8..12) == Some(b"WEBP")
 }
 
-/// The content starts like a PNG, JPEG, GIF, WebP, BMP or ICO file.
+fn is_icon(d: &[u8]) -> bool {
+    d.starts_with(ICO) || d.starts_with(CUR)
+}
+
+/// The content starts like a PNG, JPEG, GIF, WebP, BMP, ICO or CUR file.
 pub fn has_signature(d: &[u8]) -> bool {
-    [PNG, JPEG, b"BM", ICO].iter().any(|s| d.starts_with(s)) || is_gif(d) || is_webp(d)
+    [PNG, JPEG, b"BM"].iter().any(|s| d.starts_with(s)) || is_gif(d) || is_webp(d) || is_icon(d)
 }
 
 /// Width times height of the image in `data`, from its header; `None` when the format is
-/// unknown, the header is cut or a side is 0. An ICO counts its largest entry (the directory,
-/// and the PNG inside an entry).
+/// unknown, the header is cut or a side is 0. A GIF counts the larger of its screen and its
+/// first frame, an ICO or CUR its largest entry (the directory, the header of a bitmap or the
+/// PNG inside an entry).
 pub fn pixels(data: &[u8]) -> Option<u64> {
-    let (w, h) = if data.starts_with(PNG) {
-        png(data)?
+    let area = |(w, h): (u32, u32)| u64::from(w) * u64::from(h);
+    let found = if data.starts_with(PNG) {
+        png(data).map(area)
     } else if data.starts_with(JPEG) {
-        jpeg(data)?
+        jpeg(data).map(area)
     } else if is_gif(data) {
-        (u32::from(le16(data, 6)?), u32::from(le16(data, 8)?))
+        gif(data)
     } else if is_webp(data) {
-        webp(data)?
+        webp(data).map(area)
     } else if data.starts_with(b"BM") {
-        bmp(data)?
-    } else if data.starts_with(ICO) {
-        return ico(data);
+        dib(data, 14).map(area)
+    } else if is_icon(data) {
+        ico(data)
     } else {
-        return None;
+        None
     };
-    (w > 0 && h > 0).then(|| u64::from(w) * u64::from(h))
+    found.filter(|&p| p > 0)
 }
 
 fn le16(d: &[u8], at: usize) -> Option<u16> {
@@ -116,30 +124,69 @@ fn webp(d: &[u8]) -> Option<(u32, u32)> {
     }
 }
 
-fn bmp(d: &[u8]) -> Option<(u32, u32)> {
-    match le32(d, 14)? {
+/// The sides in a bitmap info header at `at` (a BMP file: 14; the data of an icon entry: 0).
+fn dib(d: &[u8], at: usize) -> Option<(u32, u32)> {
+    match le32(d, at)? {
         // The old OS/2 header: 16-bit sides.
-        12 => Some((u32::from(le16(d, 18)?), u32::from(le16(d, 20)?))),
+        12 => Some((u32::from(le16(d, at + 4)?), u32::from(le16(d, at + 6)?))),
         40.. => Some((
-            le32(d, 18)?.cast_signed().unsigned_abs(),
-            le32(d, 22)?.cast_signed().unsigned_abs(),
+            le32(d, at + 4)?.cast_signed().unsigned_abs(),
+            le32(d, at + 8)?.cast_signed().unsigned_abs(),
         )),
         _ => None,
     }
 }
 
-/// The largest entry of the directory; an entry that holds a PNG counts as that PNG says.
+/// The larger of the logical screen and the first frame: a decoder may grow the screen to a
+/// frame that does not fit it. The walk stops at the first image descriptor; none, or a cut
+/// block, gives `None`.
+fn gif(d: &[u8]) -> Option<u64> {
+    let area = |w: u16, h: u16| u64::from(w) * u64::from(h);
+    let screen = area(le16(d, 6)?, le16(d, 8)?);
+    let packed = *d.get(10)?;
+    // The global colour table, when there is one, follows the 7 bytes of the screen.
+    let mut at = 13
+        + if packed & 0x80 != 0 {
+            3 << ((packed & 7) + 1)
+        } else {
+            0
+        };
+    loop {
+        match *d.get(at)? {
+            0x2C => return Some(screen.max(area(le16(d, at + 5)?, le16(d, at + 7)?))),
+            // An extension: introducer, label, then sub-blocks up to an empty one.
+            0x21 => {
+                at += 2;
+                loop {
+                    let n = usize::from(*d.get(at)?);
+                    at += 1 + n;
+                    if n == 0 {
+                        break;
+                    }
+                }
+            }
+            _ => return None,
+        }
+    }
+}
+
+/// The largest entry of the directory: the larger of the size it lists, the size in the bitmap
+/// header of its data, and (for a PNG) the size the PNG says. An entry the PNG of which is cut
+/// gives `None`; data out of the file leaves the listed size.
 fn ico(d: &[u8]) -> Option<u64> {
     let count = usize::from(le16(d, 4)?);
     (0..count)
         .map(|i| {
             let e = 6 + 16 * i;
             let side = |b: u8| if b == 0 { 256 } else { u64::from(b) };
-            let inner = le32(d, e + 12).and_then(|at| d.get(at as usize..));
-            match inner.filter(|x| x.starts_with(PNG)) {
-                Some(x) => pixels(x),
-                None => Some(side(*d.get(e)?) * side(*d.get(e + 1)?)),
-            }
+            let listed = side(*d.get(e)?) * side(*d.get(e + 1)?);
+            let data = le32(d, e + 12).and_then(|at| d.get(at as usize..));
+            let inner = match data {
+                Some(x) if x.starts_with(PNG) => pixels(x)?,
+                Some(x) => dib(x, 0).map_or(0, |(w, h)| u64::from(w) * u64::from(h)),
+                None => 0,
+            };
+            Some(listed.max(inner))
         })
         .try_fold(0, |most: u64, p| p.map(|p| most.max(p)))
         .filter(|&p| p > 0)

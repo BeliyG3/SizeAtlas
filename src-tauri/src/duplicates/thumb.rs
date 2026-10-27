@@ -13,6 +13,10 @@ use sizeatlas_core::tree::flags;
 use crate::error::CmdError;
 use crate::state::AppState;
 
+/// Read first, to refuse a bomb by its header; a header longer than this is judged after the
+/// whole file is read.
+const HEAD: u64 = 64 << 10;
+
 /// Extensions that must hold a raster image the header of which can be read; `svg`, `ico` and
 /// `avif` need one only when their content starts like one.
 const RASTER_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp"];
@@ -45,12 +49,19 @@ pub fn thumbnail(
     if !THUMB_EXTS.contains(&ext.as_str()) {
         return Ok(Vec::new());
     }
-    let Ok((file, _, _)) = open_checked(&path, len, mtime) else {
+    let Ok((mut file, _, _)) = open_checked(&path, len, mtime) else {
         return Ok(Vec::new());
     };
     let mut bytes = Vec::new();
-    let read = file.take(MAX_THUMB_BYTES + 1).read_to_end(&mut bytes);
-    if read.is_err() || bytes.len() as u64 > MAX_THUMB_BYTES || !allowed(&bytes, &ext) {
+    let head = (&mut file).take(HEAD).read_to_end(&mut bytes);
+    // A bomb whose header lies in the head is refused without reading the rest of the file.
+    if head.is_err() || pixels(&bytes).is_some_and(|p| p > MAX_PIXELS) {
+        return Ok(Vec::new());
+    }
+    let rest = file
+        .take(MAX_THUMB_BYTES + 1 - bytes.len() as u64)
+        .read_to_end(&mut bytes);
+    if rest.is_err() || bytes.len() as u64 > MAX_THUMB_BYTES || !allowed(&bytes, &ext) {
         return Ok(Vec::new());
     }
     Ok(bytes)
