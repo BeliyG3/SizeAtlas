@@ -195,29 +195,29 @@ Known limitations:
 
 ## Finding duplicates
 
-The **Duplicate files** table mode looks for exact copies of a file across all open drives and folders together. It scans nothing itself: it uses the trees already in memory, and it reads files only when you press **Find**. Before that it shows how many files, and how many bytes, it would compare. Groups are on the left, the largest saving first; the copies of the selected group are on the right, with their full paths and a thumbnail.
+The **Duplicate files** table mode finds exact copies across all open drives and folders, from the trees already in memory. It reads files only when you press **Find**, after showing how many files and bytes it will compare. Groups are on the left, largest saving first; the selected group's copies are on the right, with paths and a thumbnail.
 
-- **What is compared:** regular files of 4 KB or more. Files of the same length are compared by their first and last bytes, and the ones that still match are read in full and compared by a BLAKE3 hash. A group holds only files with identical contents. Groups appear as the full comparison confirms them. **Cancel** keeps what was found, and **Continue** picks up from there.
-- **Filters pick starting points, they do not cut groups:** the search field here is a filter, not the usual search. A group is listed if at least one of its files matches, and it shows all of its copies, so `older:1y` or a name does not split a pair of copies. A size condition applies to every copy, because copies have the same length. The field starts as `type:image`; clear it to look at every type.
-- **Folders left out:** system and program folders (on Windows `Windows`, `Program Files`, `ProgramData` and `AppData`; on macOS `/System`, `/Library`, `/Applications`, `~/Library` and the inside of app and photo-library packages; on Linux `/usr`, `/opt`, `/var` and similar), `node_modules`, `.git`, Python environments, `steamapps` and the dot-folders of your home folder. iCloud Drive on macOS is protected like `~/Library`. **Include system folders** adds them to the search; their copies are tagged and never go to the trash. Programs and games in other folders are not recognized.
-- **One file, one copy:** a path reached through two overlapping roots (such as `C:\` and a folder on it) counts once. Hard links are one file and appear once. A file that also has links outside the open drives is tagged, does not count as freed space and is not removed here. A clone of a volume keeps the same file ids, so its files are not merged with the originals and are not removed here either.
-- **Not read:** cloud-only files are never downloaded. They are skipped, and the list counts them with the files that changed or could not be read. A root that is still being scanned is not included, and the list says so. If the trees change while the search runs (a rescan, a refresh, a removal), the search cancels itself, and a finished result is tagged as out of date. Press **Find** again.
-- **Can be freed:** for each group, the size on disk of all copies except the largest. It says "up to", because APFS and ReFS clones, which share their data, are not recognized.
+- **Compared:** regular files of 4 KB or more, by length, first and last bytes, then a full BLAKE3 hash. Groups appear as they are confirmed; **Cancel** keeps them, and **Continue** resumes.
+- **Filters choose starting files:** the search field here is a filter, not the usual search. A group is listed if any of its files matches and shows all its copies, so `older:1y` or a name never splits it; a size condition fits every copy alike. The field starts as `type:image`; clear it to see every type.
+- **Left out:** system and program folders (Windows: `Windows`, `Program Files`, `ProgramData`, `AppData`; macOS: `/System`, `/Library`, `/Applications`, `~/Library`, app and photo-library package contents, and iCloud Drive; Linux: `/usr`, `/opt`, `/var` and similar), `node_modules`, `.git`, Python environments, `steamapps` and the dot-folders of your home folder. **Include system folders** adds them; their copies are tagged and never go to the trash. Programs and games elsewhere are not recognized.
+- **Counted once:** a path reached through overlapping roots (such as `C:\` and a folder on it), and hard links. A file also linked outside the open drives is tagged, not counted as freed and not removed. A cloned volume keeps the same file ids, so its files are neither merged with the originals nor removed.
+- **Not read:** cloud-only files (never downloaded; counted with changed and unreadable files) and roots still being scanned (the list names them). If the trees change mid-search (a rescan, a refresh, a removal), the search cancels itself, and a finished result is marked out of date: press **Find** again.
+- **Can be freed:** the size on disk of all copies but the largest. It says "up to" because APFS and ReFS clones, which share their data, are not recognized.
 
-**Removing copies.** Mark the copies to remove in a group and choose **Move to the trash…**. They go to the trash only, never for good, and you can restore them. One copy always stays: the removal is refused unless at least one copy is left that is not marked, not in a system folder and known to be a separate file. The rules of [Moving to the trash](#moving-to-the-trash) apply as well.
+**Removing copies.** Mark copies and choose **Move to the trash…**. They go only to the trash, never for good. One copy always stays: nothing moves unless at least one unmarked copy, outside the system folders and known to be a separate file, is left. The [Moving to the trash](#moving-to-the-trash) rules apply too.
 
-- The copy that stays is read in full again, and its hash must still match, before anything moves. On Windows it is held open without write or delete sharing until the last copy has moved, so no program can change, rename or delete it meanwhile (a change of its times is still noticed and reported). macOS and Linux have no such lock: right after the batch SizeAtlas compares its length, time and identity, and a mismatch is reported as a warning. The moved copies are in the trash and can be restored.
-- The copies to remove are checked by length and modification time, not by content. An overwrite that keeps both is not noticed, but the copy is in the trash and can be restored.
-- A removal waits for earlier removals on the drives of its copies and of the copy that stays. If they changed those roots, it is refused with **Find again**, and the search must be repeated.
-- Thumbnails are shown for the formats the web view of the app displays: JPEG, PNG, GIF, WebP, BMP, SVG, ICO and AVIF. Other files get an icon of their type.
+- The kept copy is first read in full again and must still match its hash. On Windows it is held open without write or delete sharing until the last copy moves, so nothing can change, rename or delete it (a change to its times is still reported). macOS and Linux have no such lock: SizeAtlas checks its length, time and identity afterwards and warns on a mismatch.
+- Removed copies are checked only by length and modification time, so an overwrite that keeps both goes unnoticed; the copy can still be restored from the trash.
+- A removal waits for earlier removals on the drives of all its copies, the kept one included. If those changed the roots, it is refused and you have to **Find** again.
+- Thumbnails cover the formats the app's web view displays (JPEG, PNG, GIF, WebP, BMP, SVG, ICO, AVIF); other files get an icon of their type.
 
 Known limitations:
 
-- Reading from a network drive that has stopped answering may not be cancelled at once.
-- Stopping a removal that waits for a drive's queue takes effect when the queue's turn comes, not at once.
-- A removal waits for removals in every open root that holds the copy that stays. The one exception is a root the search left out because it was being scanned, whose drive SizeAtlas has not looked up yet. There, on Windows the held copy still cannot be deleted; elsewhere the warning above applies.
+- A read from an unresponsive network drive may not cancel at once.
+- Stopping a removal queued for a drive takes effect only at its turn.
+- A removal waits for every open root holding the kept copy, except a root the search skipped as still scanning, whose drive SizeAtlas has not looked up yet. There, the held copy still cannot be deleted on Windows; elsewhere the warning above applies.
 - The result stays in memory until you close the app.
-- Only exact copies are found, not resized or re-saved pictures. Files under 4 KB are not compared.
+- Only exact copies of 4 KB or more are found, not resized or re-saved pictures.
 
 ## Saved scans
 
