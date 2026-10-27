@@ -396,6 +396,9 @@
   "dup.groupStale": "Verouderd — zoek opnieuw",
   "dup.view.full": "Volledig scherm",
   "dup.view.window": "In apart venster",
+  "dup.view.position": "{n} van {total}",
+  "dup.view.fit": "Passend",
+  "dup.view.actual": "Ware grootte",
   "dup.lastCopy": "Minstens één kopie buiten de systeemmappen moet blijven.",
   "dup.searching": "Wacht tot de zoekopdracht klaar is, of annuleer deze."
 }

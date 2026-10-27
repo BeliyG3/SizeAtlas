@@ -520,6 +520,9 @@
   "dup.groupStale": "قديم — ابحث مرة أخرى",
   "dup.view.full": "ملء الشاشة",
   "dup.view.window": "في نافذة منفصلة",
+  "dup.view.position": "{n} من {total}",
+  "dup.view.fit": "ملاءمة",
+  "dup.view.actual": "الحجم الفعلي",
   "dup.lastCopy": "يجب أن تبقى نسخة واحدة على الأقل خارج مجلدات النظام.",
   "dup.searching": "انتظر انتهاء البحث أو ألغِه."
 }

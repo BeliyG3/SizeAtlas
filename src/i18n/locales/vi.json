@@ -365,6 +365,9 @@
   "dup.groupStale": "Đã cũ — hãy tìm lại",
   "dup.view.full": "Toàn màn hình",
   "dup.view.window": "Trong cửa sổ riêng",
+  "dup.view.position": "{n} / {total}",
+  "dup.view.fit": "Vừa khung",
+  "dup.view.actual": "Kích thước thực",
   "dup.lastCopy": "Phải giữ lại ít nhất một bản sao bên ngoài các thư mục hệ thống.",
   "dup.searching": "Hãy đợi tìm kiếm kết thúc, hoặc hủy nó."
 }

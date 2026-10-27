@@ -427,6 +427,9 @@
   "dup.groupStale": "Obsolète : relancez la recherche",
   "dup.view.full": "Plein écran",
   "dup.view.window": "Dans une fenêtre séparée",
+  "dup.view.position": "{n} sur {total}",
+  "dup.view.fit": "Ajuster",
+  "dup.view.actual": "Taille réelle",
   "dup.lastCopy": "Au moins une copie en dehors des dossiers système doit rester.",
   "dup.searching": "Attendez la fin de la recherche ou annulez-la."
 }

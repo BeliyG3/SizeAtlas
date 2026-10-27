@@ -427,6 +427,9 @@
   "dup.groupStale": "לא עדכני — חפשו שוב",
   "dup.view.full": "מסך מלא",
   "dup.view.window": "בחלון נפרד",
+  "dup.view.position": "{n} מתוך {total}",
+  "dup.view.fit": "התאמה לחלון",
+  "dup.view.actual": "גודל אמיתי",
   "dup.lastCopy": "לפחות עותק אחד מחוץ לתיקיות המערכת חייב להישאר.",
   "dup.searching": "המתינו לסיום החיפוש או בטלו אותו."
 }

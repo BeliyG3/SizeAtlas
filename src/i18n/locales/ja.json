@@ -365,6 +365,9 @@
   "dup.groupStale": "古い情報 — もう一度検索してください",
   "dup.view.full": "全画面表示",
   "dup.view.window": "別ウィンドウで表示",
+  "dup.view.position": "{n} / {total}",
+  "dup.view.fit": "全体表示",
+  "dup.view.actual": "実際のサイズ",
   "dup.lastCopy": "システムフォルダー以外に、少なくとも 1 つのコピーを残す必要があります。",
   "dup.searching": "検索が終わるまで待つか、キャンセルしてください。"
 }

@@ -458,6 +458,9 @@
   "dup.groupStale": "Nieaktualne — wyszukaj ponownie",
   "dup.view.full": "Pełny ekran",
   "dup.view.window": "W osobnym oknie",
+  "dup.view.position": "{n} z {total}",
+  "dup.view.fit": "Dopasuj",
+  "dup.view.actual": "Rzeczywisty rozmiar",
   "dup.lastCopy": "Co najmniej jedna kopia poza folderami systemowymi musi zostać.",
   "dup.searching": "Poczekaj na koniec wyszukiwania lub anuluj je."
 }

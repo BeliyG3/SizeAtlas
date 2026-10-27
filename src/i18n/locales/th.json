@@ -365,6 +365,9 @@
   "dup.groupStale": "ล้าสมัย — ค้นหาอีกครั้ง",
   "dup.view.full": "เต็มหน้าจอ",
   "dup.view.window": "ในหน้าต่างแยก",
+  "dup.view.position": "{n} จาก {total}",
+  "dup.view.fit": "พอดีหน้าจอ",
+  "dup.view.actual": "ขนาดจริง",
   "dup.lastCopy": "ต้องเหลือสำเนาอย่างน้อยหนึ่งชุดนอกโฟลเดอร์ระบบ",
   "dup.searching": "รอให้การค้นหาสิ้นสุด หรือยกเลิก"
 }

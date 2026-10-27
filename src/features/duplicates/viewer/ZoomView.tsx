@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type PointerEvent, type ReactElement } from "react";
+import {
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type PointerEvent,
+  type ReactElement,
+  type Ref,
+} from "react";
 import {
   WHEEL_STEP,
   canPan,
@@ -17,6 +25,15 @@ interface Props {
   label: string;
   /** A click on the empty space around the picture (not the end of a drag). */
   onBackground?: () => void;
+  /** The webview could not decode the picture. */
+  onError?: () => void;
+  ref?: Ref<ZoomHandle>;
+}
+
+/** The buttons of a viewer: the picture fitted, or at its actual size around the center. */
+export interface ZoomHandle {
+  fit: () => void;
+  actual: () => void;
 }
 
 interface Zoom {
@@ -40,7 +57,7 @@ const pointIn = (el: Element, e: { clientX: number; clientY: number }): Point =>
  * A picture filling its parent: fitted (never above its actual size) on a new URL and on a
  * resize; the wheel zooms at the pointer, a drag pans, a double click toggles fit and 1:1.
  */
-export function ZoomView({ url, label, onBackground }: Props): ReactElement {
+export function ZoomView({ url, label, onBackground, onError, ref }: Props): ReactElement {
   const boxRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<Zoom>({
     url: "",
@@ -65,6 +82,8 @@ export function ZoomView({ url, label, onBackground }: Props): ReactElement {
     // Native, not passive: the wheel must not scroll anything underneath.
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
+      // Sideways only: no zoom (it would zoom out), and no swipe through the history either.
+      if (e.deltaY === 0) return;
       const factor = e.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP;
       const at = pointIn(el, e);
       setZoom((z) => ({ ...z, view: zoomAt(z.view, z.image, z.box, factor, at) }));
@@ -75,6 +94,18 @@ export function ZoomView({ url, label, onBackground }: Props): ReactElement {
       el.removeEventListener("wheel", wheel);
     };
   }, []);
+  useImperativeHandle(
+    ref,
+    () => ({
+      fit: () => setZoom((z) => ({ ...z, view: fitView(z.image, z.box) })),
+      actual: () =>
+        setZoom((z) => {
+          const center = { x: z.box.w / 2, y: z.box.h / 2 };
+          return { ...z, view: zoomAt(z.view, z.image, z.box, 1 / z.view.scale, center) };
+        }),
+    }),
+    [],
+  );
 
   const down = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
@@ -86,6 +117,11 @@ export function ZoomView({ url, label, onBackground }: Props): ReactElement {
   const move = (e: PointerEvent<HTMLDivElement>) => {
     const p = press.current;
     if (!p) return;
+    // The button went up where no event of it came here: the drag is over.
+    if ((e.buttons & 1) === 0) {
+      press.current = null;
+      return;
+    }
     const dx = e.clientX - p.x;
     const dy = e.clientY - p.y;
     p.x = e.clientX;
@@ -110,6 +146,7 @@ export function ZoomView({ url, label, onBackground }: Props): ReactElement {
       onPointerMove={move}
       onPointerUp={up}
       onPointerCancel={up}
+      onLostPointerCapture={up}
       onClick={(e) => {
         if (e.target === e.currentTarget && backgroundClick.current) onBackground?.();
       }}
@@ -130,6 +167,7 @@ export function ZoomView({ url, label, onBackground }: Props): ReactElement {
           const image = { w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight };
           setZoom((z) => ({ ...z, url, image, view: fitView(image, z.box) }));
         }}
+        onError={onError}
       />
     </div>
   );

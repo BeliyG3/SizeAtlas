@@ -396,6 +396,9 @@
   "dup.groupStale": "पुराना — दोबारा खोजें",
   "dup.view.full": "पूर्ण स्क्रीन",
   "dup.view.window": "अलग विंडो में",
+  "dup.view.position": "{total} में से {n}",
+  "dup.view.fit": "फ़िट करें",
+  "dup.view.actual": "वास्तविक आकार",
   "dup.lastCopy": "सिस्टम फ़ोल्डरों के बाहर कम से कम एक प्रति बची रहनी चाहिए।",
   "dup.searching": "खोज पूरी होने तक रुकें, या उसे रद्द करें।"
 }

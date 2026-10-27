@@ -9,6 +9,7 @@ import { answer, estimate, group } from "./dup.testSupport";
 import { DuplicatesView, type DupMenuTrash } from "./DuplicatesView";
 import { GroupDetail } from "./GroupDetail";
 import { GroupList } from "./GroupList";
+import { Lightbox } from "./viewer/Lightbox";
 
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
@@ -180,5 +181,49 @@ describe("the order of the groups", () => {
     expect(first.props.groups.map((g) => g.key)).toEqual(["small", "big"]);
     expect(detail().props.group.key).toBe("big");
     expect([...detail().props.pick.marks.ids]).toEqual([1]);
+  });
+});
+
+describe("the full-screen view", () => {
+  it("opens for a picture, steps over the groups without one, and closes when it is gone", async () => {
+    vi.stubGlobal("document", { activeElement: null });
+    const groups = [group("a", 30), group("b", 20, { name: "b.txt" }), group("c", 10)];
+    vi.mocked(api.getDuplicates).mockResolvedValue(answer({ job: 1, version: 2, groups }));
+    render("type:image", "type:image");
+    await settle();
+    const lightbox = () => element(Lightbox);
+    expect(lightbox()).toBeUndefined();
+    detail().props.onFull();
+    render("type:image", "type:image");
+    expect(lightbox()!.props).toMatchObject({ position: 1, total: 2 });
+    expect(lightbox()!.props.group.key).toBe("a");
+
+    lightbox()!.props.onStep(1);
+    render("type:image", "type:image");
+    expect(detail().props.group.key).toBe("c");
+    expect(lightbox()!.props).toMatchObject({ position: 2, total: 2 });
+    lightbox()!.props.onStep(1);
+    render("type:image", "type:image");
+    expect(detail().props.group.key).toBe("c");
+
+    lightbox()!.props.onClose();
+    render("type:image", "type:image");
+    expect(lightbox()).toBeUndefined();
+
+    // A group without a picture never opens it, and picking one closes it.
+    detail().props.onFull();
+    render("type:image", "type:image");
+    const list = (
+      element(SplitPane)!.props as { first: ReactElement<Parameters<typeof GroupList>[0]> }
+    ).first;
+    list.props.onPick("b");
+    render("type:image", "type:image");
+    expect(lightbox()).toBeUndefined();
+    detail().props.onFull();
+    render("type:image", "type:image");
+    expect(lightbox()).toBeUndefined();
+    list.props.onPick("c");
+    render("type:image", "type:image");
+    expect(lightbox()).toBeUndefined();
   });
 });

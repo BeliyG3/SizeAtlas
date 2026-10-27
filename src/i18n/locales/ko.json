@@ -365,6 +365,9 @@
   "dup.groupStale": "오래됨 — 다시 찾기",
   "dup.view.full": "전체 화면",
   "dup.view.window": "별도 창에서 보기",
+  "dup.view.position": "{n} / {total}",
+  "dup.view.fit": "화면에 맞춤",
+  "dup.view.actual": "실제 크기",
   "dup.lastCopy": "시스템 폴더 밖에 사본이 최소 하나는 남아 있어야 합니다.",
   "dup.searching": "검색이 끝날 때까지 기다리거나 취소하세요."
 }

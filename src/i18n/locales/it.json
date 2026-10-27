@@ -427,6 +427,9 @@
   "dup.groupStale": "Non aggiornato: cerca di nuovo",
   "dup.view.full": "Schermo intero",
   "dup.view.window": "In una finestra separata",
+  "dup.view.position": "{n} di {total}",
+  "dup.view.fit": "Adatta",
+  "dup.view.actual": "Dimensioni reali",
   "dup.lastCopy": "Almeno una copia fuori dalle cartelle di sistema deve restare.",
   "dup.searching": "Attendi la fine della ricerca oppure annullala."
 }

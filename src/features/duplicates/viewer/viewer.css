@@ -15,3 +15,65 @@
   max-block-size: none;
   user-select: none;
 }
+
+/* The full-screen view: a modal dialog over the whole window. */
+.lightbox {
+  inset: 0;
+  inline-size: 100vw;
+  block-size: 100vh;
+  max-inline-size: none;
+  max-block-size: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: #eee;
+  background: rgb(0 0 0 / 0.9);
+}
+
+.lightbox[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.lightbox::backdrop {
+  background: transparent;
+}
+
+.lightbox-picture {
+  flex: 1;
+  min-block-size: 0;
+}
+
+.lightbox-none {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  block-size: 100%;
+}
+
+.lightbox-none > .icon {
+  inline-size: 64px;
+  block-size: 64px;
+}
+
+.lightbox-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+}
+
+.lightbox-name {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lightbox-position {
+  flex: none;
+  opacity: 0.8;
+}

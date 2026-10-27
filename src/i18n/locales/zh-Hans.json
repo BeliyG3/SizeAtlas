@@ -365,6 +365,9 @@
   "dup.groupStale": "已过期，请重新查找",
   "dup.view.full": "全屏",
   "dup.view.window": "在单独窗口中打开",
+  "dup.view.position": "{n} / {total}",
+  "dup.view.fit": "适应窗口",
+  "dup.view.actual": "实际大小",
   "dup.lastCopy": "系统文件夹之外至少要保留一个副本。",
   "dup.searching": "请等待查找结束，或将其取消。"
 }

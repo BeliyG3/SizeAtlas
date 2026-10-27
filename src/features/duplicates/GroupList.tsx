@@ -51,6 +51,14 @@ export function GroupList({ groups, selected, onPick, sort, onSort, queue }: Pro
   const { first, last } = visibleRange(scrollTop, viewport, groups.length);
   const at = groups.findIndex((g) => g.key === selected);
   const cursor = at < 0 ? null : at;
+  // A group picked elsewhere (the arrows of the full-screen view) is scrolled into view; not a
+  // row that only moved because the result grew, which would pull the list from under the user.
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (selected === scrolledTo.current) return;
+    scrolledTo.current = selected;
+    if (cursor !== null && body.current) scrollToRow(body.current, cursor);
+  }, [selected, cursor]);
   // After the rows asked for theirs (child effects run first): drop what scrolled away.
   useEffect(() => {
     const keys = new Set(groups.slice(first, last).map((g) => g.key));

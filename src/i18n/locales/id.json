@@ -365,6 +365,9 @@
   "dup.groupStale": "Kedaluwarsa — cari lagi",
   "dup.view.full": "Layar penuh",
   "dup.view.window": "Di jendela terpisah",
+  "dup.view.position": "{n} dari {total}",
+  "dup.view.fit": "Paskan",
+  "dup.view.actual": "Ukuran asli",
   "dup.lastCopy": "Setidaknya satu salinan di luar folder sistem harus tetap ada.",
   "dup.searching": "Tunggu pencarian selesai, atau batalkan."
 }

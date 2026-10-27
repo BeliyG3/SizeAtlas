@@ -396,6 +396,9 @@
   "dup.groupStale": "Veraltet – erneut suchen",
   "dup.view.full": "Vollbild",
   "dup.view.window": "In eigenem Fenster",
+  "dup.view.position": "{n} von {total}",
+  "dup.view.fit": "Einpassen",
+  "dup.view.actual": "Originalgröße",
   "dup.lastCopy": "Mindestens eine Kopie außerhalb der Systemordner muss bleiben.",
   "dup.searching": "Warten Sie, bis die Suche beendet ist, oder brechen Sie sie ab."
 }

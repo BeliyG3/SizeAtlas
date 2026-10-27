@@ -21,9 +21,11 @@ import { GroupDetail, pickTargets, type CopyPick } from "./GroupDetail";
 import { GroupList } from "./GroupList";
 import { copyMarksKey, copyTrashNote } from "./keep";
 import { DUP_SYSTEM_KEY, parseDupSystem } from "./query";
-import { createThumbQueue } from "./thumbs";
+import { createThumbQueue, mimeOf } from "./thumbs";
 import { useDupTrash, type DupRuns } from "./useDupTrash";
 import { useDuplicates } from "./useDuplicates";
+import { Lightbox } from "./viewer/Lightbox";
+import { picturePosition, stepPicture } from "./viewer/step";
 import { useImageUrl } from "./viewer/useImageUrl";
 import "./duplicates.css";
 
@@ -100,6 +102,15 @@ export function DuplicatesView(props: Props) {
   // A change without the picked group shows the first one.
   const selected = groups.find((g) => g.key === picked) ?? groups[0] ?? null;
   const picture = useImageUrl(selected, queue);
+  // The full-screen view; it closes for good when the group shown has no picture type (or none).
+  const [full, setFull] = useState(false);
+  const selectedAt = selected ? groups.indexOf(selected) : -1;
+  const fullShown = full && selected !== null && mimeOf(selected.name) !== null;
+  if (full && !fullShown) setFull(false);
+  const onStep = (dir: -1 | 1) => {
+    const next = stepPicture(groups, selectedAt, dir);
+    if (next !== null) setPicked(groups[next].key);
+  };
   // Another order keeps the group shown, and so its marks, even one shown as the first.
   const shownKey = selected?.key ?? null;
   const onSortGroups = useCallback(
@@ -196,8 +207,8 @@ export function DuplicatesView(props: Props) {
               onTrash={trash}
               onMenu={(at, x, y) => setMenu({ key, at, x, y })}
               picture={picture}
-              // Not wired yet: the full-screen view and the viewer window.
-              onFull={() => {}}
+              onFull={() => setFull(mimeOf(selected.name) !== null)}
+              // Not wired yet: the viewer window.
               onWindow={() => {}}
               onFail={onFail}
             />
@@ -216,6 +227,15 @@ export function DuplicatesView(props: Props) {
           onTrash={() => trash(menu.at)}
           onClose={() => setMenu(null)}
           onFail={onFail}
+        />
+      )}
+      {fullShown && (
+        <Lightbox
+          group={selected}
+          picture={picture}
+          {...picturePosition(groups, selectedAt)}
+          onStep={onStep}
+          onClose={() => setFull(false)}
         />
       )}
       {dupTrash.dialog}

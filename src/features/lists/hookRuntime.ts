@@ -50,6 +50,16 @@ export const rt = (() => {
       },
       useMemo: memo,
       useCallback: (callback: unknown, deps?: readonly unknown[]) => memo(() => callback, deps),
+      useImperativeHandle: (
+        ref: { current: unknown } | null | undefined,
+        make: () => unknown,
+        deps?: readonly unknown[],
+      ) =>
+        effect(() => {
+          if (!ref) return;
+          ref.current = make();
+          return () => (ref.current = null);
+        }, deps),
       useLayoutEffect: effect,
       useEffect: effect,
       useContext: () => () => () => {},
