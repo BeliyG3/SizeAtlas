@@ -43,6 +43,8 @@ export interface Block {
   d: number;
   y: number;
   h: number;
+  /** Bytes of the node, for the tooltip. */
+  size: number;
   /** Lies outside the focus and is not one of its ancestors. */
   dim: boolean;
 }
@@ -114,6 +116,7 @@ export function buildCity(data: CityData, focus: number | null): City {
       // Depth-0 blocks stand on the ground, deeper ones on their parent plate's top.
       y: r.depth * PLATE,
       h: kind === "plate" ? PLATE : buildingHeight(r.size, max),
+      size: r.size,
       dim: f !== undefined && !inside(r, f) && !inside(f, r),
     };
     blocks.push(block);
