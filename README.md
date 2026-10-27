@@ -204,6 +204,12 @@ The **Duplicate files** table mode finds exact copies across all open drives and
 - **Not read:** cloud-only files (never downloaded; counted with changed and unreadable files) and roots still being scanned (the list names them). If the trees change mid-search (a rescan, a refresh, a removal, or another root opening or finishing its first scan), the search cancels itself, and a finished result is marked out of date: press **Find** again.
 - **Can be freed:** the size on disk of all copies but the largest. It says "up to" because APFS and ReFS clones, which share their data, are not recognized.
 
+**Viewing a picture.** The preview picture is centered and never enlarged beyond its size; drag the border below it to resize. Hover a group's thumbnail for a moment to see a larger picture.
+
+- **Full screen** (the button, or double-click the picture): the wheel zooms at the pointer, a drag pans, and a double-click switches between **Fit** and **Actual size**, which also have buttons. ← and → go to the previous and next group with a picture. Esc, or a click on the dark area, closes the view.
+- **Separate window:** a second window that shows the picture of the selected group and follows the selection.
+- **Open** and, on Windows, **Open with…** (also in the copy's context menu) act on the copy under the cursor in the copies table, or on the first copy if the cursor is elsewhere.
+
 **Removing copies.** Mark copies and choose **Move to the trash…**. They go only to the trash, never for good. One copy always stays: nothing moves unless at least one unmarked copy, outside the system folders and known to be a separate file, is left. The [Moving to the trash](#moving-to-the-trash) rules apply too.
 
 - The kept copy is first read in full again and must still match its hash. On Windows it is held open without write or delete sharing until the last copy moves, so nothing can change, rename or delete it (a change to its times is still reported). macOS and Linux have no such lock: SizeAtlas checks its length, time and identity afterwards and warns on a mismatch.
