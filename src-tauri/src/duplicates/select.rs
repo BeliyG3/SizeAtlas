@@ -42,7 +42,8 @@ pub(super) struct Batch {
 /// The batch `refs` names in the result: each copy with all its paths, all of one group
 /// (`Protected` otherwise), each one removable (`Protected`). The copy that stays is the one at
 /// `keep`, or with `None` the first copy that may stay on a volume of the batch, else the first
-/// (`LastCopy` when none may). A ref, or `keep`, the result no longer has: `StaleId`.
+/// (`LastCopy` when none may). A ref, or `keep`, the result no longer has, or a group marked
+/// stale: `StaleId`.
 pub(super) fn select(
     results: &Results,
     volumes: &[String],
@@ -62,6 +63,10 @@ pub(super) fn select(
         }
     }
     let group = group.ok_or(CmdError::StaleId)?;
+    // A copy of it no longer matched: another kept copy would not prove the others are copies.
+    if group.stale {
+        return Err(CmdError::StaleId);
+    }
     let volume_of = |p: &Location| volumes.get(usize::from(p.at.root)).cloned();
     let mut copies = Vec::new();
     let mut roots: Vec<BatchRoot> = Vec::new();

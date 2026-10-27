@@ -81,6 +81,19 @@ fn a_kept_copy_rewritten_with_its_old_time_refuses() {
 }
 
 #[test]
+fn a_group_marked_stale_refuses_another_kept_copy() {
+    let t = Dups::new();
+    let (dir, a) = t.root("a", &[("a", 1), ("b", 1), ("c", 1)]);
+    t.find(false);
+    write(dir.path(), &[("a", 2)]);
+    assert_eq!(t.trash(1, &[at(&a, "b")]).err(), Some(CmdError::Changed));
+    // `c` would stay and still match, but `a` is no copy any more.
+    let refused = t.trash(2, &[at(&a, "a"), at(&a, "b")]);
+    assert_eq!(refused.err(), Some(CmdError::StaleId));
+    assert!(t.logged().is_empty());
+}
+
+#[test]
 fn the_same_file_on_both_sides_refuses() {
     let t = Dups::new();
     let (_dir, a) = t.root("a", &[("a", 1), ("b", 1), ("c", 1)]);

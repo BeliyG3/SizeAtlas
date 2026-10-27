@@ -29,7 +29,8 @@ const HELD = ["protected", "noId", "hardlink"] as const;
 
 /**
  * Why the copies at `marked` cannot go to the trash now, as a text key; null when they can.
- * `running`: a search runs. `removing`: a request has one of them already.
+ * `running`: a search runs. `removing`: a request has one of them already. A group marked out of
+ * date gives none.
  */
 export function copyTrashNote(
   group: DupGroup,
@@ -38,6 +39,8 @@ export function copyTrashNote(
   removing: boolean,
 ): string | null {
   if (running) return "dup.searching";
+  // A copy no longer matched: the backend refuses every copy of the group (`StaleId`).
+  if (group.stale) return "dup.groupStale";
   const held = group.copies.find((c, i) => marked.has(i) && !c.trashable);
   const why = held && HELD.find((m) => held[m]);
   if (why) return `dup.${why}`;

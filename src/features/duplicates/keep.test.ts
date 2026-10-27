@@ -54,6 +54,10 @@ describe("copyTrashNote", () => {
     expect(copyTrashNote(g, new Set([0, 1, 2]), false, false)).toBe("dup.lastCopy");
     expect(copyTrashNote(g, new Set([0]), false, true)).toBe("trash.already");
   });
+
+  it("refuses any copy of a group marked out of date", () => {
+    expect(copyTrashNote({ ...g, stale: true }, new Set([0]), false, false)).toBe("dup.groupStale");
+  });
 });
 
 describe("menuTrashFor", () => {
