@@ -21,8 +21,9 @@ export function Thumb({ group, queue, large = false }: Props) {
   const { key, name } = group;
   const { root = "", generation = 0, id = -1 } = group.copies[0]?.refs[0] ?? {};
   const type = id < 0 ? null : mimeOf(name);
-  // The picture belongs to one file: another one shows the icon until its own comes.
-  const file = `${key}|${root}|${generation}|${id}`;
+  // The picture belongs to one file read as one type: anything else shows the icon until its own
+  // comes, so a revoked URL never stays on screen.
+  const file = `${key}|${type}|${root}|${generation}|${id}`;
   const [shown, setShown] = useState<{ file: string; url: string } | null>(null);
   useEffect(() => {
     if (!type) return;
