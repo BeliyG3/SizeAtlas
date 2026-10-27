@@ -364,7 +364,7 @@
   "dup.noId": "无法确定这是否为独立文件，此处不会删除",
   "dup.groupStale": "已过期，请重新查找",
   "dup.view.full": "全屏",
-  "dup.view.window": "在单独窗口中打开",
+  "dup.view.window": "在单独窗口中显示",
   "dup.view.position": "{n} / {total}",
   "dup.view.fit": "适应窗口",
   "dup.view.actual": "实际大小",

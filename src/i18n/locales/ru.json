@@ -272,7 +272,7 @@
   "split.drives": "Высота панели дисков",
   "split.charts": "Высота области диаграмм",
   "split.groups": "Ширина списка групп",
-  "split.preview": "Высота картинки",
+  "split.preview": "Высота изображения",
   "contents.label": "Содержимое текущей папки",
   "contents.empty": "Папка пуста.",
   "contents.noFolders": "Здесь нет папок.",
@@ -460,9 +460,9 @@
   "dup.view.window": "В отдельном окне",
   "dup.view.position": "{n} из {total}",
   "dup.view.fit": "Вписать",
-  "dup.view.actual": "Реальный размер",
-  "dup.view.title": "Картинка — SizeAtlas",
-  "dup.view.empty": "Выберите группу с картинкой",
+  "dup.view.actual": "Фактический размер",
+  "dup.view.title": "Изображение — SizeAtlas",
+  "dup.view.empty": "Выберите группу с изображением",
   "dup.lastCopy": "Хотя бы одна копия вне системных папок должна остаться.",
   "dup.searching": "Дождитесь конца поиска или отмените его."
 }

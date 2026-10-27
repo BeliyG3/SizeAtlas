@@ -429,7 +429,7 @@
   "dup.view.window": "בחלון נפרד",
   "dup.view.position": "{n} מתוך {total}",
   "dup.view.fit": "התאמה לחלון",
-  "dup.view.actual": "גודל אמיתי",
+  "dup.view.actual": "גודל בפועל",
   "dup.view.title": "תמונה — SizeAtlas",
   "dup.view.empty": "בחרו קבוצה עם תמונה",
   "dup.lastCopy": "לפחות עותק אחד מחוץ לתיקיות המערכת חייב להישאר.",

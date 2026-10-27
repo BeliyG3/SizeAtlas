@@ -208,7 +208,7 @@ The **Duplicate files** table mode finds exact copies across all open drives and
 
 - **Full screen** (the button, or double-click the picture): the wheel zooms at the pointer, a drag pans, and a double-click switches between **Fit** and **Actual size**, which also have buttons. ← and → go to the previous and next group with a picture. Esc, or a click on the dark area, closes the view.
 - **Separate window:** a second window that shows the picture of the selected group and follows the selection.
-- **Open** and, on Windows, **Open with…** (also in the copy's context menu) act on the copy under the cursor in the copies table, or on the first copy if the cursor is elsewhere.
+- **Open** and, on Windows, **Open with…** (also in the copy's context menu) act on the copy under the cursor in the copies table, or on the first copy in the table when no copy has the cursor.
 
 **Removing copies.** Mark copies and choose **Move to the trash…**. They go only to the trash, never for good. One copy always stays: nothing moves unless at least one unmarked copy, outside the system folders and known to be a separate file, is left. The [Moving to the trash](#moving-to-the-trash) rules apply too.
 

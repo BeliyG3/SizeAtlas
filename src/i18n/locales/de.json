@@ -20,7 +20,7 @@
   "tree.unaccounted": "Nicht erfasst",
   "tree.unaccountedHint": "Belegter Speicherplatz, den der Scan nicht gefunden hat: Systemdateien, Ordner ohne Lesezugriff und der Papierkorb. Elemente, die Sie in den Papierkorb verschieben, zählen hier mit, bis Sie ihn leeren.",
   "menu.open": "Öffnen",
-  "menu.openWith": "Öffnen mit …",
+  "menu.openWith": "Öffnen mit…",
   "menu.reveal": "Im Dateimanager anzeigen",
   "menu.properties": "Eigenschaften",
   "menu.scanFolder": "Diesen Ordner scannen",
