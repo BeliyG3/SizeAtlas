@@ -37,8 +37,12 @@ export function useDuplicates({ query, system, scope, rootsKey, onFail }: Option
   const [state, setState] = useState<DupState | null>(null);
   const [status, setStatus] = useState<DupStatus | null>(null);
   // The last estimate and what it was asked for: one of an older ask is not the current one.
+  // A failed ask is answered with no estimate, so it is not shown as on its way forever.
   const ask = JSON.stringify([query, system, scope, rootsKey]);
-  const [estimated, setEstimated] = useState<{ ask: string; estimate: DupEstimate } | null>(null);
+  const [estimated, setEstimated] = useState<{
+    ask: string;
+    estimate: DupEstimate | null;
+  } | null>(null);
   const [folder, setFolder] = useState<{ scope: DupScope; path: string } | null>(null);
   // A Find sent and not answered yet: a second one would start a job that cancels the first.
   const [finding, setFinding] = useState(false);
@@ -108,7 +112,9 @@ export function useDuplicates({ query, system, scope, rootsKey, onFail }: Option
         if (live) setEstimated({ ask, estimate });
       },
       (e: unknown) => {
-        if (live) fail.current(e);
+        if (!live) return;
+        setEstimated({ ask, estimate: null });
+        fail.current(e);
       },
     );
     return () => {
@@ -135,8 +141,10 @@ export function useDuplicates({ query, system, scope, rootsKey, onFail }: Option
   const estimating = estimated?.ask !== ask;
   /** The folder Find searches now, by path; null for every open root. */
   let target = estimate?.scope ?? null;
-  if (estimating && !scope) target = null;
-  else if (estimating && folder?.scope === scope) target = folder.path;
+  // Without a current estimate (on its way or failed) the folder is named from the tree.
+  const unknown = estimating || !estimate;
+  if (unknown && !scope) target = null;
+  else if (unknown && folder?.scope === scope) target = folder.path;
 
   /** Searches for `words` (the text in the field, not the debounced query). */
   const find = useCallback(

@@ -208,6 +208,25 @@ describe("useDuplicates", () => {
     expect([shown.estimate?.files, shown.estimating]).toEqual([2, false]);
   });
 
+  it("stops estimating and drops the old counts when an estimate fails", async () => {
+    const a: DupScope = { root: "C:\\", generation: 1, folder: 4 };
+    const b: DupScope = { root: "C:\\", generation: 1, folder: 9 };
+    vi.mocked(api.estimateDuplicates).mockResolvedValueOnce(estimate({ scope: "C:\\f4" }));
+    render(undefined, undefined, a);
+    await Promise.resolve();
+    await Promise.resolve();
+    render(undefined, undefined, a);
+    const error = new Error("walk failed");
+    vi.mocked(api.estimateDuplicates).mockRejectedValueOnce(error);
+    render(undefined, undefined, b);
+    await Promise.resolve();
+    await Promise.resolve();
+    render(undefined, undefined, b);
+    expect(onFail).toHaveBeenCalledWith(error);
+    // No "…" forever, and no counts of the other folder.
+    expect([shown.estimating, shown.estimate, shown.target]).toEqual([false, null, "C:\\f9"]);
+  });
+
   it("names no folder for every open root", async () => {
     render();
     await settle();
