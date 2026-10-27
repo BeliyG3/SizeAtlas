@@ -201,7 +201,7 @@ The **Duplicate files** table mode finds exact copies across all open drives and
 - **Filters choose starting files:** the search field here is a filter, not the usual search. A group is listed if any of its files matches and shows all its copies, so `older:1y` or a name never splits it; a size condition fits every copy alike. The field starts as `type:image`; clear it to see every type.
 - **Left out:** system and program folders (Windows: `Windows`, `Program Files`, `ProgramData`, `AppData`; macOS: `/System`, `/Library`, `/Applications`, `~/Library`, app and photo-library package contents, and iCloud Drive; Linux: `/usr`, `/opt`, `/var` and similar), `node_modules`, `.git`, Python environments, `steamapps` and the dot-folders of your home folder. **Include system folders** adds them; their copies are tagged and never go to the trash. Programs and games elsewhere are not recognized.
 - **Counted once:** a path reached through overlapping roots (such as `C:\` and a folder on it), and hard links. A file also linked outside the open drives is tagged, not counted as freed and not removed. A cloned volume keeps the same file ids, so its files are neither merged with the originals nor removed.
-- **Not read:** cloud-only files (never downloaded; counted with changed and unreadable files) and roots still being scanned (the list names them). If the trees change mid-search (a rescan, a refresh, a removal), the search cancels itself, and a finished result is marked out of date: press **Find** again.
+- **Not read:** cloud-only files (never downloaded; counted with changed and unreadable files) and roots still being scanned (the list names them). If the trees change mid-search (a rescan, a refresh, a removal, or another root opening or finishing its first scan), the search cancels itself, and a finished result is marked out of date: press **Find** again.
 - **Can be freed:** the size on disk of all copies but the largest. It says "up to" because APFS and ReFS clones, which share their data, are not recognized.
 
 **Removing copies.** Mark copies and choose **Move to the trash…**. They go only to the trash, never for good. One copy always stays: nothing moves unless at least one unmarked copy, outside the system folders and known to be a separate file, is left. The [Moving to the trash](#moving-to-the-trash) rules apply too.
@@ -209,14 +209,14 @@ The **Duplicate files** table mode finds exact copies across all open drives and
 - The kept copy is first read in full again and must still match its hash. On Windows it is held open without write or delete sharing until the last copy moves, so nothing can change, rename or delete it (a change to its times is still reported). macOS and Linux have no such lock: SizeAtlas checks its length, time and identity afterwards and warns on a mismatch.
 - Removed copies are checked only by length and modification time, so an overwrite that keeps both goes unnoticed; the copy can still be restored from the trash.
 - A removal waits for earlier removals on the drives of all its copies, the kept one included. If those changed the roots, it is refused and you have to **Find** again.
-- Thumbnails cover the formats the app's web view displays (JPEG, PNG, GIF, WebP, BMP, SVG, ICO, AVIF); other files get an icon of their type.
+- Thumbnails cover the formats the app's web view displays (JPEG, PNG, GIF, WebP, BMP, SVG, ICO, AVIF); other files get an icon of their type. A thumbnail is read from a copy that is not on a hard disk drive when the group has one, so a sleeping hard drive is not woken just to show the list.
 
 Known limitations:
 
 - A read from an unresponsive network drive may not cancel at once.
 - Stopping a removal queued for a drive takes effect only at its turn.
 - A removal waits for every open root holding the kept copy, except a root the search skipped as still scanning, whose drive SizeAtlas has not looked up yet. There, the held copy still cannot be deleted on Windows; elsewhere the warning above applies.
-- The result stays in memory until you close the app.
+- The result stays in memory until you close the app, and so do the hashes of the files read (about 150 bytes per file), so a later **Find** does not read unchanged files again.
 - Only exact copies of 4 KB or more are found, not resized or re-saved pictures.
 
 ## Saved scans

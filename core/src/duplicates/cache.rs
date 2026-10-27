@@ -21,6 +21,8 @@ struct Entry {
 
 /// Hashes by volume key and file id, valid for the length and time they were read at. A file
 /// of unknown time (0) is never cached: a rewrite of the same length would go unseen.
+// ponytail: never evicts, about 150 B per file read for the whole session (a million files keep
+// about 150 MB); add an LRU or a clear on close of the mode if that ever matters.
 #[derive(Default)]
 pub struct HashCache {
     volumes: HashMap<String, HashMap<FileId, Entry>>,
