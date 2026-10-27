@@ -427,7 +427,7 @@
   "dup.phaseFull": "Porównywanie: odczytano {done} z {total}",
   "dup.system": "Uwzględnij foldery systemowe",
   "dup.everywhere": "Na otwartych dyskach i w otwartych folderach",
-  "dup.scope": "Szukaj w {path}",
+  "dup.scope": "Wyszukiwanie w {path}",
   "dup.next": "„Szukaj” przeszuka: {path}",
   "dup.findWhere": "„Szukaj” przeszuka wszystkie otwarte dyski i foldery",
   "dup.unfinished": "Wyszukiwanie nie zostało ukończone.",
