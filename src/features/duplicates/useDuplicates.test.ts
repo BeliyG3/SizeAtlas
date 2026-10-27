@@ -90,6 +90,15 @@ describe("useDuplicates", () => {
     expect(shown.status?.running).toBe(true);
   });
 
+  it("keeps a stale mark of a version when an answer of it read before says otherwise", async () => {
+    render();
+    await settle();
+    sent.status!(status({ job: 2, version: 5, stale: true }));
+    render("C:\\:1:4");
+    await settle("C:\\:1:4");
+    expect(shown.status?.stale).toBe(true);
+  });
+
   it("asks again when the roots change, so the stale mark follows them", async () => {
     render();
     await settle();

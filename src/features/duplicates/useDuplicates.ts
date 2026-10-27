@@ -13,9 +13,15 @@ interface Options {
   onFail: (e: unknown) => void;
 }
 
-/** Whether `next` is at least as new as `shown`. */
-const newer = (next: DupStatus, shown: DupStatus | null) =>
-  !shown || next.job > shown.job || (next.job === shown.job && next.version >= shown.version);
+/**
+ * `next` over `shown`, or null when it is older. Within one version the stale mark only turns
+ * on: answers read before a status may land after it.
+ */
+function merged(next: DupStatus, shown: DupStatus | null): DupStatus | null {
+  if (!shown || next.job > shown.job) return next;
+  if (next.job < shown.job || next.version < shown.version) return null;
+  return next.version > shown.version ? next : { ...next, stale: next.stale || shown.stale };
+}
 
 /**
  * The duplicates result the backend keeps, read by cursor: on mount (a search never starts by
@@ -38,17 +44,23 @@ export function useDuplicates({ query, system, rootsKey, onFail }: Options) {
     fail.current = onFail;
   }, [onFail]);
 
-  const take = useCallback((answer: Duplicates) => {
-    const before = shown.current.state;
-    const next = applyAnswer(before, answer);
-    if (next === before) return;
-    shown.current.state = next;
-    setState(next);
-    if (newer(answer.status, shown.current.status)) {
-      shown.current.status = answer.status;
-      setStatus(answer.status);
-    }
+  const showStatus = useCallback((next: DupStatus) => {
+    const status = merged(next, shown.current.status);
+    if (!status) return;
+    shown.current.status = status;
+    setStatus(status);
   }, []);
+  const take = useCallback(
+    (answer: Duplicates) => {
+      const before = shown.current.state;
+      const next = applyAnswer(before, answer);
+      if (next === before) return;
+      shown.current.state = next;
+      setState(next);
+      showStatus(answer.status);
+    },
+    [showStatus],
+  );
   const fetch = useCallback(() => {
     const life = lifecycle.current;
     const at = shown.current.state;
@@ -67,17 +79,14 @@ export function useDuplicates({ query, system, rootsKey, onFail }: Options) {
     lifecycle.current = life;
     const unlisten = onDuplicatesStatus((next) => {
       if (!life.live) return;
-      if (newer(next, shown.current.status)) {
-        shown.current.status = next;
-        setStatus(next);
-      }
+      showStatus(next);
       if (shouldFetch(shown.current.state, next)) fetch();
     });
     return () => {
       life.live = false;
       void unlisten.then((off) => off());
     };
-  }, [fetch]);
+  }, [fetch, showStatus]);
 
   // On mount too: the first read is the whole kept result.
   useEffect(fetch, [fetch, rootsKey]);

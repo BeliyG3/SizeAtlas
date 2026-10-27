@@ -54,6 +54,29 @@ describe("the groups of a duplicates result", () => {
     expect(late.answer.stale).toBe(true);
   });
 
+  it("never roll back by a late whole result, so a later change lands on the newest one", () => {
+    // Two whole reads in flight: the newer lands first, the older after it.
+    const v7 = applyAnswer(null, answer({ job: 1, version: 7, groups: [group("a"), group("b")] }));
+    const late = applyAnswer(v7, answer({ job: 1, version: 5, groups: [group("a")] }));
+    expect(keys(late)).toEqual(["a", "b"]);
+    expect(late.version).toBe(7);
+    const v8 = applyAnswer(
+      late,
+      answer({ job: 1, version: 8, full: false, groups: [group("c")], removed: ["b"] }),
+    );
+    expect(keys(v8)).toEqual(["a", "c"]);
+  });
+
+  it("keep the stale mark of a version once one answer of it brought it", () => {
+    const stale = applyAnswer(null, answer({ job: 1, version: 5, stale: true }));
+    const delta = answer({ job: 1, version: 5, full: false, stale: false });
+    expect(applyAnswer(stale, delta).answer.stale).toBe(true);
+    const whole = answer({ job: 1, version: 5, full: true, stale: false });
+    expect(applyAnswer(stale, whole).answer.stale).toBe(true);
+    const newer = answer({ job: 1, version: 6, full: false, stale: false });
+    expect(applyAnswer(stale, newer).answer.stale).toBe(false);
+  });
+
   it("are fetched for a new job or a newer version only", () => {
     const state = applyAnswer(null, answer({ job: 2, version: 5 }));
     expect(shouldFetch(null, status({ job: 0 }))).toBe(true);

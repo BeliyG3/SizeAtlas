@@ -11,18 +11,22 @@ export interface DupState {
 
 /**
  * `state` with `answer` taken in: a whole result replaces the groups, a change adds, replaces and
- * removes them. An answer of an older job changes nothing; a late change of this job (its version
- * not newer) leaves the groups as they are but still brings the stale mark.
+ * removes them. An answer of an older job changes nothing; a late answer of this job (a change
+ * not newer, a whole result older) leaves the groups as they are but still brings the stale
+ * mark. Within one version the mark only turns on: answers of it may land out of order, and a
+ * result does not get fresh again without a new version.
  */
 export function applyAnswer(state: DupState | null, answer: Duplicates): DupState {
   if (state && answer.job < state.job) return state;
   const sameJob = state !== null && answer.job === state.job;
-  if (sameJob && !answer.full && answer.version <= state.version)
-    return { ...state, answer: { ...state.answer, stale: answer.stale } };
+  const notNewer = sameJob && answer.version <= state.version;
+  const stale = notNewer ? state.answer.stale || answer.stale : answer.stale;
+  if (sameJob && (answer.full ? answer.version < state.version : notNewer))
+    return { ...state, answer: { ...state.answer, stale } };
   const groups = new Map(sameJob && !answer.full ? state.groups : []);
   for (const key of answer.removed) groups.delete(key);
   for (const group of answer.groups) groups.set(group.key, group);
-  return { job: answer.job, version: answer.version, groups, answer };
+  return { job: answer.job, version: answer.version, groups, answer: { ...answer, stale } };
 }
 
 /** Whether `status` says there is more to read than `state` holds. */
