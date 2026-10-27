@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rt } from "../../lists/hookRuntime";
 import { ZoomView, type ZoomHandle } from "./ZoomView";
 
@@ -36,6 +36,7 @@ const press = (target: object) => ({
 beforeEach(() => {
   rt.state.slots = [];
 });
+afterEach(() => vi.unstubAllGlobals());
 
 describe("ZoomView", () => {
   it("shows the picture under its label", () => {

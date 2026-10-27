@@ -104,12 +104,15 @@ export function DuplicatesView(props: Props) {
   const picture = useImageUrl(selected, queue);
   // The full-screen view; it closes for good when the group shown has no picture type (or none).
   const [full, setFull] = useState(false);
+  const [reveal, setReveal] = useState<{ key: string } | null>(null);
   const selectedAt = selected ? groups.indexOf(selected) : -1;
   const fullShown = full && selected !== null && mimeOf(selected.name) !== null;
   if (full && !fullShown) setFull(false);
   const onStep = (dir: -1 | 1) => {
     const next = stepPicture(groups, selectedAt, dir);
-    if (next !== null) setPicked(groups[next].key);
+    if (next === null) return;
+    setPicked(groups[next].key);
+    setReveal({ key: groups[next].key });
   };
   // Another order keeps the group shown, and so its marks, even one shown as the first.
   const shownKey = selected?.key ?? null;
@@ -193,6 +196,7 @@ export function DuplicatesView(props: Props) {
             <GroupList
               groups={groups}
               selected={selected.key}
+              reveal={reveal}
               onPick={setPicked}
               sort={sort}
               onSort={onSortGroups}

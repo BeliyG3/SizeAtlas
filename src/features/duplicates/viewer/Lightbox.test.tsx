@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ItemIcon } from "../../contents/ItemIcon";
 import { rt } from "../../lists/hookRuntime";
 import { group } from "../dup.testSupport";
@@ -64,6 +64,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("document", { activeElement: null });
 });
+afterEach(() => vi.unstubAllGlobals());
+const labels = () =>
+  find("button").map((b) => [b.props.children].flat().find((c) => typeof c === "string"));
 
 describe("Lightbox", () => {
   it("is a native modal dialog that Escape closes", () => {
@@ -85,6 +88,13 @@ describe("Lightbox", () => {
     expect(left.preventDefault).toHaveBeenCalled();
     shown.props.onKeyDown!({ key: "Enter", preventDefault: vi.fn() });
     expect(onStep).toHaveBeenCalledTimes(2);
+    // Alt+arrow goes through the history and the like: only a plain arrow steps.
+    for (const held of ["altKey", "ctrlKey", "metaKey", "shiftKey"]) {
+      const chord = { key: "ArrowRight", [held]: true, preventDefault: vi.fn() };
+      shown.props.onKeyDown!(chord);
+      expect(chord.preventDefault).not.toHaveBeenCalled();
+    }
+    expect(onStep).toHaveBeenCalledTimes(2);
   });
 
   it("zooms the picture and closes on a click on the background", () => {
@@ -100,6 +110,8 @@ describe("Lightbox", () => {
       expect(find(ZoomView)).toEqual([]);
       expect(find(ItemIcon)).toHaveLength(1);
       expect(text(shown)).toContain("a.jpg");
+      // The focus may be on any of them: none goes while the next picture loads or fails.
+      expect(labels()).toEqual(["dup.view.fit", "dup.view.actual", "dialog.close"]);
     }
   });
 

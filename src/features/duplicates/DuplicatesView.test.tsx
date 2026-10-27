@@ -1,11 +1,11 @@
 import type { ReactElement, ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../../api/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api, onDuplicatesStatus } from "../../api/client";
 import { rt } from "../lists/hookRuntime";
 import type { Summary } from "../../api/types";
 import { SplitPane } from "../shell/SplitPane";
 import { DupHeader } from "./DupHeader";
-import { answer, estimate, group } from "./dup.testSupport";
+import { answer, estimate, group, status } from "./dup.testSupport";
 import { DuplicatesView, type DupMenuTrash } from "./DuplicatesView";
 import { GroupDetail } from "./GroupDetail";
 import { GroupList } from "./GroupList";
@@ -77,6 +77,7 @@ beforeEach(() => {
   vi.mocked(api.estimateDuplicates).mockResolvedValue(estimate());
   vi.mocked(api.findDuplicates).mockResolvedValue(1);
 });
+afterEach(() => vi.unstubAllGlobals());
 
 describe("Find in the duplicates mode", () => {
   it("searches the text in the field right after typing, and commits it", () => {
@@ -184,6 +185,9 @@ describe("the order of the groups", () => {
   });
 });
 
+const list = () =>
+  (element(SplitPane)!.props as { first: ReactElement<Parameters<typeof GroupList>[0]> }).first;
+
 describe("the full-screen view", () => {
   it("opens for a picture, steps over the groups without one, and closes when it is gone", async () => {
     vi.stubGlobal("document", { activeElement: null });
@@ -202,6 +206,7 @@ describe("the full-screen view", () => {
     render("type:image", "type:image");
     expect(detail().props.group.key).toBe("c");
     expect(lightbox()!.props).toMatchObject({ position: 2, total: 2 });
+    expect(list().props.reveal).toEqual({ key: "c" });
     lightbox()!.props.onStep(1);
     render("type:image", "type:image");
     expect(detail().props.group.key).toBe("c");
@@ -213,17 +218,42 @@ describe("the full-screen view", () => {
     // A group without a picture never opens it, and picking one closes it.
     detail().props.onFull();
     render("type:image", "type:image");
-    const list = (
-      element(SplitPane)!.props as { first: ReactElement<Parameters<typeof GroupList>[0]> }
-    ).first;
-    list.props.onPick("b");
+    list().props.onPick("b");
     render("type:image", "type:image");
     expect(lightbox()).toBeUndefined();
     detail().props.onFull();
     render("type:image", "type:image");
     expect(lightbox()).toBeUndefined();
-    list.props.onPick("c");
+    list().props.onPick("c");
     render("type:image", "type:image");
     expect(lightbox()).toBeUndefined();
+  });
+
+  it("closes when the groups are gone, and stays closed when they come back", async () => {
+    vi.stubGlobal("document", { activeElement: null });
+    vi.mocked(api.getDuplicates).mockResolvedValue(
+      answer({ job: 1, version: 2, groups: [group("a")] }),
+    );
+    render("type:image", "type:image");
+    await settle();
+    detail().props.onFull();
+    render("type:image", "type:image");
+    expect(element(Lightbox)).toBeDefined();
+
+    // A new search: its first answer has no group yet.
+    const told = vi.mocked(onDuplicatesStatus).mock.lastCall![0];
+    vi.mocked(api.getDuplicates).mockResolvedValue(answer({ job: 2, version: 1, groups: [] }));
+    told(status({ job: 2, version: 1 }));
+    await settle();
+    expect(element(SplitPane)).toBeUndefined();
+    expect(element(Lightbox)).toBeUndefined();
+
+    vi.mocked(api.getDuplicates).mockResolvedValue(
+      answer({ job: 2, version: 2, groups: [group("a")] }),
+    );
+    told(status({ job: 2, version: 2 }));
+    await settle();
+    expect(detail().props.group.key).toBe("a");
+    expect(element(Lightbox)).toBeUndefined();
   });
 });

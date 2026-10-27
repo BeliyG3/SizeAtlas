@@ -45,10 +45,11 @@ export function Lightbox({ group, picture, position, total, onStep, onClose }: P
     };
   }, [previous]);
 
-  // Not mirrored in a right-to-left language: pictures are not text.
+  // Not mirrored in a right-to-left language: pictures are not text. A plain arrow only: Alt+←
+  // and the like belong to the history.
   const onKeyDown = (e: KeyboardEvent) => {
     const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-    if (dir === 0) return;
+    if (dir === 0 || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     e.preventDefault();
     onStep(dir);
   };
@@ -92,16 +93,14 @@ export function Lightbox({ group, picture, position, total, onStep, onClose }: P
             total: formatCount(total, lang),
           })}
         </span>
-        {url && (
-          <button type="button" onClick={() => zoom.current?.fit()}>
-            {t("dup.view.fit")}
-          </button>
-        )}
-        {url && (
-          <button type="button" onClick={() => zoom.current?.actual()}>
-            {t("dup.view.actual")}
-          </button>
-        )}
+        {/* Always there, never disabled, even with no picture: the focus may be on one of
+            them, and a button that goes takes the focus out of the dialog (and the arrows). */}
+        <button type="button" onClick={() => zoom.current?.fit()}>
+          {t("dup.view.fit")}
+        </button>
+        <button type="button" onClick={() => zoom.current?.actual()}>
+          {t("dup.view.actual")}
+        </button>
         <button type="button" onClick={onClose}>
           {t("dialog.close")}
         </button>

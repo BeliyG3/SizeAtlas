@@ -26,6 +26,12 @@ interface Props {
   groups: readonly DupGroup[];
   /** Key of the group whose copies are shown. */
   selected: string | null;
+  /**
+   * A group picked elsewhere (a step of the full-screen view), to scroll into view: a new object
+   * for each step. Only these scroll: the first group shown by default changes as a search
+   * grows, and following it would pull the list from under the user.
+   */
+  reveal: { key: string } | null;
   onPick: (key: string) => void;
   sort: DupSort<GroupColumn>;
   onSort: (sort: DupSort<GroupColumn>) => void;
@@ -37,7 +43,7 @@ const nothing = () => {};
 const sortable = () => true;
 
 /** The groups of the result, one row each; the selected one is the cursor row. Virtual. */
-export function GroupList({ groups, selected, onPick, sort, onSort, queue }: Props) {
+export function GroupList({ groups, selected, reveal, onPick, sort, onSort, queue }: Props) {
   const { t, lang } = useT();
   const size = useSize();
   const body = useRef<HTMLDivElement>(null);
@@ -51,14 +57,14 @@ export function GroupList({ groups, selected, onPick, sort, onSort, queue }: Pro
   const { first, last } = visibleRange(scrollTop, viewport, groups.length);
   const at = groups.findIndex((g) => g.key === selected);
   const cursor = at < 0 ? null : at;
-  // A group picked elsewhere (the arrows of the full-screen view) is scrolled into view; not a
-  // row that only moved because the result grew, which would pull the list from under the user.
-  const scrolledTo = useRef<string | null>(null);
+  // Once per step: not again when the rows move as the result grows.
+  const revealed = useRef<{ key: string } | null>(null);
   useEffect(() => {
-    if (selected === scrolledTo.current) return;
-    scrolledTo.current = selected;
-    if (cursor !== null && body.current) scrollToRow(body.current, cursor);
-  }, [selected, cursor]);
+    if (!reveal || reveal === revealed.current) return;
+    revealed.current = reveal;
+    const index = groups.findIndex((g) => g.key === reveal.key);
+    if (index >= 0 && body.current) scrollToRow(body.current, index);
+  }, [reveal, groups]);
   // After the rows asked for theirs (child effects run first): drop what scrolled away.
   useEffect(() => {
     const keys = new Set(groups.slice(first, last).map((g) => g.key));
