@@ -63,12 +63,14 @@ fn a_tree_change_does_not_wait_for_the_volume_of_another_root() {
     let (_a, root, generation) = open_pair(&state, "free");
     let _b = open_pair(&state, "held");
     let picking = state.clone();
-    let estimate = thread::spawn(move || picking.estimate_duplicates("", false));
+    // Only a search asks the volumes.
+    let search = thread::spawn(move || find(&picking, Arc::new(|_| {})));
     entered.recv_timeout(HANG).unwrap();
     let changed = change_within(&state, &root, generation);
     go.send(()).unwrap();
     assert_eq!(changed, Ok(()));
-    assert_eq!(estimate.join().unwrap().roots, 2);
+    search.join().unwrap();
+    assert_eq!(state.0.duplicates.inner.lock().unwrap().volumes.len(), 2);
 }
 
 #[test]

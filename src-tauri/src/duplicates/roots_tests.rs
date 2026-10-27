@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use sizeatlas_core::duplicates::DiskKind;
 
@@ -61,6 +61,27 @@ fn picked_roots_carry_the_volume_of_the_trash_queue() {
     let (_, handle) = state.find_duplicates(String::new(), false, emit).unwrap();
     handle.join().unwrap();
     assert_eq!(state.0.duplicates.inner.lock().unwrap().volumes, ["v7"]);
+}
+
+#[test]
+fn only_a_find_asks_the_volumes() {
+    let asked = Arc::new(AtomicUsize::new(0));
+    let count = asked.clone();
+    let state = AppState::with_context_and_volumes(
+        counting().0,
+        Arc::new(move |_| {
+            count.fetch_add(1, Ordering::SeqCst);
+            "v".to_owned()
+        }),
+    );
+    let _dir = open_pair(&state, "volumes");
+    let before = asked.load(Ordering::SeqCst);
+    for _ in 0..3 {
+        state.estimate_duplicates("", false);
+    }
+    assert_eq!(asked.load(Ordering::SeqCst), before);
+    find(&state, recorder().0);
+    assert!(asked.load(Ordering::SeqCst) > before);
 }
 
 #[test]

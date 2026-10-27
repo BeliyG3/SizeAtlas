@@ -19,7 +19,7 @@ pub(crate) struct Picked {
     pub tree: Arc<Tree>,
     pub root: String,
     pub generation: u64,
-    /// The key of the trash queue of its volume (`AppState::volume_of`).
+    /// The key of the trash queue of its volume (`AppState::volume_of`); empty for an estimate.
     pub volume: String,
     pub disk: DiskKind,
 }
@@ -49,8 +49,8 @@ pub(crate) fn current(state: &AppState) -> (Vec<RootMark>, Vec<String>) {
 /// [`current`]). Asking the volume of a network share the first time may take a while, and so
 /// may the context the first time: call it off the async runtime. The disks are listed only
 /// with `disks` (a search; an estimate needs no disk kind, and listing them asks every volume of
-/// the machine); otherwise every disk is `Unknown`. The trees are taken last, in one read, so
-/// none is held across a question or a second read.
+/// the machine); otherwise every disk is `Unknown` and no volume is asked (it is empty). The
+/// trees are taken last, in one read, so none is held across a question or a second read.
 pub(crate) fn pick(state: &AppState, disks: bool) -> (Vec<Picked>, Vec<String>) {
     let (roots, skipped) = current(state);
     if let Some(first) = roots.first() {
@@ -60,7 +60,12 @@ pub(crate) fn pick(state: &AppState, disks: bool) -> (Vec<Picked>, Vec<String>) 
     let placed: Vec<(String, String, DiskKind)> = roots
         .into_iter()
         .map(|m| {
-            let volume = state.volume_of(&m.path);
+            // An estimate needs no volume: asking may wake a sleeping or network one.
+            let volume = if disks {
+                state.volume_of(&m.path)
+            } else {
+                String::new()
+            };
             let disk = disk_of(Path::new(&m.path), &mounts);
             (m.path, volume, disk)
         })
