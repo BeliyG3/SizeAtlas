@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { Fragment, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../api/client";
 import type { DupGroup } from "../../api/duplicates";
@@ -7,12 +7,15 @@ import { rt } from "../lists/hookRuntime";
 import { copy, group } from "./dup.testSupport";
 import { Thumb } from "./Thumb";
 import { createThumbQueue } from "./thumbs";
+import { HoverZoom } from "./viewer/HoverZoom";
+import { HOVER_DELAY } from "./viewer/hover";
 
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
   ...(await import("../lists/hookRuntime")).rt.hooks,
 }));
 vi.mock("../../api/client", () => ({ api: { getThumbnail: vi.fn() } }));
+vi.mock("react-dom", () => ({ createPortal: (children: unknown) => children }));
 
 const queue = createThumbQueue();
 let shown: ReactElement;
@@ -27,6 +30,15 @@ function render(g: DupGroup) {
   }
   throw new Error("the thumbnail never settled");
 }
+
+/** What the thumbnail shows: the picture and, while hovered, the larger copy; or the icon. */
+const parts = () => {
+  if (shown.type !== Fragment) return [shown];
+  const { children } = shown.props as { children: unknown };
+  return [children].flat().filter(Boolean) as ReactElement[];
+};
+const picture = () => parts()[0];
+const popup = () => parts().find((p) => p.type === HoverZoom);
 
 async function settle(g: DupGroup) {
   for (let i = 0; i < 10; i++) await Promise.resolve();
@@ -49,8 +61,8 @@ describe("Thumb", () => {
     expect(shown.type).toBe(ItemIcon);
     await settle(first);
     expect(api.getThumbnail).toHaveBeenCalledWith(first.copies[0].refs[0]);
-    expect(shown.type).toBe("img");
-    expect((shown.props as { src: string }).src).toBe("blob:one");
+    expect(picture().type).toBe("img");
+    expect((picture().props as { src: string }).src).toBe("blob:one");
     const blob = vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob;
     expect(blob.type).toBe("image/jpeg");
     // The group lost its first copy: another file, the icon until its picture comes.
@@ -65,7 +77,7 @@ describe("Thumb", () => {
     const first = group("a");
     render(first);
     await settle(first);
-    expect(shown.type).toBe("img");
+    expect(picture().type).toBe("img");
     render({ ...first, name: "a.png" });
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:one");
     expect(shown.type).toBe(ItemIcon);
@@ -105,5 +117,94 @@ describe("Thumb", () => {
     vi.mocked(api.getThumbnail).mockClear();
     render(group("t", 0, { name: "notes.txt" }));
     expect(api.getThumbnail).not.toHaveBeenCalled();
+  });
+
+  describe("hover zoom", () => {
+    type Handlers = Record<string, (e?: unknown) => void>;
+    const listeners = new Map<string, () => void>();
+    const on = () => picture().props as Handlers;
+    const at = (clientX: number, clientY: number) => ({ clientX, clientY });
+    const rest = (g: DupGroup, ms: number) => {
+      vi.advanceTimersByTime(ms);
+      render(g);
+    };
+
+    async function ready() {
+      vi.mocked(api.getThumbnail).mockResolvedValue(new ArrayBuffer(3));
+      const g = group("a");
+      render(g);
+      await settle(g);
+      return g;
+    }
+
+    beforeEach(() => {
+      listeners.clear();
+      vi.stubGlobal("window", {
+        addEventListener: (type: string, fn: () => void) => listeners.set(type, fn),
+        removeEventListener: (type: string) => listeners.delete(type),
+      });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    });
+
+    it("shows the larger picture after the delay at the pointer, and follows it", async () => {
+      const g = await ready();
+      vi.useFakeTimers();
+      on().onPointerEnter(at(10, 20));
+      render(g);
+      rest(g, HOVER_DELAY - 1);
+      expect(popup()).toBeUndefined();
+      rest(g, 1);
+      expect(popup()?.props).toEqual({ url: "blob:one", at: { x: 10, y: 20 } });
+      on().onPointerMove(at(30, 40));
+      render(g);
+      expect(popup()?.props).toEqual({ url: "blob:one", at: { x: 30, y: 40 } });
+    });
+
+    it("restarts the delay while the pointer moves, and never shows after leaving", async () => {
+      const g = await ready();
+      vi.useFakeTimers();
+      on().onPointerEnter(at(1, 1));
+      render(g);
+      rest(g, 300);
+      on().onPointerMove(at(2, 2));
+      render(g);
+      rest(g, 300);
+      expect(popup()).toBeUndefined();
+      on().onPointerLeave();
+      render(g);
+      rest(g, 1000);
+      expect(popup()).toBeUndefined();
+    });
+
+    it.each(["scroll", "pointerdown", "keydown", "wheel"])("hides on %s", async (type) => {
+      const g = await ready();
+      vi.useFakeTimers();
+      on().onPointerEnter(at(1, 1));
+      render(g);
+      rest(g, HOVER_DELAY);
+      expect(popup()).toBeDefined();
+      listeners.get(type)?.();
+      render(g);
+      expect(popup()).toBeUndefined();
+      expect(listeners.size).toBe(0);
+    });
+
+    it("hides when the picture goes away", async () => {
+      const g = await ready();
+      vi.useFakeTimers();
+      on().onPointerEnter(at(1, 1));
+      render(g);
+      rest(g, HOVER_DELAY);
+      expect(popup()).toBeDefined();
+      render({ ...g, name: "a.png" });
+      expect(shown.type).toBe(ItemIcon);
+      rest({ ...g, name: "a.png" }, 1000);
+      expect(shown.type).toBe(ItemIcon);
+      render(g);
+      expect(popup()).toBeUndefined();
+    });
   });
 });

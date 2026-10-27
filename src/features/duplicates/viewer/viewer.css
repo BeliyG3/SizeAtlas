@@ -92,3 +92,14 @@
   padding: 24px;
   text-align: center;
 }
+
+/* The larger picture of a hovered group thumbnail: above the table and its sticky header. */
+.hover-zoom {
+  position: fixed;
+  z-index: 40;
+  object-fit: contain;
+  pointer-events: none;
+  background: var(--panel);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+}
