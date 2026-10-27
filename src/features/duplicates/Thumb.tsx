@@ -13,13 +13,15 @@ interface Props {
 
 /**
  * The picture of a group (its copies are equal, so any one of them), asked through `queue` by
- * the group's key; the icon of its category until it comes, and when there is none (not an image
+ * the group's key, from a copy not on a spinning disk if there is one (the list never wakes a
+ * sleeping external disk then); the icon of its category until it comes, and when there is none (not an image
  * the webview shows, too large, in the cloud, gone, out of view). Its object URL is revoked as
  * soon as another picture or none is shown.
  */
 export function Thumb({ group, queue, large = false }: Props) {
   const { key, name } = group;
-  const { root = "", generation = 0, id = -1 } = group.copies[0]?.refs[0] ?? {};
+  const read = group.copies.find((c) => !c.hdd) ?? group.copies[0];
+  const { root = "", generation = 0, id = -1 } = read?.refs[0] ?? {};
   const type = id < 0 ? null : mimeOf(name);
   // The picture belongs to one file read as one type: anything else shows the icon until its own
   // comes, so a revoked URL never stays on screen.

@@ -5,7 +5,7 @@ use sizeatlas_core::categories::categorize;
 use sizeatlas_core::duplicates::group::{Group, Object};
 use sizeatlas_core::duplicates::hash::Hash;
 use sizeatlas_core::duplicates::results::RootMark;
-use sizeatlas_core::duplicates::{Phase, Unread};
+use sizeatlas_core::duplicates::{DiskKind, Phase, Unread};
 
 use super::millis;
 
@@ -55,6 +55,8 @@ pub struct CopyDto {
     /// Its file id could not be told: neither kept nor removed.
     pub no_id: bool,
     pub trashable: bool,
+    /// Its first path lies on a spinning disk: a thumbnail reads another copy if it can.
+    pub hdd: bool,
 }
 
 /// Files of equal content.
@@ -118,8 +120,9 @@ pub fn hex(hash: &Hash) -> String {
 }
 
 impl GroupDto {
-    /// `group` of a result of the roots `roots` (`PathRef::root` indexes them).
-    pub fn of(group: &Group, roots: &[RootMark]) -> GroupDto {
+    /// `group` of a result of the roots `roots` on the disks `disks` (`PathRef::root` indexes
+    /// both; a root without a known disk is not spinning).
+    pub fn of(group: &Group, roots: &[RootMark], disks: &[DiskKind]) -> GroupDto {
         let name = group
             .objects
             .first()
@@ -135,12 +138,16 @@ impl GroupDto {
             category: categorize(&name) as u8,
             name,
             stale: group.stale,
-            copies: group.objects.iter().map(|o| copy(o, roots)).collect(),
+            copies: group
+                .objects
+                .iter()
+                .map(|o| copy(o, roots, disks))
+                .collect(),
         }
     }
 }
 
-fn copy(object: &Object, roots: &[RootMark]) -> CopyDto {
+fn copy(object: &Object, roots: &[RootMark], disks: &[DiskKind]) -> CopyDto {
     let root = |at: u16| &roots[usize::from(at)];
     let first = object.paths.first();
     CopyDto {
@@ -164,5 +171,6 @@ fn copy(object: &Object, roots: &[RootMark]) -> CopyDto {
         synced: object.synced,
         no_id: object.id.is_none(),
         trashable: object.trashable(),
+        hdd: first.is_some_and(|p| disks.get(usize::from(p.at.root)) == Some(&DiskKind::Hdd)),
     }
 }

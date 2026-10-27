@@ -17,7 +17,7 @@ use std::time::SystemTime;
 use sizeatlas_core::cleanup::{Known, Os};
 use sizeatlas_core::duplicates::cache::HashCache;
 use sizeatlas_core::duplicates::results::{Results, RootMark};
-use sizeatlas_core::duplicates::{self as core, Options, SearchRoot};
+use sizeatlas_core::duplicates::{self as core, DiskKind, Options, SearchRoot};
 use sizeatlas_core::scanner::epoch_nanos;
 use sizeatlas_core::tree::Query;
 
@@ -60,6 +60,8 @@ struct Inner {
     results: Option<Results>,
     /// The trash queue key of each root of `results` (one per `RootMark`).
     volumes: Vec<String>,
+    /// The disk of each root of `results`, for the copy a thumbnail reads.
+    disks: Vec<DiskKind>,
     query: String,
     system: bool,
     status: StatusDto,
@@ -112,6 +114,7 @@ impl AppState {
             })
             .collect();
         let volumes = picked.iter().map(|p| p.volume.clone()).collect();
+        let disks = picked.iter().map(|p| p.disk).collect();
         let prepared = self.searching(&picked, &query, system, |roots, opts| {
             core::prepare(roots, opts)
         });
@@ -135,6 +138,7 @@ impl AppState {
             inner.results = Some(Results::new(job, marks, previous.as_ref()));
             inner.running = Some((job, cancel.clone()));
             inner.volumes = volumes;
+            inner.disks = disks;
             inner.query = query;
             inner.system = system;
             inner.skipped = skipped;
@@ -182,7 +186,7 @@ impl AppState {
             dto.complete = r.complete;
             dto.full = delta.full;
             dto.groups = (delta.groups.iter())
-                .map(|g| GroupDto::of(g, &r.roots))
+                .map(|g| GroupDto::of(g, &r.roots, &inner.disks))
                 .collect();
             dto.removed = delta.removed.iter().map(hex).collect();
             dto.unread = r.unread.clone();

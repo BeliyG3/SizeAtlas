@@ -71,6 +71,21 @@ describe("Thumb", () => {
     expect(shown.type).toBe(ItemIcon);
   });
 
+  it("reads a copy that is not on a spinning disk, if there is one", async () => {
+    vi.mocked(api.getThumbnail).mockResolvedValue(new ArrayBuffer(3));
+    const spinning = { root: "E:\\", generation: 3, id: 1 };
+    const g = group("h", 0, {
+      copies: [copy(1, { hdd: true, refs: [spinning] }), copy(2)],
+    });
+    render(g);
+    await settle(g);
+    expect(api.getThumbnail).toHaveBeenCalledWith(g.copies[1].refs[0]);
+    rt.state.slots = [];
+    const all = group("i", 0, { copies: [copy(1, { hdd: true, refs: [spinning] })] });
+    render(all);
+    expect(api.getThumbnail).toHaveBeenLastCalledWith(spinning);
+  });
+
   it("keeps the icon for an empty answer, a failure or a name of no image type", async () => {
     vi.mocked(api.getThumbnail).mockResolvedValueOnce(new ArrayBuffer(0));
     const empty = group("e");

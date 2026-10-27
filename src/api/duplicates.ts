@@ -43,6 +43,8 @@ export interface DupCopy {
   /** Its file id could not be told: neither kept nor removed. */
   noId: boolean;
   trashable: boolean;
+  /** Its first path lies on a spinning disk: a thumbnail reads another copy if it can. */
+  hdd: boolean;
 }
 
 /** Files of equal content. */

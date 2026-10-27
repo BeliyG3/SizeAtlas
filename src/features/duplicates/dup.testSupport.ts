@@ -12,6 +12,7 @@ export const copy = (id: number, more: Partial<DupCopy> = {}): DupCopy => ({
   synced: false,
   noId: false,
   trashable: true,
+  hdd: false,
   ...more,
 });
 
