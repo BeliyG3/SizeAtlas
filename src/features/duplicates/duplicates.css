@@ -51,6 +51,7 @@
 .dup-title {
   display: flex;
   flex: none;
+  align-items: center;
   gap: 12px;
   margin: 0;
   padding: 6px 12px;
@@ -76,15 +77,37 @@
   object-fit: contain;
 }
 
-/* The picture of the group above its copies. */
-.dup-preview {
+/* Open, Open with…, Full screen and Separate window at the end of the title line. */
+.dup-actions {
+  display: flex;
   flex: none;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.dup-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* The picture of the group above its copies: centered, never blown up. */
+.dup-preview {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 0;
   padding: 0 12px 6px;
 }
 
 .dup-picture {
-  display: block;
-  max-inline-size: min(100%, 240px);
-  max-block-size: 160px;
+  max-inline-size: 100%;
+  max-block-size: 100%;
   object-fit: contain;
+}
+
+.dup-preview > .icon {
+  inline-size: 48px;
+  block-size: 48px;
 }

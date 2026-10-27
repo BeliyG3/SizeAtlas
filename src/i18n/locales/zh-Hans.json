@@ -212,6 +212,7 @@
   "split.drives": "驱动器列表的高度",
   "split.charts": "图表区域的高度",
   "split.groups": "分组列表的宽度",
+  "split.preview": "图片的高度",
   "contents.label": "当前文件夹的内容",
   "contents.empty": "此文件夹为空。",
   "contents.noFolders": "此处没有文件夹。",
@@ -362,6 +363,8 @@
   "dup.synced": "已同步：删除后会在你的所有设备上删除",
   "dup.noId": "无法确定这是否为独立文件，此处不会删除",
   "dup.groupStale": "已过期，请重新查找",
+  "dup.view.full": "全屏",
+  "dup.view.window": "在单独窗口中打开",
   "dup.lastCopy": "系统文件夹之外至少要保留一个副本。",
   "dup.searching": "请等待查找结束，或将其取消。"
 }

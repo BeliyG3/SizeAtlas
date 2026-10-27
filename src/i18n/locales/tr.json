@@ -232,6 +232,7 @@
   "split.drives": "Sürücüler panelinin yüksekliği",
   "split.charts": "Grafik alanının yüksekliği",
   "split.groups": "Grup listesinin genişliği",
+  "split.preview": "Resmin yüksekliği",
   "contents.label": "Geçerli klasörün içeriği",
   "contents.empty": "Bu klasör boş.",
   "contents.noFolders": "Burada klasör yok.",
@@ -393,6 +394,8 @@
   "dup.synced": "Eşitlendi: silerseniz tüm cihazlarınızdan silinir",
   "dup.noId": "Ayrı bir dosya olup olmadığı anlaşılamadı — burada silinmez",
   "dup.groupStale": "Güncel değil — yeniden arayın",
+  "dup.view.full": "Tam ekran",
+  "dup.view.window": "Ayrı pencerede",
   "dup.lastCopy": "Sistem klasörlerinin dışında en az bir kopya kalmalı.",
   "dup.searching": "Aramanın bitmesini bekleyin veya iptal edin."
 }

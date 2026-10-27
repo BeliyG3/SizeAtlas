@@ -212,6 +212,7 @@
   "split.drives": "Tinggi panel drive",
   "split.charts": "Tinggi area diagram",
   "split.groups": "Lebar daftar grup",
+  "split.preview": "Tinggi gambar",
   "contents.label": "Isi folder saat ini",
   "contents.empty": "Folder ini kosong.",
   "contents.noFolders": "Tidak ada folder di sini.",
@@ -362,6 +363,8 @@
   "dup.synced": "Disinkronkan: menghapusnya akan menghapusnya di semua perangkat Anda",
   "dup.noId": "Tidak dapat memastikan apakah ini file terpisah — tidak dihapus di sini",
   "dup.groupStale": "Kedaluwarsa — cari lagi",
+  "dup.view.full": "Layar penuh",
+  "dup.view.window": "Di jendela terpisah",
   "dup.lastCopy": "Setidaknya satu salinan di luar folder sistem harus tetap ada.",
   "dup.searching": "Tunggu pencarian selesai, atau batalkan."
 }

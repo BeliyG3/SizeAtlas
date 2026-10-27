@@ -252,6 +252,7 @@
   "split.drives": "Hauteur du panneau des lecteurs",
   "split.charts": "Hauteur de la zone des graphiques",
   "split.groups": "Largeur de la liste des groupes",
+  "split.preview": "Hauteur de l’image",
   "contents.label": "Contenu du dossier actuel",
   "contents.empty": "Ce dossier est vide.",
   "contents.noFolders": "Aucun dossier ici.",
@@ -424,6 +425,8 @@
   "dup.synced": "Synchronisé : sa suppression le supprime sur tous vos appareils",
   "dup.noId": "Impossible de savoir s’il s’agit d’un fichier distinct : non supprimé ici",
   "dup.groupStale": "Obsolète : relancez la recherche",
+  "dup.view.full": "Plein écran",
+  "dup.view.window": "Dans une fenêtre séparée",
   "dup.lastCopy": "Au moins une copie en dehors des dossiers système doit rester.",
   "dup.searching": "Attendez la fin de la recherche ou annulez-la."
 }

@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../api/client";
 import { noMarks } from "../contents/marks";
 import { rt } from "../lists/hookRuntime";
+import { SplitPane } from "../shell/SplitPane";
 import { copy, group } from "./dup.testSupport";
 import { GroupDetail, type CopyPick } from "./GroupDetail";
-import { createThumbQueue } from "./thumbs";
+import { GroupTitle } from "./GroupPreview";
 
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
@@ -18,15 +19,16 @@ vi.mock("../../i18n/react", () => ({
     lang: "en",
   }),
 }));
-vi.mock("../../settings/react", () => ({ useSize: () => (n: number) => `${n} B` }));
 vi.mock("../../api/client", () => ({ api: { reveal: vi.fn() } }));
 
-type Props = { role?: string; children?: ReactNode; className?: string };
+type Props = { role?: string; children?: ReactNode; first?: ReactNode; second?: ReactNode };
+/** The elements of a tree, the panes of a split among them. */
 function elements(node: ReactNode): ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(elements);
   if (!node || typeof node !== "object" || !("props" in node)) return [];
   const element = node as ReactElement<Props>;
-  return [element, ...elements(element.props.children)];
+  const { children, first, second } = element.props;
+  return [element, ...elements(children), ...elements(first), ...elements(second)];
 }
 const roles = (tree: ReactNode) => elements(tree).flatMap((e) => e.props.role ?? []);
 
@@ -34,17 +36,20 @@ const onPick = vi.fn();
 const onTrash = vi.fn();
 const onMenu = vi.fn();
 const onFail = vi.fn();
-const queue = createThumbQueue();
+const onFull = vi.fn();
+const onWindow = vi.fn();
 const pick = (ids: number[] = [], cursor: number | null = null): CopyPick => ({
   marks: { ...noMarks("k"), ids: new Set(ids) },
   cursor,
 });
 
-function detail(at: CopyPick = pick(), copies = [copy(1), copy(2), copy(3)]) {
-  const props = { onPick, onTrash, onMenu, onFail, queue };
+function detail(at: CopyPick = pick(), copies = [copy(1), copy(2), copy(3)], name = "a.jpg") {
+  const props = { onPick, onTrash, onMenu, onFail, onFull, onWindow };
+  const g = group("a", 10, { copies, name });
   rt.state.at = 0;
-  return GroupDetail({ group: group("a", 10, { copies }), pick: at, ...props }) as ReactElement;
+  return GroupDetail({ group: g, pick: at, picture: { state: "none" }, ...props }) as ReactElement;
 }
+const find = (tree: ReactElement, type: unknown) => elements(tree).find((e) => e.type === type)!;
 
 /** Presses `key` on the copies table. */
 function press(tree: ReactElement, key: string, more: Partial<KeyboardEvent> = {}) {
@@ -79,14 +84,20 @@ describe("the copies of a group", () => {
     expect(roles(tree)).toContain("gridcell");
   });
 
-  it("writes the count of copies with the number format of the language", () => {
-    const copies = Array.from({ length: 1234 }, (_, i) => copy(i + 1, { path: `C:\\f${i}.jpg` }));
-    const tree = detail(pick(), copies);
-    expect(JSON.stringify(tree)).toContain('dup.copies {\\"count\\":1234,\\"copies\\":\\"1,234\\"');
+  it("opens the copy under the cursor from the title, else the first in table order", () => {
+    const copies = [copy(1, { path: "C:\\b.jpg" }), copy(2, { path: "C:\\a.jpg" }), copy(3)];
+    const target = (tree: ReactElement) =>
+      (find(tree, GroupTitle).props as { target?: unknown }).target;
+    expect(target(detail(pick([], 2), copies))).toBe(copies[2]);
+    // By path, A to Z: a.jpg (copy 2) comes first.
+    expect(target(detail(pick(), copies))).toBe(copies[1]);
   });
 
-  it("keeps the title on one line that ends in an ellipsis", () => {
-    expect(elements(detail()).find((e) => e.props.className === "dup-name")).toBeDefined();
+  it("hides the picture of a name of no image type, in the same split", () => {
+    const collapse = (tree: ReactElement) =>
+      (find(tree, SplitPane).props as { collapse?: string }).collapse;
+    expect(collapse(detail())).toBeUndefined();
+    expect(collapse(detail(pick(), undefined, "a.txt"))).toBe("first");
   });
 
   it("moves the cursor with the arrows and marks a range with Shift", () => {

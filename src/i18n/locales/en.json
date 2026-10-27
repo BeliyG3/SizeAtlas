@@ -232,6 +232,7 @@
   "split.drives": "Height of the drives panel",
   "split.charts": "Height of the chart area",
   "split.groups": "Width of the group list",
+  "split.preview": "Height of the picture",
   "contents.label": "Contents of the current folder",
   "contents.empty": "This folder is empty.",
   "contents.noFolders": "No folders here.",
@@ -393,6 +394,8 @@
   "dup.synced": "Synced: deleting it deletes it on all your devices",
   "dup.noId": "Could not tell if this is a separate file — not deleted here",
   "dup.groupStale": "Out of date — find again",
+  "dup.view.full": "Full screen",
+  "dup.view.window": "Separate window",
   "dup.lastCopy": "At least one copy outside the system folders has to stay.",
   "dup.searching": "Wait for the search to end, or cancel it."
 }

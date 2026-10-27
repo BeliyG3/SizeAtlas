@@ -272,6 +272,7 @@
   "split.drives": "Wysokość panelu dysków",
   "split.charts": "Wysokość obszaru wykresów",
   "split.groups": "Szerokość listy grup",
+  "split.preview": "Wysokość obrazu",
   "contents.label": "Zawartość bieżącego folderu",
   "contents.empty": "Ten folder jest pusty.",
   "contents.noFolders": "Brak folderów.",
@@ -455,6 +456,8 @@
   "dup.synced": "Zsynchronizowany: usunięcie go usuwa go na wszystkich urządzeniach",
   "dup.noId": "Nie można ustalić, czy to osobny plik — nie jest tu usuwany",
   "dup.groupStale": "Nieaktualne — wyszukaj ponownie",
+  "dup.view.full": "Pełny ekran",
+  "dup.view.window": "W osobnym oknie",
   "dup.lastCopy": "Co najmniej jedna kopia poza folderami systemowymi musi zostać.",
   "dup.searching": "Poczekaj na koniec wyszukiwania lub anuluj je."
 }

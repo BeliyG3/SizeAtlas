@@ -232,6 +232,7 @@
   "split.drives": "Höhe des Laufwerksbereichs",
   "split.charts": "Höhe des Diagrammbereichs",
   "split.groups": "Breite der Gruppenliste",
+  "split.preview": "Höhe des Bildes",
   "contents.label": "Inhalt des aktuellen Ordners",
   "contents.empty": "Dieser Ordner ist leer.",
   "contents.noFolders": "Hier gibt es keine Ordner.",
@@ -393,6 +394,8 @@
   "dup.synced": "Synchronisiert: Beim Löschen wird die Datei auf allen Ihren Geräten gelöscht",
   "dup.noId": "Es ließ sich nicht feststellen, ob dies eine eigene Datei ist – hier nicht gelöscht",
   "dup.groupStale": "Veraltet – erneut suchen",
+  "dup.view.full": "Vollbild",
+  "dup.view.window": "In eigenem Fenster",
   "dup.lastCopy": "Mindestens eine Kopie außerhalb der Systemordner muss bleiben.",
   "dup.searching": "Warten Sie, bis die Suche beendet ist, oder brechen Sie sie ab."
 }

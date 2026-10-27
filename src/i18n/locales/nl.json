@@ -232,6 +232,7 @@
   "split.drives": "Hoogte van het stationspaneel",
   "split.charts": "Hoogte van het grafiekgebied",
   "split.groups": "Breedte van de groepenlijst",
+  "split.preview": "Hoogte van de afbeelding",
   "contents.label": "Inhoud van de huidige map",
   "contents.empty": "Deze map is leeg.",
   "contents.noFolders": "Hier staan geen mappen.",
@@ -393,6 +394,8 @@
   "dup.synced": "Gesynchroniseerd: verwijderen verwijdert het op al je apparaten",
   "dup.noId": "Kon niet vaststellen of dit een apart bestand is — hier niet verwijderd",
   "dup.groupStale": "Verouderd — zoek opnieuw",
+  "dup.view.full": "Volledig scherm",
+  "dup.view.window": "In apart venster",
   "dup.lastCopy": "Minstens één kopie buiten de systeemmappen moet blijven.",
   "dup.searching": "Wacht tot de zoekopdracht klaar is, of annuleer deze."
 }

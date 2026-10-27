@@ -212,6 +212,7 @@
   "split.drives": "Chiều cao bảng ổ đĩa",
   "split.charts": "Chiều cao vùng biểu đồ",
   "split.groups": "Độ rộng danh sách nhóm",
+  "split.preview": "Chiều cao của ảnh",
   "contents.label": "Nội dung thư mục hiện tại",
   "contents.empty": "Thư mục này trống.",
   "contents.noFolders": "Không có thư mục nào ở đây.",
@@ -362,6 +363,8 @@
   "dup.synced": "Đã đồng bộ: xóa tệp này sẽ xóa trên mọi thiết bị của bạn",
   "dup.noId": "Không xác định được đây có phải tệp riêng biệt không — không xóa ở đây",
   "dup.groupStale": "Đã cũ — hãy tìm lại",
+  "dup.view.full": "Toàn màn hình",
+  "dup.view.window": "Trong cửa sổ riêng",
   "dup.lastCopy": "Phải giữ lại ít nhất một bản sao bên ngoài các thư mục hệ thống.",
   "dup.searching": "Hãy đợi tìm kiếm kết thúc, hoặc hủy nó."
 }

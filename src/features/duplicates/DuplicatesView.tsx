@@ -24,6 +24,7 @@ import { DUP_SYSTEM_KEY, parseDupSystem } from "./query";
 import { createThumbQueue } from "./thumbs";
 import { useDupTrash, type DupRuns } from "./useDupTrash";
 import { useDuplicates } from "./useDuplicates";
+import { useImageUrl } from "./viewer/useImageUrl";
 import "./duplicates.css";
 
 /** Width of the group list until its border is moved. */
@@ -98,6 +99,7 @@ export function DuplicatesView(props: Props) {
   const [picked, setPicked] = useState<string | null>(null);
   // A change without the picked group shows the first one.
   const selected = groups.find((g) => g.key === picked) ?? groups[0] ?? null;
+  const picture = useImageUrl(selected, queue);
   // Another order keeps the group shown, and so its marks, even one shown as the first.
   const shownKey = selected?.key ?? null;
   const onSortGroups = useCallback(
@@ -193,7 +195,10 @@ export function DuplicatesView(props: Props) {
               onPick={setPick}
               onTrash={trash}
               onMenu={(at, x, y) => setMenu({ key, at, x, y })}
-              queue={queue}
+              picture={picture}
+              // Not wired yet: the full-screen view and the viewer window.
+              onFull={() => {}}
+              onWindow={() => {}}
               onFail={onFail}
             />
           }

@@ -252,6 +252,7 @@
   "split.drives": "Altura do painel de unidades",
   "split.charts": "Altura da área de gráficos",
   "split.groups": "Largura da lista de grupos",
+  "split.preview": "Altura da imagem",
   "contents.label": "Conteúdo da pasta atual",
   "contents.empty": "Esta pasta está vazia.",
   "contents.noFolders": "Nenhuma pasta aqui.",
@@ -424,6 +425,8 @@
   "dup.synced": "Sincronizado: excluir aqui exclui em todos os seus dispositivos",
   "dup.noId": "Não foi possível saber se é um arquivo separado — não é excluído aqui",
   "dup.groupStale": "Desatualizado — pesquise de novo",
+  "dup.view.full": "Tela cheia",
+  "dup.view.window": "Em outra janela",
   "dup.lastCopy": "Pelo menos uma cópia fora das pastas do sistema precisa ficar.",
   "dup.searching": "Aguarde o fim da pesquisa ou cancele-a."
 }

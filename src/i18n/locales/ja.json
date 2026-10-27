@@ -212,6 +212,7 @@
   "split.drives": "ドライブ一覧の高さ",
   "split.charts": "グラフ領域の高さ",
   "split.groups": "グループ一覧の幅",
+  "split.preview": "画像の高さ",
   "contents.label": "現在のフォルダーの内容",
   "contents.empty": "このフォルダーは空です。",
   "contents.noFolders": "フォルダーがありません。",
@@ -362,6 +363,8 @@
   "dup.synced": "同期済み: 削除するとすべてのデバイスで削除されます",
   "dup.noId": "別のファイルかどうか判断できません — ここでは削除されません",
   "dup.groupStale": "古い情報 — もう一度検索してください",
+  "dup.view.full": "全画面表示",
+  "dup.view.window": "別ウィンドウで表示",
   "dup.lastCopy": "システムフォルダー以外に、少なくとも 1 つのコピーを残す必要があります。",
   "dup.searching": "検索が終わるまで待つか、キャンセルしてください。"
 }

@@ -1,10 +1,9 @@
 import { Fragment, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "../../api/client";
 import type { DupCopy, DupGroup } from "../../api/duplicates";
-import { formatCount, formatDate } from "../../format";
+import { formatDate } from "../../format";
 import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
-import { useSize } from "../../settings/react";
 import { useStored } from "../../settings/storage";
 import { GridHeader } from "../columns/GridHeader";
 import { useGridColumns } from "../columns/useGridColumns";
@@ -12,6 +11,7 @@ import { mark, markAll, markHow, targets, type MarkHow, type Marks } from "../co
 import { HEADER_HEIGHT, ROW_HEIGHT } from "../contents/pages";
 import { tableKeyDown, type RowActions } from "../contents/tableView";
 import { scrollToRow } from "../contents/useCursor";
+import { SplitPane } from "../shell/SplitPane";
 import {
   COPY_GRID,
   COPY_SORTS,
@@ -24,8 +24,9 @@ import {
   shownSort,
   type CopyColumn,
 } from "./columns";
-import { Thumb } from "./Thumb";
-import { mimeOf, type ThumbQueue } from "./thumbs";
+import { GroupTitle, PreviewPicture } from "./GroupPreview";
+import { mimeOf } from "./thumbs";
+import type { Picture } from "./viewer/useImageUrl";
 import "../contents/contents.css";
 
 /** Why a copy is never removed here, or what removing it means. */
@@ -54,7 +55,11 @@ interface Props {
   onTrash: (indices: number[]) => void;
   /** The menu of the copies at these indices, at viewport coordinates. */
   onMenu: (indices: number[], x: number, y: number) => void;
-  queue: ThumbQueue;
+  /** The picture of the group (`useImageUrl`). */
+  picture: Picture;
+  /** The picture full screen, and in a window of its own. */
+  onFull: () => void;
+  onWindow: () => void;
   onFail: (e: unknown) => void;
 }
 
@@ -63,9 +68,9 @@ interface Props {
  * moved through like those of any table; a double click or Enter shows the copy in the file
  * manager.
  */
-export function GroupDetail({ group, pick, onPick, onTrash, onMenu, queue, onFail }: Props) {
+export function GroupDetail(props: Props) {
+  const { group, pick, onPick, onTrash, onMenu, picture, onFull, onWindow, onFail } = props;
   const { t, lang } = useT();
-  const size = useSize();
   const count = group.copies.length;
   const body = useRef<HTMLDivElement>(null);
   const layout = useGridColumns(body, COPY_GRID);
@@ -140,75 +145,79 @@ export function GroupDetail({ group, pick, onPick, onTrash, onMenu, queue, onFai
       ),
     };
   };
+  // ponytail: every copy is rendered; virtualize if groups of thousands of copies show up.
+  const table = (
+    <div
+      className="contents dup-table"
+      ref={body}
+      role="grid"
+      aria-label={t("dup.colCopies")}
+      aria-multiselectable
+      aria-rowcount={count + 1}
+      aria-colcount={layout.columns.length}
+      aria-activedescendant={row === null ? undefined : `dcopy-${row}`}
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <GridHeader layout={layout} sort={sort} canSort={sortable} onSort={(c) => onSort(c.id)} />
+      <div className="crows" style={{ height: count * ROW_HEIGHT, width: layout.width }}>
+        {order.map((copyAt, index) => {
+          const copy = group.copies[copyAt];
+          const marked = marks.ids.has(copyAt);
+          const state = `${index % 2 ? " alt" : ""}${marked ? " selected" : ""}${index === row ? " cursor" : ""}`;
+          const shown = cells(copy);
+          return (
+            <div
+              key={copy.path}
+              id={`dcopy-${index}`}
+              data-index={index}
+              role="row"
+              aria-rowindex={index + 2}
+              aria-selected={marked}
+              className={`crow${state}`}
+              style={{
+                top: index * ROW_HEIGHT,
+                width: layout.width,
+                gridTemplateColumns: layout.template,
+              }}
+              onClick={(e) => mouse.point(index, markHow(e))}
+              onDoubleClick={() => reveal(index)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                mouse.menuAt(index, e.clientX, e.clientY);
+              }}
+            >
+              {layout.ids.map((id) => (
+                <Fragment key={id}>{shown[id]}</Fragment>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
   return (
     <div className="dup-detail">
-      <p className="dup-title">
-        <span className="dup-name" dir="auto">
-          {t("dup.copies", {
-            count,
-            copies: formatCount(count, lang),
-            name: group.name,
-            size: size(group.size),
-          })}
-        </span>
-        {group.stale && <span className="tag dup-warn">{t("dup.groupStale")}</span>}
-      </p>
-      {mimeOf(group.name) && (
-        <div className="dup-preview">
-          <Thumb group={group} queue={queue} large />
-        </div>
-      )}
-      {/* ponytail: every copy is rendered; virtualize if groups of thousands of copies show up. */}
-      <div
-        className="contents dup-table"
-        ref={body}
-        role="grid"
-        aria-label={t("dup.colCopies")}
-        aria-multiselectable
-        aria-rowcount={count + 1}
-        aria-colcount={layout.columns.length}
-        aria-activedescendant={row === null ? undefined : `dcopy-${row}`}
-        tabIndex={0}
-        onKeyDown={onKeyDown}
-        onContextMenu={(e) => e.preventDefault()}
-      >
-        <GridHeader layout={layout} sort={sort} canSort={sortable} onSort={(c) => onSort(c.id)} />
-        <div className="crows" style={{ height: count * ROW_HEIGHT, width: layout.width }}>
-          {order.map((copyAt, index) => {
-            const copy = group.copies[copyAt];
-            const marked = marks.ids.has(copyAt);
-            const state = `${index % 2 ? " alt" : ""}${marked ? " selected" : ""}${index === row ? " cursor" : ""}`;
-            const shown = cells(copy);
-            return (
-              <div
-                key={copy.path}
-                id={`dcopy-${index}`}
-                data-index={index}
-                role="row"
-                aria-rowindex={index + 2}
-                aria-selected={marked}
-                className={`crow${state}`}
-                style={{
-                  top: index * ROW_HEIGHT,
-                  width: layout.width,
-                  gridTemplateColumns: layout.template,
-                }}
-                onClick={(e) => mouse.point(index, markHow(e))}
-                onDoubleClick={() => reveal(index)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  mouse.menuAt(index, e.clientX, e.clientY);
-                }}
-              >
-                {layout.ids.map((id) => (
-                  <Fragment key={id}>{shown[id]}</Fragment>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <GroupTitle
+        group={group}
+        target={group.copies[cursor ?? order[0]]}
+        onFull={onFull}
+        onWindow={onWindow}
+        onFail={onFail}
+      />
+      {/* The same split for every group, so the table in it is never recreated. */}
+      <SplitPane
+        direction="column"
+        sized="first"
+        storageKey="sizeatlas.split.dupPreview"
+        defaultSize={170}
+        label={t("split.preview")}
+        collapse={mimeOf(group.name) ? undefined : "first"}
+        first={<PreviewPicture group={group} picture={picture} onFull={onFull} />}
+        second={table}
+      />
     </div>
   );
 }
