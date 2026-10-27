@@ -2,7 +2,7 @@
 
 ![SizeAtlas, a free disk usage analyzer for Windows, macOS and Linux](assets/cover.png)
 
-**Contents:** [What it does](#what-it-does) · [Install](#install) · [Languages](#languages) · [Using SizeAtlas](#using-sizeatlas) · [Benchmark](#benchmark) · [How sizes are counted](#how-sizes-are-counted) · [Moving to the trash](#moving-to-the-trash) · [Cleaning up](#cleaning-up) · [Saved scans](#saved-scans) · [Updates](#updates) · [Building](#building) · [Releases](#releases) · [License](#license)
+**Contents:** [What it does](#what-it-does) · [Install](#install) · [Languages](#languages) · [Using SizeAtlas](#using-sizeatlas) · [Benchmark](#benchmark) · [How sizes are counted](#how-sizes-are-counted) · [Moving to the trash](#moving-to-the-trash) · [Cleaning up](#cleaning-up) · [Finding duplicates](#finding-duplicates) · [Saved scans](#saved-scans) · [Updates](#updates) · [Building](#building) · [Releases](#releases) · [License](#license)
 
 A cross-platform disk usage analyzer: see which folders and file types take up your disk space.
 
@@ -20,6 +20,7 @@ A cross-platform disk usage analyzer: see which folders and file types take up y
 - Search by name or extension, and filter the results by size, date and type.
 - Refresh a single folder after a change, and move files and folders to the trash after a confirmation.
 - Find known junk (caches, old temporary files, crash dumps) in two lists, **Can be cleaned** and **Check before deleting**, and move it to the trash or, on an explicit command, delete it for good.
+- Find exact copies of files across all open drives and folders, and move the extra ones to the trash.
 - Open items, show their properties and export the table to CSV. On Windows, restart as administrator to read every folder.
 - The drives and folders that were open reopen at the next start.
 
@@ -191,6 +192,32 @@ Known limitations:
 - Without administrator rights, SizeAtlas cannot read the command lines of programs that run as administrator, so npm, pip or Gradle started that way may look closed.
 - Running apps are read once per request, by process name, not by open files. An app started during a long request, or a file kept open in an old `%TEMP%` folder, can leave a row partly deleted; SizeAtlas then says what stayed.
 - A folder deleted for good only in part keeps its old size in the tree until you refresh it.
+
+## Finding duplicates
+
+The **Duplicate files** table mode looks for exact copies of a file across all open drives and folders together. It scans nothing itself: it uses the trees already in memory, and it reads files only when you press **Find**. Before that it shows how many files, and how many bytes, it would compare. Groups are on the left, the largest saving first; the copies of the selected group are on the right, with their full paths and a thumbnail.
+
+- **What is compared:** regular files of 4 KB or more. Files of the same length are compared by their first and last bytes, and the ones that still match are read in full and compared by a BLAKE3 hash. A group holds only files with identical contents. Groups appear as the full comparison confirms them. **Cancel** keeps what was found, and **Continue** picks up from there.
+- **Filters pick starting points, they do not cut groups:** the search field here is a filter, not the usual search. A group is listed if at least one of its files matches, and it shows all of its copies, so `older:1y` or a name does not split a pair of copies. A size condition applies to every copy, because copies have the same length. The field starts as `type:image`; clear it to look at every type.
+- **Folders left out:** system and program folders (on Windows `Windows`, `Program Files`, `ProgramData` and `AppData`; on macOS `/System`, `/Library`, `/Applications`, `~/Library` and the inside of app and photo-library packages; on Linux `/usr`, `/opt`, `/var` and similar), `node_modules`, `.git`, Python environments, `steamapps` and the dot-folders of your home folder. iCloud Drive on macOS is protected like `~/Library`. **Include system folders** adds them to the search; their copies are tagged and never go to the trash. Programs and games in other folders are not recognized.
+- **One file, one copy:** a path reached through two overlapping roots (such as `C:\` and a folder on it) counts once. Hard links are one file and appear once. A file that also has links outside the open drives is tagged, does not count as freed space and is not removed here. A clone of a volume keeps the same file ids, so its files are not merged with the originals and are not removed here either.
+- **Not read:** cloud-only files are never downloaded. They are skipped, and the list counts them with the files that changed or could not be read. A root that is still being scanned is not included, and the list says so. If the trees change while the search runs (a rescan, a refresh, a removal), the search cancels itself, and a finished result is tagged as out of date. Press **Find** again.
+- **Can be freed:** for each group, the size on disk of all copies except the largest. It says "up to", because APFS and ReFS clones, which share their data, are not recognized.
+
+**Removing copies.** Mark the copies to remove in a group and choose **Move to the trash…**. They go to the trash only, never for good, and you can restore them. One copy always stays: the removal is refused unless at least one copy is left that is not marked, not in a system folder and known to be a separate file. The rules of [Moving to the trash](#moving-to-the-trash) apply as well.
+
+- The copy that stays is read in full again, and its hash must still match, before anything moves. On Windows it is held open without write or delete sharing until the last copy has moved, so no program can change, rename or delete it meanwhile (a change of its times is still noticed and reported). macOS and Linux have no such lock: right after the batch SizeAtlas compares its length, time and identity, and a mismatch is reported as a warning. The moved copies are in the trash and can be restored.
+- The copies to remove are checked by length and modification time, not by content. An overwrite that keeps both is not noticed, but the copy is in the trash and can be restored.
+- A removal waits for earlier removals on the drives of its copies and of the copy that stays. If they changed those roots, it is refused with **Find again**, and the search must be repeated.
+- Thumbnails are shown for the formats the web view of the app displays: JPEG, PNG, GIF, WebP, BMP, SVG, ICO and AVIF. Other files get an icon of their type.
+
+Known limitations:
+
+- Reading from a network drive that has stopped answering may not be cancelled at once.
+- Stopping a removal that waits for a drive's queue takes effect when the queue's turn comes, not at once.
+- A removal waits for removals in every open root that holds the copy that stays. The one exception is a root the search left out because it was being scanned, whose drive SizeAtlas has not looked up yet. There, on Windows the held copy still cannot be deleted; elsewhere the warning above applies.
+- The result stays in memory until you close the app.
+- Only exact copies are found, not resized or re-saved pictures. Files under 4 KB are not compared.
 
 ## Saved scans
 
