@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useT } from "../../i18n/react";
+import { words } from "../search/useCommittedQuery";
 import { serializeShown } from "../../settings/settings";
 import { useStored } from "../../settings/storage";
 import { SplitPane } from "../shell/SplitPane";
@@ -16,18 +17,22 @@ import "./duplicates.css";
 const LIST_WIDTH = 420;
 
 interface Props {
-  /** The words of the search field (committed): they pick the files whose copies are looked for. */
+  /** The words of the search field (committed): what the estimate is made for. */
   query: string;
+  /** The text in the field now: what Find searches for (the committed words lag behind it). */
+  field: string;
+  /** Commits the words Find searches for, so the estimate catches up at once. */
+  onCommit: (words: string) => void;
   /** Changes whenever an open root does. */
   rootsKey: string;
   onFail: (e: unknown) => void;
 }
 
 /** The duplicates mode: the search above, the groups on the left, the copies of one on the right. */
-export function DuplicatesView({ query, rootsKey, onFail }: Props) {
+export function DuplicatesView({ query, field, onCommit, rootsKey, onFail }: Props) {
   const { t } = useT();
   const [system, setSystem] = useStored(DUP_SYSTEM_KEY, parseDupSystem, serializeShown);
-  const { state, status, estimate, find, cancel } = useDuplicates({
+  const { state, status, estimate, finding, find, cancel } = useDuplicates({
     query,
     system,
     rootsKey,
@@ -38,6 +43,11 @@ export function DuplicatesView({ query, rootsKey, onFail }: Props) {
   // A change without the picked group shows the first one.
   const selected = groups.find((g) => g.key === picked) ?? groups[0] ?? null;
   const empty = emptyKey({ estimate, state, status });
+  const text = words(field);
+  const onFind = () => {
+    onCommit(text);
+    find(text);
+  };
 
   return (
     <div className="dups">
@@ -45,10 +55,11 @@ export function DuplicatesView({ query, rootsKey, onFail }: Props) {
         estimate={estimate}
         state={state}
         status={status}
-        query={query}
+        query={text}
         system={system}
+        finding={finding}
         onSystem={setSystem}
-        onFind={find}
+        onFind={onFind}
         onCancel={cancel}
       />
       {selected ? (

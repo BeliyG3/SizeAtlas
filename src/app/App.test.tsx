@@ -253,6 +253,14 @@ describe("App search wiring", () => {
     expect(setState).toHaveBeenCalledWith("");
   });
 
+  it("starts in the stored duplicates mode with the stored search shown and committed", () => {
+    stored.mode = "duplicates";
+    render(false, "queued", 0);
+    const browser = findElement(App(), Browser);
+    expect(browser?.props.field).toBe("type:image");
+    expect(browser?.props.query).toBe("type:image");
+  });
+
   it("keeps the search of the duplicates while they are shown, and only then", () => {
     render(false, "queued", 0);
     const toolbar = () => App().props.children[1] as ReactElement<ComponentProps<typeof Toolbar>>;

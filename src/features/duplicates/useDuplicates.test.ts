@@ -109,13 +109,31 @@ describe("useDuplicates", () => {
     expect(api.estimateDuplicates).toHaveBeenCalledTimes(1);
   });
 
-  it("starts a search with the query and fetches its result", async () => {
+  it("starts a search for the words it is given and fetches its result", async () => {
     render();
     await settle();
     vi.mocked(api.findDuplicates).mockResolvedValue(3);
-    shown.find();
-    expect(api.findDuplicates).toHaveBeenCalledWith("type:image", false);
+    shown.find("*.png");
+    expect(api.findDuplicates).toHaveBeenCalledWith("*.png", false);
     await settle();
     expect(api.getDuplicates).toHaveBeenLastCalledWith(2, 5);
+  });
+
+  it("starts one search for a double click: Find waits for the first to be taken", async () => {
+    render();
+    await settle();
+    let started!: (job: number) => void;
+    vi.mocked(api.findDuplicates).mockReturnValue(new Promise((resolve) => (started = resolve)));
+    shown.find("type:image");
+    render();
+    expect(shown.finding).toBe(true);
+    shown.find("type:image");
+    expect(api.findDuplicates).toHaveBeenCalledTimes(1);
+    started(3);
+    await settle();
+    expect(shown.finding).toBe(false);
+    vi.mocked(api.findDuplicates).mockResolvedValue(4);
+    shown.find("type:image");
+    expect(api.findDuplicates).toHaveBeenCalledTimes(2);
   });
 });

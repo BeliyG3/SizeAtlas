@@ -30,6 +30,10 @@ interface Props {
    * duplicates, whose search they filter.
    */
   query: string;
+  /** The text in the search field now: Find of the duplicates searches it. */
+  field: string;
+  /** Commits words to the search at once (as Enter does). */
+  onCommitQuery: (words: string) => void;
   /** Enter or a double click on a folder of the results: the search is over (stable). */
   onLeaveSearch: () => void;
   sources: Sources | null;
@@ -91,6 +95,8 @@ export function Browser({
   selection,
   mode,
   query,
+  field,
+  onCommitQuery,
   onLeaveSearch,
   sources,
   progress,
@@ -186,7 +192,15 @@ export function Browser({
   let content: ReactNode;
   if (mode === "duplicates") {
     // Of every open root, not of the selected one.
-    content = <DuplicatesView query={query} rootsKey={rootsKey} onFail={onFail} />;
+    content = (
+      <DuplicatesView
+        query={query}
+        field={field}
+        onCommit={onCommitQuery}
+        rootsKey={rootsKey}
+        onFail={onFail}
+      />
+    );
   } else if (!selection) {
     content = <p className="empty-hint dim">{t("empty.hint")}</p>;
   } else if (!selected) {

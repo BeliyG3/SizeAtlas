@@ -60,7 +60,12 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("useCommittedQuery", () => {
+  it("starts with the words it is mounted with: a stored search is searched at once", () => {
+    expect(Render("  type:image  ").committed).toBe("type:image");
+  });
+
   it("passes the query on 250 ms after the last keystroke", () => {
+    expect(Render("").committed).toBe("");
     expect(Render("a").committed).toBe("");
     vi.advanceTimersByTime(200);
     Render("ab");

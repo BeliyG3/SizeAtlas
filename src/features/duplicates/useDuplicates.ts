@@ -33,6 +33,9 @@ export function useDuplicates({ query, system, rootsKey, onFail }: Options) {
   const [state, setState] = useState<DupState | null>(null);
   const [status, setStatus] = useState<DupStatus | null>(null);
   const [estimate, setEstimate] = useState<DupEstimate | null>(null);
+  // A Find sent and not answered yet: a second one would start a job that cancels the first.
+  const [finding, setFinding] = useState(false);
+  const sending = useRef(false);
   // The answers land after renders: they read and update the state here, not in a closure.
   const shown = useRef<{ state: DupState | null; status: DupStatus | null }>({
     state: null,
@@ -106,13 +109,34 @@ export function useDuplicates({ query, system, rootsKey, onFail }: Options) {
     };
   }, [query, system, rootsKey]);
 
-  const find = useCallback(() => {
-    // The job's own status asks for its result; this read covers a status sent before it.
-    api.findDuplicates(query, system).then(fetch, (e: unknown) => fail.current(e));
-  }, [query, system, fetch]);
+  /** Searches for `words` (the text in the field, not the debounced query). */
+  const find = useCallback(
+    (words: string) => {
+      if (sending.current) return;
+      sending.current = true;
+      setFinding(true);
+      const life = lifecycle.current;
+      const sent = () => {
+        sending.current = false;
+        if (life.live) setFinding(false);
+      };
+      api.findDuplicates(words, system).then(
+        () => {
+          sent();
+          // The job's own status asks for its result; this read covers a status sent before it.
+          if (life.live) fetch();
+        },
+        (e: unknown) => {
+          sent();
+          if (life.live) fail.current(e);
+        },
+      );
+    },
+    [system, fetch],
+  );
   const cancel = useCallback(() => {
     api.cancelDuplicates().catch((e: unknown) => fail.current(e));
   }, []);
 
-  return { state, status, estimate, find, cancel, refresh: fetch };
+  return { state, status, estimate, finding, find, cancel, refresh: fetch };
 }

@@ -12,6 +12,8 @@ interface Props {
   /** The words of the search field and the switch: what Find would search for. */
   query: string;
   system: boolean;
+  /** A Find is being sent: Find is off until it is taken. */
+  finding?: boolean;
   onSystem: (system: boolean) => void;
   /** Find, or Continue: a new search (counted files come from the cache). */
   onFind: () => void;
@@ -30,6 +32,7 @@ export function DupHeader({
   status,
   query,
   system,
+  finding = false,
   onSystem,
   onFind,
   onCancel,
@@ -98,7 +101,7 @@ export function DupHeader({
             {t("dup.cancel")}
           </button>
         ) : (
-          <button type="button" onClick={onFind}>
+          <button type="button" disabled={finding} onClick={onFind}>
             {t(resumable ? "dup.continue" : "dup.find")}
           </button>
         )}

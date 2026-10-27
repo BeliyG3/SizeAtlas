@@ -52,7 +52,10 @@ export function App() {
   // Picking a mode ends the search, so that the table shows the mode.
   const showMode = (next: Mode) => {
     setMode(next);
-    setQuery(next === "duplicates" ? dupQuery() : "");
+    const text = next === "duplicates" ? dupQuery() : "";
+    setQuery(text);
+    // The stored search of the duplicates is estimated at once, not after the typing delay.
+    if (text.trim() !== "") commit(text);
   };
   const editQuery = (next: string) => {
     setQuery(next);
@@ -232,6 +235,8 @@ export function App() {
                 selection={selection}
                 mode={mode}
                 query={committed}
+                field={query}
+                onCommitQuery={commit}
                 onLeaveSearch={endSearch}
                 sources={sources}
                 progress={progress}

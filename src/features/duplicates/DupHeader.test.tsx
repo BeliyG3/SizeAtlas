@@ -65,6 +65,13 @@ describe("the header of the duplicates", () => {
     expect(onFind).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps Find off while a Find is being sent", () => {
+    const tree = header({ state: applyAnswer(null, answer()), status: status(), finding: true });
+    expect((button(tree, "dup.find")!.props as { disabled?: boolean }).disabled).toBe(true);
+    const idle = header({ state: applyAnswer(null, answer()), status: status() });
+    expect((button(idle, "dup.find")!.props as { disabled?: boolean }).disabled).toBe(false);
+  });
+
   it("shows the phase and Cancel while the search runs", () => {
     const running = status({
       job: 1,
