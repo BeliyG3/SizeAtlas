@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { ListKind } from "../../api/types";
+import { gridTemplate, totalWidth } from "../columns/grid";
 import { moveColumn as moveAny } from "../columns/order";
 import { COLUMNS, DEFAULT_SORT, DEFAULT_WIDTHS, type ColumnId } from "./columns";
 import {
   DEFAULT_VIEW,
   comparedByDefault,
-  gridTemplate,
   type ColumnView,
   parseView,
   serializeView,
   toggleColumn,
-  totalWidth,
   visibleColumns,
   visibleSort,
   withDefaults,

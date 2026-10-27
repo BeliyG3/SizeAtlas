@@ -386,6 +386,7 @@
   "dup.colCopies": "Kopyalar",
   "dup.colFree": "Boşaltılabilir",
   "dup.colRoot": "Sürücü veya klasör",
+  "dup.colMarks": "Notlar",
   "dup.protected": "Sistem klasörü — burada silinmez",
   "dup.hardlink": "Sabit bağlantı: diğer bağlantılar açık sürücülerin dışında",
   "dup.synced": "Eşitlendi: silerseniz tüm cihazlarınızdan silinir",

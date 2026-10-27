@@ -417,6 +417,7 @@
   "dup.colCopies": "Cópias",
   "dup.colFree": "Liberável",
   "dup.colRoot": "Unidade ou pasta",
+  "dup.colMarks": "Observações",
   "dup.protected": "Pasta do sistema — não é excluído aqui",
   "dup.hardlink": "Link físico: os outros links estão fora das unidades abertas",
   "dup.synced": "Sincronizado: excluir aqui exclui em todos os seus dispositivos",

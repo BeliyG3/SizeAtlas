@@ -386,6 +386,7 @@
   "dup.colCopies": "Kopieën",
   "dup.colFree": "Vrij te maken",
   "dup.colRoot": "Station of map",
+  "dup.colMarks": "Opmerkingen",
   "dup.protected": "Systeemmap — hier niet verwijderd",
   "dup.hardlink": "Harde koppeling: andere koppelingen staan buiten de geopende stations",
   "dup.synced": "Gesynchroniseerd: verwijderen verwijdert het op al je apparaten",

@@ -1,14 +1,7 @@
-import { useCallback, useState, type KeyboardEvent } from "react";
 import { formatDate } from "../../format";
-import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
-import { ColumnDivider } from "../columns/ColumnDivider";
-import { DragGhost } from "../columns/DragGhost";
-import { useColumnDrag } from "../columns/useColumnDrag";
-import { isMenuKey } from "../menu/Menu";
-import { anchorX } from "../menu/place";
+import { GridHeader } from "../columns/GridHeader";
 import type { Column, HeaderSort } from "./columns";
-import { HeaderMenu, type HeaderMenuTarget } from "./HeaderMenu";
 import type { ColumnLayout } from "./useColumnLayout";
 
 interface Props {
@@ -25,91 +18,14 @@ interface Props {
   onSort: (column: Column) => void;
 }
 
-const ariaSort = (c: Column, sort: HeaderSort | null, sortable: boolean) => {
-  if (!sortable) return undefined;
-  if (sort?.column !== c.id) return "none";
-  return sort.descending ? "descending" : "ascending";
-};
-
-/**
- * Sticky header: a click sorts, dragging a cell moves its column, the borders resize, and the
- * context menu fits, shows, hides and resets columns.
- */
+/** The header of the folder table and the flat lists: `GridHeader` with their tooltips. */
 export function TableHeader({ layout, sort, canSort, sizeHint, baselineAt, onSort }: Props) {
   const { t, lang } = useT();
-  const { columns, widths, template, width } = layout;
-  const [menu, setMenu] = useState<HeaderMenuTarget | null>(null);
-  const closeMenu = useCallback(() => setMenu(null), []);
-  // Name stays first: it is what identifies a row.
-  const drag = useColumnDrag(layout.ids, layout.move, "name");
   const title = (c: Column, label: string) => {
     if (c.id === "size" || c.id === "percent") return sizeHint;
     if (c.id === "change" && baselineAt !== null)
       return t("col.changeHint", { date: formatDate(baselineAt * 1000, lang) });
     return label;
   };
-
-  // Shift+F10 or the menu key in the header (or in its menu, a React child): this menu, never
-  // the one of the cursor row.
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (!isMenuKey(e)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const cell = e.target instanceof Element ? e.target.closest<HTMLElement>("[data-col]") : null;
-    if (!cell) return;
-    const box = cell.getBoundingClientRect();
-    setMenu({ id: cell.dataset.col as Column["id"], x: anchorX(box, isRtl(lang)), y: box.bottom });
-  };
-
-  return (
-    <div
-      className="chead"
-      role="row"
-      aria-rowindex={1}
-      style={{ gridTemplateColumns: template, width }}
-      onKeyDown={onKeyDown}
-    >
-      {columns.map((c) => {
-        const label = t(`col.${c.id}`);
-        const sortable = canSort(c);
-        const classes = [c.numeric && "num", drag.dragging === c.id && "col-dragging"];
-        return (
-          <span
-            key={c.id}
-            role="columnheader"
-            aria-sort={ariaSort(c, sort, sortable)}
-            data-col={c.id}
-            className={classes.filter(Boolean).join(" ") || undefined}
-            // A label cut short by a narrow column shows in full on hover.
-            title={title(c, label)}
-            onPointerDown={(e) => drag.start(c.id, e)}
-            onClickCapture={drag.suppressClick}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setMenu({ id: c.id, x: e.clientX, y: e.clientY });
-            }}
-          >
-            {sortable ? (
-              <button className="col-sort" onClick={() => onSort(c)}>
-                <span className="ellipsis">{label}</span>
-                {sort?.column === c.id && (
-                  <span aria-hidden="true">{sort.descending ? "▼" : "▲"}</span>
-                )}
-              </button>
-            ) : (
-              <span className="label ellipsis">{label}</span>
-            )}
-            <ColumnDivider
-              label={t("columns.width", { name: label })}
-              width={widths[c.id]}
-              onResize={(w, done) => layout.resize(c.id, w, done)}
-              onFit={() => layout.fit(c.id)}
-            />
-          </span>
-        );
-      })}
-      <DragGhost view={drag.view} />
-      {menu && <HeaderMenu target={menu} layout={layout} onClose={closeMenu} />}
-    </div>
-  );
+  return <GridHeader layout={layout} sort={sort} canSort={canSort} onSort={onSort} title={title} />;
 }

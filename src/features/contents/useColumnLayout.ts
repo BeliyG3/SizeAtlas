@@ -2,20 +2,21 @@ import { useMemo, type RefObject } from "react";
 import type { ListKind } from "../../api/types";
 import { useStored } from "../../settings/storage";
 import { fitWidth, measureColumn } from "../columns/fit";
+import { gridTemplate, totalWidth, type GridLayout } from "../columns/grid";
+import { useHeaderWidths } from "../columns/headerFit";
 import { moveColumn } from "../columns/order";
 import { useColumnWidths } from "../columns/useColumnWidths";
-import { DEFAULT_WIDTHS, type ColumnId } from "./columns";
-import { useHeaderWidths } from "./headerFit";
+import { DEFAULT_WIDTHS, type Column, type ColumnId } from "./columns";
 import {
   DEFAULT_VIEW,
   VIEW_KEY,
-  gridTemplate,
+  isListOnly,
   parseView,
   serializeView,
   toggleColumn,
-  totalWidth,
   visibleColumns,
   withDefaults,
+  type ColumnView,
 } from "./layout";
 
 /** The widths the user set, one per column id. */
@@ -25,6 +26,14 @@ const WIDTHS_KEY = "sizeatlas.columns.widths";
  * so its widths at a default are left behind once (see `legacyWidths`).
  */
 const LEGACY_WIDTHS_KEY = "sizeatlas.columns";
+
+const labelKey = (id: ColumnId) => `col.${id}`;
+
+/** The layout of the folder table and the flat lists: their view and whether a list is shown too. */
+export interface ColumnLayout extends GridLayout<ColumnId, Column> {
+  view: ColumnView;
+  lists: boolean;
+}
 
 /**
  * Widths, order and visibility of the table's columns, all stored. `body` holds the cells;
@@ -36,12 +45,12 @@ export function useColumnLayout(
   body: RefObject<HTMLElement | null>,
   list: ListKind | null,
   baseline: boolean,
-) {
+): ColumnLayout {
   const lists = list !== null;
   const { widths, stored, resize, store } = useColumnWidths(
     WIDTHS_KEY,
     DEFAULT_WIDTHS,
-    useHeaderWidths(body),
+    useHeaderWidths(body, DEFAULT_WIDTHS, labelKey),
     LEGACY_WIDTHS_KEY,
   );
   const [storedView, setView] = useStored(VIEW_KEY, parseView, serializeView);
@@ -69,11 +78,16 @@ export function useColumnLayout(
     widths,
     template: gridTemplate(columns, widths),
     width: totalWidth(columns, widths),
+    pinned: "name",
+    labelKey,
+    options: view.order
+      .filter((id) => lists || !isListOnly(id))
+      .map((id) => ({ id, shown: !view.hidden.includes(id) })),
     resize,
-    fit: (id: ColumnId) => fit([id]),
+    fit: (id) => fit([id]),
     fitAll: () => fit(ids),
-    toggle: (id: ColumnId) => setView(toggleColumn(storedView, id, baseline, list)),
-    move: (id: ColumnId, before: ColumnId | null) =>
+    toggle: (id) => setView(toggleColumn(storedView, id, baseline, list)),
+    move: (id, before) =>
       setView({ ...storedView, order: moveColumn(storedView.order, id, before, "name") }),
     reset: () => {
       // No width the user set: the defaults, fitted to the header labels, take over.
@@ -82,5 +96,3 @@ export function useColumnLayout(
     },
   };
 }
-
-export type ColumnLayout = ReturnType<typeof useColumnLayout>;

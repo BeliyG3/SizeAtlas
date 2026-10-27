@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, type ReactNode } from "react";
 import type { DupGroup } from "../../api/duplicates";
 import { formatCount } from "../../format";
 import { isRtl } from "../../i18n";
@@ -7,12 +7,12 @@ import { useSize } from "../../settings/react";
 import { ROW_HEIGHT, visibleRange } from "../contents/pages";
 import { tableKeyDown, useViewport, type RowActions } from "../contents/tableView";
 import { scrollToRow } from "../contents/useCursor";
+import { GridHeader } from "../columns/GridHeader";
+import { useGridColumns } from "../columns/useGridColumns";
+import { GROUP_GRID, nextDupSort, type DupSort, type GroupColumn } from "./columns";
 import { Thumb } from "./Thumb";
 import type { ThumbQueue } from "./thumbs";
 import "../contents/contents.css";
-
-/** Icon, name, copies, size of a copy, what can be freed. */
-const TEMPLATE = "28px minmax(80px, 1fr) 56px 88px 110px";
 
 interface Props {
   /** In the order shown. */
@@ -20,17 +20,21 @@ interface Props {
   /** Key of the group whose copies are shown. */
   selected: string | null;
   onPick: (key: string) => void;
+  sort: DupSort<GroupColumn>;
+  onSort: (sort: DupSort<GroupColumn>) => void;
   /** Thumbnails: only those of the rows on screen and of the selected group are asked for. */
   queue: ThumbQueue;
 }
 
 const nothing = () => {};
+const sortable = () => true;
 
 /** The groups of the result, one row each; the selected one is the cursor row. Virtual. */
-export function GroupList({ groups, selected, onPick, queue }: Props) {
+export function GroupList({ groups, selected, onPick, sort, onSort, queue }: Props) {
   const { t, lang } = useT();
   const size = useSize();
   const body = useRef<HTMLDivElement>(null);
+  const layout = useGridColumns(body, GROUP_GRID);
   const { scrollTop, viewport, onScroll } = useViewport(body);
   const { first, last } = visibleRange(scrollTop, viewport, groups.length);
   const at = groups.findIndex((g) => g.key === selected);
@@ -58,10 +62,36 @@ export function GroupList({ groups, selected, onPick, queue }: Props) {
     up: nothing,
   };
 
+  const cells = (group: DupGroup): Record<GroupColumn, ReactNode> => ({
+    name: (
+      <span role="gridcell" data-col="name" className="name" title={group.name}>
+        <Thumb group={group} queue={queue} />
+        <span className="ellipsis" dir="auto">
+          {group.name}
+        </span>
+      </span>
+    ),
+    copies: (
+      <span role="gridcell" data-col="copies" className="num">
+        ×{formatCount(group.copies.length, lang)}
+      </span>
+    ),
+    size: (
+      <span role="gridcell" data-col="size" className="num">
+        {size(group.size)}
+      </span>
+    ),
+    free: (
+      <span role="gridcell" data-col="free" className="num">
+        {t("dup.free", { size: size(group.free) })}
+      </span>
+    ),
+  });
   const rows: ReactNode[] = [];
   for (let index = first; index < last; index++) {
     const group = groups[index];
     const state = `${index % 2 ? " alt" : ""}${index === cursor ? " cursor" : ""}`;
+    const row = cells(group);
     rows.push(
       <div
         key={group.key}
@@ -71,24 +101,16 @@ export function GroupList({ groups, selected, onPick, queue }: Props) {
         aria-rowindex={index + 2}
         aria-selected={index === cursor}
         className={`crow${state}`}
-        style={{ top: index * ROW_HEIGHT, gridTemplateColumns: TEMPLATE }}
+        style={{
+          top: index * ROW_HEIGHT,
+          width: layout.width,
+          gridTemplateColumns: layout.template,
+        }}
         onClick={() => point(index)}
       >
-        <span role="gridcell" className="dup-icon">
-          <Thumb group={group} queue={queue} />
-        </span>
-        <span role="gridcell" dir="auto" title={group.name}>
-          {group.name}
-        </span>
-        <span role="gridcell" className="num">
-          ×{formatCount(group.copies.length, lang)}
-        </span>
-        <span role="gridcell" className="num">
-          {size(group.size)}
-        </span>
-        <span role="gridcell" className="num">
-          {t("dup.free", { size: size(group.free) })}
-        </span>
+        {layout.ids.map((id) => (
+          <Fragment key={id}>{row[id]}</Fragment>
+        ))}
       </div>,
     );
   }
@@ -101,7 +123,7 @@ export function GroupList({ groups, selected, onPick, queue }: Props) {
       role="grid"
       aria-label={t("mode.duplicates")}
       aria-rowcount={groups.length + 1}
-      aria-colcount={5}
+      aria-colcount={layout.columns.length}
       aria-activedescendant={cursorShown ? `dgroup-${cursor}` : undefined}
       tabIndex={0}
       onScroll={onScroll}
@@ -110,22 +132,13 @@ export function GroupList({ groups, selected, onPick, queue }: Props) {
       }
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className="chead" role="row" style={{ gridTemplateColumns: TEMPLATE }}>
-        <span role="columnheader" />
-        <span role="columnheader" className="label">
-          {t("col.name")}
-        </span>
-        <span role="columnheader" className="label num">
-          {t("dup.colCopies")}
-        </span>
-        <span role="columnheader" className="label num">
-          {t("col.size")}
-        </span>
-        <span role="columnheader" className="label num">
-          {t("dup.colFree")}
-        </span>
-      </div>
-      <div className="crows" style={{ height: groups.length * ROW_HEIGHT }}>
+      <GridHeader
+        layout={layout}
+        sort={sort}
+        canSort={sortable}
+        onSort={(c) => onSort(nextDupSort(sort, c.id))}
+      />
+      <div className="crows" style={{ height: groups.length * ROW_HEIGHT, width: layout.width }}>
         {rows}
       </div>
     </div>

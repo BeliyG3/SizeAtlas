@@ -386,6 +386,7 @@
   "dup.colCopies": "Copies",
   "dup.colFree": "Can be freed",
   "dup.colRoot": "Drive or folder",
+  "dup.colMarks": "Notes",
   "dup.protected": "System folder — not deleted here",
   "dup.hardlink": "Hard link: other links are outside the open drives",
   "dup.synced": "Synced: deleting it deletes it on all your devices",

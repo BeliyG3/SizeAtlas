@@ -417,6 +417,7 @@
   "dup.colCopies": "Copies",
   "dup.colFree": "Libérable",
   "dup.colRoot": "Lecteur ou dossier",
+  "dup.colMarks": "Remarques",
   "dup.protected": "Dossier système : non supprimé ici",
   "dup.hardlink": "Lien physique : les autres liens sont hors des lecteurs ouverts",
   "dup.synced": "Synchronisé : sa suppression le supprime sur tous vos appareils",

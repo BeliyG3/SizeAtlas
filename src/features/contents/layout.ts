@@ -1,11 +1,4 @@
-import {
-  COLUMNS,
-  DEFAULT_SORT,
-  type Column,
-  type ColumnId,
-  type SortState,
-  type Widths,
-} from "./columns";
+import { COLUMNS, DEFAULT_SORT, type Column, type ColumnId, type SortState } from "./columns";
 import type { ListKind, Summary } from "../../api/types";
 import { repairOrder } from "../columns/order";
 import { isCleanupMode } from "../lists/modes";
@@ -103,13 +96,6 @@ export const visibleColumns = (view: ColumnView, lists: boolean): Column[] =>
   view.order
     .filter((id) => !view.hidden.includes(id) && (lists || !isListOnly(id)))
     .map((id) => BY_ID.get(id)!);
-
-/** CSS grid columns shared by the header and every row. */
-export const gridTemplate = (columns: readonly Column[], widths: Widths) =>
-  columns.map((c) => `${widths[c.id]}px`).join(" ");
-
-export const totalWidth = (columns: readonly Column[], widths: Widths) =>
-  columns.reduce((sum, c) => sum + widths[c.id], 0);
 
 const NAME_SORT: SortState = { column: "name", key: "name", descending: false };
 

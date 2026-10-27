@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { answer, group, status } from "./dup.testSupport";
-import { applyAnswer, shouldFetch, sortGroups, totalFree } from "./groups";
+import { applyAnswer, shouldFetch, totalFree } from "./groups";
 
 const keys = (state: { groups: ReadonlyMap<string, unknown> }) => [...state.groups.keys()].sort();
 
@@ -85,11 +85,6 @@ describe("the groups of a duplicates result", () => {
     expect(shouldFetch(state, status({ job: 2, version: 4 }))).toBe(false);
     expect(shouldFetch(state, status({ job: 2, version: 6 }))).toBe(true);
     expect(shouldFetch(state, status({ job: 3, version: 0 }))).toBe(true);
-  });
-
-  it("sort by what can be freed, the larger first, then by key", () => {
-    const sorted = sortGroups([group("b", 10), group("c", 30), group("a", 30)]);
-    expect(sorted.map((g) => g.key)).toEqual(["a", "c", "b"]);
   });
 
   it("add up what can be freed", () => {

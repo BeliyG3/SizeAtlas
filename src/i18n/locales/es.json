@@ -417,6 +417,7 @@
   "dup.colCopies": "Copias",
   "dup.colFree": "Se puede liberar",
   "dup.colRoot": "Unidad o carpeta",
+  "dup.colMarks": "Notas",
   "dup.protected": "Carpeta del sistema: aquí no se elimina",
   "dup.hardlink": "Vínculo físico: los demás vínculos están fuera de las unidades abiertas",
   "dup.synced": "Sincronizado: al eliminarlo, se elimina en todos tus dispositivos",

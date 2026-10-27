@@ -1,25 +1,39 @@
-import type { KeyboardEvent } from "react";
+import { Fragment, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "../../api/client";
-import type { DupGroup } from "../../api/duplicates";
+import type { DupCopy, DupGroup } from "../../api/duplicates";
 import { formatCount, formatDate } from "../../format";
 import { isRtl } from "../../i18n";
 import { useT } from "../../i18n/react";
 import { useSize } from "../../settings/react";
+import { useStored } from "../../settings/storage";
+import { GridHeader } from "../columns/GridHeader";
+import { useGridColumns } from "../columns/useGridColumns";
 import { mark, markAll, markHow, targets, type MarkHow, type Marks } from "../contents/marks";
 import { HEADER_HEIGHT, ROW_HEIGHT } from "../contents/pages";
 import { tableKeyDown, type RowActions } from "../contents/tableView";
 import { scrollToRow } from "../contents/useCursor";
+import {
+  COPY_GRID,
+  COPY_SORTS,
+  COPY_SORT_KEY,
+  DEFAULT_COPY_SORT,
+  copyOrder,
+  nextDupSort,
+  parseDupSort,
+  serializeDupSort,
+  type CopyColumn,
+} from "./columns";
 import { Thumb } from "./Thumb";
 import { mimeOf, type ThumbQueue } from "./thumbs";
 import "../contents/contents.css";
 
-/** Path, modified, root, marks. */
-const TEMPLATE = "minmax(160px, 3fr) 140px minmax(60px, 1fr) minmax(80px, 2fr)";
-
 /** Why a copy is never removed here, or what removing it means. */
 const MARKS = ["protected", "noId", "hardlink", "synced"] as const;
 
-/** The marked copies (by index, keyed by `copyMarksKey`) and the cursor row of the table. */
+/**
+ * The marked copies and the copy under the cursor, by their index in the group (the marks keyed
+ * by `copyMarksKey`); the table may show them in another order.
+ */
 export interface CopyPick {
   marks: Marks;
   cursor: number | null;
@@ -27,6 +41,9 @@ export interface CopyPick {
 
 /** What an action on the copies takes: the marked ones, else the one under the cursor. */
 export const pickTargets = (pick: CopyPick) => targets(pick.marks, pick.cursor ?? undefined);
+
+const sortable = (c: { id: CopyColumn }) => COPY_SORTS.includes(c.id);
+const parseSort = (raw: string | null) => parseDupSort(raw, COPY_SORTS, DEFAULT_COPY_SORT);
 
 interface Props {
   group: DupGroup;
@@ -49,15 +66,22 @@ export function GroupDetail({ group, pick, onPick, onTrash, onMenu, queue, onFai
   const { t, lang } = useT();
   const size = useSize();
   const count = group.copies.length;
+  const body = useRef<HTMLDivElement>(null);
+  const layout = useGridColumns(body, COPY_GRID);
+  const [sort, setSort] = useStored(COPY_SORT_KEY, parseSort, serializeDupSort);
+  /** The copy shown in each row, by its index in the group. */
+  const order = useMemo(() => copyOrder(group.copies, sort), [group, sort]);
   const { marks, cursor } = pick;
-  const idAt = (i: number) => (i >= 0 && i < count ? i : undefined);
+  const at = cursor === null ? -1 : order.indexOf(cursor);
+  const row = at < 0 ? null : at;
+  const idAt = (index: number) => order[index];
   const point = (index: number, how: MarkHow) =>
-    onPick({ marks: mark(marks, how, index, idAt, cursor ?? index), cursor: index });
+    onPick({ marks: mark(marks, how, index, idAt, row ?? index), cursor: order[index] });
   const reveal = (index: number) => {
-    const at = group.copies[index]?.refs[0];
-    if (at) void api.reveal(at.generation, at.id).catch(onFail);
+    const ref = group.copies[order[index]]?.refs[0];
+    if (ref) void api.reveal(ref.generation, ref.id).catch(onFail);
   };
-  /** The keys and clicks; `shown` scrolls a row into view. */
+  /** The keys and clicks, by row; `shown` scrolls a row into view. */
   const actions = (shown: (index: number) => void): RowActions => ({
     point: (index, how) => {
       shown(index);
@@ -68,10 +92,10 @@ export function GroupDetail({ group, pick, onPick, onTrash, onMenu, queue, onFai
     open: reveal,
     menuAt: (index, x, y) => {
       // A row outside the marks is marked on its own, as in the other tables.
-      if (marks.ids.has(index) && marks.ids.size > 1) onMenu([...marks.ids], x, y);
+      if (marks.ids.has(order[index]) && marks.ids.size > 1) onMenu([...marks.ids], x, y);
       else {
         point(index, "one");
-        onMenu([index], x, y);
+        onMenu([order[index]], x, y);
       }
     },
     up: () => {},
@@ -80,10 +104,39 @@ export function GroupDetail({ group, pick, onPick, onTrash, onMenu, queue, onFai
     const el = e.currentTarget;
     const viewport = Math.max(0, el.clientHeight - HEADER_HEIGHT);
     const keys = actions((index) => scrollToRow(el, index));
-    tableKeyDown(e, { cursor, viewport, count }, keys, isRtl(lang));
+    tableKeyDown(e, { cursor: row, viewport, count }, keys, isRtl(lang));
   };
   const mouse = actions(() => {});
-  const cursorShown = cursor !== null && cursor < count;
+  // Shift ranges count rows: another order starts them afresh, the marks stay.
+  const onSort = (column: CopyColumn) => {
+    setSort(nextDupSort(sort, column));
+    onPick({ marks: { key: marks.key, ids: marks.ids, anchor: null }, cursor });
+  };
+  const cells = (copy: DupCopy): Record<CopyColumn, ReactNode> => {
+    const held = MARKS.filter((m) => copy[m]).map((m) => t(`dup.${m}`));
+    return {
+      path: (
+        <span role="gridcell" data-col="path" dir="auto" title={copy.path}>
+          {copy.path}
+        </span>
+      ),
+      modified: (
+        <span role="gridcell" data-col="modified">
+          {formatDate(copy.mtime || null, lang)}
+        </span>
+      ),
+      root: (
+        <span role="gridcell" data-col="root" dir="auto" title={copy.root}>
+          {copy.root}
+        </span>
+      ),
+      marks: (
+        <span role="gridcell" data-col="marks" className="tag" title={held.join("\n")}>
+          {held.join(" · ")}
+        </span>
+      ),
+    };
+  };
   return (
     <div className="dup-detail">
       <p className="dup-title">
@@ -105,33 +158,24 @@ export function GroupDetail({ group, pick, onPick, onTrash, onMenu, queue, onFai
       {/* ponytail: every copy is rendered; virtualize if groups of thousands of copies show up. */}
       <div
         className="contents dup-table"
+        ref={body}
         role="grid"
         aria-label={t("dup.colCopies")}
         aria-multiselectable
         aria-rowcount={count + 1}
-        aria-colcount={4}
-        aria-activedescendant={cursorShown ? `dcopy-${cursor}` : undefined}
+        aria-colcount={layout.columns.length}
+        aria-activedescendant={row === null ? undefined : `dcopy-${row}`}
         tabIndex={0}
         onKeyDown={onKeyDown}
         onContextMenu={(e) => e.preventDefault()}
       >
-        <div className="chead" role="row" style={{ gridTemplateColumns: TEMPLATE }}>
-          <span role="columnheader" className="label">
-            {t("col.path")}
-          </span>
-          <span role="columnheader" className="label">
-            {t("col.modified")}
-          </span>
-          <span role="columnheader" className="label">
-            {t("dup.colRoot")}
-          </span>
-          <span role="columnheader" />
-        </div>
-        <div className="crows" style={{ height: count * ROW_HEIGHT }}>
-          {group.copies.map((copy, index) => {
-            const held = MARKS.filter((m) => copy[m]).map((m) => t(`dup.${m}`));
-            const marked = marks.ids.has(index);
-            const state = `${index % 2 ? " alt" : ""}${marked ? " selected" : ""}${index === cursor ? " cursor" : ""}`;
+        <GridHeader layout={layout} sort={sort} canSort={sortable} onSort={(c) => onSort(c.id)} />
+        <div className="crows" style={{ height: count * ROW_HEIGHT, width: layout.width }}>
+          {order.map((copyAt, index) => {
+            const copy = group.copies[copyAt];
+            const marked = marks.ids.has(copyAt);
+            const state = `${index % 2 ? " alt" : ""}${marked ? " selected" : ""}${index === row ? " cursor" : ""}`;
+            const shown = cells(copy);
             return (
               <div
                 key={copy.path}
@@ -141,7 +185,11 @@ export function GroupDetail({ group, pick, onPick, onTrash, onMenu, queue, onFai
                 aria-rowindex={index + 2}
                 aria-selected={marked}
                 className={`crow${state}`}
-                style={{ top: index * ROW_HEIGHT, gridTemplateColumns: TEMPLATE }}
+                style={{
+                  top: index * ROW_HEIGHT,
+                  width: layout.width,
+                  gridTemplateColumns: layout.template,
+                }}
                 onClick={(e) => mouse.point(index, markHow(e))}
                 onDoubleClick={() => reveal(index)}
                 onContextMenu={(e) => {
@@ -150,16 +198,9 @@ export function GroupDetail({ group, pick, onPick, onTrash, onMenu, queue, onFai
                   mouse.menuAt(index, e.clientX, e.clientY);
                 }}
               >
-                <span role="gridcell" data-col="path" dir="auto" title={copy.path}>
-                  {copy.path}
-                </span>
-                <span role="gridcell">{formatDate(copy.mtime || null, lang)}</span>
-                <span role="gridcell" dir="auto" title={copy.root}>
-                  {copy.root}
-                </span>
-                <span role="gridcell" className="tag" title={held.join("\n")}>
-                  {held.join(" · ")}
-                </span>
+                {layout.ids.map((id) => (
+                  <Fragment key={id}>{shown[id]}</Fragment>
+                ))}
               </div>
             );
           })}

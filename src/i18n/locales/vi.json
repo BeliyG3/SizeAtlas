@@ -355,6 +355,7 @@
   "dup.colCopies": "Bản sao",
   "dup.colFree": "Có thể giải phóng",
   "dup.colRoot": "Ổ đĩa hoặc thư mục",
+  "dup.colMarks": "Ghi chú",
   "dup.protected": "Thư mục hệ thống — không xóa ở đây",
   "dup.hardlink": "Liên kết cứng: các liên kết khác nằm ngoài các ổ đĩa đang mở",
   "dup.synced": "Đã đồng bộ: xóa tệp này sẽ xóa trên mọi thiết bị của bạn",

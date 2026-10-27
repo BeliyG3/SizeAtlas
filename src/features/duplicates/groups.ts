@@ -36,10 +36,6 @@ export function shouldFetch(state: DupState | null, status: DupStatus): boolean 
   return status.version > state.version;
 }
 
-/** What can be freed, the larger first; equal ones by key, so the order holds between answers. */
-export const sortGroups = (groups: Iterable<DupGroup>): DupGroup[] =>
-  [...groups].sort((a, b) => b.free - a.free || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-
 export const totalFree = (groups: Iterable<DupGroup>): number => {
   let sum = 0;
   for (const group of groups) sum += group.free;

@@ -355,6 +355,7 @@
   "dup.colCopies": "副本",
   "dup.colFree": "可释放",
   "dup.colRoot": "驱动器或文件夹",
+  "dup.colMarks": "备注",
   "dup.protected": "系统文件夹，此处不会删除",
   "dup.hardlink": "硬链接：其他链接位于已打开的驱动器之外",
   "dup.synced": "已同步：删除后会在你的所有设备上删除",

@@ -355,6 +355,7 @@
   "dup.colCopies": "Salinan",
   "dup.colFree": "Dapat dibebaskan",
   "dup.colRoot": "Drive atau folder",
+  "dup.colMarks": "Catatan",
   "dup.protected": "Folder sistem — tidak dihapus di sini",
   "dup.hardlink": "Hard link: tautan lainnya berada di luar drive yang dibuka",
   "dup.synced": "Disinkronkan: menghapusnya akan menghapusnya di semua perangkat Anda",

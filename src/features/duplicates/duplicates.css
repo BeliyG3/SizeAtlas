@@ -68,19 +68,9 @@
   flex: none;
 }
 
-/* The columns share the width of the pane: no sideways scrolling. */
-.dup-table .crow {
-  inset-inline-end: 0;
-}
-
-.dup-table .dup-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* A thumbnail in the icon cell of a group row. */
+/* A thumbnail before the name of a group, in place of its icon. */
 .dup-thumb {
+  flex: none;
   inline-size: 20px;
   block-size: 20px;
   object-fit: contain;

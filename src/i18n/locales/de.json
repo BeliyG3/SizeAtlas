@@ -386,6 +386,7 @@
   "dup.colCopies": "Kopien",
   "dup.colFree": "Platzgewinn",
   "dup.colRoot": "Laufwerk oder Ordner",
+  "dup.colMarks": "Hinweise",
   "dup.protected": "Systemordner – hier nicht gelöscht",
   "dup.hardlink": "Hardlink: Weitere Links liegen außerhalb der geöffneten Laufwerke",
   "dup.synced": "Synchronisiert: Beim Löschen wird die Datei auf allen Ihren Geräten gelöscht",

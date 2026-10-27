@@ -1,7 +1,6 @@
 import { useEffect, useState, type RefObject } from "react";
 import { useT } from "../../i18n/react";
-import { fitWidth } from "../columns/fit";
-import { DEFAULT_WIDTHS, type Widths } from "./columns";
+import { fitWidth } from "./fit";
 
 /** Padding of a header label (6px on each side) and the gap before its sort arrow. */
 const LABEL_ROOM = 16;
@@ -24,11 +23,16 @@ export function headerWidths<K extends string>(
 
 /**
  * Default widths of the table under `body` that fit its header labels in the current language
- * (see `headerWidths`); undefined until measured.
+ * (see `headerWidths`); undefined until measured. `defaults` and `labelKey` (the text key of a
+ * column's label) must be module-level constants.
  */
-export function useHeaderWidths(body: RefObject<HTMLElement | null>): Widths | undefined {
+export function useHeaderWidths<K extends string>(
+  body: RefObject<HTMLElement | null>,
+  defaults: Readonly<Record<K, number>>,
+  labelKey: (id: K) => string,
+): Record<K, number> | undefined {
   const { t } = useT();
-  const [fitted, setFitted] = useState<Widths>();
+  const [fitted, setFitted] = useState<Record<K, number>>();
   useEffect(() => {
     const label = body.current?.querySelector<HTMLElement>(".chead .ellipsis");
     const context = label && document.createElement("canvas").getContext("2d");
@@ -40,11 +44,11 @@ export function useHeaderWidths(body: RefObject<HTMLElement | null>): Widths | u
       const style = getComputedStyle(label);
       context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
       const width = (text: string) => context.measureText(text).width;
-      setFitted(headerWidths(DEFAULT_WIDTHS, (id) => width(t(`col.${id}`)), width("▼")));
+      setFitted(headerWidths(defaults, (id) => width(t(labelKey(id))), width("▼")));
     });
     return () => {
       live = false;
     };
-  }, [body, t]);
+  }, [body, t, defaults, labelKey]);
   return fitted;
 }

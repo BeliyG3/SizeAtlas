@@ -6,12 +6,19 @@ import { words } from "../search/useCommittedQuery";
 import { serializeShown } from "../../settings/settings";
 import { useStored } from "../../settings/storage";
 import { SplitPane } from "../shell/SplitPane";
+import {
+  DEFAULT_GROUP_SORT,
+  GROUP_SORTS,
+  GROUP_SORT_KEY,
+  parseDupSort,
+  serializeDupSort,
+  sortGroups,
+} from "./columns";
 import { CopyMenu } from "./CopyMenu";
 import { DupHeader } from "./DupHeader";
 import { emptyKey } from "./emptyState";
 import { GroupDetail, pickTargets, type CopyPick } from "./GroupDetail";
 import { GroupList } from "./GroupList";
-import { sortGroups } from "./groups";
 import { copyMarksKey, copyTrashNote } from "./keep";
 import { DUP_SYSTEM_KEY, parseDupSystem } from "./query";
 import { createThumbQueue } from "./thumbs";
@@ -56,6 +63,7 @@ interface Props extends DupWiring {
 }
 
 const NOTHING: DupMenuTrash = { run: null, note: null };
+const parseGroupSort = (raw: string | null) => parseDupSort(raw, GROUP_SORTS, DEFAULT_GROUP_SORT);
 
 /** The duplicates mode: the search above, the groups on the left, the copies of one on the right. */
 export function DuplicatesView(props: Props) {
@@ -85,7 +93,8 @@ export function DuplicatesView(props: Props) {
     refresh,
   });
   const [queue] = useState(() => createThumbQueue());
-  const groups = useMemo(() => sortGroups(state?.groups.values() ?? []), [state]);
+  const [sort, setSort] = useStored(GROUP_SORT_KEY, parseGroupSort, serializeDupSort);
+  const groups = useMemo(() => sortGroups(state?.groups.values() ?? [], sort), [state, sort]);
   const [picked, setPicked] = useState<string | null>(null);
   // A change without the picked group shows the first one.
   const selected = groups.find((g) => g.key === picked) ?? groups[0] ?? null;
@@ -159,7 +168,14 @@ export function DuplicatesView(props: Props) {
           defaultSize={LIST_WIDTH}
           label={t("split.groups")}
           first={
-            <GroupList groups={groups} selected={selected.key} onPick={setPicked} queue={queue} />
+            <GroupList
+              groups={groups}
+              selected={selected.key}
+              onPick={setPicked}
+              sort={sort}
+              onSort={setSort}
+              queue={queue}
+            />
           }
           second={
             <GroupDetail

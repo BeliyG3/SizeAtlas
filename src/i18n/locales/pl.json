@@ -448,6 +448,7 @@
   "dup.colCopies": "Kopie",
   "dup.colFree": "Do zwolnienia",
   "dup.colRoot": "Dysk lub folder",
+  "dup.colMarks": "Uwagi",
   "dup.protected": "Folder systemowy — nie jest tu usuwany",
   "dup.hardlink": "Dowiązanie twarde: pozostałe dowiązania są poza otwartymi dyskami",
   "dup.synced": "Zsynchronizowany: usunięcie go usuwa go na wszystkich urządzeniach",

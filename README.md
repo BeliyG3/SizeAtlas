@@ -195,7 +195,7 @@ Known limitations:
 
 ## Finding duplicates
 
-The **Duplicate files** table mode finds exact copies across all open drives and folders, from the trees already in memory. It reads files only when you press **Find**, after showing how many files and bytes it will compare. Groups are on the left, largest saving first; the selected group's copies are on the right, with paths and a thumbnail.
+The **Duplicate files** table mode finds exact copies across all open drives and folders, from the trees already in memory. It reads files only when you press **Find**, after showing how many files and bytes it will compare. Groups are on the left, largest saving first; the selected group's copies are on the right, with paths and a thumbnail. Their columns work as in the main table: click a header to sort, drag it to move the column, drag its border to resize, and right-click it to fit, show or hide columns.
 
 - **Compared:** regular files of 4 KB or more, by length, first and last bytes, then a full BLAKE3 hash. Groups appear as they are confirmed; **Cancel** keeps them, and **Continue** resumes.
 - **Filters choose starting files:** the search field here is a filter, not the usual search. A group is listed if any of its files matches and shows all its copies, so `older:1y` or a name never splits it; a size condition fits every copy alike. The field starts as `type:image`; clear it to see every type.
