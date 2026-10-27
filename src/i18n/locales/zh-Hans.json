@@ -90,7 +90,7 @@
   "treemap.label": "当前文件夹的矩形树图；如需使用键盘操作，请使用文件夹树",
   "treemap.empty": "没有可显示的内容：此文件夹不占用空间。",
   "city.reset": "重置视图",
-  "city.unavailable": "此系统不支持 3D 视图",
+  "city.unavailable": "3D 视图在此系统上不可用",
   "city.label": "已扫描驱动器或文件夹的 3D 城市",
   "city.folder": "文件夹",
   "city.file": "文件",

@@ -97,7 +97,7 @@
   "treemap.empty": "Niets te tonen: deze map neemt geen ruimte in.",
   "city.reset": "Weergave herstellen",
   "city.unavailable": "De 3D-weergave is niet beschikbaar op dit systeem",
-  "city.label": "3D-stad van de gescande schijf of map",
+  "city.label": "3D-stad van het gescande station of de gescande map",
   "city.folder": "Map",
   "city.file": "Bestand",
   "city.empty": "Kies een station of map met een scan",

@@ -106,7 +106,7 @@
   "city.label": "עיר תלת־ממדית של הכונן או התיקייה שנסרקו",
   "city.folder": "תיקייה",
   "city.file": "קובץ",
-  "city.empty": "יש לבחור כונן או תיקייה שיש להם סריקה",
+  "city.empty": "יש לבחור כונן או תיקייה שכבר נסרקו",
   "toolbar.back": "הקודם (⁦Alt+→⁩)",
   "toolbar.forward": "הבא (⁦Alt+←⁩)",
   "toolbar.source": "מקור",

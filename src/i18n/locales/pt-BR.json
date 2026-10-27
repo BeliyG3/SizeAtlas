@@ -106,7 +106,7 @@
   "city.label": "Cidade 3D da unidade ou pasta analisada",
   "city.folder": "Pasta",
   "city.file": "Arquivo",
-  "city.empty": "Escolha uma unidade ou pasta que tenha uma verificação",
+  "city.empty": "Escolha uma unidade ou pasta já analisada",
   "toolbar.back": "Voltar (Alt+←)",
   "toolbar.forward": "Avançar (Alt+→)",
   "toolbar.source": "Origem",

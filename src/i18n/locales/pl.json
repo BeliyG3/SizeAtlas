@@ -112,7 +112,7 @@
   "city.label": "Miasto 3D przeskanowanego dysku lub folderu",
   "city.folder": "Folder",
   "city.file": "Plik",
-  "city.empty": "Wybierz dysk lub folder, który ma skan",
+  "city.empty": "Wybierz przeskanowany dysk lub folder",
   "toolbar.back": "Wstecz (Alt+←)",
   "toolbar.forward": "Dalej (Alt+→)",
   "toolbar.source": "Źródło",

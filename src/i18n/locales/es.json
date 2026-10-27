@@ -106,7 +106,7 @@
   "city.label": "Ciudad 3D de la unidad o carpeta analizada",
   "city.folder": "Carpeta",
   "city.file": "Archivo",
-  "city.empty": "Elige una unidad o carpeta que tenga un escaneo",
+  "city.empty": "Elige una unidad o carpeta ya analizada",
   "toolbar.back": "Atrás (Alt+←)",
   "toolbar.forward": "Adelante (Alt+→)",
   "toolbar.source": "Origen",

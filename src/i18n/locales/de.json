@@ -100,7 +100,7 @@
   "city.label": "3D-Stadt des gescannten Laufwerks oder Ordners",
   "city.folder": "Ordner",
   "city.file": "Datei",
-  "city.empty": "Wählen Sie ein Laufwerk oder einen Ordner mit Scan",
+  "city.empty": "Wählen Sie ein gescanntes Laufwerk oder einen gescannten Ordner",
   "toolbar.back": "Zurück (Alt+←)",
   "toolbar.forward": "Vorwärts (Alt+→)",
   "toolbar.source": "Quelle",
