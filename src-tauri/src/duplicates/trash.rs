@@ -175,6 +175,7 @@ fn execute(
                     done,
                     total,
                     current,
+                    rehash: None,
                 });
             }
         };
@@ -196,6 +197,7 @@ fn execute(
         done,
         total,
         current: None,
+        rehash: None,
     });
     sum
 }

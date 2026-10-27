@@ -91,6 +91,12 @@ export function trashProgressText(
   return t(key, { done: count(at), total: count(progress.total) });
 }
 
+/** How full the bar of `progress` is: by items, or by bytes while the copy that stays is read. */
+export function progressBar(progress: Omit<TrashProgress, "request">) {
+  const [value, max] = progress.rehash ?? [progress.done, progress.total];
+  return { max: Math.max(1, max), value: Math.min(value, max) };
+}
+
 /**
  * Messages after a request of `preview` that removed its items `how`: what went (its size from
  * the result), where a stop left it, what stayed and why, what was gone already, and a change

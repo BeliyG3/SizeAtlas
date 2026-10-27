@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { TrashProgress } from "../../api/types";
 import { formatCount } from "../../format";
 import { useT } from "../../i18n/react";
-import { itemName, trashProgressText } from "./text";
+import { itemName, progressBar, trashProgressText } from "./text";
 import "./trash.css";
 
 /** A request of more items than this also gets a progress window, with its Stop button. */
@@ -20,13 +20,12 @@ interface Props {
 /** "Moving to the trash: 3 of 120" (or "Deleting permanently"), that item's path, the bar, Stop. */
 function useLine(progress: TrashProgress, stopping: boolean, purge: boolean) {
   const { t, lang } = useT();
-  const { done, total, current } = progress;
   const title = t(purge ? "purge.title" : "trash.title");
   return {
     title,
     text: trashProgressText(progress, t, (n) => formatCount(n, lang), purge),
-    path: current ?? "",
-    bar: <progress aria-label={title} max={Math.max(1, total)} value={Math.min(done, total)} />,
+    path: progress.current ?? "",
+    bar: <progress aria-label={title} {...progressBar(progress)} />,
     stop: t(stopping ? "trash.stopping" : "trash.stop"),
   };
 }

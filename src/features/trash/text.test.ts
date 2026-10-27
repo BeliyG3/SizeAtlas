@@ -4,6 +4,7 @@ import { translate, type Params } from "../../i18n";
 import {
   cancelledText,
   itemName,
+  progressBar,
   purgeAgain,
   purgeMessage,
   trashMessage,
@@ -275,6 +276,16 @@ describe("trashProgressText", () => {
   it("says that the items are deleted for good, not moved", () => {
     const at = trashProgressText({ done: 2, total: 1200, current: "/a" }, t, count, true);
     expect(at).toBe("Deleting permanently: 3 of 1,200");
+  });
+
+  it("fills the bar by items, or by the bytes of the copy that stays while it is read again", () => {
+    expect(progressBar({ done: 2, total: 5, current: "/a" })).toEqual({ max: 5, value: 2 });
+    expect(progressBar({ done: 0, total: 0, current: null })).toEqual({ max: 1, value: 0 });
+    const rehash: [number, number] = [3 << 20, 8 << 20];
+    expect(progressBar({ done: 0, total: 5, current: "/k", rehash })).toEqual({
+      max: 8 << 20,
+      value: 3 << 20,
+    });
   });
 
   it("names an item by the last part of its path", () => {

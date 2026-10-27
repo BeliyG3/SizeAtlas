@@ -141,6 +141,7 @@ async fn removing(
             done: 0,
             total: plan.items.len() as u32,
             current: None,
+            rehash: None,
         });
         run(state, dir, plan, stop, &report)
     });

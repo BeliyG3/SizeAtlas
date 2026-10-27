@@ -56,7 +56,8 @@ fn progress_names_the_first_item_and_ends_with_all_of_them() {
         Some(&TrashProgressDto {
             done: 0,
             total: 3,
-            current: Some(first)
+            current: Some(first),
+            rehash: None,
         })
     );
     assert_eq!(
@@ -64,7 +65,8 @@ fn progress_names_the_first_item_and_ends_with_all_of_them() {
         Some(&TrashProgressDto {
             done: 3,
             total: 3,
-            current: None
+            current: None,
+            rehash: None,
         })
     );
     assert!(events.windows(2).all(|w| w[0].done <= w[1].done));

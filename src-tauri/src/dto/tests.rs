@@ -373,6 +373,7 @@ fn trash_results_use_camel_case() {
         done: 2,
         total: 5,
         current: None,
+        rehash: None,
     };
     assert_eq!(
         serde_json::to_value(&progress).unwrap(),

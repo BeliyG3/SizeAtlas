@@ -53,19 +53,34 @@ pub(super) fn decide(
     let batch = fresh(state, &state.duplicates(), refs, keep, roots)?;
     let total: usize = batch.copies.iter().map(|c| c.paths.len()).sum();
     let total = total as u32;
-    report(TrashProgressDto {
-        done: 0,
-        total,
-        current: Some(batch.keep.path.display().to_string()),
-    });
+    let k = &batch.keep;
+    // A phase of its own: no item counted, the bytes of the copy that stays at each percent.
+    let current = Some(k.path.display().to_string());
+    let hashed = |read: u64| {
+        report(TrashProgressDto {
+            done: 0,
+            total,
+            current: current.clone(),
+            rehash: Some([read, k.len]),
+        })
+    };
+    hashed(0);
+    let (mut read, mut percent) = (0, 0);
+    let mut progress = |n: u64| {
+        read += n;
+        let now = read * 100 / k.len.max(1);
+        if now > percent {
+            percent = now;
+            hashed(read);
+        }
+    };
     let changed = || {
         if let Some(r) = state.duplicates().results.as_mut() {
             r.mark_stale(&batch.hash);
         }
         CmdError::Changed
     };
-    let k = &batch.keep;
-    let held = match rehash_held(&k.path, k.len, k.mtime, stop, &mut |_| ()) {
+    let held = match rehash_held(&k.path, k.len, k.mtime, stop, &mut progress) {
         Ok((hash, held)) if hash == batch.hash => held,
         Err(_) if stop() => return Ok(None),
         _ => return Err(changed()),

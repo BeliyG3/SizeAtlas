@@ -235,7 +235,8 @@ pub(super) fn with_keep(
     let confirmed = t.confirm(1, &[at(a, "x")]).unwrap();
     let keep = keep.display().to_string();
     let report = move |p: TrashProgressDto| {
-        if p.current.as_deref() == Some(keep.as_str()) {
+        let start = p.rehash.is_some_and(|[read, _]| read == 0);
+        if start && p.current.as_deref() == Some(keep.as_str()) {
             on_keep();
         }
     };

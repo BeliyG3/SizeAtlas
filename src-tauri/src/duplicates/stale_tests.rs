@@ -11,7 +11,7 @@ use tauri::async_runtime::block_on;
 
 use super::Emit;
 use super::tests::{Hold, dir_named, scanned};
-use super::trash_fixture::{Dups, at, progress, write};
+use super::trash_fixture::{Dups, at, progress, two_big, write};
 use crate::error::CmdError;
 use crate::exit::ExitDecision;
 use crate::recycle::fixture::{HANG, TrashOne, gate, logged};
@@ -170,6 +170,28 @@ fn two_roots_report_one_progress_sequence() {
     assert_eq!(ends.len(), 1);
     assert_eq!(events.last(), Some(ends[0]));
     assert_eq!(ends[0].done, 5);
+}
+
+#[test]
+fn the_rehash_of_the_kept_copy_reports_its_bytes() {
+    let t = Dups::new();
+    let (_dirs, a, keep) = two_big(&t);
+    let len = keep.metadata().unwrap().len();
+    let confirmed = t.confirm(1, &[at(&a, "x")]).unwrap();
+    let (events, report) = progress();
+    let done = t.start_reporting(confirmed, logged(&t.log), report);
+    assert_eq!(done.join().unwrap().unwrap().removed, 1);
+    let events = events.lock().unwrap();
+    let keep = keep.display().to_string();
+    let rehash: Vec<_> = events.iter().filter_map(|e| e.rehash).collect();
+    assert_eq!(rehash.first(), Some(&[0, len]));
+    assert_eq!(rehash.last(), Some(&[len, len]));
+    assert!(rehash.len() > 2, "between the reads too: {rehash:?}");
+    assert!(rehash.windows(2).all(|w| w[0][0] < w[1][0]));
+    // A phase of its own: the copy that stays, no item counted.
+    let mut hashing = events.iter().filter(|e| e.rehash.is_some());
+    assert!(hashing.all(|e| e.done == 0 && e.current.as_ref() == Some(&keep)));
+    assert_eq!(events.last().unwrap().rehash, None);
 }
 
 #[test]

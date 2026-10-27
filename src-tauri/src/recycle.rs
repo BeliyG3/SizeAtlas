@@ -124,6 +124,7 @@ pub(crate) fn move_plan(
                 done: done as u32,
                 total,
                 current: Some(item.path.display().to_string()),
+                rehash: None,
             });
         }
         let path = item.path.display().to_string();
@@ -179,6 +180,7 @@ pub(crate) fn move_plan(
         done: (trashed.len() + failed.len()) as u32,
         total,
         current: None,
+        rehash: None,
     });
     let mut warning = None;
     if !trashed.is_empty() {

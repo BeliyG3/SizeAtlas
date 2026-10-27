@@ -79,6 +79,10 @@ pub struct TrashProgressDto {
     pub done: u32,
     pub total: u32,
     pub current: Option<String>,
+    /// While a trash of duplicates reads the copy that stays (`current`) again: the bytes read
+    /// of its length. Not sent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rehash: Option<[u64; 2]>,
 }
 
 /// A `trash-progress` event: the progress of the request with the number `request` the UI gave.

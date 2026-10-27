@@ -293,4 +293,6 @@ export interface TrashProgress {
   done: number;
   total: number;
   current: string | null;
+  /** While a trash of duplicates reads the copy that stays (`current`) again: bytes read, of its length. */
+  rehash?: [number, number];
 }
