@@ -1,0 +1,17 @@
+.zoom-view {
+  position: relative;
+  overflow: hidden;
+  inline-size: 100%;
+  block-size: 100%;
+  touch-action: none;
+}
+
+.zoom-view img {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  transform-origin: 0 0;
+  max-inline-size: none;
+  max-block-size: none;
+  user-select: none;
+}

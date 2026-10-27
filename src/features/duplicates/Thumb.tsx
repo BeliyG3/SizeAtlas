@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { api } from "../../api/client";
+import { useState } from "react";
 import type { DupGroup } from "../../api/duplicates";
 import { ItemIcon } from "../contents/ItemIcon";
-import { mimeOf, type ThumbQueue } from "./thumbs";
+import type { ThumbQueue } from "./thumbs";
+import { useImageUrl } from "./viewer/useImageUrl";
 
 interface Props {
   group: DupGroup;
@@ -12,41 +12,21 @@ interface Props {
 }
 
 /**
- * The picture of a group (its copies are equal, so any one of them), asked through `queue` by
- * the group's key, from a copy not on a spinning disk if there is one (the list never wakes a
- * sleeping external disk then); the icon of its category until it comes, and when there is none (not an image
- * the webview shows, too large, in the cloud, gone, out of view). Its object URL is revoked as
- * soon as another picture or none is shown.
+ * The picture of a group (`useImageUrl`); the icon of its category until it comes, when there is
+ * none, and when the webview cannot decode it.
  */
 export function Thumb({ group, queue, large = false }: Props) {
-  const { key, name } = group;
-  const read = group.copies.find((c) => !c.hdd) ?? group.copies[0];
-  const { root = "", generation = 0, id = -1 } = read?.refs[0] ?? {};
-  const type = id < 0 ? null : mimeOf(name);
-  // The picture belongs to one file read as one type: anything else shows the icon until its own
-  // comes, so a revoked URL never stays on screen.
-  const file = `${key}|${type}|${root}|${generation}|${id}`;
-  const [shown, setShown] = useState<{ file: string; url: string } | null>(null);
-  useEffect(() => {
-    if (!type) return;
-    let live = true;
-    let url: string | null = null;
-    queue
-      .request(key, () => api.getThumbnail({ root, generation, id }))
-      .then(
-        (bytes) => {
-          if (!live || bytes.byteLength === 0) return;
-          url = URL.createObjectURL(new Blob([bytes], { type }));
-          setShown({ file, url });
-        },
-        // Out of view, or the backend failed: the icon stays.
-        () => {},
-      );
-    return () => {
-      live = false;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [queue, key, file, type, root, generation, id]);
-  if (shown?.file !== file) return <ItemIcon isDir={false} category={group.category} />;
-  return <img className={large ? "dup-picture" : "dup-thumb"} src={shown.url} alt="" />;
+  const picture = useImageUrl(group, queue);
+  const [broken, setBroken] = useState<string | null>(null);
+  if (picture.state !== "ready" || picture.url === broken) {
+    return <ItemIcon isDir={false} category={group.category} />;
+  }
+  return (
+    <img
+      className={large ? "dup-picture" : "dup-thumb"}
+      src={picture.url}
+      alt=""
+      onError={() => setBroken(picture.url)}
+    />
+  );
 }

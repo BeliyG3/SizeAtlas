@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createThumbQueue, mimeOf } from "./thumbs";
 
 /** A request that ends when the test says. */
@@ -51,6 +51,72 @@ describe("createThumbQueue", () => {
     const next = queue.request("b", () => Promise.resolve(new ArrayBuffer(2)));
     await expect(failed).rejects.toThrow("gone");
     expect((await next).byteLength).toBe(2);
+  });
+});
+
+describe("the picture URLs", () => {
+  const file = "k|image/png|C:\\|1|2";
+  const bytes = (n: number) => () => Promise.resolve(new ArrayBuffer(n));
+  beforeEach(() => {
+    let made = 0;
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => `blob:${++made}`),
+      revokeObjectURL: vi.fn(),
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("one_url_for_every_holder", async () => {
+    const queue = createThumbQueue();
+    const run = vi.fn(bytes(3));
+    const first = queue.acquire(file, "image/png", run);
+    const second = queue.acquire(file, "image/png", run);
+    expect(await first).toBe("blob:1");
+    expect(await second).toBe("blob:1");
+    expect(run).toHaveBeenCalledTimes(1);
+    expect((vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob).type).toBe("image/png");
+    queue.release(file);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    queue.release(file);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:1");
+  });
+
+  it("no_url_for_empty_bytes", async () => {
+    const queue = createThumbQueue();
+    const run = vi.fn(bytes(0));
+    expect(await queue.acquire(file, "image/png", run)).toBeNull();
+    expect(await queue.acquire(file, "image/png", run)).toBeNull();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it("a_release_before_the_load_revokes_it_when_it_comes", async () => {
+    const queue = createThumbQueue();
+    const load = pending();
+    const url = queue.acquire(file, "image/png", () => load.promise);
+    queue.release(file);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    load.done(new ArrayBuffer(3));
+    expect(await url).toBe("blob:1");
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:1");
+  });
+
+  it("goes through the queue by the group key, and asks again after a failure", async () => {
+    const queue = createThumbQueue(1);
+    const busy = pending();
+    queue.request("busy", () => busy.promise);
+    const kept = queue.acquire(file, "image/png", bytes(3));
+    queue.keep(new Set(["k"]));
+    busy.done(new ArrayBuffer(1));
+    expect(await kept).toBe("blob:1");
+    queue.request("busy", () => new Promise<ArrayBuffer>(() => {}));
+    const dropped = queue.acquire("d|image/png|C:\\|1|3", "image/png", bytes(3));
+    queue.keep(new Set(["k"]));
+    await expect(dropped).rejects.toThrow("cancelled");
+    const other = createThumbQueue();
+    const failing = () => Promise.reject(new Error("gone"));
+    await expect(other.acquire(file, "image/png", failing)).rejects.toThrow("gone");
+    expect(await other.acquire(file, "image/png", bytes(3))).toBe("blob:2");
   });
 });
 
