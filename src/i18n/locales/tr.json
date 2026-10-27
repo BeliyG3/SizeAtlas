@@ -20,6 +20,7 @@
   "tree.unaccounted": "Hesaba katılmayan",
   "tree.unaccountedHint": "Taramanın bulamadığı kullanılan alan: sistem dosyaları, okuyamadığınız klasörler ve çöp kutusu. Çöp kutusuna taşıdığınız öğeler, çöp kutusunu boşaltana kadar burada sayılır.",
   "menu.open": "Aç",
+  "menu.openWith": "Birlikte aç…",
   "menu.reveal": "Dosya yöneticisinde göster",
   "menu.properties": "Özellikler",
   "menu.scanFolder": "Bu klasörü tara",

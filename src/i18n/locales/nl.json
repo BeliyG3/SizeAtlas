@@ -20,6 +20,7 @@
   "tree.unaccounted": "Niet meegeteld",
   "tree.unaccountedHint": "Gebruikte ruimte die de scan niet heeft gevonden: systeembestanden, mappen die u niet kunt lezen en de prullenbak. Items die u naar de prullenbak verplaatst, tellen hier mee totdat u de prullenbak leegmaakt.",
   "menu.open": "Openen",
+  "menu.openWith": "Openen met…",
   "menu.reveal": "Weergeven in bestandsbeheer",
   "menu.properties": "Eigenschappen",
   "menu.scanFolder": "Deze map scannen",

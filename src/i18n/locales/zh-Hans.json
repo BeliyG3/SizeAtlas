@@ -18,6 +18,7 @@
   "tree.unaccounted": "未统计",
   "tree.unaccountedHint": "扫描未找到的已用空间：系统文件、无法读取的文件夹以及回收站。移到回收站的项目在清空回收站之前都计入此处。",
   "menu.open": "打开",
+  "menu.openWith": "打开方式…",
   "menu.reveal": "在文件夹中显示",
   "menu.properties": "属性",
   "menu.scanFolder": "扫描此文件夹",

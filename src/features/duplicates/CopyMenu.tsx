@@ -6,9 +6,7 @@ import { useT } from "../../i18n/react";
 import { Icon } from "../icons/Icon";
 import type { IconName } from "../icons/paths";
 import { Menu } from "../menu/Menu";
-
-/** Only Windows has a Properties dialog, and ends copied lines with CR LF. */
-const WINDOWS = /Windows/i.test(navigator.userAgent);
+import { WINDOWS } from "./platform";
 
 interface Props {
   /** The copies it acts on: the marked ones it opened on, else the one under it. */
@@ -52,6 +50,7 @@ export function CopyMenu({ copies, x, y, canTrash, trashNote, onTrash, onClose, 
   const groups = [
     !many && [
       item("open", t("menu.open"), () => onCopy(api.openItem)),
+      WINDOWS && item("open", t("menu.openWith"), () => onCopy(api.openWith)),
       item("reveal", t("menu.reveal"), () => onCopy(api.reveal)),
       WINDOWS && item("properties", t("menu.properties"), () => onCopy(api.showProperties)),
     ],

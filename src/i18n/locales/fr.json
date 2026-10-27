@@ -22,6 +22,7 @@
   "tree.unaccounted": "Non comptabilisé",
   "tree.unaccountedHint": "Espace utilisé que l’analyse n’a pas trouvé : fichiers système, dossiers que vous ne pouvez pas lire et la corbeille. Les éléments placés dans la corbeille sont comptés ici jusqu’à ce que vous la vidiez.",
   "menu.open": "Ouvrir",
+  "menu.openWith": "Ouvrir avec…",
   "menu.reveal": "Afficher dans le gestionnaire de fichiers",
   "menu.properties": "Propriétés",
   "menu.scanFolder": "Analyser ce dossier",

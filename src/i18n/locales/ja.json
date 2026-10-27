@@ -18,6 +18,7 @@
   "tree.unaccounted": "内訳不明",
   "tree.unaccountedHint": "スキャンで見つからなかった使用済み領域です。システムファイル、読み取れないフォルダー、ごみ箱が含まれます。ごみ箱に移動した項目も、ごみ箱を空にするまではここに計上されます。",
   "menu.open": "開く",
+  "menu.openWith": "プログラムから開く…",
   "menu.reveal": "ファイルマネージャーで表示",
   "menu.properties": "プロパティ",
   "menu.scanFolder": "このフォルダーをスキャン",

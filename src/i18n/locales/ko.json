@@ -18,6 +18,7 @@
   "tree.unaccounted": "미확인 공간",
   "tree.unaccountedHint": "스캔으로 찾지 못한 사용 공간입니다. 시스템 파일, 읽을 수 없는 폴더, 휴지통이 여기에 포함됩니다. 휴지통으로 이동한 항목도 휴지통을 비울 때까지 여기에 계산됩니다.",
   "menu.open": "열기",
+  "menu.openWith": "연결 프로그램…",
   "menu.reveal": "폴더에서 보기",
   "menu.properties": "속성",
   "menu.scanFolder": "이 폴더 스캔",

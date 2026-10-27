@@ -22,6 +22,7 @@
   "tree.unaccounted": "Non conteggiato",
   "tree.unaccountedHint": "Spazio occupato che la scansione non ha trovato: file di sistema, cartelle che non puoi leggere e il cestino. Gli elementi che sposti nel cestino vengono conteggiati qui finché non lo svuoti.",
   "menu.open": "Apri",
+  "menu.openWith": "Apri con…",
   "menu.reveal": "Mostra nel gestore di file",
   "menu.properties": "Proprietà",
   "menu.scanFolder": "Scansiona questa cartella",

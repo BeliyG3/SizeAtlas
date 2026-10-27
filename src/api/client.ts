@@ -97,6 +97,8 @@ export const api = {
   reveal: (generation: number, id: number) => invoke<void>("reveal", { generation, id }),
   /** A file opens in its default program, a folder in the file manager. */
   openItem: (generation: number, id: number) => invoke<void>("open_item", { generation, id }),
+  /** The "Open with" dialog of the system; Windows only. */
+  openWith: (generation: number, id: number) => invoke<void>("open_with", { generation, id }),
   /** The Properties dialog of the system; Windows only. */
   showProperties: (generation: number, id: number) =>
     invoke<void>("show_properties", { generation, id }),

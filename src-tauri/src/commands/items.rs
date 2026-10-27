@@ -1,4 +1,5 @@
-//! Commands that act on one item of the tree on disk: open, show, copy its path, properties.
+//! Commands that act on one item of the tree on disk: open, open with, show, copy its path,
+//! properties.
 //! Also copying a path the tree no longer has.
 //! Paths whose names were not valid Unicode are refused (`LossyName`), see `exact_path`.
 
@@ -10,6 +11,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use crate::error::CmdError;
 use crate::state::AppState;
 
+mod open_with;
 mod properties;
 
 fn io(path: &Path, e: impl ToString) -> CmdError {
@@ -115,4 +117,16 @@ pub async fn show_properties(
 ) -> Result<(), CmdError> {
     let path: PathBuf = on_path(&state, generation, id, |path| Ok(path.to_path_buf())).await?;
     properties::show(&window, path).await
+}
+
+/// The "Open with" dialog of the system for the item. Windows only.
+#[tauri::command]
+pub async fn open_with(
+    window: Window,
+    state: State<'_, AppState>,
+    generation: u64,
+    id: u32,
+) -> Result<(), CmdError> {
+    let path: PathBuf = on_path(&state, generation, id, |path| Ok(path.to_path_buf())).await?;
+    open_with::show(&window, path).await
 }

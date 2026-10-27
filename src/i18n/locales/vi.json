@@ -18,6 +18,7 @@
   "tree.unaccounted": "Không được tính",
   "tree.unaccountedHint": "Dung lượng đã dùng mà lần quét không tìm thấy: tệp hệ thống, thư mục bạn không đọc được và thùng rác. Các mục bạn chuyển vào thùng rác được tính ở đây cho đến khi bạn dọn sạch thùng rác.",
   "menu.open": "Mở",
+  "menu.openWith": "Mở bằng…",
   "menu.reveal": "Hiển thị trong trình quản lý tệp",
   "menu.properties": "Thuộc tính",
   "menu.scanFolder": "Quét thư mục này",

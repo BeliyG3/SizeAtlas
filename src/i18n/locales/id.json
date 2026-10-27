@@ -18,6 +18,7 @@
   "tree.unaccounted": "Tidak tercatat",
   "tree.unaccountedHint": "Ruang terpakai yang tidak ditemukan oleh pemindaian: file sistem, folder yang tidak dapat Anda baca, dan tempat sampah. Item yang Anda pindahkan ke tempat sampah dihitung di sini sampai Anda mengosongkannya.",
   "menu.open": "Buka",
+  "menu.openWith": "Buka dengan…",
   "menu.reveal": "Tampilkan di pengelola file",
   "menu.properties": "Properti",
   "menu.scanFolder": "Pindai folder ini",

@@ -22,6 +22,7 @@
   "tree.unaccounted": "Não contabilizado",
   "tree.unaccountedHint": "Espaço usado que a análise não encontrou: arquivos do sistema, pastas que você não pode ler e a lixeira. Itens movidos para a lixeira são contados aqui até você esvaziá-la.",
   "menu.open": "Abrir",
+  "menu.openWith": "Abrir com…",
   "menu.reveal": "Mostrar no gerenciador de arquivos",
   "menu.properties": "Propriedades",
   "menu.scanFolder": "Analisar esta pasta",

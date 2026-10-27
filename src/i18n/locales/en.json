@@ -20,6 +20,7 @@
   "tree.unaccounted": "Unaccounted",
   "tree.unaccountedHint": "Used space the scan did not find: system files, folders you cannot read and the trash. Items you move to the trash count here until you empty it.",
   "menu.open": "Open",
+  "menu.openWith": "Open with…",
   "menu.reveal": "Show in file manager",
   "menu.properties": "Properties",
   "menu.scanFolder": "Scan this folder",

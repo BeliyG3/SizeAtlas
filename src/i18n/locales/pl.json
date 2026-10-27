@@ -24,6 +24,7 @@
   "tree.unaccounted": "Nieuwzględnione",
   "tree.unaccountedHint": "Zajęte miejsce, którego nie wykryto podczas skanowania: pliki systemowe, foldery, których nie można odczytać, oraz kosz. Elementy przeniesione do kosza są tu liczone, dopóki go nie opróżnisz.",
   "menu.open": "Otwórz",
+  "menu.openWith": "Otwórz za pomocą…",
   "menu.reveal": "Pokaż w menedżerze plików",
   "menu.properties": "Właściwości",
   "menu.scanFolder": "Skanuj ten folder",

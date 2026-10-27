@@ -22,6 +22,7 @@
   "tree.unaccounted": "Sin contabilizar",
   "tree.unaccountedHint": "Espacio ocupado que el análisis no encontró: archivos del sistema, carpetas que no puedes leer y la papelera. Lo que muevas a la papelera se contabiliza aquí hasta que la vacíes.",
   "menu.open": "Abrir",
+  "menu.openWith": "Abrir con…",
   "menu.reveal": "Mostrar en el administrador de archivos",
   "menu.properties": "Propiedades",
   "menu.scanFolder": "Analizar esta carpeta",

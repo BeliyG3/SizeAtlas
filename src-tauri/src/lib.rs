@@ -67,6 +67,7 @@ pub fn run() {
             commands::items::reveal,
             commands::items::open_item,
             commands::items::item_path,
+            commands::items::open_with,
             commands::items::show_properties,
             commands::is_elevated,
             commands::has_full_disk_access,
