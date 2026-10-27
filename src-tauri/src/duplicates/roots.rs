@@ -64,17 +64,21 @@ pub(crate) fn current(state: &AppState) -> (Vec<RootMark>, Vec<String>) {
 /// the machine); otherwise every disk is `Unknown` and no volume is asked (it is empty). The
 /// trees are taken last, in one read, so none is held across a question or a second read.
 ///
-/// With `scope` only its root is taken (or skipped), walked from its folder: `StaleId` when
-/// that root is not open with its generation, or the folder is no live folder of it.
+/// With `scope` only its root is taken (or skipped), walked from its folder, and the roots open
+/// inside that folder (whole, so their files stay theirs, as without a scope): `StaleId` when
+/// the root is not open with its generation, or the folder is no live folder of it.
 pub(crate) fn pick(
     state: &AppState,
     disks: bool,
     scope: Option<&ScopeDto>,
 ) -> Result<(Vec<Picked>, Vec<String>), CmdError> {
-    let (mut roots, skipped) = current(state);
-    // No other root is asked its volume: that may wake a sleeping or network one.
+    let (mut roots, mut skipped) = current(state);
+    // No root outside the folder is asked its volume: that may wake a sleeping or network one.
     if let Some(s) = scope {
-        roots.retain(|m| m.path == s.root);
+        let folder = folder_of(state, s)?;
+        let within = |p: &str| p == s.root || Path::new(p).starts_with(&folder);
+        roots.retain(|m| within(&m.path));
+        skipped.retain(|p| within(p));
     }
     if let Some(first) = roots.first() {
         state.duplicates_env(&first.path);
@@ -116,35 +120,55 @@ pub(crate) fn pick(
     }
 }
 
-/// The root of `scope` among `picked` (walked from its folder) and the path of the root if it
-/// is skipped instead; `StaleId` when it is neither, of another generation, or the folder is
-/// no live folder of it.
+/// The full path of the folder of `scope`, from the open tree of its root (let go at once);
+/// `StaleId` when that root, scanned or being scanned, is not open with the scope's generation,
+/// or the folder is no live folder of it.
+fn folder_of(state: &AppState, scope: &ScopeDto) -> Result<PathBuf, CmdError> {
+    let trees = state.open_trees();
+    let (_, tree) = (trees.iter())
+        .find(|(g, t)| t.name(0) == scope.root && *g == scope.generation)
+        .ok_or(CmdError::StaleId)?;
+    if !live_folder(tree, scope.folder) {
+        return Err(CmdError::StaleId);
+    }
+    Ok(tree.path(scope.folder))
+}
+
+fn live_folder(tree: &Tree, id: u32) -> bool {
+    (id as usize) < tree.len() && {
+        let node = tree.node(id);
+        node.is_alive() && node.is_dir()
+    }
+}
+
+/// `picked` with the root of `scope` walked from its folder, checked again on the tree taken
+/// (it may have changed since [`folder_of`]); `StaleId` when it was closed meanwhile.
 fn scoped(
     mut picked: Vec<Picked>,
-    mut skipped: Vec<String>,
+    skipped: Vec<String>,
     scope: &ScopeDto,
 ) -> Result<(Vec<Picked>, Vec<String>), CmdError> {
-    skipped.retain(|p| *p == scope.root);
-    if let Some(p) = picked.first_mut() {
-        let tree = &p.tree;
-        let folder = (scope.folder as usize) < tree.len() && {
-            let node = tree.node(scope.folder);
-            node.is_alive() && node.is_dir()
-        };
-        if p.generation != scope.generation || !folder {
-            return Err(CmdError::StaleId);
+    match picked.iter_mut().find(|p| p.root == scope.root) {
+        Some(p) => {
+            if p.generation != scope.generation || !live_folder(&p.tree, scope.folder) {
+                return Err(CmdError::StaleId);
+            }
+            p.start = scope.folder;
         }
-        p.start = scope.folder;
-    } else if skipped.is_empty() {
-        return Err(CmdError::StaleId);
+        None if !skipped.contains(&scope.root) => return Err(CmdError::StaleId),
+        None => {}
     }
     Ok((picked, skipped))
 }
 
-/// The full path of the folder a search of `scope` walks from; `None` without a scope or a
-/// root taken.
+/// The full path of the folder a search of `scope` walks from; `None` without a scope or with
+/// its root not taken.
 pub(crate) fn scope_path(picked: &[Picked], scope: Option<&ScopeDto>) -> Option<String> {
-    scope.and(picked.first()).map(Picked::start_path)
+    let s = scope?;
+    picked
+        .iter()
+        .find(|p| p.root == s.root)
+        .map(Picked::start_path)
 }
 
 /// The kind of the disk mounted at the longest mount point that holds `root`, compared by

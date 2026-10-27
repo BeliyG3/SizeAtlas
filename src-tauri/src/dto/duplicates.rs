@@ -98,7 +98,8 @@ pub struct DuplicatesDto {
     pub running: bool,
     /// Not cancelled.
     pub complete: bool,
-    /// A searched root changed, closed, or another one opened: search again before removing.
+    /// A searched root changed or closed, or (without a scope) another one opened: search again
+    /// before removing.
     pub stale: bool,
     /// `groups` is the whole result, not a change.
     pub full: bool,

@@ -155,3 +155,49 @@ fn no_scope_is_unchanged() {
     want.sort();
     assert_eq!(parents(&state), want);
 }
+
+#[test]
+fn a_dead_folder_is_refused() {
+    let (state, _) = state();
+    let dir = dir_named("dead-scope");
+    for rel in ["f/a", "g/b"] {
+        let path = dir.path().join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, [1; 8192]).unwrap();
+        settle(&path);
+    }
+    let mut tree = scanned(dir.path());
+    let g = at(&tree, "g");
+    tree.remove(g);
+    let root = tree.name(0).to_owned();
+    let generation = state.install_tree(tree);
+    let dead = ScopeDto {
+        root,
+        generation,
+        folder: g,
+    };
+    let e = state.estimate_duplicates("", false, Some(&dead));
+    assert_eq!(e.err(), Some(CmdError::StaleId));
+    let found = find_in(&state, Some(&dead), recorder().0);
+    assert_eq!(found.err(), Some(CmdError::StaleId));
+}
+
+#[test]
+fn a_scope_on_a_root_being_scanned_checks_its_generation() {
+    let (state, _) = state();
+    let (_a, [f, _, _]) = open_two_pairs(&state, "scanning-scope");
+    state.enqueue(f.root.clone()).unwrap();
+    let e = state.estimate_duplicates("", false, Some(&f)).unwrap();
+    assert_eq!(
+        (e.roots, &e.skipped, e.files),
+        (0, &vec![f.root.clone()], 0)
+    );
+    let old = ScopeDto {
+        generation: f.generation + 1,
+        ..f.clone()
+    };
+    let e = state.estimate_duplicates("", false, Some(&old));
+    assert_eq!(e.err(), Some(CmdError::StaleId));
+    let found = find_in(&state, Some(&old), recorder().0);
+    assert_eq!(found.err(), Some(CmdError::StaleId));
+}

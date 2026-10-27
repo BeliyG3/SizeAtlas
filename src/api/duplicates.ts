@@ -87,7 +87,10 @@ export interface Duplicates {
   running: boolean;
   /** Not cancelled. */
   complete: boolean;
-  /** A searched root changed, closed, or another one opened: search again before removing. */
+  /**
+   * A searched root changed or closed, or (without a scope) another one opened: search again
+   * before removing.
+   */
   stale: boolean;
   /** `groups` is the whole result, not a change. */
   full: boolean;

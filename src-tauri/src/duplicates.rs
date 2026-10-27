@@ -243,6 +243,8 @@ mod roots_tests;
 #[cfg(test)]
 mod scope_tests;
 #[cfg(test)]
+mod scope_trash_tests;
+#[cfg(test)]
 mod stale_tests;
 #[cfg(test)]
 mod status_tests;
