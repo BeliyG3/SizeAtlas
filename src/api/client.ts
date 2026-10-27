@@ -99,6 +99,8 @@ export const api = {
   openItem: (generation: number, id: number) => invoke<void>("open_item", { generation, id }),
   /** The "Open with" dialog of the system; Windows only. */
   openWith: (generation: number, id: number) => invoke<void>("open_with", { generation, id }),
+  /** Opens the picture viewer window, or raises the open one. */
+  openViewer: (title: string, dark: boolean) => invoke<void>("open_viewer", { title, dark }),
   /** The Properties dialog of the system; Windows only. */
   showProperties: (generation: number, id: number) =>
     invoke<void>("show_properties", { generation, id }),

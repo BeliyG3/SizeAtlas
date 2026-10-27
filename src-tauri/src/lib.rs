@@ -16,6 +16,7 @@ mod recycle;
 mod sources;
 mod state;
 mod title_bar;
+mod viewer;
 mod worker;
 mod writes;
 
@@ -76,6 +77,7 @@ pub fn run() {
             commands::open_privacy_settings,
             commands::open_url,
             title_bar::set_title_bar,
+            viewer::open_viewer,
             commands::roots::list_sources,
             commands::roots::list_roots,
             commands::roots::scan,
@@ -107,10 +109,15 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
+            // Closing the viewer never runs the exit.
+            if let WindowEvent::CloseRequested { api, .. } = event
+                && viewer::runs_exit(window.label())
+            {
                 let state = window.state::<AppState>().inner().clone();
                 match state.on_exit_request() {
-                    ExitDecision::Allow => {}
+                    // Ends the process with every other window (the viewer too); the code
+                    // `Some(0)` skips the `code: None` arm below.
+                    ExitDecision::Allow => window.app_handle().exit(0),
                     ExitDecision::Prevent => api.prevent_close(),
                     ExitDecision::PreventAndWait => {
                         api.prevent_close();
