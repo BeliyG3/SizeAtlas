@@ -12,6 +12,9 @@ mod windows;
 #[cfg(windows)]
 pub use windows::*;
 
+mod priority;
+pub(crate) use priority::lower_this_thread;
+
 /// The identity of a file within its volume: Windows the volume serial number and the 128-bit
 /// file id, Unix the device and the inode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

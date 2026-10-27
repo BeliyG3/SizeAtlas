@@ -6,6 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::DiskKind;
+use crate::platform;
 
 /// At most one progress event this often.
 pub(crate) const PACE: Duration = Duration::from_millis(150);
@@ -56,6 +57,7 @@ pub(crate) fn run<T: Sync, R: Send>(
         for ((queue, next), disk) in queues.iter().zip(&next).zip(disks) {
             for _ in 0..disk.threads().min(queue.len()) {
                 readers.push(s.spawn(move || {
+                    platform::lower_this_thread();
                     let mut done = Vec::new();
                     while !cancel.load(Ordering::Relaxed) {
                         let Some(&i) = queue.get(next.fetch_add(1, Ordering::Relaxed)) else {
