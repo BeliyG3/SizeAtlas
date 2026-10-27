@@ -84,7 +84,7 @@ impl Search<'_> {
             sub[0].object.paths[0].len > TAIL_FROM && sub.iter().all(|i| i.full.is_none())
         });
         let count = long.iter().map(Vec::len).sum::<usize>() as u64;
-        self.advance(|p| p.files_total -= bound - count);
+        self.advance(|_, s| s.total -= bound - count);
         for sub in self.read_all(long, |item| self.tail(item)) {
             next.extend(split(sub, |i| &i.object).into_iter().map(|(_, sub)| sub));
         }
@@ -106,7 +106,7 @@ impl Search<'_> {
             .iter()
             .map(|&(s, k)| subs[s][k].object.paths[0].len)
             .sum();
-        self.advance(|p| {
+        self.advance(|p, _| {
             *p = Progress {
                 phase: Phase::Full,
                 files_done: 0,

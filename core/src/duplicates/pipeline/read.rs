@@ -40,7 +40,7 @@ impl Search<'_> {
         let hash = self.read_full(item, &mut read);
         if hash != Ok(None) {
             let rest = item.object.paths[0].len.saturating_sub(read);
-            self.advance(|p| p.bytes_done += rest);
+            self.advance(|p, _| p.bytes_done += rest);
         }
         hash
     }
@@ -52,7 +52,7 @@ impl Search<'_> {
         let mut progress = |n: u64| {
             let n = n.min(stamp.len - *read);
             *read += n;
-            self.advance(|p| p.bytes_done += n);
+            self.advance(|p, _| p.bytes_done += n);
         };
         let hash = hash::full(&mut file, self.cancel, &mut progress).map_err(|e| skip_of(&e))?;
         let Some(hash) = hash else {

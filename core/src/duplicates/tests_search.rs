@@ -191,6 +191,46 @@ fn progress_comes_in_two_phases() {
 }
 
 #[test]
+fn the_starts_of_files_are_counted_in_files() {
+    // Three files of one length, one of them other: each is opened and read at its start, yet
+    // the progress counts three files, as the estimate does.
+    let d = dir();
+    let bytes = data(5000);
+    put(d.path(), "a", &bytes);
+    put(d.path(), "b", &bytes);
+    let mut other = bytes.clone();
+    other[0] ^= 1;
+    put(d.path(), "c", &other);
+    let (_, _, events) = run(&[&scan_of(d.path())], "", &cache());
+    let progress: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Progress(p) => Some(*p),
+            Event::Group(_) => None,
+        })
+        .collect();
+    let starts: Vec<_> = progress
+        .iter()
+        .filter(|p| p.phase == Phase::Prefix)
+        .collect();
+    assert!(!starts.is_empty());
+    for p in starts {
+        assert_eq!(p.files_total, 3, "{p:?}");
+        assert!(p.files_done <= p.files_total, "{p:?}");
+    }
+}
+
+#[test]
+fn steps_are_shown_as_a_share_of_the_files() {
+    assert_eq!(super::pipeline::files_done(0, 6, 3), 0);
+    assert_eq!(super::pipeline::files_done(3, 6, 3), 1);
+    assert_eq!(super::pipeline::files_done(6, 6, 3), 3);
+    // A total that shrank below what was done, or none at all, never shows more than all.
+    assert_eq!(super::pipeline::files_done(7, 6, 3), 3);
+    assert_eq!(super::pipeline::files_done(0, 0, 3), 0);
+}
+
+#[test]
 fn a_root_inside_another_counts_once() {
     let d = dir();
     put(d.path(), "a.jpg", &data(5000));

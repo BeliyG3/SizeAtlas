@@ -39,6 +39,24 @@ pub struct Progress {
     pub bytes_total: u64,
 }
 
+/// The reads of the first phase: every path is opened, then read for its prefix and maybe its
+/// tail, at most once each; `total` shrinks as each step finds less to read. Shown as a share of
+/// the `files` (see [`files_done`]), the number the estimate gives.
+#[derive(Default)]
+struct Steps {
+    done: u64,
+    total: u64,
+    files: u64,
+}
+
+/// How many of `files` the `done` of `total` steps stand for; never more than all of them.
+pub(super) fn files_done(done: u64, total: u64, files: u64) -> u64 {
+    if total == 0 {
+        return 0;
+    }
+    (u128::from(done.min(total)) * u128::from(files) / u128::from(total)) as u64
+}
+
 #[derive(Clone, Debug)]
 pub enum Event {
     Progress(Progress),
@@ -178,7 +196,7 @@ struct Search<'a> {
     cache: &'a Mutex<HashCache>,
     cancel: &'a AtomicBool,
     emit: &'a (dyn Fn(Event) + Sync),
-    progress: Mutex<(Progress, Pacer)>,
+    progress: Mutex<(Progress, Pacer, Steps)>,
     unread: Mutex<Unread>,
     stats: Mutex<Stats>,
     /// Held while checking `cancel` and giving a group, so none is given after a cancel.
@@ -208,7 +226,7 @@ impl<'a> Search<'a> {
             cache,
             cancel,
             emit,
-            progress: Mutex::new((progress, Pacer::default())),
+            progress: Mutex::new((progress, Pacer::default(), Steps::default())),
             unread: Mutex::default(),
             stats: Mutex::default(),
             publish: Mutex::new(()),
@@ -224,15 +242,16 @@ impl<'a> Search<'a> {
             .flatten()
             .filter(|(at, _)| at.len > TAIL_FROM);
         let long = long.count() as u64;
-        // Every path is opened, then read for its prefix and maybe its tail, at most once
-        // each; the total shrinks as each step finds less to read.
-        self.advance(|p| p.files_total = 2 * paths + long);
+        self.advance(|_, s| {
+            s.total = 2 * paths + long;
+            s.files = paths;
+        });
         let objects = self.identify(buckets);
         if self.stopped() {
             return;
         }
         let found = objects.iter().map(Vec::len).sum::<usize>() as u64;
-        self.advance(|p| p.files_total -= paths - found);
+        self.advance(|_, s| s.total -= paths - found);
         let subs = self.prefixes(objects);
         if self.stopped() {
             return;
@@ -244,7 +263,8 @@ impl<'a> Search<'a> {
         self.fulls(subs);
     }
 
-    /// Runs `work` on the pool of each volume, counting each job as a file done.
+    /// Runs `work` on the pool of each volume, counting each job: a step of the first phase, a
+    /// file of the second.
     fn pool<T: Sync, R: Send>(
         &self,
         jobs: &[T],
@@ -253,17 +273,25 @@ impl<'a> Search<'a> {
     ) -> Vec<Option<R>> {
         pool::run(jobs, place, &self.disks, self.cancel, |job| {
             let r = work(job);
-            self.advance(|p| p.files_done += 1);
+            self.advance(|p, s| match p.phase {
+                Phase::Prefix => s.done += 1,
+                Phase::Full => p.files_done += 1,
+            });
             r
         })
     }
 
     /// Changes the progress, and gives it if one is due. It is given under the lock, so events
     /// keep their order; `emit` never comes back here, and no other lock is held around it.
-    fn advance(&self, change: impl FnOnce(&mut Progress)) {
+    fn advance(&self, change: impl FnOnce(&mut Progress, &mut Steps)) {
         let now = Instant::now();
         let mut g = lock(&self.progress);
-        change(&mut g.0);
+        let (progress, _, steps) = &mut *g;
+        change(progress, steps);
+        if progress.phase == Phase::Prefix {
+            progress.files_total = steps.files;
+            progress.files_done = files_done(steps.done, steps.total, steps.files);
+        }
         if g.1.due(now) {
             (self.emit)(Event::Progress(g.0));
         }
