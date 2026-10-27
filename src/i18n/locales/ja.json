@@ -355,7 +355,7 @@
   "dup.colCopies": "コピー数",
   "dup.colFree": "解放可能",
   "dup.colRoot": "ドライブまたはフォルダー",
-  "dup.colMarks": "注記",
+  "dup.colMarks": "備考",
   "dup.protected": "システムフォルダー — ここでは削除されません",
   "dup.hardlink": "ハードリンク: 他のリンクは開いているドライブの外にあります",
   "dup.synced": "同期済み: 削除するとすべてのデバイスで削除されます",

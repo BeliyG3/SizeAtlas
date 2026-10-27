@@ -355,7 +355,7 @@
   "dup.colCopies": "사본",
   "dup.colFree": "확보 가능",
   "dup.colRoot": "드라이브 또는 폴더",
-  "dup.colMarks": "참고",
+  "dup.colMarks": "비고",
   "dup.protected": "시스템 폴더 — 여기서는 삭제되지 않음",
   "dup.hardlink": "하드 링크: 다른 링크가 열려 있는 드라이브 밖에 있음",
   "dup.synced": "동기화됨: 삭제하면 모든 기기에서 삭제됩니다",
