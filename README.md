@@ -17,6 +17,7 @@ A cross-platform disk usage analyzer: see which folders and file types take up y
 
 - Scan drives and folders, and keep several of them side by side in one folder tree. The tree fills in while the first scan of a drive runs, and you can browse it meanwhile. Scans wait in a queue and run one at a time.
 - See where the space goes: a sortable table of the current folder; lists of the largest, oldest, newest and empty items below it, and of the folders that grew most since the last scan; pie and bar charts, a treemap, file types and the largest files; free and unaccounted space of a drive.
+- View a drive or folder as a 3D city: folders are plates stacked by depth, and files are buildings whose height grows with their size. Rotate and zoom the city, and click a block to select it in the tree.
 - Search by name or extension, and filter the results by size, date and type.
 - Refresh a single folder after a change, and move files and folders to the trash after a confirmation.
 - Find known junk (caches, old temporary files, crash dumps) in two lists, **Can be cleaned** and **Check before deleting**, and move it to the trash or, on an explicit command, delete it for good.
