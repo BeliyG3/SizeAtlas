@@ -174,6 +174,19 @@ pub async fn get_treemap(
     Ok(tauri::ipc::Response::new(bytes))
 }
 
+/// Raw bytes of the whole root's city (format in `sizeatlas_core::treemap`).
+#[tauri::command]
+pub async fn get_city(
+    state: State<'_, AppState>,
+    generation: u64,
+) -> Result<tauri::ipc::Response, CmdError> {
+    let state = state.inner().clone();
+    let bytes = tauri::async_runtime::spawn_blocking(move || state.city(generation))
+        .await
+        .map_err(CmdError::from)??;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[tauri::command]
 pub fn is_elevated() -> bool {
     elevate::is_elevated()

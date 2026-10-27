@@ -181,6 +181,30 @@ fn panels_and_treemap_describe_the_subtree() {
 }
 
 #[test]
+fn city_lays_out_the_whole_root_with_sizes() {
+    let state = AppState::default();
+    let (_dir, tree) = scanned_tree();
+    let generation = state.install_tree(tree);
+    let bytes = state.city(generation).unwrap();
+    assert_eq!(
+        u64::from_le_bytes(bytes[..8].try_into().unwrap()),
+        generation
+    );
+    let count = u32::from_le_bytes(bytes[16..20].try_into().unwrap()) as usize;
+    assert_eq!(count, 3);
+    assert_eq!(
+        bytes.len(),
+        treemap::HEADER_LEN + treemap::CITY_RECORD_LEN * count
+    );
+    let sizes: Vec<u64> = bytes[treemap::HEADER_LEN..]
+        .chunks(treemap::CITY_RECORD_LEN)
+        .map(|rec| u64::from_le_bytes(rec[24..32].try_into().unwrap()))
+        .collect();
+    assert!(sizes.iter().all(|&size| size > 0));
+    assert_eq!(state.city(generation + 1), Err(CmdError::StaleId));
+}
+
+#[test]
 fn crumbs_carry_size_and_rank() {
     let state = AppState::default();
     let (_dir, tree) = scanned_tree();

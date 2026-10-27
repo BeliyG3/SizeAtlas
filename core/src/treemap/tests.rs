@@ -158,3 +158,79 @@ fn encoding_matches_the_wire_format() {
     assert_eq!(bytes, expected);
     assert_eq!(bytes.len(), HEADER_LEN + RECORD_LEN);
 }
+
+fn city_records(bytes: &[u8]) -> Vec<&[u8]> {
+    bytes[HEADER_LEN..].chunks(CITY_RECORD_LEN).collect()
+}
+
+fn id_of(record: &[u8]) -> u32 {
+    u32::from_le_bytes(record[16..20].try_into().unwrap())
+}
+
+#[test]
+fn city_encoding_adds_size_and_expanded_at_fixed_offsets() {
+    let tree = sample_tree();
+    let rects = layout(&tree, 0, CITY_FIELD, CITY_FIELD, MAX_RECTS);
+    let bytes = encode_city(7, 9, true, &rects, &tree);
+    assert_eq!(
+        bytes[..HEADER_LEN],
+        encode(7, 9, true, &rects)[..HEADER_LEN]
+    );
+    assert_eq!(bytes.len(), HEADER_LEN + rects.len() * CITY_RECORD_LEN);
+    assert_eq!(rects.len(), 6);
+    for (r, rec) in rects.iter().zip(city_records(&bytes)) {
+        assert_eq!(f32::from_le_bytes(rec[0..4].try_into().unwrap()), r.x);
+        assert_eq!(f32::from_le_bytes(rec[12..16].try_into().unwrap()), r.h);
+        assert_eq!(id_of(rec), r.id);
+        assert_eq!(rec[20..23], [r.category, r.depth, u8::from(r.is_dir)]);
+        let size = u64::from_le_bytes(rec[24..32].try_into().unwrap());
+        assert_eq!(size, tree.node(r.id).size);
+        // "docs" and "deep" have laid-out children; files never do.
+        let name = tree.name(r.id);
+        assert_eq!(
+            rec[23],
+            u8::from(name == "docs" || name == "deep"),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn a_folder_whose_children_are_not_laid_out_is_not_expanded() {
+    let file = |name: &str, size| FileRec {
+        name: name.into(),
+        size,
+        len: size,
+        mtime: 0,
+        flags: 0,
+        ino: None,
+    };
+    let dir = |id, parent, name: &str, files| DirRec {
+        id,
+        parent,
+        name: name.into(),
+        mtime: 0,
+        flags: 0,
+        files,
+    };
+    // "thin" gets a 3 × 100 strip: drawn, but its inside is narrower than MIN_SIDE.
+    let tree = Tree::from_records(
+        vec![
+            dir(0, NO_PARENT, "/r", vec![file("big", 97)]),
+            dir(1, 0, "thin", vec![file("a", 1), file("b", 1), file("c", 1)]),
+        ],
+        ScanMeta {
+            cluster: 0,
+            size_mode: SizeMode::Logical,
+            scanned_at: 0,
+        },
+    );
+    let rects = layout(&tree, 0, 100.0, 100.0, MAX_RECTS);
+    assert_eq!(rects.len(), 2);
+    let bytes = encode_city(1, 1, false, &rects, &tree);
+    let thin = city_records(&bytes)
+        .into_iter()
+        .find(|rec| tree.name(id_of(rec)) == "thin")
+        .unwrap();
+    assert_eq!((thin[22], thin[23]), (1, 0));
+}

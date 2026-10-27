@@ -47,4 +47,19 @@ impl AppState {
             treemap::encode(generation, tree.rev, tree.approximate, &rects)
         })
     }
+
+    /// Encoded city of the whole root `generation`: a fixed-size layout with node sizes
+    /// (see `sizeatlas_core::treemap`).
+    pub fn city(&self, generation: u64) -> Result<Vec<u8>, CmdError> {
+        self.with_live(generation, 0, |tree| {
+            let rects = treemap::layout(
+                tree,
+                0,
+                treemap::CITY_FIELD,
+                treemap::CITY_FIELD,
+                treemap::MAX_RECTS,
+            );
+            treemap::encode_city(generation, tree.rev, tree.approximate, &rects, tree)
+        })
+    }
 }

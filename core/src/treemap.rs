@@ -11,6 +11,9 @@ use std::collections::BinaryHeap;
 
 use crate::tree::Tree;
 
+mod city;
+pub use city::{CITY_FIELD, CITY_RECORD_LEN, encode_city};
+
 pub const HEADER_LEN: usize = 24;
 pub const RECORD_LEN: usize = 24;
 /// Rectangle budget of one response: plenty of detail, about 480 KB.
@@ -230,13 +233,26 @@ fn squarify(areas: &[f64], mut r: Area, out: &mut Vec<Area>) {
     }
 }
 
-/// Serializes rectangles in the wire format described in the module docs.
-pub fn encode(generation: u64, rev: u64, approximate: bool, rects: &[Rect]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(HEADER_LEN + rects.len() * RECORD_LEN);
+/// The 24-byte header shared by the treemap and the city responses; the buffer has room
+/// for `count` records of `record_len` bytes.
+fn header(
+    generation: u64,
+    rev: u64,
+    approximate: bool,
+    count: usize,
+    record_len: usize,
+) -> Vec<u8> {
+    let mut out = Vec::with_capacity(HEADER_LEN + count * record_len);
     out.extend_from_slice(&generation.to_le_bytes());
     out.extend_from_slice(&rev.to_le_bytes());
-    out.extend_from_slice(&(rects.len() as u32).to_le_bytes());
+    out.extend_from_slice(&(count as u32).to_le_bytes());
     out.extend_from_slice(&[u8::from(approximate), 0, 0, 0]);
+    out
+}
+
+/// Serializes rectangles in the wire format described in the module docs.
+pub fn encode(generation: u64, rev: u64, approximate: bool, rects: &[Rect]) -> Vec<u8> {
+    let mut out = header(generation, rev, approximate, rects.len(), RECORD_LEN);
     for r in rects {
         for v in [r.x, r.y, r.w, r.h] {
             out.extend_from_slice(&v.to_le_bytes());

@@ -90,6 +90,8 @@ export const api = {
   /** Raw bytes; decode with `parseTreemap`. */
   getTreemap: (generation: number, id: number, width: number, height: number) =>
     invoke<ArrayBuffer>("get_treemap", { generation, id, width, height }),
+  /** Raw bytes of the whole root's city; decode with `parseCity`. */
+  getCity: (generation: number) => invoke<ArrayBuffer>("get_city", { generation }),
   /** One path per line. */
   copyPaths: (generation: number, ids: number[]) => invoke<void>("copy_paths", { generation, ids }),
   /** `text` as it is, such as the path of a deleted folder, which the tree no longer has. */
