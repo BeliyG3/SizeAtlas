@@ -97,7 +97,7 @@
   "treemap.empty": "Nothing to show: this folder takes no space.",
   "city.reset": "Reset view",
   "city.unavailable": "3D view is not available on this system",
-  "city.label": "3D city of the drive",
+  "city.label": "3D city of the scanned drive or folder",
   "city.folder": "Folder",
   "city.file": "File",
   "city.empty": "Select a drive or folder that has a scan",

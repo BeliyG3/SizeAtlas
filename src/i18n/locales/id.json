@@ -91,7 +91,7 @@
   "treemap.empty": "Tidak ada yang ditampilkan: folder ini tidak memakai ruang.",
   "city.reset": "Atur ulang tampilan",
   "city.unavailable": "Tampilan 3D tidak tersedia di sistem ini",
-  "city.label": "Kota 3D dari drive",
+  "city.label": "Kota 3D dari drive atau folder yang dipindai",
   "city.folder": "Folder",
   "city.file": "File",
   "city.empty": "Pilih drive atau folder yang sudah dipindai",

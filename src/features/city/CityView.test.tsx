@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../api/client";
 import { rt } from "../lists/hookRuntime";
 import { CityView } from "./CityView";
-import { createScene } from "./scene";
+import { createScene, type Hover } from "./scene";
 
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
@@ -52,6 +52,7 @@ const texts = () => elements(tree).flatMap((el) => [el.props.children].flat());
 const canvas = () => elements(tree).find((el) => el.type === "canvas");
 
 beforeEach(() => {
+  props.generation = 1;
   rt.state.slots = [];
   vi.clearAllMocks();
   vi.stubGlobal("document", { documentElement: {} });
@@ -93,6 +94,56 @@ describe("CityView", () => {
     expect(scene.setTheme).toHaveBeenCalledWith({
       palette: expect.objectContaining({ dirFill: "#20232b" }),
       background: "#181818",
+    });
+  });
+
+  describe("the tooltip", () => {
+    const block = { id: 5, isDir: false, size: 10 };
+    const hover = (x: number, y: number) =>
+      vi.mocked(createScene).mock.calls[0][2].onHover({ block, x, y, w: 250, h: 300 } as Hover);
+    const tip = () => elements(tree).find((el) => el.props.className === "city-tip");
+    const fake = { offsetWidth: 200, offsetHeight: 40, style: {} as Record<string, string> };
+
+    async function start() {
+      const scene = { setCity: vi.fn(), setTheme: vi.fn(), reset: vi.fn(), dispose: vi.fn() };
+      vi.mocked(createScene).mockReturnValue(scene);
+      render();
+      (canvas()!.props.ref as (el: unknown) => void)({});
+      render();
+      await vi.dynamicImportSettled();
+      render();
+    }
+
+    it("stays inside the panel, flipped and clamped beside the pointer", async () => {
+      await start();
+      hover(20, 20);
+      render();
+      (tip()!.props.ref as { current: unknown }).current = fake;
+      render();
+      expect(fake.style).toMatchObject({ left: "34px", top: "34px" });
+      // No room on either side of the pointer: the left edge, never past it.
+      hover(100, 290);
+      render();
+      expect(fake.style).toMatchObject({ left: "0px", top: "236px" });
+    });
+
+    it("never names a block with the previous root's crumbs", async () => {
+      vi.mocked(api.getCrumbs).mockImplementation((generation) =>
+        Promise.resolve([{ id: 5, name: `root${generation}`, size: 1, rank: 0 }]),
+      );
+      await start();
+      vi.useFakeTimers();
+      hover(20, 20);
+      render();
+      await vi.advanceTimersByTimeAsync(200);
+      render();
+      expect(texts()).toContain("root1");
+      props.generation = 2;
+      render();
+      hover(20, 20);
+      render();
+      expect(texts()).not.toContain("root1");
+      vi.useRealTimers();
     });
   });
 });

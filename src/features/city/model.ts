@@ -55,6 +55,8 @@ export interface City {
   focusBox: Box | null;
   /** The whole ground up to the tallest top. */
   bounds: Box;
+  /** The layout it was built from: cities of the same `data` differ only in their focus. */
+  data: CityData;
 }
 
 /** Height of a building of `size` when the biggest one has `max`: grows with √size. */
@@ -131,7 +133,7 @@ export function buildCity(data: CityData, focus: number | null): City {
       }
     : null;
   const bounds: Box = { min: [0, 0, 0], max: [WORLD, top, WORLD] };
-  return { blocks, focusBox, bounds };
+  return { blocks, focusBox, bounds, data };
 }
 
 /**

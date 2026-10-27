@@ -91,7 +91,7 @@
   "treemap.empty": "표시할 항목이 없습니다. 이 폴더는 공간을 차지하지 않습니다.",
   "city.reset": "보기 초기화",
   "city.unavailable": "이 시스템에서는 3D 보기를 사용할 수 없습니다",
-  "city.label": "드라이브의 3D 도시",
+  "city.label": "스캔한 드라이브 또는 폴더의 3D 도시",
   "city.folder": "폴더",
   "city.file": "파일",
   "city.empty": "스캔한 드라이브나 폴더를 선택하세요",

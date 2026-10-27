@@ -33,8 +33,10 @@ const FOV = 45;
 const START_POLAR = (55 * Math.PI) / 180;
 const MAX_POLAR = (85 * Math.PI) / 180;
 const FLY_MS = 400;
-/** The outline sits this far outside the focus box, so its lines never sink into faces. */
+/** The outline sits this far outside the focus box, so its lines never sink into faces... */
 const OUTLINE_MARGIN = 0.01;
+/** ...and its base ring this far above the focus bottom, on the parent plate, not inside it. */
+const OUTLINE_LIFT = 0.002;
 
 export interface SceneEvents {
   onHover: (hover: Hover | null) => void;
@@ -44,7 +46,10 @@ export interface SceneEvents {
 }
 
 export interface CityScene {
-  /** Shows `city` (null: nothing); a new `generation` also resets the camera. */
+  /**
+   * Shows `city` (null: nothing); a new `generation` also resets the camera. A city of the
+   * shown `data` (only the focus moved) is repainted in place, keeping the meshes and the hover.
+   */
   setCity: (city: City | null, generation: number) => void;
   setTheme: (theme: CityTheme) => void;
   reset: () => void;
@@ -58,9 +63,12 @@ export function createScene(
   events: SceneEvents,
 ): CityScene {
   const renderer = new WebGLRenderer({ canvas, antialias: true });
+  // What a failing set-up has attached so far, released in reverse.
+  const undo: (() => void)[] = [];
   try {
-    return setUp(renderer, canvas, theme, events);
+    return setUp(renderer, canvas, theme, events, undo);
   } catch (e) {
+    for (const release of undo.reverse()) release();
     renderer.dispose();
     renderer.forceContextLoss();
     throw e;
@@ -72,6 +80,7 @@ function setUp(
   canvas: HTMLCanvasElement,
   initialTheme: CityTheme,
   events: SceneEvents,
+  undo: (() => void)[],
 ): CityScene {
   let theme = initialTheme;
   let city: City | null = null;
@@ -102,6 +111,7 @@ function setUp(
   controls.minDistance = MIN_DISTANCE;
   controls.maxDistance = MAX_DISTANCE;
   controls.maxPolarAngle = MAX_POLAR;
+  undo.push(() => controls.dispose());
 
   const fit = (box: Box, polar: number, azimuth: number) => {
     const { target, distance } = frame(box, FOV, camera.aspect, polar, azimuth);
@@ -129,6 +139,7 @@ function setUp(
     renderer.render(scene, camera);
   };
   const scheduler = createScheduler(draw);
+  undo.push(() => scheduler.dispose());
   const invalidate = () => scheduler.invalidate();
 
   const applyTheme = () => {
@@ -184,6 +195,7 @@ function setUp(
     onPick: events.onPick,
     onFly: flyTo,
   });
+  undo.push(detachPointer);
   controls.addEventListener("change", invalidate);
   const onStart = () => {
     scheduler.stopFly();
@@ -197,6 +209,7 @@ function setUp(
     invalidate();
   });
   observer.observe(canvas);
+  undo.push(() => observer.disconnect());
 
   // Moving the window to a monitor with another scale changes the ratio but not the size.
   let ratioQuery: MediaQueryList | null = null;
@@ -238,11 +251,17 @@ function setUp(
 
   return {
     setCity(next, generation) {
-      clearLayers();
+      const sameLayout = next !== null && next.data === city?.data;
       city = next;
-      if (city) {
-        layers = buildLayers(city.blocks, geometry, material, theme);
-        for (const layer of layers) scene.add(layer.mesh);
+      if (city && sameLayout) {
+        for (const layer of layers) paint(layer, city.blocks, theme);
+      } else {
+        clearLayers();
+        if (city) {
+          layers = buildLayers(city.blocks, geometry, material, theme);
+          for (const layer of layers) scene.add(layer.mesh);
+        }
+        events.onHover(null);
       }
       const focus = city?.focusBox;
       outline.visible = !!focus;
@@ -250,15 +269,15 @@ function setUp(
         const [x0, y0, z0] = focus.min;
         const [x1, y1, z1] = focus.max;
         const m = OUTLINE_MARGIN;
-        outline.position.set((x0 + x1) / 2, y0 - m, (z0 + z1) / 2);
-        outline.scale.set(x1 - x0 + 2 * m, y1 - y0 + 2 * m, z1 - z0 + 2 * m);
+        const bottom = y0 + OUTLINE_LIFT;
+        outline.position.set((x0 + x1) / 2, bottom, (z0 + z1) / 2);
+        outline.scale.set(x1 - x0 + 2 * m, y1 + m - bottom, z1 - z0 + 2 * m);
       }
       if (generation !== shownGeneration) {
         shownGeneration = generation;
         needsReset = true;
         scheduler.stopFly();
       }
-      events.onHover(null);
       invalidate();
     },
     setTheme(next) {

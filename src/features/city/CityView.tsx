@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { useT } from "../../i18n/react";
 import type { Palette } from "../../palette";
 import { usePalette, useSettings, useSize } from "../../settings/react";
+import { placePopup } from "../duplicates/viewer/hover";
 import type { CityScene, CityTheme, Hover } from "./scene";
 import { useCityData } from "./useCityData";
 import "./city.css";
 
 const TOOLTIP_DELAY_MS = 150;
+/** Distance between the pointer and the tooltip, px. */
+const TIP_GAP = 14;
 
 interface Props {
   /** The root shown: a change reloads the city and resets the camera. */
@@ -36,7 +39,13 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
   const [scene, setScene] = useState<CityScene | null>(null);
   const [status, setStatus] = useState<"ready" | "failed" | "lost">("ready");
   const [hover, setHover] = useState<Hover | null>(null);
-  const [tip, setTip] = useState<{ id: number; name: string; path: string } | null>(null);
+  const [tip, setTip] = useState<{
+    generation: number;
+    id: number;
+    name: string;
+    path: string;
+  } | null>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
   // The scene outlives renders: its callbacks read the current props through this.
   const latest = useRef({ onSelect, palette });
   useEffect(() => {
@@ -92,7 +101,7 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
           if (!live) return;
           const names = crumbs.map((c) => c.name);
           const name = names.pop() ?? "";
-          setTip({ id: hoverId, name, path: names.join(" › ") });
+          setTip({ generation, id: hoverId, name, path: names.join(" › ") });
         },
         (e: unknown) => live && onFail(e),
       );
@@ -103,6 +112,18 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
     };
   }, [hoverId, generation, onFail]);
 
+  // Beside the pointer, flipped and clamped so the whole tip stays inside the panel. Measured at
+  // the corner first, where the panel edge does not narrow it.
+  useLayoutEffect(() => {
+    const el = tipRef.current;
+    if (!el || !hover) return;
+    el.style.left = el.style.top = "0px";
+    const size = { w: el.offsetWidth, h: el.offsetHeight };
+    const { x, y } = placePopup(hover, size, { w: hover.w, h: hover.h }, TIP_GAP);
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+  });
+
   if (status === "failed") {
     return (
       <div className="city">
@@ -111,13 +132,7 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
     );
   }
 
-  const named = hover && tip?.id === hover.block.id ? tip : null;
-  const tipStyle = hover && {
-    left: hover.x < hover.w / 2 ? hover.x + 14 : undefined,
-    right: hover.x >= hover.w / 2 ? hover.w - hover.x + 14 : undefined,
-    top: hover.y < hover.h / 2 ? hover.y + 14 : undefined,
-    bottom: hover.y >= hover.h / 2 ? hover.h - hover.y + 14 : undefined,
-  };
+  const named = hover && tip?.id === hover.block.id && tip.generation === generation ? tip : null;
 
   return (
     <div className="city">
@@ -132,7 +147,7 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
       </button>
       {status === "lost" && <p className="city-message dim">{t("city.unavailable")}</p>}
       {hover && (
-        <div className="city-tip" style={tipStyle ?? undefined}>
+        <div className="city-tip" ref={tipRef}>
           {named && <div dir="auto">{named.name}</div>}
           {named?.path && (
             <div className="dim" dir="auto">

@@ -103,7 +103,7 @@
   "treemap.empty": "Niente da mostrare: questa cartella non occupa spazio.",
   "city.reset": "Ripristina vista",
   "city.unavailable": "La vista 3D non è disponibile su questo sistema",
-  "city.label": "Città 3D dell’unità",
+  "city.label": "Città 3D dell’unità o della cartella scansionata",
   "city.folder": "Cartella",
   "city.file": "File",
   "city.empty": "Scegli un’unità o una cartella con una scansione",

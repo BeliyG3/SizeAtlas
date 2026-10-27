@@ -103,7 +103,7 @@
   "treemap.empty": "Rien à afficher : ce dossier n’occupe aucun espace.",
   "city.reset": "Réinitialiser la vue",
   "city.unavailable": "La vue 3D n’est pas disponible sur ce système",
-  "city.label": "Ville 3D du disque",
+  "city.label": "Ville 3D du disque ou dossier analysé",
   "city.folder": "Dossier",
   "city.file": "Fichier",
   "city.empty": "Choisissez un lecteur ou un dossier déjà analysé",

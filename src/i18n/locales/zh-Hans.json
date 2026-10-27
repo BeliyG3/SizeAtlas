@@ -91,7 +91,7 @@
   "treemap.empty": "没有可显示的内容：此文件夹不占用空间。",
   "city.reset": "重置视图",
   "city.unavailable": "此系统不支持 3D 视图",
-  "city.label": "驱动器的 3D 城市",
+  "city.label": "已扫描驱动器或文件夹的 3D 城市",
   "city.folder": "文件夹",
   "city.file": "文件",
   "city.empty": "请选择已扫描的驱动器或文件夹",

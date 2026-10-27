@@ -18,7 +18,7 @@ export function CityPane({ summary, selection, onSelect, onFail }: Props) {
   const { t } = useT();
   const generation = summary?.generation ?? null;
   // A live scan rebuilds the city at the chart cadence, not on every tick.
-  const rev = useLiveRevision(summary?.rev ?? 0, summary?.scanning ?? false, "charts");
+  const rev = useLiveRevision(summary?.rev ?? 0, summary?.scanning ?? false, "charts", generation);
   const select = useCallback(
     (id: number, isDir: boolean) => {
       if (generation !== null) onSelect(generation, id, isDir);

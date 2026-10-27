@@ -91,7 +91,7 @@
   "treemap.empty": "Không có gì để hiển thị: thư mục này không chiếm dung lượng.",
   "city.reset": "Đặt lại góc nhìn",
   "city.unavailable": "Chế độ xem 3D không khả dụng trên hệ thống này",
-  "city.label": "Thành phố 3D của ổ đĩa",
+  "city.label": "Thành phố 3D của ổ đĩa hoặc thư mục đã quét",
   "city.folder": "Thư mục",
   "city.file": "Tệp",
   "city.empty": "Chọn một ổ đĩa hoặc thư mục đã được quét",

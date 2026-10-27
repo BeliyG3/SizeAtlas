@@ -97,7 +97,7 @@
   "treemap.empty": "Nichts anzuzeigen: Dieser Ordner belegt keinen Speicherplatz.",
   "city.reset": "Ansicht zurücksetzen",
   "city.unavailable": "Die 3D-Ansicht ist auf diesem System nicht verfügbar",
-  "city.label": "3D-Stadt des Laufwerks",
+  "city.label": "3D-Stadt des gescannten Laufwerks oder Ordners",
   "city.folder": "Ordner",
   "city.file": "Datei",
   "city.empty": "Wählen Sie ein Laufwerk oder einen Ordner mit Scan",

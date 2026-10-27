@@ -103,7 +103,7 @@
   "treemap.empty": "Nada para mostrar: esta pasta não ocupa espaço.",
   "city.reset": "Redefinir visualização",
   "city.unavailable": "A visualização 3D não está disponível neste sistema",
-  "city.label": "Cidade 3D da unidade",
+  "city.label": "Cidade 3D da unidade ou pasta analisada",
   "city.folder": "Pasta",
   "city.file": "Arquivo",
   "city.empty": "Escolha uma unidade ou pasta que tenha uma verificação",

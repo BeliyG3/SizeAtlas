@@ -109,7 +109,7 @@
   "treemap.empty": "Nic do pokazania: ten folder nie zajmuje miejsca.",
   "city.reset": "Resetuj widok",
   "city.unavailable": "Widok 3D jest niedostępny w tym systemie",
-  "city.label": "Miasto 3D dysku",
+  "city.label": "Miasto 3D przeskanowanego dysku lub folderu",
   "city.folder": "Folder",
   "city.file": "Plik",
   "city.empty": "Wybierz dysk lub folder, który ma skan",

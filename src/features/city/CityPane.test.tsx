@@ -88,4 +88,11 @@ describe("CityPane", () => {
     render({ summary: summary(3, 2, true), selection: selection(3, 0) });
     expect(view()!.rev).toBe(2);
   });
+
+  it("shows a switched root's own revision, not the last root's", () => {
+    render({ summary: summary(3, 1, true), selection: selection(3, 0) });
+    render({ summary: summary(3, 2, true), selection: selection(3, 0) });
+    render({ summary: summary(4, 9, true), selection: selection(4, 0) });
+    expect(view()).toMatchObject({ generation: 4, rev: 9 });
+  });
 });

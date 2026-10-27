@@ -97,7 +97,7 @@
   "treemap.empty": "Gösterilecek bir şey yok: bu klasör yer kaplamıyor.",
   "city.reset": "Görünümü sıfırla",
   "city.unavailable": "3B görünüm bu sistemde kullanılamıyor",
-  "city.label": "Sürücünün 3B şehri",
+  "city.label": "Taranan sürücünün veya klasörün 3B şehri",
   "city.folder": "Klasör",
   "city.file": "Dosya",
   "city.empty": "Taraması olan bir sürücü veya klasör seçin",

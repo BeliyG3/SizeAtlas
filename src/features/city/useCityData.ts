@@ -47,7 +47,7 @@ export function useCityData(
 
   const data = loaded?.data.generation === generation ? loaded.data : null;
   const ids = path?.generation === generation ? path.ids : null;
-  const focus = data && ids ? focusIn(data, ids) : null;
+  const focus = useMemo(() => (data && ids ? focusIn(data, ids) : null), [data, ids]);
   const city = useMemo(() => (data ? buildCity(data, focus) : null), [data, focus]);
   return { city, finish: data ? loaded!.finish : null };
 }

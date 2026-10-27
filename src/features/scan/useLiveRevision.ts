@@ -1,9 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { refreshInterval, waitForRefresh, type RefreshGroup } from "./cadence";
 
-/** Coalesces live revisions; navigation and the completed tree remain immediately available. */
-export function useLiveRevision(rev: number, liveScan: boolean, group: RefreshGroup): number {
-  const [shown, setShown] = useState(rev);
+/**
+ * Coalesces live revisions; navigation and the completed tree remain immediately available.
+ * A new `scope` (another root) starts from its own revision, never the last scope's.
+ */
+export function useLiveRevision(
+  rev: number,
+  liveScan: boolean,
+  group: RefreshGroup,
+  scope?: unknown,
+): number {
+  const [state, setState] = useState({ scope, rev });
+  const switched = !Object.is(state.scope, scope);
+  // Adjusted while rendering, as React advises for state that follows a prop.
+  if (switched) setState({ scope, rev });
+  const shown = switched ? rev : state.rev;
   const last = useRef(-Infinity);
   useEffect(() => {
     if (last.current === -Infinity) last.current = performance.now();
@@ -13,7 +25,7 @@ export function useLiveRevision(rev: number, liveScan: boolean, group: RefreshGr
       () => {
         if (!live) return;
         last.current = performance.now();
-        setShown(rev);
+        setState({ scope, rev });
       },
       waitForRefresh({ last: last.current, interval: refreshInterval(group) }, performance.now()),
     );
@@ -21,6 +33,6 @@ export function useLiveRevision(rev: number, liveScan: boolean, group: RefreshGr
       live = false;
       clearTimeout(timer);
     };
-  }, [rev, shown, liveScan, group]);
+  }, [rev, shown, liveScan, group, scope]);
   return liveScan ? shown : rev;
 }

@@ -3,9 +3,14 @@ import { api } from "../../api/client";
 import type { Crumb } from "../../api/types";
 import { rt } from "../lists/hookRuntime";
 import { CITY_RECORD_LEN, HEADER_LEN } from "./bytes";
+import { focusIn } from "./model";
 import { useCityData } from "./useCityData";
 
 vi.mock("react", async () => (await import("../lists/hookRuntime")).rt.hooks);
+vi.mock("./model", async (original) => {
+  const model = await original<typeof import("./model")>();
+  return { ...model, focusIn: vi.fn(model.focusIn) };
+});
 vi.mock("../../api/client", () => ({ api: { getCity: vi.fn(), getCrumbs: vi.fn() } }));
 
 /** A city answer with the given folders (ids), each a plate over the whole field. */
@@ -114,5 +119,14 @@ describe("useCityData", () => {
     render(1, 1, 0);
     await settle(1, 1, 0);
     expect(onFail).toHaveBeenCalledWith(new Error("gone"));
+  });
+
+  it("finds the focus once per city and selection, not on every render", async () => {
+    render(1, 1, 0);
+    await settle(1, 1, 0);
+    const calls = vi.mocked(focusIn).mock.calls.length;
+    render(1, 1, 0);
+    render(1, 1, 0);
+    expect(vi.mocked(focusIn).mock.calls.length).toBe(calls);
   });
 });

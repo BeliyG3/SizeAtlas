@@ -56,9 +56,14 @@ vi.mock("react", () => ({
   },
 }));
 
-function useRenderRevision(rev: number, live = true, group: RefreshGroup = "tree") {
+function useRenderRevision(
+  rev: number,
+  live = true,
+  group: RefreshGroup = "tree",
+  scope?: unknown,
+) {
   hooks.beginRender();
-  const shown = useLiveRevision(rev, live, group);
+  const shown = useLiveRevision(rev, live, group, scope);
   hooks.commit();
   return shown;
 }
@@ -151,5 +156,16 @@ describe("useLiveRevision", () => {
     expect(useRenderRevision(10, true, "charts")).toBe(9);
     vi.advanceTimersByTime(1);
     expect(useRenderRevision(10, true, "charts")).toBe(10);
+  });
+
+  it("starts a new scope from its own revision, then gates it", () => {
+    useRenderRevision(1, true, "tree", "a");
+    expect(useRenderRevision(2, true, "tree", "a")).toBe(1);
+
+    expect(useRenderRevision(7, true, "tree", "b")).toBe(7);
+    expect(useRenderRevision(7, true, "tree", "b")).toBe(7);
+    expect(useRenderRevision(8, true, "tree", "b")).toBe(7);
+    vi.advanceTimersByTime(2000);
+    expect(useRenderRevision(8, true, "tree", "b")).toBe(8);
   });
 });

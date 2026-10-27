@@ -103,7 +103,7 @@
   "treemap.empty": "No hay nada que mostrar: esta carpeta no ocupa espacio.",
   "city.reset": "Restablecer vista",
   "city.unavailable": "La vista 3D no está disponible en este sistema",
-  "city.label": "Ciudad 3D de la unidad",
+  "city.label": "Ciudad 3D de la unidad o carpeta analizada",
   "city.folder": "Carpeta",
   "city.file": "Archivo",
   "city.empty": "Elige una unidad o carpeta que tenga un escaneo",
