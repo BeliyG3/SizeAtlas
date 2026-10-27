@@ -24,6 +24,7 @@ export type CmdError =
         | "LossyName"
         | "NoTrash"
         | "Protected"
+        | "LastCopy"
         | "Cancelled";
     }
   | { code: "NoAccess"; path: string }

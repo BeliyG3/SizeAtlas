@@ -91,6 +91,7 @@ describe("locales", () => {
       "LossyName",
       "NoTrash",
       "Protected",
+      "LastCopy",
       "Cancelled",
       "Io",
     ])

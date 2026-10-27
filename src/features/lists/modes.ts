@@ -3,8 +3,11 @@ import type { ListKind } from "../../api/types";
 /** A flat list the user picks in the mode menu; a search is shown by a query, never picked. */
 export type ListMode = Exclude<ListKind, "search">;
 
-/** What the contents table shows: the current folder (all items, or folders only) or a flat list of its subtree. */
-export type Mode = "all" | "folders" | ListMode;
+/**
+ * What the contents table shows: the current folder (all items, or folders only), a flat list of
+ * its subtree, or the duplicate files of every open root.
+ */
+export type Mode = "all" | "folders" | ListMode | "duplicates";
 
 /** The key of the old "Folders only" switch: its two values keep their meaning. */
 export const MODE_KEY = "sizeatlas.contents.filter";
@@ -27,6 +30,7 @@ export const MODE_MENU: readonly ModeEntry[] = [
   "-",
   "cleanup",
   "review",
+  "duplicates",
   "-",
   { submenu: "oldest", modes: ["oldestFiles", "oldestFolders", "oldest"] },
   { submenu: "newest", modes: ["newestFiles", "newestFolders", "newest"] },
@@ -46,8 +50,12 @@ export const parseMode = (raw: string | null): Mode => MODES.find((m) => m === r
 export const isCleanupMode = (mode: Mode | "search"): mode is "cleanup" | "review" =>
   mode === "cleanup" || mode === "review";
 
-export const isListMode = (mode: Mode): mode is ListMode => mode !== "all" && mode !== "folders";
+export const isListMode = (mode: Mode): mode is ListMode =>
+  mode !== "all" && mode !== "folders" && mode !== "duplicates";
 
-/** The flat list the table shows: the search while the query has words, else the mode's list (null: a folder view). */
+/**
+ * The flat list the table shows: the search while the query has words, else the mode's list
+ * (null: a folder view, or the duplicates, whose query only filters their search).
+ */
 export const listShown = (mode: Mode, query: string): ListKind | null =>
-  query.trim() !== "" ? "search" : isListMode(mode) ? mode : null;
+  mode === "duplicates" ? null : query.trim() !== "" ? "search" : isListMode(mode) ? mode : null;

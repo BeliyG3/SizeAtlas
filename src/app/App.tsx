@@ -17,7 +17,8 @@ import { useUpdateCheck } from "../features/update/useUpdateCheck";
 import { useCommittedQuery } from "../features/search/useCommittedQuery";
 import { useSearchKey } from "../features/search/useSearchKey";
 import { MODE_KEY, parseMode, type Mode } from "../features/lists/modes";
-import { useStored } from "../settings/storage";
+import { DUP_QUERY_KEY, parseDupQuery } from "../features/duplicates/query";
+import { readStored, useStored, writeStored } from "../settings/storage";
 import { formatCount } from "../format";
 import { useT } from "../i18n/react";
 import { Browser } from "./Browser";
@@ -40,8 +41,10 @@ export function App() {
     [push, t, errorText],
   );
   const [mode, setMode] = useStored(MODE_KEY, parseMode);
-  // The search is not stored. `query` is the text in the field; the table gets `committed`.
-  const [query, setQuery] = useState("");
+  // The search is not stored, but the duplicates mode keeps its own: there the field filters
+  // what is looked for. `query` is the text in the field; the table gets `committed`.
+  const dupQuery = () => parseDupQuery(readStored(DUP_QUERY_KEY));
+  const [query, setQuery] = useState(() => (mode === "duplicates" ? dupQuery() : ""));
   const { committed, commit } = useCommittedQuery(query);
   const searchField = useRef<HTMLInputElement>(null);
   useSearchKey(searchField);
@@ -49,7 +52,11 @@ export function App() {
   // Picking a mode ends the search, so that the table shows the mode.
   const showMode = (next: Mode) => {
     setMode(next);
-    setQuery("");
+    setQuery(next === "duplicates" ? dupQuery() : "");
+  };
+  const editQuery = (next: string) => {
+    setQuery(next);
+    if (mode === "duplicates") writeStored(DUP_QUERY_KEY, next);
   };
   const update = useUpdateCheck(push);
   const roots = useRoots(pushError, onSkipped, onScanError);
@@ -150,14 +157,19 @@ export function App() {
     (selectedRoot !== null && fullScans.has(selectedRoot))
       ? null
       : () => refreshFolder(shownGeneration, shownFolder);
+  // The tree's selection is hidden in the duplicates mode: Delete and Scan › Move to the trash
+  // must not take it there (its copies go through a trash of their own, which keeps one).
+  const dupMode = mode === "duplicates";
+  const menuTrash = dupMode ? null : trash.menuTrash;
+  const trashNote = dupMode ? null : trash.trashNote;
   const exporter = useExport(push, fail);
   useChangeKeys({
     onRefresh: () => refreshCurrent?.(),
     onRescan: () => rescan?.(),
     // Refused while a scan still lists the items: say why, as the menu item does.
     onDelete: () => {
-      if (trash.menuTrash) trash.menuTrash();
-      else if (trash.trashNote) push(trash.trashNote);
+      if (menuTrash) menuTrash();
+      else if (trashNote) push(trashNote);
     },
     onExport: () => void exporter.run(exporter.separator),
   });
@@ -170,8 +182,8 @@ export function App() {
         onRefresh={refreshCurrent}
         refreshIsRescan={atRoot}
         refreshNote={trashingHere ? t("trash.busy") : null}
-        onTrash={trash.menuTrash}
-        trashNote={trash.trashNote}
+        onTrash={menuTrash}
+        trashNote={trashNote}
         scanning={scanning !== null}
         forgetTarget={forgettable(sources, pending)}
         onChooseFolder={scanFolder}
@@ -203,7 +215,7 @@ export function App() {
         mode={mode}
         onMode={showMode}
         query={query}
-        onQuery={setQuery}
+        onQuery={editQuery}
         onSearch={commit}
         searchRef={searchField}
       />

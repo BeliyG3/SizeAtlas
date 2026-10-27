@@ -9,14 +9,17 @@ import { Browser } from "./Browser";
 import { useChangeKeys } from "./useChangeKeys";
 import { useRoots } from "./useRoots";
 import { useSelection } from "./useSelection";
+import { writeStored } from "../settings/storage";
 
 // App's real action composition runs; child rendering and unrelated app hooks do not.
 // Every state of App shares one setter, so that a test sees what App sets.
 const setState = vi.hoisted(() => vi.fn());
 const setMode = vi.hoisted(() => vi.fn());
+// The stored mode, and what else storage holds.
+const stored = vi.hoisted(() => ({ mode: "all", values: {} as Record<string, string> }));
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
-  useState: (initial: unknown) => [initial, setState],
+  useState: (initial: unknown) => [typeof initial === "function" ? initial() : initial, setState],
   useRef: (initial: unknown) => ({ current: initial }),
   useMemo: (calculate: () => unknown) => calculate(),
   useCallback: (callback: unknown) => callback,
@@ -34,7 +37,11 @@ vi.mock("./useSelection", () => ({ useSelection: vi.fn() }));
 vi.mock("./useChangeKeys", () => ({ useChangeKeys: vi.fn() }));
 vi.mock("../features/search/useSearchKey", () => ({ useSearchKey: vi.fn() }));
 vi.mock("../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
-vi.mock("../settings/storage", () => ({ useStored: () => ["all", setMode] }));
+vi.mock("../settings/storage", () => ({
+  useStored: () => [stored.mode, setMode],
+  readStored: (key: string) => stored.values[key] ?? null,
+  writeStored: vi.fn(),
+}));
 vi.mock("../features/export/useExport", () => ({
   useExport: () => ({ run: vi.fn(), register: vi.fn(), separator: "," }),
 }));
@@ -143,6 +150,8 @@ function render(scanning: boolean, state: "queued" | "scanning", folder: number)
 
 beforeEach(() => {
   vi.clearAllMocks();
+  stored.mode = "all";
+  stored.values = {};
   vi.mocked(api.refreshFolder).mockResolvedValue();
   vi.mocked(api.trashRefused).mockResolvedValue(true);
   vi.mocked(api.trashPreview).mockResolvedValue({
@@ -191,6 +200,14 @@ describe("App live scan action wiring", () => {
     expect(api.refreshFolder).toHaveBeenNthCalledWith(2, 1, folder);
   });
 
+  it("never takes the hidden selection to the trash in the duplicates mode", () => {
+    stored.mode = "duplicates";
+    const { menu, keys } = render(false, "queued", 7);
+    expect(menu.onTrash).toBeNull();
+    keys.onDelete();
+    expect(api.trashPreview).not.toHaveBeenCalled();
+  });
+
   it("wires menu and Delete to the actual trash action while a rescan waits", () => {
     const { menu, keys } = render(false, "queued", 7);
     expect(menu.onTrash).toBeTypeOf("function");
@@ -221,5 +238,30 @@ describe("App search wiring", () => {
     setState.mockClear();
     browser?.props.onLeaveSearch();
     expect(setState).toHaveBeenCalledWith("");
+  });
+
+  it("fills the field with the stored search of the duplicates when they are picked", () => {
+    render(false, "queued", 0);
+    const toolbar = () => App().props.children[1] as ReactElement<ComponentProps<typeof Toolbar>>;
+    setState.mockClear();
+    toolbar().props.onMode("duplicates");
+    expect(setMode).toHaveBeenCalledWith("duplicates");
+    expect(setState).toHaveBeenCalledWith("type:image");
+    stored.values["sizeatlas.duplicates.query"] = "";
+    setState.mockClear();
+    toolbar().props.onMode("duplicates");
+    expect(setState).toHaveBeenCalledWith("");
+  });
+
+  it("keeps the search of the duplicates while they are shown, and only then", () => {
+    render(false, "queued", 0);
+    const toolbar = () => App().props.children[1] as ReactElement<ComponentProps<typeof Toolbar>>;
+    toolbar().props.onQuery("backup");
+    expect(writeStored).not.toHaveBeenCalled();
+    stored.mode = "duplicates";
+    stored.values["sizeatlas.duplicates.query"] = "*.png";
+    expect(toolbar().props.query).toBe("*.png");
+    toolbar().props.onQuery("*.jpg");
+    expect(writeStored).toHaveBeenCalledWith("sizeatlas.duplicates.query", "*.jpg");
   });
 });

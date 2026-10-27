@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { QueueEntry, ScanProgress, Sources } from "../api/types";
 import { DEFAULT_SORT, type SortState } from "../features/contents/columns";
 import { DrivesPanel } from "../features/drives/DrivesPanel";
+import { DuplicatesView } from "../features/duplicates/DuplicatesView";
 import { ItemMenu, menuIds, type MenuTarget } from "../features/menu/ItemMenu";
 import { RootMenu, type RootMenuTarget } from "../features/menu/RootMenu";
 import { ScanView } from "../features/scan/ScanView";
@@ -24,7 +25,10 @@ interface Props {
   selection: Selection | null;
   /** What the table shows. */
   mode: Mode;
-  /** The words searched for (committed): the table shows the results over any mode. */
+  /**
+   * The words searched for (committed): the table shows the results over any mode but the
+   * duplicates, whose search they filter.
+   */
   query: string;
   /** Enter or a double click on a folder of the results: the search is over (stable). */
   onLeaveSearch: () => void;
@@ -137,6 +141,14 @@ export function Browser({
       })),
     [entries, sources],
   );
+  // Any root opened, closed, rescanned or changed: the duplicates estimate and stale mark follow.
+  const rootsKey = useMemo(
+    () =>
+      entries
+        .map((e) => `${e.root}|${e.summary?.generation ?? ""}|${e.summary?.rev ?? ""}|${e.status}`)
+        .join("\n"),
+    [entries],
+  );
   const treeTarget = useMemo<TreeTarget | null>(
     () =>
       selection && { root: selection.root, generation: selection.generation, id: selection.folder },
@@ -172,7 +184,10 @@ export function Browser({
   const trashNote =
     itemMenu && availabilityNoteKey(itemTrash, menuItems.length, itemMenu.target.isDir);
   let content: ReactNode;
-  if (!selection) {
+  if (mode === "duplicates") {
+    // Of every open root, not of the selected one.
+    content = <DuplicatesView query={query} rootsKey={rootsKey} onFail={onFail} />;
+  } else if (!selection) {
     content = <p className="empty-hint dim">{t("empty.hint")}</p>;
   } else if (!selected) {
     // The remembered root is still being reopened: nothing to show yet.

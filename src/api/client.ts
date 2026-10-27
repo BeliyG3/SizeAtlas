@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { DupEstimate, DupRef, DupStatus, Duplicates } from "./duplicates";
 import type {
   ChildrenPage,
   CmdError,
@@ -119,6 +120,29 @@ export const api = {
    */
   exportTable: (suggestedName: string, text: string) =>
     invoke<string | null>("export_table", { suggestedName, text }),
+  /** What a search for duplicates would compare among all open roots; reads no file. */
+  estimateDuplicates: (query: string, system: boolean) =>
+    invoke<DupEstimate>("estimate_duplicates", { query, system }),
+  /**
+   * Starts a search for duplicates (and stops the one running); resolves at once to its job id.
+   * Progress comes as `duplicates-status`. Refused (`Busy`) while a trash of copies is pending.
+   */
+  findDuplicates: (query: string, system: boolean) =>
+    invoke<number>("find_duplicates", { query, system }),
+  /** Stops the running search; what it found stays, not complete. */
+  cancelDuplicates: () => invoke<void>("cancel_duplicates"),
+  /** What changed in the result after version `since` of `job`; all of it for another job or 0. */
+  getDuplicates: (job: number, since: number) =>
+    invoke<Duplicates>("get_duplicates", { job, since }),
+  /**
+   * Moves copies (the paths of one group) to the trash; one copy of the group always stays.
+   * `request` as for `trash`: its progress carries it, `cancelTrash` names it.
+   */
+  trashDuplicates: (request: number, copies: DupRef[]) =>
+    invoke<TrashResult>("trash_duplicates", { request, copies }),
+  /** The bytes of an image for a thumbnail; empty when there is none to show. */
+  getThumbnail: ({ root, generation, id }: DupRef) =>
+    invoke<ArrayBuffer>("get_thumbnail", { root, generation, id }),
   /** Paints the native title bar dark or light (Windows; elsewhere nothing happens). */
   setTitleBar: (dark: boolean) => invoke<void>("set_title_bar", { dark }),
 };
@@ -139,3 +163,6 @@ export const onLiveTreeChanged = (cb: () => void): Promise<UnlistenFn> =>
 
 export const onScanError = (cb: (e: ScanError) => void): Promise<UnlistenFn> =>
   listen<ScanError>("scan-error", (e) => cb(e.payload));
+
+export const onDuplicatesStatus = (cb: (s: DupStatus) => void): Promise<UnlistenFn> =>
+  listen<DupStatus>("duplicates-status", (e) => cb(e.payload));
