@@ -19,7 +19,9 @@ fn a_panic_in_the_search_still_ends_the_job() {
         }
         record(s);
     });
-    let (job, handle) = state.find_duplicates(String::new(), false, emit).unwrap();
+    let (job, handle) = state
+        .find_duplicates(String::new(), false, None, emit)
+        .unwrap();
     assert!(handle.join().is_err());
     assert!(!state.duplicates_running());
     let dto = state.duplicates_since(0, 0);
@@ -48,7 +50,9 @@ fn the_end_of_a_job_has_a_version_after_every_running_status() {
         }
         record(s);
     });
-    let (_, handle) = state.find_duplicates(String::new(), false, emit).unwrap();
+    let (_, handle) = state
+        .find_duplicates(String::new(), false, None, emit)
+        .unwrap();
     assert!(handle.join().is_err());
     let running = first.lock().unwrap().expect("a running status");
     let log = log.lock().unwrap();

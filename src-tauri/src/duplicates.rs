@@ -1,38 +1,36 @@
-//! The duplicate search of the app: one background job at a time over every open root (see
-//! `sizeatlas_core::duplicates`), its result kept until the next search and read by cursor, its
-//! progress sent as `duplicates-status`. A result is stale once the set of searched roots or
-//! the `(generation, rev)` of one changes; a running job then cancels itself.
+//! The duplicate search of the app: one background job at a time over every open root, or over
+//! one folder of one (a scope; see `sizeatlas_core::duplicates`), its result kept until the next
+//! search and read by cursor, its progress sent as `duplicates-status`. A result is stale once
+//! the `(generation, rev)` of a searched root changes, or (without a scope) the set of open
+//! roots does; a running job then cancels itself.
 //!
 //! Locks: `Inner` is held only for short steps in memory, never across `.await`, IO or a
 //! callback; under it the queue and the data locks may be taken (in that order, for staleness),
 //! so neither is ever held while `Inner` is taken. Nobody holds an `Arc<Tree>` while taking
 //! `Inner`, and a job holds no tree at all: `prepare` copies what it needs.
 
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::thread::{self, JoinHandle};
-use std::time::SystemTime;
 
 use sizeatlas_core::cleanup::{Known, Os};
 use sizeatlas_core::duplicates::cache::HashCache;
 use sizeatlas_core::duplicates::results::{Results, RootMark};
-use sizeatlas_core::duplicates::{self as core, DiskKind, Options, SearchRoot};
-use sizeatlas_core::scanner::epoch_nanos;
-use sizeatlas_core::tree::Query;
+use sizeatlas_core::duplicates::{self as core, DiskKind};
 
-use crate::dto::{DuplicatesDto, EstimateDto, GroupDto, StatusDto, hex};
+use crate::dto::{DuplicatesDto, EstimateDto, GroupDto, ScopeDto, StatusDto, hex};
 use crate::error::CmdError;
 use crate::state::AppState;
 
 mod decide;
 mod job;
+mod options;
 mod roots;
 mod select;
 pub mod thumb;
 pub mod trash;
 
-use roots::Picked;
+use roots::scope_path;
 
 /// Where the statuses of a job go: the `duplicates-status` event, or a test.
 pub type Emit = Arc<dyn Fn(StatusDto) + Send + Sync>;
@@ -64,6 +62,9 @@ struct Inner {
     disks: Vec<DiskKind>,
     query: String,
     system: bool,
+    /// The scope of the search, and the full path of its folder.
+    scope: Option<ScopeDto>,
+    scope_path: Option<String>,
     status: StatusDto,
     skipped: Vec<String>,
 }
@@ -75,29 +76,38 @@ impl AppState {
             .unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// What a search for `query` (with the zones when `system`) would compare; reads no file.
-    pub fn estimate_duplicates(&self, query: &str, system: bool) -> EstimateDto {
-        let (picked, skipped) = roots::pick(self, false);
+    /// What a search for `query` (with the zones when `system`; of the folder `scope`, else of
+    /// every open root) would compare; reads no file. A scope out of date is `StaleId`.
+    pub fn estimate_duplicates(
+        &self,
+        query: &str,
+        system: bool,
+        scope: Option<&ScopeDto>,
+    ) -> Result<EstimateDto, CmdError> {
+        let (picked, skipped) = roots::pick(self, false, scope)?;
         let e = self.searching(&picked, query, system, |roots, opts| {
             core::estimate(roots, opts)
         });
-        EstimateDto {
+        Ok(EstimateDto {
             files: e.files,
             bytes: e.bytes,
             eligible: e.eligible,
             seeded: e.seeded,
             roots: picked.len() as u32,
             skipped,
-        }
+            scope: scope_path(&picked, scope),
+        })
     }
 
     /// Starts a search job for `query` on a thread of its own and returns its id; a running job
-    /// is cancelled. Refused (`Busy`) while a trash request of duplicates is registered. With
-    /// the query and the roots of the last result, the new one starts with its groups.
+    /// is cancelled. Refused (`Busy`) while a trash request of duplicates is registered, and
+    /// (`StaleId`) for a scope out of date. With the query, the scope and the roots of the last
+    /// result, the new one starts with its groups.
     pub fn find_duplicates(
         &self,
         query: String,
         system: bool,
+        scope: Option<ScopeDto>,
         emit: Emit,
     ) -> Result<(u64, JoinHandle<()>), CmdError> {
         let trashing = || self.0.duplicates.trashing.load(Ordering::Acquire) > 0;
@@ -105,7 +115,8 @@ impl AppState {
         if trashing() {
             return Err(CmdError::Busy);
         }
-        let (picked, skipped) = roots::pick(self, true);
+        let (picked, skipped) = roots::pick(self, true, scope.as_ref())?;
+        let path = scope_path(&picked, scope.as_ref());
         let marks: Vec<RootMark> = (picked.iter())
             .map(|p| RootMark {
                 path: p.root.clone(),
@@ -132,7 +143,7 @@ impl AppState {
             }
             inner.next_job += 1;
             let job = inner.next_job;
-            let same = inner.query == query && inner.system == system;
+            let same = inner.query == query && inner.system == system && inner.scope == scope;
             let previous = inner.results.take().filter(|_| same);
             // `Results::new` keeps the old groups only for the same root marks.
             inner.results = Some(Results::new(job, marks, previous.as_ref()));
@@ -141,6 +152,8 @@ impl AppState {
             inner.disks = disks;
             inner.query = query;
             inner.system = system;
+            inner.scope = scope;
+            inner.scope_path = path;
             inner.skipped = skipped;
             inner.status = StatusDto {
                 job,
@@ -172,6 +185,7 @@ impl AppState {
             full: true,
             query: inner.query.clone(),
             system: inner.system,
+            scope: inner.scope_path.clone(),
             skipped: inner.skipped.clone(),
             status: StatusDto {
                 stale,
@@ -212,52 +226,9 @@ impl AppState {
             return false;
         };
         let (now, _) = roots::current(self);
-        now.len() != r.roots.len() || now.iter().any(|m| !r.roots.contains(m))
-    }
-
-    /// Asks `context` once, by the first root `first`, for the known folders and the system:
-    /// before any tree is taken, as the question may take a while.
-    fn duplicates_env(&self, first: &str) {
-        self.0.duplicates.env.get_or_init(|| {
-            let ctx = (self.0.context)(Path::new(first));
-            (ctx.known, ctx.os)
-        });
-    }
-
-    /// Runs `f` with the roots of `picked` and the options of `query` (`duplicates_env` first).
-    fn searching<T>(
-        &self,
-        picked: &[Picked],
-        query: &str,
-        system: bool,
-        f: impl FnOnce(&[SearchRoot], &Options) -> T,
-    ) -> T {
-        let fallback;
-        let (known, os) = match self.0.duplicates.env.get() {
-            Some(env) => env,
-            // Not asked yet: no root was picked, and nothing is searched.
-            None => {
-                fallback = (Known::default(), Os::current());
-                &fallback
-            }
-        };
-        let roots: Vec<SearchRoot> = (picked.iter())
-            .map(|p| SearchRoot {
-                tree: &p.tree,
-                generation: p.generation,
-                volume: &p.volume,
-                disk: p.disk,
-            })
-            .collect();
-        let query = Query::parse(query);
-        let opts = Options {
-            query: query.as_ref(),
-            include_zones: system,
-            os: *os,
-            known,
-            now_ns: epoch_nanos(SystemTime::now()),
-        };
-        f(&roots, &opts)
+        let changed = r.roots.iter().any(|m| !now.contains(m));
+        // A search of one folder takes no other root: opening or closing one changes nothing.
+        changed || (inner.scope.is_none() && now.len() != r.roots.len())
     }
 }
 
@@ -269,6 +240,8 @@ mod queue_tests;
 mod race_tests;
 #[cfg(test)]
 mod roots_tests;
+#[cfg(test)]
+mod scope_tests;
 #[cfg(test)]
 mod stale_tests;
 #[cfg(test)]

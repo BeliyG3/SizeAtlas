@@ -55,6 +55,7 @@ export const answer = (more: Partial<Duplicates> = {}): Duplicates => {
     removed: [],
     unread: { cloud: 0, changed: 0, noAccess: 0, failed: 0 },
     skipped: [],
+    scope: null,
     status: status(),
     ...more,
   };
@@ -69,5 +70,6 @@ export const estimate = (more: Partial<DupEstimate> = {}): DupEstimate => ({
   seeded: 5,
   roots: 1,
   skipped: [],
+  scope: null,
   ...more,
 });

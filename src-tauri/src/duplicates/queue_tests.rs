@@ -276,7 +276,7 @@ fn find_during_a_queued_trash_is_busy() {
     let batch = t.confirm(1, &[at(&a, "x")]).unwrap();
     let running = t.start(batch, logged(&t.log));
     let (emit, _) = super::tests::recorder();
-    let found = t.state.find_duplicates(String::new(), false, emit);
+    let found = t.state.find_duplicates(String::new(), false, None, emit);
     assert_eq!(found.err(), Some(CmdError::Busy));
     drop(held);
     assert_eq!(ended(running).unwrap().removed, 1);

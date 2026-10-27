@@ -84,7 +84,7 @@ fn a_tree_change_does_not_wait_for_the_context() {
     let state = AppState::with_context(context);
     let (_dir, root, generation) = open_pair(&state, "context");
     let picking = state.clone();
-    let estimate = thread::spawn(move || picking.estimate_duplicates("", false));
+    let estimate = thread::spawn(move || picking.estimate_duplicates("", false, None).unwrap());
     entered.recv_timeout(HANG).unwrap();
     let changed = change_within(&state, &root, generation);
     go.send(()).unwrap();

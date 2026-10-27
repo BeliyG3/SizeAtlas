@@ -96,7 +96,7 @@ export function useDuplicates({ query, system, rootsKey, onFail }: Options) {
 
   useEffect(() => {
     let live = true;
-    api.estimateDuplicates(query, system).then(
+    api.estimateDuplicates(query, system, null).then(
       (next) => {
         if (live) setEstimate(next);
       },
@@ -120,7 +120,7 @@ export function useDuplicates({ query, system, rootsKey, onFail }: Options) {
         sending.current = false;
         if (life.live) setFinding(false);
       };
-      api.findDuplicates(words, system).then(
+      api.findDuplicates(words, system, null).then(
         () => {
           sent();
           // The job's own status asks for its result; this read covers a status sent before it.

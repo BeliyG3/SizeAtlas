@@ -8,32 +8,38 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
 use super::roots::{cache_dir, changed};
-use crate::dto::{DuplicatesDto, EstimateDto, RefDto, TrashDto, TrashProgressEventDto};
+use crate::dto::{DuplicatesDto, EstimateDto, RefDto, ScopeDto, TrashDto, TrashProgressEventDto};
 use crate::duplicates::{Emit, thumb, trash};
 use crate::error::CmdError;
 use crate::recycle;
 use crate::state::AppState;
 
-/// What a search for `query` would compare; reads no file.
+/// What a search for `query` (of the folder `scope`, else of every open root) would compare;
+/// reads no file. A scope out of date is `StaleId`.
 #[tauri::command]
 pub async fn estimate_duplicates(
     state: State<'_, AppState>,
     query: String,
     system: bool,
+    scope: Option<ScopeDto>,
 ) -> Result<EstimateDto, CmdError> {
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || state.estimate_duplicates(&query, system))
-        .await
-        .map_err(CmdError::from)
+    tauri::async_runtime::spawn_blocking(move || {
+        state.estimate_duplicates(&query, system, scope.as_ref())
+    })
+    .await
+    .map_err(CmdError::from)?
 }
 
-/// Starts a search and returns its job id at once; its progress comes as `duplicates-status`.
+/// Starts a search (of the folder `scope`, else of every open root) and returns its job id at
+/// once; its progress comes as `duplicates-status`. A scope out of date is `StaleId`.
 #[tauri::command]
 pub async fn find_duplicates(
     app: AppHandle,
     state: State<'_, AppState>,
     query: String,
     system: bool,
+    scope: Option<ScopeDto>,
 ) -> Result<u64, CmdError> {
     let state = state.inner().clone();
     let emit: Emit = Arc::new(move |status| {
@@ -41,7 +47,7 @@ pub async fn find_duplicates(
     });
     tauri::async_runtime::spawn_blocking(move || {
         state
-            .find_duplicates(query, system, emit)
+            .find_duplicates(query, system, scope, emit)
             .map(|(job, _)| job)
     })
     .await

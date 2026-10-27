@@ -219,7 +219,7 @@ fn a_search_whose_result_goes_stale_stops() {
     let (hold, entered, go) = Hold::new();
     let emit: Emit = Arc::new(move |_| hold.wait());
     let (_, handle) = (t.state)
-        .find_duplicates(String::new(), false, emit)
+        .find_duplicates(String::new(), false, None, emit)
         .unwrap();
     entered.recv_timeout(HANG).unwrap();
     t.state.install_tree(scanned(dir.path()));

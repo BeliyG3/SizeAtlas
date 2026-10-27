@@ -86,7 +86,9 @@ pub(super) fn recorder() -> (Emit, Arc<Mutex<Vec<StatusDto>>>) {
 
 /// Runs a job with no query to its end.
 pub(super) fn find(state: &AppState, emit: Emit) -> u64 {
-    let (job, handle) = state.find_duplicates(String::new(), false, emit).unwrap();
+    let (job, handle) = state
+        .find_duplicates(String::new(), false, None, emit)
+        .unwrap();
     handle.join().unwrap();
     job
 }
@@ -140,7 +142,7 @@ fn estimate_reads_no_file() {
     let (state, calls) = state();
     let (_dir, _, _) = open_pair(&state, "estimate");
     for _ in 0..3 {
-        let e = state.estimate_duplicates("", false);
+        let e = state.estimate_duplicates("", false, None).unwrap();
         assert_eq!((e.files, e.bytes, e.roots), (2, 2 * LEN as u64, 1));
         assert!(e.skipped.is_empty());
     }
@@ -166,7 +168,9 @@ fn a_resumed_search_starts_with_the_old_groups() {
     // "Continue": the new job is held at its first progress, before it reads any content.
     let (hold, at_start, go) = Hold::new();
     let hold: Emit = Arc::new(move |_| hold.wait());
-    let (job, handle) = state.find_duplicates(String::new(), false, hold).unwrap();
+    let (job, handle) = state
+        .find_duplicates(String::new(), false, None, hold)
+        .unwrap();
     at_start.recv_timeout(HANG).unwrap();
     let resumed = state.duplicates_since(0, 0);
     assert_eq!(resumed.job, job);
@@ -186,7 +190,9 @@ fn a_resumed_search_of_another_query_starts_empty() {
     find(&state, recorder().0);
     let (hold, at_start, go) = Hold::new();
     let hold: Emit = Arc::new(move |_| hold.wait());
-    let (_, handle) = state.find_duplicates("a".into(), false, hold).unwrap();
+    let (_, handle) = state
+        .find_duplicates("a".into(), false, None, hold)
+        .unwrap();
     at_start.recv_timeout(HANG).unwrap();
     assert!(state.duplicates_since(0, 0).groups.is_empty());
     go.send(()).unwrap();
@@ -199,7 +205,7 @@ fn find_during_a_trash_is_busy() {
     let _dir = open_pair(&state, "busy");
     state.0.duplicates.trashing.store(1, Ordering::SeqCst);
     let (emit, statuses) = recorder();
-    let found = state.find_duplicates(String::new(), false, emit);
+    let found = state.find_duplicates(String::new(), false, None, emit);
     assert_eq!(found.err(), Some(CmdError::Busy));
     assert!(statuses.lock().unwrap().is_empty());
     assert_eq!(state.duplicates_since(0, 0).job, 0);
@@ -211,7 +217,7 @@ fn roots_being_scanned_are_skipped() {
     let (state, _) = state();
     let (_dir, root, _) = open_pair(&state, "scanning");
     state.enqueue(root.clone()).unwrap();
-    let e = state.estimate_duplicates("", false);
+    let e = state.estimate_duplicates("", false, None).unwrap();
     assert_eq!(e.skipped, [root]);
     assert_eq!((e.files, e.roots), (0, 0));
 }
@@ -249,7 +255,9 @@ fn a_new_find_replaces_the_old_job() {
         statuses(s);
         hold.wait();
     });
-    let (job1, h1) = state.find_duplicates(String::new(), false, first).unwrap();
+    let (job1, h1) = state
+        .find_duplicates(String::new(), false, None, first)
+        .unwrap();
     entered.recv_timeout(HANG).unwrap();
     let job2 = find(&state, recorder().0);
     assert_eq!(job2, job1 + 1);

@@ -118,7 +118,7 @@ impl Dups {
     pub fn find(&self, system: bool) {
         let (emit, _) = recorder();
         let (_, handle) = (self.state)
-            .find_duplicates(String::new(), system, emit)
+            .find_duplicates(String::new(), system, None, emit)
             .unwrap();
         handle.join().unwrap();
     }

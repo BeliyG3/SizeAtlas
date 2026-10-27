@@ -9,6 +9,16 @@ use sizeatlas_core::duplicates::{DiskKind, Phase, Unread};
 
 use super::millis;
 
+/// One folder to search instead of every open root: node `folder` of the tree of `root` with
+/// `generation` (node 0 for the whole root).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopeDto {
+    pub root: String,
+    pub generation: u64,
+    pub folder: u32,
+}
+
 /// Where a search job is; the payload of the `duplicates-status` event.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -94,6 +104,8 @@ pub struct DuplicatesDto {
     pub full: bool,
     pub query: String,
     pub system: bool,
+    /// The full path of the folder searched; `None` for every open root.
+    pub scope: Option<String>,
     pub groups: Vec<GroupDto>,
     /// Keys of groups gone.
     pub removed: Vec<String>,
@@ -113,6 +125,8 @@ pub struct EstimateDto {
     pub seeded: u64,
     pub roots: u32,
     pub skipped: Vec<String>,
+    /// The full path of the folder of the scope; `None` without one.
+    pub scope: Option<String>,
 }
 
 pub fn hex(hash: &Hash) -> String {

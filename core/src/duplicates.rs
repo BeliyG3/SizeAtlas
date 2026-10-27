@@ -49,6 +49,9 @@ pub struct SearchRoot<'a> {
     /// The key of the root's volume; file ids are compared only within one volume.
     pub volume: &'a str,
     pub disk: DiskKind,
+    /// The node the walk starts at: 0 for the whole root, else a folder in it (zones still
+    /// count from the root's path down to it). A file or a dead node gives no candidates.
+    pub start: u32,
 }
 
 /// What a search looks for.
@@ -107,6 +110,8 @@ mod tests_held;
 mod tests_links;
 #[cfg(test)]
 mod tests_results;
+#[cfg(test)]
+mod tests_scope;
 #[cfg(test)]
 mod tests_search;
 #[cfg(test)]

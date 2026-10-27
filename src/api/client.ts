@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { DupEstimate, DupRef, DupStatus, Duplicates } from "./duplicates";
+import type { DupEstimate, DupRef, DupScope, DupStatus, Duplicates } from "./duplicates";
 import type {
   ChildrenPage,
   CmdError,
@@ -124,15 +124,20 @@ export const api = {
    */
   exportTable: (suggestedName: string, text: string) =>
     invoke<string | null>("export_table", { suggestedName, text }),
-  /** What a search for duplicates would compare among all open roots; reads no file. */
-  estimateDuplicates: (query: string, system: boolean) =>
-    invoke<DupEstimate>("estimate_duplicates", { query, system }),
   /**
-   * Starts a search for duplicates (and stops the one running); resolves at once to its job id.
-   * Progress comes as `duplicates-status`. Refused (`Busy`) while a trash of copies is pending.
+   * What a search for duplicates would compare in the folder `scope`, or among all open roots
+   * when null; reads no file. Refused (`StaleId`) for a scope out of date.
    */
-  findDuplicates: (query: string, system: boolean) =>
-    invoke<number>("find_duplicates", { query, system }),
+  estimateDuplicates: (query: string, system: boolean, scope: DupScope | null) =>
+    invoke<DupEstimate>("estimate_duplicates", { query, system, scope }),
+  /**
+   * Starts a search for duplicates in the folder `scope`, or among all open roots when null (and
+   * stops the one running); resolves at once to its job id. Progress comes as
+   * `duplicates-status`. Refused (`Busy`) while a trash of copies is pending, and (`StaleId`)
+   * for a scope out of date.
+   */
+  findDuplicates: (query: string, system: boolean, scope: DupScope | null) =>
+    invoke<number>("find_duplicates", { query, system, scope }),
   /** Stops the running search; what it found stays, not complete. */
   cancelDuplicates: () => invoke<void>("cancel_duplicates"),
   /** What changed in the result after version `since` of `job`; all of it for another job or 0. */

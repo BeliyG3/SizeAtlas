@@ -72,6 +72,13 @@ export interface DupUnread {
   failed: number;
 }
 
+/** One folder to search instead of every open root: node `folder` of the tree of `root`. */
+export interface DupScope {
+  root: string;
+  generation: number;
+  folder: number;
+}
+
 /** What changed in the result after the cursor the UI gave (all of it when `full`). */
 export interface Duplicates {
   /** 0 without a result. */
@@ -86,6 +93,8 @@ export interface Duplicates {
   full: boolean;
   query: string;
   system: boolean;
+  /** The full path of the folder searched; null for every open root. */
+  scope: string | null;
   groups: DupGroup[];
   /** Keys of groups gone. */
   removed: string[];
@@ -107,4 +116,6 @@ export interface DupEstimate {
   seeded: number;
   roots: number;
   skipped: string[];
+  /** The full path of the folder of the scope; null without one. */
+  scope: string | null;
 }

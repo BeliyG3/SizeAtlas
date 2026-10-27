@@ -81,15 +81,22 @@ pub(super) fn cache() -> Mutex<HashCache> {
 
 /// What `prepare` takes out of `trees` (one root each, on one HDD) for `query`.
 pub(super) fn prepared(trees: &[&Tree], query: &str) -> Prepared {
+    let whole: Vec<(&Tree, u32)> = trees.iter().map(|&t| (t, 0)).collect();
+    prepared_from(&whole, query)
+}
+
+/// [`prepared`] with each tree walked from the node paired with it.
+pub(super) fn prepared_from(trees: &[(&Tree, u32)], query: &str) -> Prepared {
     let known = Known::default();
     let query = Query::parse(query);
     let roots: Vec<SearchRoot> = trees
         .iter()
-        .map(|tree| SearchRoot {
+        .map(|&(tree, start)| SearchRoot {
             tree,
             generation: 0,
             volume: "v",
             disk: DiskKind::Hdd,
+            start,
         })
         .collect();
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();

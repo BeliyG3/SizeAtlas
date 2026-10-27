@@ -62,7 +62,7 @@ describe("useDuplicates", () => {
     expect(shown.state?.job).toBe(2);
     expect([...shown.state!.groups.keys()]).toEqual(["a"]);
     expect(shown.estimate).toEqual(estimate());
-    expect(api.estimateDuplicates).toHaveBeenCalledWith("type:image", false);
+    expect(api.estimateDuplicates).toHaveBeenCalledWith("type:image", false, null);
     expect(api.findDuplicates).not.toHaveBeenCalled();
   });
 
@@ -114,7 +114,7 @@ describe("useDuplicates", () => {
     await settle();
     vi.mocked(api.findDuplicates).mockResolvedValue(3);
     shown.find("*.png");
-    expect(api.findDuplicates).toHaveBeenCalledWith("*.png", false);
+    expect(api.findDuplicates).toHaveBeenCalledWith("*.png", false, null);
     await settle();
     expect(api.getDuplicates).toHaveBeenLastCalledWith(2, 5);
   });

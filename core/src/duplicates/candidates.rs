@@ -76,7 +76,7 @@ pub(super) fn collect(roots: &[SearchRoot], opts: &Options) -> (Vec<Candidate>, 
                 find(root.tree, os, rest)
             })
             .collect();
-        walk.root(i as u16, root.tree, path, &skip);
+        walk.root(i as u16, root.tree, path, root.start, &skip);
     }
     (walk.out, walk.eligible)
 }
@@ -108,9 +108,14 @@ struct Walk<'a> {
 }
 
 impl Walk<'_> {
-    /// Walks the tree of root `index` at `path`, leaving out the nodes in `skip` (inner roots).
-    fn root(&mut self, index: u16, tree: &Tree, path: &[&str], skip: &[u32]) {
-        if tree.node(0).has(flags::LOSSY_NAME) {
+    /// Walks the subtree of `start` in the tree of root `index` at `path`, leaving out the
+    /// nodes in `skip` (inner roots). `start` must be a live folder.
+    fn root(&mut self, index: u16, tree: &Tree, path: &[&str], start: u32, skip: &[u32]) {
+        let live_dir = (start as usize) < tree.len() && {
+            let node = tree.node(start);
+            node.is_alive() && node.is_dir()
+        };
+        if !live_dir || tree.node(0).has(flags::LOSSY_NAME) {
             return;
         }
         // The root's name is a whole path: a zone on the way makes the whole root one.
@@ -119,7 +124,22 @@ impl Walk<'_> {
             (state, mark) = self.zones.step(&state, mark, name, &mut self.buf);
         }
         mark.zone |= is_venv(tree, 0);
-        let mut stack: Vec<(u32, State, Mark)> = vec![(0, state, mark)];
+        // Then down the folders to `start`, as the walk would go.
+        let mut down = Vec::new();
+        let mut at = start;
+        while at != 0 {
+            down.push(at);
+            at = tree.node(at).parent;
+        }
+        for &id in down.iter().rev() {
+            let node = tree.node(id);
+            if skip.contains(&id) || node.has(flags::LOSSY_NAME) || !node.is_alive() {
+                return;
+            }
+            (state, mark) = self.zones.step(&state, mark, tree.name(id), &mut self.buf);
+            mark.zone |= is_venv(tree, id);
+        }
+        let mut stack: Vec<(u32, State, Mark)> = vec![(start, state, mark)];
         while let Some((dir, state, mark)) = stack.pop() {
             for id in tree.children(dir) {
                 let node = tree.node(id);

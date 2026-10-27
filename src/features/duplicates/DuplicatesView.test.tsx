@@ -90,8 +90,8 @@ describe("Find in the duplicates mode", () => {
     render("type:image", "  *.png   holiday ");
     header().props.onFind();
     expect(onCommit).toHaveBeenCalledWith("*.png holiday");
-    expect(api.findDuplicates).toHaveBeenCalledWith("*.png holiday", false);
-    expect(api.estimateDuplicates).toHaveBeenLastCalledWith("type:image", false);
+    expect(api.findDuplicates).toHaveBeenCalledWith("*.png holiday", false, null);
+    expect(api.estimateDuplicates).toHaveBeenLastCalledWith("type:image", false, null);
   });
 
   it("waits while a removal of copies runs, even one sent before the mode was entered", () => {
@@ -105,7 +105,7 @@ describe("Find in the duplicates mode", () => {
     render("", "type:image");
     expect(header().props.query).toBe("type:image");
     header().props.onFind();
-    expect(api.findDuplicates).toHaveBeenCalledWith("type:image", false);
+    expect(api.findDuplicates).toHaveBeenCalledWith("type:image", false, null);
   });
 });
 

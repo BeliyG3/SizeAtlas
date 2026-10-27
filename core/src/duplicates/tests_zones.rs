@@ -16,6 +16,7 @@ pub(super) fn root(tree: &Tree) -> SearchRoot<'_> {
         generation: 1,
         volume: "v",
         disk: DiskKind::Ssd,
+        start: 0,
     }
 }
 

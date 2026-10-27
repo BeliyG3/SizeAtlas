@@ -37,7 +37,7 @@ fn find_and_confirm_race_on_a_barrier() {
         let (state, at_start) = (t.state.clone(), barrier.clone());
         let finding = thread::spawn(move || {
             at_start.wait();
-            let found = state.find_duplicates(String::new(), false, emit);
+            let found = state.find_duplicates(String::new(), false, None, emit);
             let _ = found_tx.send(());
             found
         });
