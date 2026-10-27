@@ -22,8 +22,8 @@ export const GROUP_GRID = gridSpec<GroupColumn>({
   pinned: "name",
   labelKey,
   columns: [
-    // With the others, about the default width of the group list: all four fit.
-    { id: "name", width: 150, numeric: false },
+    // With the others and a scroll bar, within the default width of the group list.
+    { id: "name", width: 140, numeric: false },
     { id: "copies", width: 64, numeric: true },
     { id: "size", width: 88, numeric: true },
     { id: "free", width: 110, numeric: true },
@@ -36,7 +36,7 @@ export const COPY_GRID = gridSpec<CopyColumn>({
   pinned: "path",
   labelKey,
   columns: [
-    { id: "path", width: 480, numeric: false },
+    { id: "path", width: 400, numeric: false },
     { id: "modified", width: 140, numeric: false },
     { id: "root", width: 110, numeric: false },
     { id: "marks", width: 200, numeric: false },
@@ -69,6 +69,20 @@ export function parseDupSort<K extends string>(
   return columns.includes(column as K) && (direction === "asc" || direction === "desc")
     ? { column: column as K, descending: direction === "desc" }
     : fallback;
+}
+
+/**
+ * The sort in effect while the columns `shown` are shown: a hidden column cannot sort, so the
+ * `fallback` takes over, or the `pinned` column from A when that one is hidden too.
+ */
+export function shownSort<K extends string>(
+  sort: DupSort<K>,
+  shown: readonly K[],
+  fallback: DupSort<K>,
+  pinned: K,
+): DupSort<K> {
+  if (shown.includes(sort.column)) return sort;
+  return shown.includes(fallback.column) ? fallback : { column: pinned, descending: false };
 }
 
 /** Columns of text start from A, numbers and dates from the largest. */

@@ -8,6 +8,7 @@ import { DupHeader } from "./DupHeader";
 import { answer, estimate, group } from "./dup.testSupport";
 import { DuplicatesView, type DupMenuTrash } from "./DuplicatesView";
 import { GroupDetail } from "./GroupDetail";
+import { GroupList } from "./GroupList";
 
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
@@ -154,5 +155,30 @@ describe("the trash of copies", () => {
     detail().props.onTrash([0, 1]);
     expect(push).toHaveBeenCalledWith("dup.lastCopy");
     expect(api.trashPreview).not.toHaveBeenCalled();
+  });
+});
+
+describe("the order of the groups", () => {
+  it("keeps the group shown first, and its marks, when the groups are sorted again", async () => {
+    vi.mocked(api.getDuplicates).mockResolvedValue(
+      answer({ job: 1, version: 2, groups: [group("big", 99), group("small", 10)] }),
+    );
+    render("type:image", "type:image");
+    await settle();
+    expect(detail().props.group.key).toBe("big");
+    detail().props.onPick(marked([1]));
+    render("type:image", "type:image");
+    const list = (
+      element(SplitPane)!.props as { first: ReactElement<Parameters<typeof GroupList>[0]> }
+    ).first;
+    // Smallest saving first: "small" leads the list, the group shown stays.
+    list.props.onSort({ column: "free", descending: false });
+    render("type:image", "type:image");
+    const first = (
+      element(SplitPane)!.props as { first: ReactElement<Parameters<typeof GroupList>[0]> }
+    ).first;
+    expect(first.props.groups.map((g) => g.key)).toEqual(["small", "big"]);
+    expect(detail().props.group.key).toBe("big");
+    expect([...detail().props.pick.marks.ids]).toEqual([1]);
   });
 });

@@ -21,6 +21,7 @@ import {
   nextDupSort,
   parseDupSort,
   serializeDupSort,
+  shownSort,
   type CopyColumn,
 } from "./columns";
 import { Thumb } from "./Thumb";
@@ -68,7 +69,9 @@ export function GroupDetail({ group, pick, onPick, onTrash, onMenu, queue, onFai
   const count = group.copies.length;
   const body = useRef<HTMLDivElement>(null);
   const layout = useGridColumns(body, COPY_GRID);
-  const [sort, setSort] = useStored(COPY_SORT_KEY, parseSort, serializeDupSort);
+  const [stored, setSort] = useStored(COPY_SORT_KEY, parseSort, serializeDupSort);
+  // A column hidden while it sorts hands the order to the default one, as in the main table.
+  const sort = shownSort(stored, layout.ids, DEFAULT_COPY_SORT, COPY_GRID.pinned);
   /** The copy shown in each row, by its index in the group. */
   const order = useMemo(() => copyOrder(group.copies, sort), [group, sort]);
   const { marks, cursor } = pick;

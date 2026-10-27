@@ -8,6 +8,7 @@ import {
   nextDupSort,
   parseDupSort,
   serializeDupSort,
+  shownSort,
   sortGroups,
 } from "./columns";
 import { copy, group } from "./dup.testSupport";
@@ -71,6 +72,17 @@ describe("the columns of the duplicates tables", () => {
       descending: true,
     });
     expect(nextDupSort(DEFAULT_COPY_SORT, "root")).toEqual({ column: "root", descending: false });
+  });
+
+  it("sort by the default column while the sorted one is hidden, else by the pinned one", () => {
+    const sort = { column: "copies" as const, descending: true };
+    const all = ["name", "copies", "size", "free"] as const;
+    expect(shownSort(sort, all, DEFAULT_GROUP_SORT, "name")).toBe(sort);
+    expect(shownSort(sort, ["name", "free"], DEFAULT_GROUP_SORT, "name")).toBe(DEFAULT_GROUP_SORT);
+    expect(shownSort(sort, ["name"], DEFAULT_GROUP_SORT, "name")).toEqual({
+      column: "name",
+      descending: false,
+    });
   });
 
   it("store a sort and read back only a known one", () => {

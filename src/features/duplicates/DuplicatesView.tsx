@@ -98,6 +98,15 @@ export function DuplicatesView(props: Props) {
   const [picked, setPicked] = useState<string | null>(null);
   // A change without the picked group shows the first one.
   const selected = groups.find((g) => g.key === picked) ?? groups[0] ?? null;
+  // Another order keeps the group shown, and so its marks, even one shown as the first.
+  const shownKey = selected?.key ?? null;
+  const onSortGroups = useCallback(
+    (next: typeof sort) => {
+      setPicked(shownKey);
+      setSort(next);
+    },
+    [shownKey, setSort],
+  );
   // Marks belong to one group as it is: another group, or this one changed, starts without any.
   const key = selected && state ? copyMarksKey(state.job, selected) : "";
   const [stored, setPick] = useState<CopyPick>({ marks: noMarks(key), cursor: null });
@@ -173,7 +182,7 @@ export function DuplicatesView(props: Props) {
               selected={selected.key}
               onPick={setPicked}
               sort={sort}
-              onSort={setSort}
+              onSort={onSortGroups}
               queue={queue}
             />
           }

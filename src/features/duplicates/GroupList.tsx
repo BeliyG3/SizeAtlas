@@ -9,7 +9,14 @@ import { tableKeyDown, useViewport, type RowActions } from "../contents/tableVie
 import { scrollToRow } from "../contents/useCursor";
 import { GridHeader } from "../columns/GridHeader";
 import { useGridColumns } from "../columns/useGridColumns";
-import { GROUP_GRID, nextDupSort, type DupSort, type GroupColumn } from "./columns";
+import {
+  DEFAULT_GROUP_SORT,
+  GROUP_GRID,
+  nextDupSort,
+  shownSort,
+  type DupSort,
+  type GroupColumn,
+} from "./columns";
 import { Thumb } from "./Thumb";
 import type { ThumbQueue } from "./thumbs";
 import "../contents/contents.css";
@@ -35,6 +42,11 @@ export function GroupList({ groups, selected, onPick, sort, onSort, queue }: Pro
   const size = useSize();
   const body = useRef<HTMLDivElement>(null);
   const layout = useGridColumns(body, GROUP_GRID);
+  // A column hidden while it sorts hands the order to the default one, as in the main table.
+  const shown = shownSort(sort, layout.ids, DEFAULT_GROUP_SORT, GROUP_GRID.pinned);
+  useEffect(() => {
+    if (shown !== sort) onSort(shown);
+  }, [shown, sort, onSort]);
   const { scrollTop, viewport, onScroll } = useViewport(body);
   const { first, last } = visibleRange(scrollTop, viewport, groups.length);
   const at = groups.findIndex((g) => g.key === selected);
