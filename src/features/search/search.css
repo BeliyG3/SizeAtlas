@@ -1,4 +1,4 @@
-/* The toolbar's search field, at the end of it: up to 220px, down to 120px before it moves to the next line. */
+/* The toolbar's search field, at its end before the 3D city toggle: up to 220px, down to 120px before it moves to the next line. */
 .search {
   display: flex;
   flex: 1 1 120px;

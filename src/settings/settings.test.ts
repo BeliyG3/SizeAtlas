@@ -40,4 +40,11 @@ describe("stored settings", () => {
     expect(serializeShown(false)).toBe("0");
     expect(parseShown(serializeShown(true))).toBe(true);
   });
+
+  it("hide a panel that is off by default until it was stored as shown", () => {
+    expect(parseShown(null, false)).toBe(false);
+    expect(parseShown("garbage", false)).toBe(false);
+    expect(parseShown("0", false)).toBe(false);
+    expect(parseShown(serializeShown(true), false)).toBe(true);
+  });
 });

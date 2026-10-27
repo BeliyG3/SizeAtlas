@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import type { Sources } from "../../api/types";
 import { useT } from "../../i18n/react";
+import { useSettings } from "../../settings/react";
 import { Icon } from "../icons/Icon";
 import type { IconName } from "../icons/paths";
 import { ModeMenu } from "../lists/ModeMenu";
@@ -54,7 +55,10 @@ interface Props {
   searchRef: RefObject<HTMLInputElement | null>;
 }
 
-/** Back and forward, the source list and its main button, Cancel, Forget, the table mode and the search. */
+/**
+ * Back and forward, the source list and its main button, Cancel, Forget, the table mode, the
+ * search and the 3D city toggle.
+ */
 export function Toolbar({
   canBack,
   canForward,
@@ -80,6 +84,7 @@ export function Toolbar({
   searchRef,
 }: Props) {
   const { t } = useT();
+  const { showCity, setShowCity } = useSettings();
   const action = sourceAction(pending, selectedRoot, inTree, sources?.scans ?? []);
   const ready = action === "open" || (pending !== null && !waiting.has(pending));
   const forget = forgettable(sources, pending);
@@ -143,6 +148,15 @@ export function Toolbar({
       </button>
       <ModeMenu value={mode} onChange={onMode} />
       <SearchField value={query} onChange={onQuery} onCommit={onSearch} inputRef={searchRef} />
+      <button
+        className="nav toggle"
+        aria-pressed={showCity}
+        title={t("toolbar.city")}
+        aria-label={t("toolbar.city")}
+        onClick={() => setShowCity(!showCity)}
+      >
+        <Icon name="city" />
+      </button>
     </header>
   );
 }

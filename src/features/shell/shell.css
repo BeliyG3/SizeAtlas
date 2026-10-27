@@ -18,6 +18,11 @@
   color: var(--accent);
 }
 
+/* A panel toggle (the 3D city): tinted while its panel is shown. */
+.toolbar .toggle[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
 /* The source list's button: as wide as the field was; a long path is cut short. */
 .toolbar .source {
   width: 280px;

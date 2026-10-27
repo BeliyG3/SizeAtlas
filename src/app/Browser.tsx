@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { DupScope } from "../api/duplicates";
 import type { QueueEntry, ScanProgress, Sources } from "../api/types";
+import { CityPane } from "../features/city/CityPane";
 import { DEFAULT_SORT, type SortState } from "../features/contents/columns";
 import { DrivesPanel } from "../features/drives/DrivesPanel";
 import { DuplicatesView, type DupWiring } from "../features/duplicates/DuplicatesView";
@@ -265,6 +266,14 @@ export function Browser({
           />
         }
         content={content}
+        city={
+          <CityPane
+            summary={summary}
+            selection={selection}
+            onSelect={onSelectNode}
+            onFail={onFail}
+          />
+        }
         drivesWidth={drivesWidth}
       />
       {menu?.kind === "item" && itemOpen && (

@@ -1,9 +1,10 @@
 /** `localStorage` keys. */
 export const THEME_KEY = "sizeatlas.theme";
 export const UNIT_KEY = "sizeatlas.unit";
-/** Whether the drives panel and the chart area are shown: "0" hides them. */
+/** Whether the drives panel, the chart area and the 3D city are shown: "0" hides, "1" shows. */
 export const DRIVES_KEY = "sizeatlas.view.drives";
 export const CHART_KEY = "sizeatlas.view.chart";
+export const CITY_KEY = "sizeatlas.view.city";
 
 export const THEMES = ["system", "dark", "light"] as const;
 export type ThemePref = (typeof THEMES)[number];
@@ -31,6 +32,7 @@ export function parseSize(raw: string | null, fallback: number): number {
     : fallback;
 }
 
-/** A panel is shown unless it was stored as hidden. */
-export const parseShown = (raw: string | null): boolean => raw !== "0";
+/** A panel is shown as stored; anything else gives `byDefault`. */
+export const parseShown = (raw: string | null, byDefault = true): boolean =>
+  raw === "1" || (raw !== "0" && byDefault);
 export const serializeShown = (shown: boolean): string => (shown ? "1" : "0");

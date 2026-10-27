@@ -16,6 +16,7 @@ import { useT } from "../i18n/react";
 import { PALETTES, type Palette } from "../palette";
 import {
   CHART_KEY,
+  CITY_KEY,
   DRIVES_KEY,
   THEME_KEY,
   UNIT_KEY,
@@ -45,6 +46,9 @@ interface Settings {
   /** View › Chart. */
   showChart: boolean;
   setShowChart: (shown: boolean) => void;
+  /** View › 3D city; off until turned on. */
+  showCity: boolean;
+  setShowCity: (shown: boolean) => void;
 }
 
 const SettingsContext = createContext<Settings | null>(null);
@@ -56,12 +60,14 @@ function subscribeToSystemTheme(onChange: () => void) {
 }
 
 const systemIsDark = () => window.matchMedia(DARK_QUERY).matches;
+const parseCity = (raw: string | null) => parseShown(raw, false);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useStored(THEME_KEY, parseTheme);
   const [unit, setUnit] = useStored(UNIT_KEY, parseUnit);
   const [showDrives, setShowDrives] = useStored(DRIVES_KEY, parseShown, serializeShown);
   const [showChart, setShowChart] = useStored(CHART_KEY, parseShown, serializeShown);
+  const [showCity, setShowCity] = useStored(CITY_KEY, parseCity, serializeShown);
   const systemDark = useSyncExternalStore(subscribeToSystemTheme, systemIsDark);
   const resolved = resolveTheme(theme, systemDark);
   // Before paint, so a light theme never flashes dark.
@@ -99,8 +105,22 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setShowDrives,
       showChart,
       setShowChart,
+      showCity,
+      setShowCity,
     }),
-    [theme, setTheme, resolved, unit, setUnit, showDrives, setShowDrives, showChart, setShowChart],
+    [
+      theme,
+      setTheme,
+      resolved,
+      unit,
+      setUnit,
+      showDrives,
+      setShowDrives,
+      showChart,
+      setShowChart,
+      showCity,
+      setShowCity,
+    ],
   );
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

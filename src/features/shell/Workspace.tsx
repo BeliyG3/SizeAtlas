@@ -7,6 +7,8 @@ interface Props {
   tree: ReactNode;
   drives: ReactNode;
   content: ReactNode;
+  /** The 3D city, right of the content (View › 3D city shows it). */
+  city: ReactNode;
   /** Width the drives panel needs to show its columns in full (see DrivesPanel `onWidth`). */
   drivesWidth: number;
 }
@@ -18,11 +20,11 @@ const LEFT_SLACK = 2;
 
 /**
  * Window body: the folder tree above the drives on the left (View › Drives panel hides them), the
- * content on the right.
+ * content on the right, then the 3D city (View › 3D city shows it; hidden, it is not mounted).
  */
-export function Workspace({ tree, drives, content, drivesWidth }: Props) {
+export function Workspace({ tree, drives, content, city, drivesWidth }: Props) {
   const { t } = useT();
-  const { showDrives } = useSettings();
+  const { showDrives, showCity } = useSettings();
   return (
     <SplitPane
       direction="row"
@@ -43,7 +45,18 @@ export function Workspace({ tree, drives, content, drivesWidth }: Props) {
           collapse={showDrives ? undefined : "second"}
         />
       }
-      second={content}
+      second={
+        <SplitPane
+          direction="row"
+          sized="second"
+          storageKey="sizeatlas.split.city"
+          defaultSize={420}
+          label={t("split.city")}
+          first={content}
+          second={city}
+          collapse={showCity ? undefined : "second"}
+        />
+      }
     />
   );
 }
