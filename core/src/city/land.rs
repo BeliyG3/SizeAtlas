@@ -1,8 +1,9 @@
 //! The island's land: overlapping octagons around the district seeds.
 
 use super::CELL;
-use super::grid::{Grid, close, fill_holes};
+use super::grid::{Grid, close, fill_holes, label};
 use super::rng::Rng;
+use std::cmp::Reverse;
 
 /// Golden angle, radians: consecutive seeds of the spiral turn by it.
 const GOLDEN: f32 = 2.39996;
@@ -14,6 +15,10 @@ const CLOSING: f32 = 30.0;
 /// Cell of the coarse raster the overall scale is fitted on, metres.
 const COARSE: f32 = 6.0;
 const FIT_ROUNDS: usize = 3;
+/// A district cut off from the main land moves this share of the way to the core per try.
+const PULL: f32 = 0.15;
+/// Tries before the pieces off the main land are dropped (the sweeps in the tests need 1).
+const MAX_PULLS: usize = 20;
 
 /// Seeds of `n` districts in units of the spiral's ring step: the core at the origin, the rest
 /// on a golden-angle spiral around it, slightly squashed along `y`.
@@ -58,10 +63,14 @@ impl Octagon {
     }
 }
 
+fn scaled(octagons: &[Octagon], k: f32) -> Vec<Octagon> {
+    octagons.iter().map(|o| o.scaled(k)).collect()
+}
+
 /// The land of districts of `areas` (m²) around `seeds` (from [`seeds`]): three overlapping
-/// octagons per district, closed and without holes, scaled so its area is about `Σ areas`. The
-/// field keeps `margin` metres of room around the land's bounding box for the shore. `seeds` are
-/// moved into the field's frame (metres).
+/// octagons per district, closed, without holes and in one piece, scaled so its area is about
+/// `Σ areas`. The field keeps `margin` metres of room around the land's bounding box for the
+/// shore. `seeds` are moved into the field's frame (metres).
 pub(crate) fn land(
     areas: &[f32],
     seeds: &mut [[f32; 2]],
@@ -95,25 +104,109 @@ pub(crate) fn land(
             });
         }
     }
-    // The overlaps and the closing change the area: fit one overall scale on a coarse raster.
+    // Pull detached districts toward the core until the land is one piece: checked on the coarse
+    // raster first (cheap), then on the final one.
     let mut k = 1.0f32;
-    for _ in 0..FIT_ROUNDS {
-        let shape: Vec<Octagon> = octagons.iter().map(|o| o.scaled(k)).collect();
-        let (coarse, _) = raster(&shape, COARSE, 0.0);
-        let got = coarse.data.iter().filter(|&&l| l).count() as f32 * COARSE * COARSE;
-        k *= (want / got.max(COARSE * COARSE)).sqrt().clamp(0.5, 2.0);
-    }
-    let shape: Vec<Octagon> = octagons.iter().map(|o| o.scaled(k)).collect();
-    let (field, origin) = raster(&shape, CELL, margin);
+    let mut pulls = 0;
+    let (tight, origin) = loop {
+        k = fit(&octagons, want, k);
+        let shape = scaled(&octagons, k);
+        let (coarse, at) = raster(&shape, COARSE);
+        let (labels, count) = label(&coarse);
+        if count > 1
+            && pulls < MAX_PULLS
+            && pull(seeds, &mut octagons, &labels, count, at, COARSE, k)
+        {
+            pulls += 1;
+            continue;
+        }
+        let (fine, at) = raster(&shape, CELL);
+        let (labels, count) = label(&fine);
+        if count > 1 && pulls < MAX_PULLS && pull(seeds, &mut octagons, &labels, count, at, CELL, k)
+        {
+            pulls += 1;
+            continue;
+        }
+        // Left off the main land now: specks of a cell or two that the closing leaves (or, past
+        // `MAX_PULLS`, whatever did not join), dropped.
+        let main = biggest(&labels, count);
+        let data = labels.data.iter().map(|&l| l >= 0 && l == main).collect();
+        break (Grid { data, ..fine }, at);
+    };
+    let (field, origin) = pad(tight, origin, margin);
     for p in seeds.iter_mut() {
         *p = [p[0] * k - origin[0], p[1] * k - origin[1]];
     }
     field
 }
 
-/// The closed, hole-free union of `octagons` on a raster of `cell` metres with `margin` metres
-/// of room around its bounding box, and the field's origin in the octagons' frame.
-fn raster(octagons: &[Octagon], cell: f32, margin: f32) -> (Grid<bool>, [f32; 2]) {
+/// The overall scale that brings the land's area to `want`, fitted on a coarse raster starting
+/// from `k`: the overlaps and the closing change the area.
+fn fit(octagons: &[Octagon], want: f32, mut k: f32) -> f32 {
+    for _ in 0..FIT_ROUNDS {
+        let (coarse, _) = raster(&scaled(octagons, k), COARSE);
+        let got = coarse.data.iter().filter(|&&l| l).count() as f32 * COARSE * COARSE;
+        k *= (want / got.max(COARSE * COARSE)).sqrt().clamp(0.5, 2.0);
+    }
+    k
+}
+
+/// The label of the biggest of `count` components (`-1` when there is none).
+fn biggest(labels: &Grid<i32>, count: usize) -> i32 {
+    let mut size = vec![0usize; count];
+    for &l in &labels.data {
+        if l >= 0 {
+            size[l as usize] += 1;
+        }
+    }
+    (0..count)
+        .max_by_key(|&i| (size[i], Reverse(i)))
+        .map_or(-1, |i| i as i32)
+}
+
+/// Moves every district with an octagon off the biggest component toward the core, and its
+/// octagons toward its seed; `false` when no district is off it. Every piece that holds an
+/// octagon's centre gets pulled, the others are specks left by the closing. `labels` (with
+/// `count` components) rasterises the octagons scaled by `k` in cells of `cell` metres from
+/// `origin`.
+fn pull(
+    seeds: &mut [[f32; 2]],
+    octagons: &mut [Octagon],
+    labels: &Grid<i32>,
+    count: usize,
+    origin: [f32; 2],
+    cell: f32,
+    k: f32,
+) -> bool {
+    let main = biggest(labels, count);
+    let on_main = |c: [f32; 2]| {
+        let x = ((c[0] * k - origin[0]) / cell) as usize;
+        let y = ((c[1] * k - origin[1]) / cell) as usize;
+        x < labels.w && y < labels.h && labels.get(x, y) == main
+    };
+    let mut moved = false;
+    for (seed, patch) in seeds.iter_mut().zip(octagons.chunks_mut(3)) {
+        if patch.iter().all(|o| on_main(o.c)) {
+            continue;
+        }
+        moved = true;
+        let d = [-PULL * seed[0], -PULL * seed[1]];
+        *seed = [seed[0] + d[0], seed[1] + d[1]];
+        // The district's own octagons close up too (the core's can only do that).
+        for o in patch {
+            let c = [o.c[0] + d[0], o.c[1] + d[1]];
+            o.c = [
+                c[0] + PULL * (seed[0] - c[0]),
+                c[1] + PULL * (seed[1] - c[1]),
+            ];
+        }
+    }
+    moved
+}
+
+/// The closed, hole-free union of `octagons` on a raster of `cell` metres just big enough for
+/// it, and the raster's origin in the octagons' frame.
+fn raster(octagons: &[Octagon], cell: f32) -> (Grid<bool>, [f32; 2]) {
     let (mut lo, mut hi) = ([f32::INFINITY; 2], [f32::NEG_INFINITY; 2]);
     for o in octagons {
         let h = o.half();
@@ -122,9 +215,8 @@ fn raster(octagons: &[Octagon], cell: f32, margin: f32) -> (Grid<bool>, [f32; 2]
             hi[a] = hi[a].max(o.c[a] + h[a]);
         }
     }
-    // Room for the closing's dilation inside the tight raster, then the margin outside it.
+    // Room for the closing's dilation.
     let pad = (CLOSING / cell).ceil() as usize + 1;
-    let room = (margin / cell).ceil() as usize;
     let origin = [lo[0] - pad as f32 * cell, lo[1] - pad as f32 * cell];
     let (w, h) = (
         ((hi[0] - lo[0]) / cell).ceil() as usize + 2 * pad,
@@ -154,17 +246,22 @@ fn raster(octagons: &[Octagon], cell: f32, margin: f32) -> (Grid<bool>, [f32; 2]
             }
         }
     }
-    let tight = fill_holes(&close(&tight, CLOSING / cell));
+    (fill_holes(&close(&tight, CLOSING / cell)), origin)
+}
+
+/// `tight` (at `origin`, in cells of `CELL`) with `margin` metres of empty field on every side.
+fn pad(tight: Grid<bool>, origin: [f32; 2], margin: f32) -> (Grid<bool>, [f32; 2]) {
+    let room = (margin / CELL).ceil() as usize;
     if room == 0 {
         return (tight, origin);
     }
+    let (w, h) = (tight.w, tight.h);
     let mut field = Grid::new(w + 2 * room, h + 2 * room, false);
     for y in 0..h {
-        let row = &tight.data[y * w..(y + 1) * w];
         let at = field.idx(room, y + room);
-        field.data[at..at + w].copy_from_slice(row);
+        field.data[at..at + w].copy_from_slice(&tight.data[y * w..(y + 1) * w]);
     }
-    let shift = room as f32 * cell;
+    let shift = room as f32 * CELL;
     (field, [origin[0] - shift, origin[1] - shift])
 }
 

@@ -1,5 +1,5 @@
 use super::*;
-use crate::city::grid::fill_holes;
+use crate::city::grid::{fill_holes, label};
 
 /// Areas of `n` districts that add up to `total`, the first (the core) the biggest.
 fn areas(n: usize, total: f32) -> Vec<f32> {
@@ -64,4 +64,46 @@ fn the_same_seed_gives_the_same_land() {
     assert_eq!(sa, sb);
     let (c, _) = island(12, 600_000.0, 43);
     assert_ne!(a, c);
+}
+
+fn assert_one_piece(n: usize, total: f32, seed: u64) {
+    let (land, at) = island(n, total, seed);
+    assert_eq!(label(&land).1, 1, "{n} districts, {total} m², seed {seed}");
+    // No district was dropped with a piece of land: every seed stands on the land.
+    for p in &at {
+        let (x, y) = ((p[0] / CELL) as usize, (p[1] / CELL) as usize);
+        assert!(
+            land.get(x, y),
+            "{n} districts, {total} m², seed {seed}: {p:?} off the land"
+        );
+    }
+    let area = land.data.iter().filter(|&&l| l).count() as f32 * CELL * CELL;
+    assert!((area - total).abs() <= 0.15 * total, "{area} vs {total}");
+}
+
+#[test]
+fn the_land_is_one_piece() {
+    for n in [1, 2, 6, 15] {
+        for total in [150_000.0, 600_000.0] {
+            for seed in 0..50 {
+                assert_one_piece(n, total, seed);
+            }
+        }
+    }
+}
+
+#[test]
+fn big_islands_that_fell_apart_are_one_piece() {
+    // 1 500 000 m² built up, and with the most empty space inside: these fell apart before the
+    // detached districts were pulled in.
+    for (n, total, seed) in [
+        (6, 1_500_000.0, 28),
+        (6, 4_200_000.0, 0),
+        (6, 4_200_000.0, 10),
+        (6, 4_200_000.0, 28),
+        (15, 4_200_000.0, 0),
+        (15, 4_200_000.0, 27),
+    ] {
+        assert_one_piece(n, total, seed);
+    }
 }
