@@ -1,7 +1,7 @@
 //! The whole island as a vector map: districts, land, blocks, roads, the canal and the shore.
 
 use super::CELL;
-use super::blocks::{Blocks, LotKind, blocks};
+use super::blocks::{Blocks, LotInfo, LotKind, blocks};
 use super::canal::{canal, water};
 use super::graph::{Edge, along, build, keep_connected, length};
 use super::grid::Grid;
@@ -12,6 +12,7 @@ use super::map::{Gate, Island, Poly, PolyKind, Stats, frame};
 use super::outline::outline;
 use super::path::apart;
 use super::plan::{IslandInput, built_area, districts, empty_ratio};
+use super::rehome::{Rehomed, lot_polys};
 use super::rng::Rng;
 use super::road::RoadClass;
 use super::shore::{face, shore};
@@ -33,8 +34,20 @@ pub fn island(input: &IslandInput) -> Island {
     assemble(input).0
 }
 
-/// [`island`], and the share of the road length left off for not joining the core's roads.
-pub(super) fn assemble(input: &IslandInput) -> (Island, f32) {
+/// What the island was checked against in the tests.
+#[cfg_attr(not(test), allow(dead_code))] // Read by the tests only.
+pub(super) struct Trace {
+    /// Share of the road length left off for not joining the core's roads.
+    pub dropped: f32,
+    /// The canal's axis in the map's frame, empty without a canal.
+    pub canal: Vec<[f32; 2]>,
+    /// The lots as the blocks made them, and as the map keeps them.
+    pub placed: Vec<LotInfo>,
+    pub kept: Rehomed,
+}
+
+/// [`island`], and what the tests check it against.
+pub(super) fn assemble(input: &IslandInput) -> (Island, Trace) {
     let root = &input.root;
     let districts = districts(root);
     let b = built_area(root.size);
@@ -62,7 +75,7 @@ pub(super) fn assemble(input: &IslandInput) -> (Island, f32) {
         water(&axis, land.w, land.h)
     };
 
-    let (nodes, edges) = build(segments(&blocks, &ways), &wet);
+    let (nodes, edges) = build(segments(&blocks, &ways), &wet, &axis);
     let total: f32 = edges.iter().map(|e| length(&nodes, e)).sum();
     let (nodes, edges, dropped) = keep_connected(nodes, edges, core);
     let mut lot = blocks.lot.clone();
@@ -139,10 +152,8 @@ pub(super) fn assemble(input: &IslandInput) -> (Island, f32) {
         let (id, parent, size) = blocks.block_info[l as usize];
         polys.push(poly(PolyKind::Block, id, parent, size, p));
     }
-    for (l, p) in outlines(&lot, None, CELL, [0.0; 2], Fit::Inside) {
-        let info = blocks.lots[l as usize];
-        polys.push(poly(kind(info.kind), info.id, info.parent, info.size, p));
-    }
+    let (lots, kept) = lot_polys(&blocks, &lot);
+    polys.extend(lots);
     polys.retain(|p| p.points.len() <= usize::from(u16::MAX));
     polys.sort_by(|p, q| {
         rank(p.kind)
@@ -160,8 +171,17 @@ pub(super) fn assemble(input: &IslandInput) -> (Island, f32) {
         gates,
         stats,
     };
-    frame(&mut out);
-    (out, if total > 0.0 { dropped / total } else { 0.0 })
+    let shift = frame(&mut out);
+    let trace = Trace {
+        dropped: if total > 0.0 { dropped / total } else { 0.0 },
+        canal: axis
+            .iter()
+            .map(|p| [p[0] - shift[0], p[1] - shift[1]])
+            .collect(),
+        placed: blocks.lots,
+        kept,
+    };
+    (out, trace)
 }
 
 fn poly(kind: PolyKind, id: u32, parent: u32, size: u64, points: Vec<[f32; 2]>) -> Poly {
@@ -176,16 +196,6 @@ fn poly(kind: PolyKind, id: u32, parent: u32, size: u64, points: Vec<[f32; 2]>) 
 
 fn count(cells: &[bool]) -> usize {
     cells.iter().filter(|&&c| c).count()
-}
-
-fn kind(k: LotKind) -> PolyKind {
-    match k {
-        LotKind::House => PolyKind::House,
-        LotKind::Filler => PolyKind::Filler,
-        LotKind::Square => PolyKind::Square,
-        LotKind::Plaza => PolyKind::Plaza,
-        LotKind::Vacant => PolyKind::Vacant,
-    }
 }
 
 /// Drawing order of the kinds: the lots side by side last.

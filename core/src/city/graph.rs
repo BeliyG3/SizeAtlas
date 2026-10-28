@@ -26,12 +26,14 @@ const MIN_EDGE: f32 = 1.0;
 /// The graph of `segments` (metres, each straight at a multiple of 45°, ideally on the lines of
 /// [`snap_line`]): roads that run side by side merged (the higher class kept: Highway > Ring >
 /// Ramp > Street > Lane), cut at every crossing and junction, loose ends carried on to the next
-/// road (a lane up to 6 m, others up to 20 m), stretches over `water` (cells of `CELL` metres)
-/// made bridges or cut off (see [`bridges`]), and loose pieces under 1 m dropped. Nodes lie on
-/// the 1/64 m lattice, so every edge keeps its exact direction.
+/// road (a lane up to 6 m, others up to 20 m), stretches over the `water` (cells of `CELL`
+/// metres) of the canal along `axis` made bridges or cut off (see [`bridges`]), and loose pieces
+/// under 1 m and bridges with a loose end dropped. Nodes lie on the 1/64 m lattice, so every edge
+/// keeps its exact direction.
 pub(crate) fn build(
     segments: Vec<([f32; 2], [f32; 2], RoadClass)>,
     water: &Grid<bool>,
+    axis: &[[f32; 2]],
 ) -> (Vec<[f32; 2]>, Vec<Edge>) {
     let mut segs = Vec::with_capacity(segments.len());
     for (a, b, class) in segments {
@@ -52,7 +54,7 @@ pub(crate) fn build(
         pieces.extend(more);
         pieces = split(&pieces);
     }
-    let pieces = prune(bridges(pieces, water));
+    let pieces = prune(bridges(pieces, water, axis));
     index(&pieces)
 }
 
@@ -67,12 +69,16 @@ pub(crate) fn along(line: &[P], class: RoadClass) -> Vec<Seg> {
         .collect()
 }
 
-/// `pieces` without the loose ones shorter than `MIN_EDGE`, again and again.
+/// `pieces` without the loose ones shorter than `MIN_EDGE` and the loose bridges, again and
+/// again.
 fn prune(mut pieces: Vec<(Seg, bool)>) -> Vec<(Seg, bool)> {
     loop {
         let deg = degrees(&pieces.iter().map(|p| p.0).collect::<Vec<_>>());
         let before = pieces.len();
-        pieces.retain(|(s, _)| s.len() >= MIN_EDGE || (deg[&s.a] > 1 && deg[&s.b] > 1));
+        pieces.retain(|(s, bridge)| {
+            let held = deg[&s.a] > 1 && deg[&s.b] > 1;
+            held || (s.len() >= MIN_EDGE && !bridge)
+        });
         if pieces.len() == before {
             return pieces;
         }

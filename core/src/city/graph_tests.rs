@@ -42,6 +42,7 @@ fn crossing_roads_meet_at_a_node() {
             seg([10.0, 90.0], [90.0, 10.0], RoadClass::Lane),
         ],
         &dry(),
+        &[],
     );
     assert_eq!(degree(&edges, node(&nodes, [50.0, 50.0])), 6);
     assert_eq!(edges.len(), 6);
@@ -56,6 +57,7 @@ fn a_road_ending_on_another_splits_it() {
             seg([40.0, 0.0], [40.0, 60.0], RoadClass::Street),
         ],
         &dry(),
+        &[],
     );
     assert_eq!(edges.len(), 3);
     assert_eq!(degree(&edges, node(&nodes, [40.0, 0.0])), 3);
@@ -71,6 +73,7 @@ fn a_loose_lane_end_reaches_the_street() {
             seg([80.0, 7.0], [80.0, 40.0], RoadClass::Lane),
         ],
         &dry(),
+        &[],
     );
     let at = node(&nodes, [50.0, 0.0]);
     assert_eq!(degree(&edges, at), 3);
@@ -88,6 +91,7 @@ fn roads_side_by_side_become_one() {
             seg([0.0, -2.5], [60.0, -2.5], RoadClass::Highway),
         ],
         &dry(),
+        &[],
     );
     let on = |e: &Edge, y: f32| nodes[e.a as usize][1] == y && nodes[e.b as usize][1] == y;
     let len = |y: f32| -> f32 {
@@ -120,17 +124,22 @@ fn a_crossing_over_water_is_a_bridge_and_a_road_along_it_ends_at_the_bank() {
             seg([100.0, 0.0], [100.0, 150.0], RoadClass::Street),
             seg([0.0, 75.0], [200.0, 75.0], RoadClass::Street),
             seg([20.0, 40.0], [20.0, 70.0], RoadClass::Lane),
+            // Across at 45°: 38 m over water.
+            seg([140.0, 50.0], [180.0, 90.0], RoadClass::Street),
         ],
         &water,
+        &[[0.0, 73.5], [300.0, 73.5]],
     );
     let bridges: Vec<&Edge> = edges.iter().filter(|e| e.bridge).collect();
     let x = |e: &Edge| (nodes[e.a as usize][0], nodes[e.b as usize][0]);
+    let (straight, diagonal): (Vec<&Edge>, Vec<&Edge>) =
+        bridges.iter().partition(|e| x(e) == (100.0, 100.0));
+    let span = |b: &[&Edge]| -> f32 { b.iter().map(|e| length(&nodes, e)).sum() };
+    assert_eq!(span(&straight), 18.0 * CELL);
     assert!(
-        bridges.iter().all(|e| x(e) == (100.0, 100.0)),
-        "{bridges:?}"
+        (span(&diagonal) - 27.0 * std::f32::consts::SQRT_2).abs() < 1.0,
+        "{diagonal:?}"
     );
-    let span: f32 = bridges.iter().map(|e| length(&nodes, e)).sum();
-    assert_eq!(span, 18.0 * CELL);
     // Nothing runs along the water, and the lane stops at the bank.
     let y = |e: &Edge| (nodes[e.a as usize][1], nodes[e.b as usize][1]);
     assert!(!edges.iter().any(|e| y(e) == (75.0, 75.0)));
@@ -153,6 +162,7 @@ fn short_loose_pieces_are_dropped() {
             seg([30.0, -0.75], [30.0, 40.0], RoadClass::Lane),
         ],
         &dry(),
+        &[],
     );
     assert_eq!(edges.len(), 3);
     assert!(nodes.iter().all(|p| p[1] >= 0.0));

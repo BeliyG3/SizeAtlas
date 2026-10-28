@@ -23,7 +23,9 @@ pub enum PolyKind {
 /// A house's `id` is its folder and `parent` its block; every other lot has its block as both; a
 /// block's parent is its district, a district's the root; the island, its land and the canal
 /// have the root as both. `size` is the folder's bytes (a region split in pieces repeats it on
-/// each), 0 for the empty lots and the water.
+/// each, a lot keeps it on its biggest piece), 0 for the empty lots and the water. A house or
+/// filler lot the roads took away is made up for: its folder moves to a filler of its block, or
+/// its bytes to another building of the block, else they stay with the block's polygon.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Poly {
     pub kind: PolyKind,
@@ -66,8 +68,9 @@ pub struct Island {
     pub stats: Stats,
 }
 
-/// Moves everything so the top left of the map lies within a metre of `(0, 0)` and sets its size.
-pub(super) fn frame(island: &mut Island) {
+/// Moves everything so the top left of the map lies within a metre of `(0, 0)` and sets its size;
+/// returns the shift taken off every point.
+pub(super) fn frame(island: &mut Island) -> [f32; 2] {
     let all = island
         .polys
         .iter()
@@ -81,7 +84,7 @@ pub(super) fn frame(island: &mut Island) {
         }
     }
     if !lo[0].is_finite() {
-        return;
+        return [0.0; 2];
     }
     // Whole metres keep the nodes on their lattice.
     let lo = lo.map(f32::floor);
@@ -93,4 +96,5 @@ pub(super) fn frame(island: &mut Island) {
         .for_each(shift);
     island.nodes.iter_mut().for_each(shift);
     (island.width, island.height) = (hi[0] - lo[0], hi[1] - lo[1]);
+    lo
 }

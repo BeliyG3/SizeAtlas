@@ -4,12 +4,13 @@
 use super::CELL;
 use super::grid::Grid;
 use super::lattice::{Line, P, metres, step};
+use super::path::point_segment;
 use super::road::Seg;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
+use std::f32::consts::FRAC_1_SQRT_2;
 
-/// The longest bridge, metres: the 26 m canal crossed at 45° is 36.8 m over water (a little
-/// more on the raster).
-const MAX_BRIDGE: f32 = 40.0;
+/// The longest bridge, metres.
+const MAX_BRIDGE: f32 = 100.0;
 /// Roads are probed for water every this many units along their line.
 const PROBE: i64 = 16;
 /// A stretch over water "lands" when the road this far beyond its end is dry, metres.
@@ -25,69 +26,63 @@ fn wet(water: &Grid<bool>, p: P) -> bool {
         && water.get(x as usize, y as usize)
 }
 
-/// `pieces` cut where they reach or leave the `water` (cells of `CELL` metres), with the stretches
-/// over it either kept as bridges or dropped. Stretches over water that touch each other form a
-/// crossing: one of at most `MAX_BRIDGE` metres in all is a bridge; in a longer one each straight
-/// run is a bridge if it is that short and lands on dry ground at both ends, and the rest goes.
-pub(crate) fn bridges(pieces: Vec<Seg>, water: &Grid<bool>) -> Vec<(Seg, bool)> {
-    let mut dry = Vec::with_capacity(pieces.len());
+/// `pieces` cut where they reach or leave the `water` (cells of `CELL` metres) of the canal along
+/// `axis` (metres), the stretches over it kept as bridges or dropped. Each straight run over the
+/// water is a bridge when it crosses the canal: at most `MAX_BRIDGE` metres long, landing on dry
+/// ground at both ends, and at 45° or more to the canal's axis where it runs. Every other stretch
+/// over water goes, so a road along the canal ends at the embankment and none ends in the water.
+pub(crate) fn bridges(pieces: Vec<Seg>, water: &Grid<bool>, axis: &[[f32; 2]]) -> Vec<(Seg, bool)> {
+    let mut out = Vec::with_capacity(pieces.len());
     let mut over: Vec<Seg> = Vec::new();
     for s in pieces {
         for (piece, w) in runs(&s, water) {
             if w {
                 over.push(piece);
             } else {
-                dry.push((piece, false));
+                out.push((piece, false));
             }
         }
     }
-    // Crossings: stretches over water joined at their ends.
-    let mut root: Vec<usize> = (0..over.len()).collect();
-    let mut at: HashMap<P, usize> = HashMap::new();
+    let mut by_line: BTreeMap<Line, Vec<usize>> = BTreeMap::new();
     for (i, s) in over.iter().enumerate() {
-        for p in [s.a, s.b] {
-            if let Some(&j) = at.get(&p) {
-                union(&mut root, i, j);
-            } else {
-                at.insert(p, i);
-            }
-        }
+        by_line.entry(s.line()).or_default().push(i);
     }
-    let mut total: HashMap<usize, f32> = HashMap::new();
-    for (i, s) in over.iter().enumerate() {
-        *total.entry(find(&mut root, i)).or_default() += s.len();
-    }
-    // Straight runs inside a long crossing.
-    let mut runs: HashMap<(usize, Line), Vec<usize>> = HashMap::new();
-    for (i, s) in over.iter().enumerate() {
-        let r = find(&mut root, i);
-        if total[&r] > MAX_BRIDGE {
-            runs.entry((r, s.line())).or_default().push(i);
-        }
-    }
-    let mut keep: Vec<bool> = (0..over.len())
-        .map(|i| total[&find(&mut root, i)] <= MAX_BRIDGE)
-        .collect();
-    for ((_, line), ids) in &runs {
-        for run in straight(&over, ids) {
-            let (lo, hi) = run.1;
+    let mut keep = vec![false; over.len()];
+    for (line, ids) in &by_line {
+        for (members, (lo, hi)) in straight(&over, ids) {
             let len = (hi - lo) as f32 * line.scale();
             let beyond = (LANDING / line.scale()).ceil() as i64;
             let lands = !wet(water, line.at(lo - beyond)) && !wet(water, line.at(hi + beyond));
-            if len <= MAX_BRIDGE && lands {
-                for i in run.0 {
+            if len <= MAX_BRIDGE && lands && across(*line, (lo + hi) / 2, axis) {
+                for i in members {
                     keep[i] = true;
                 }
             }
         }
     }
-    dry.extend(
+    out.extend(
         over.into_iter()
             .zip(keep)
             .filter(|(_, k)| *k)
             .map(|(s, _)| (s, true)),
     );
-    dry
+    out
+}
+
+/// Whether `line` at position `t` runs at 45° or more to the segment of `axis` nearest to it.
+fn across(line: Line, t: i64, axis: &[[f32; 2]]) -> bool {
+    let p = metres(line.at(t));
+    let Some(seg) = axis
+        .windows(2)
+        .min_by(|a, b| point_segment(p, a[0], a[1]).total_cmp(&point_segment(p, b[0], b[1])))
+    else {
+        return false;
+    };
+    let u = [seg[1][0] - seg[0][0], seg[1][1] - seg[0][1]];
+    let d = step(usize::from(line.f));
+    let (d, u) = ([d[0] as f32, d[1] as f32], u.map(|v| v / u[0].hypot(u[1])));
+    let cos = (d[0] * u[0] + d[1] * u[1]).abs() / d[0].hypot(d[1]);
+    cos <= FRAC_1_SQRT_2 + 1e-3
 }
 
 /// The contiguous stretches (piece indices and span) of the pieces `ids`, all on one line.
@@ -146,20 +141,5 @@ fn piece(s: &Seg, a: P, b: P) -> Seg {
         a: a.min(b),
         b: a.max(b),
         class: s.class,
-    }
-}
-
-fn find(root: &mut [usize], mut i: usize) -> usize {
-    while root[i] != i {
-        root[i] = root[root[i]];
-        i = root[i];
-    }
-    i
-}
-
-fn union(root: &mut [usize], a: usize, b: usize) {
-    let (a, b) = (find(root, a), find(root, b));
-    if a != b {
-        root[a.max(b)] = a.min(b);
     }
 }

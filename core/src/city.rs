@@ -20,6 +20,7 @@ mod outline;
 mod path;
 mod plan;
 mod plots;
+mod rehome;
 mod ring;
 mod rng;
 mod road;

@@ -1,4 +1,5 @@
 use super::*;
+use crate::city::blocks::LotKind;
 use crate::city::graph::{Edge, length};
 use crate::city::path::point_segment;
 use crate::city::plan::Folder;
@@ -57,14 +58,14 @@ fn input(seed: u64, used: u64, r: f64) -> IslandInput {
 }
 
 /// A 300 000 m² island with a canal and three gates, built once.
-fn town() -> &'static (Island, f32) {
+fn town() -> &'static (Island, Trace) {
     &all()[0]
 }
 
 /// The town, one island for each of the free space ratios `RATIOS` (no canal on them), and
 /// one whose canal runs at 45° to nearly all of its streets.
-fn all() -> &'static [(Island, f32)] {
-    static ALL: OnceLock<Vec<(Island, f32)>> = OnceLock::new();
+fn all() -> &'static [(Island, Trace)] {
+    static ALL: OnceLock<Vec<(Island, Trace)>> = OnceLock::new();
     ALL.get_or_init(|| {
         let town = assemble(&input(15, 2 * GIB, 0.6));
         let rest = RATIOS.iter().map(|&r| assemble(&input(1, 2 * GIB, r)));
@@ -204,7 +205,8 @@ fn houses_stay_off_the_roads() {
 
 #[test]
 fn the_graph_is_one_piece() {
-    for (island, dropped) in all() {
+    for (island, trace) in all() {
+        let dropped = trace.dropped;
         let mut near = vec![Vec::new(); island.nodes.len()];
         for e in &island.edges {
             near[e.a as usize].push(e.b as usize);
@@ -223,7 +225,7 @@ fn the_graph_is_one_piece() {
         assert!(seen.iter().all(|&s| s));
         assert!(degrees(island).iter().all(|&d| d > 0));
         eprintln!("left off: {:.3}% of the road length", 100.0 * dropped);
-        assert!(*dropped <= 0.02, "{dropped}");
+        assert!(dropped <= 0.02, "{dropped}");
         for class in [
             RoadClass::Highway,
             RoadClass::Ring,
@@ -253,21 +255,96 @@ fn the_empty_space_matches_the_free_space() {
 #[test]
 fn bridges_only_cross_the_canal() {
     // The town, and the island whose streets cross its canal at 45° (36.8 m over water).
-    for (island, _) in [town(), &all()[RATIOS.len() + 1]] {
+    for (island, trace) in [town(), &all()[RATIOS.len() + 1]] {
         let water: Vec<&Poly> = island
             .polys
             .iter()
             .filter(|p| p.kind == PolyKind::Water)
             .collect();
         assert_eq!(water.len(), 1);
+        let deg = degrees(island);
+        let mut chain: Vec<usize> = (0..island.nodes.len()).collect();
         let bridges: Vec<&Edge> = island.edges.iter().filter(|e| e.bridge).collect();
         assert!(!bridges.is_empty());
-        for e in bridges {
+        for e in &bridges {
             let (a, b) = ends(island, e);
             let mid = [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0];
             assert!(inside(mid, &water[0].points), "{e:?} at {mid:?}");
-            assert!(length(&island.nodes, e) <= 40.0, "{e:?}");
+            assert!(length(&island.nodes, e) <= 100.0, "{e:?}");
+            assert!(deg[e.a as usize] >= 2 && deg[e.b as usize] >= 2, "{e:?}");
+            // At 45° or more to the canal's axis where it crosses it.
+            let seg = trace
+                .canal
+                .windows(2)
+                .min_by(|s, t| {
+                    let d = |w: &[[f32; 2]]| point_segment(mid, w[0], w[1]);
+                    d(s).total_cmp(&d(t))
+                })
+                .unwrap();
+            let (u, v) = (
+                [b[0] - a[0], b[1] - a[1]],
+                [seg[1][0] - seg[0][0], seg[1][1] - seg[0][1]],
+            );
+            let cos = (u[0] * v[0] + u[1] * v[1]).abs() / (u[0].hypot(u[1]) * v[0].hypot(v[1]));
+            assert!(cos <= FRAC_PI_4.cos() + 1e-3, "{e:?}: {cos}");
+            let (ra, rb) = (
+                root_of(&mut chain, e.a as usize),
+                root_of(&mut chain, e.b as usize),
+            );
+            chain[ra.max(rb)] = ra.min(rb);
         }
+        // Every bridge, or chain of bridges, lands on roads on dry ground at two ends at least.
+        let mut landings: HashMap<usize, usize> = HashMap::new();
+        for e in island.edges.iter().filter(|e| !e.bridge) {
+            for n in [e.a as usize, e.b as usize] {
+                let touches = bridges
+                    .iter()
+                    .any(|b| b.a as usize == n || b.b as usize == n);
+                if touches {
+                    *landings.entry(root_of(&mut chain, n)).or_default() += 1;
+                }
+            }
+        }
+        for e in &bridges {
+            let r = root_of(&mut chain, e.a as usize);
+            assert!(landings.get(&r).copied().unwrap_or(0) >= 2, "{e:?}");
+        }
+    }
+}
+
+fn root_of(root: &mut [usize], mut i: usize) -> usize {
+    while root[i] != i {
+        i = root[i];
+    }
+    i
+}
+
+#[test]
+fn every_folder_and_its_bytes_stay_on_the_map() {
+    for (island, trace) in all() {
+        let building = |k: PolyKind| matches!(k, PolyKind::House | PolyKind::Filler);
+        let mut on_map: HashMap<u32, u64> = HashMap::new();
+        let mut blocks: Vec<u32> = Vec::new();
+        for p in &island.polys {
+            if building(p.kind) {
+                *on_map.entry(p.id).or_default() += p.size;
+            } else if p.kind == PolyKind::Block {
+                blocks.push(p.id);
+            }
+        }
+        let placed = trace
+            .placed
+            .iter()
+            .filter(|l| matches!(l.kind, LotKind::House | LotKind::Filler));
+        let mut bytes = 0u64;
+        for l in placed {
+            bytes += l.size;
+            let kept = on_map.contains_key(&l.id) || blocks.contains(&l.parent);
+            assert!(kept, "{l:?} left the map");
+        }
+        let shown = on_map.values().sum::<u64>() + trace.kept.absorbed_bytes;
+        assert!(shown <= bytes, "{shown} > {bytes}");
+        assert!(shown as f64 >= 0.999 * bytes as f64, "{shown} of {bytes}");
     }
 }
 
