@@ -92,7 +92,23 @@ pub(super) fn cut(cells: &[u32], w: usize, rot: f32, room: &[bool], rng: &mut Rn
         }
         let span = [hi[0] - lo[0], hi[1] - lo[1]];
         let side = rng.range(LOT.0, LOT.1);
-        if span[0].max(span[1]) < side || ids.len() as f32 * CELL * CELL < MIN_LOT_AREA {
+        let fits = span[0].max(span[1]) < side || ids.len() as f32 * CELL * CELL < MIN_LOT_AREA;
+        let width = WIDTHS[depth.min(WIDTHS.len() - 1)];
+        let line = if fits {
+            None
+        } else {
+            // Axis `a` is the one the cut crosses: the long side's, now and then the short one's.
+            // A cut leaves at least a lot's least side on both of its sides; when the piece is too
+            // short for that along this axis, the other one is tried.
+            let long = usize::from(span[1] > span[0]);
+            let first = if rng.unit() < ALONG { 1 - long } else { long };
+            let share = rng.range(AT.0, AT.1);
+            [first, 1 - first].into_iter().find_map(|a| {
+                let (min, max) = (lo[a] + LOT.0 + width / 2.0, hi[a] - LOT.0 - width / 2.0);
+                (min <= max).then(|| (a, (lo[a] + span[a] * share).clamp(min, max)))
+            })
+        };
+        let Some((a, at)) = line else {
             let lot: Vec<u32> = ids
                 .iter()
                 .map(|&j| cells[j as usize])
@@ -102,12 +118,7 @@ pub(super) fn cut(cells: &[u32], w: usize, rot: f32, room: &[bool], rng: &mut Rn
                 out.lots.push(lot);
             }
             continue;
-        }
-        // Axis `a` is the one the cut crosses: the long side's, now and then the short one's.
-        let long = usize::from(span[1] > span[0]);
-        let a = if rng.unit() < ALONG { 1 - long } else { long };
-        let at = lo[a] + span[a] * rng.range(AT.0, AT.1);
-        let width = WIDTHS[depth.min(WIDTHS.len() - 1)];
+        };
         let (mut below, mut above, mut gap) = (Vec::new(), Vec::new(), Vec::new());
         for &j in &ids {
             let q = uv[j as usize][a];

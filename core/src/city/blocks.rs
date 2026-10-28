@@ -75,9 +75,10 @@ pub(crate) fn blocks(
         .iter()
         .map(|p| p.cells.iter().filter(|&&i| !room[i as usize]).count())
         .collect();
+    rehome(&mut plots, &cuts);
     let target = (inner_empty.max(0.0) / (CELL * CELL)) as usize;
     let (uses, square) = choose(&plots, &cuts, &free, target, rng);
-    share_loose(&mut plots, &uses, &free, &loose);
+    place_bytes(&mut plots, &cuts, &uses, &square, &loose);
 
     let mut lot = Grid::new(block.w, block.h, -1);
     let mut lots = Vec::new();
@@ -127,14 +128,53 @@ pub(crate) fn blocks(
     }
 }
 
-/// Hands each district's `loose` bytes to its built filler blocks by their `free` cells; the
-/// empty ones hold none.
-fn share_loose(plots: &mut [Plot], uses: &[Use], free: &[usize], loose: &[u64]) {
-    let holds = |b: usize, p: &Plot| p.filler && uses[b] == Use::Built && free[b] > 0;
+/// A folder block with no lot (too thin for anything but street) trades places with the
+/// smallest filler block of its district that has lots, so the folder stays on the map.
+fn rehome(plots: &mut [Plot], cuts: &[Cut]) {
+    for b in 0..plots.len() {
+        if plots[b].filler || !cuts[b].lots.is_empty() {
+            continue;
+        }
+        let k = plots[b].district;
+        let to = (0..plots.len())
+            .filter(|&o| plots[o].district == k && plots[o].filler && !cuts[o].lots.is_empty())
+            .min_by_key(|&o| (plots[o].cells.len(), o));
+        if let Some(o) = to {
+            // The cells stay where they are; the folder and the filler swap.
+            let here = std::mem::take(&mut plots[b].cells);
+            let there = std::mem::take(&mut plots[o].cells);
+            plots.swap(b, o);
+            plots[b].cells = here;
+            plots[o].cells = there;
+        }
+    }
+}
+
+/// Hands each district's `loose` bytes, and those of its folder blocks left without a lot to
+/// build on, to its built filler blocks by the cells they build on; when it has none, its
+/// biggest built block takes them. Bytes go missing only in a district with nothing built.
+fn place_bytes(
+    plots: &mut [Plot],
+    cuts: &[Cut],
+    uses: &[Use],
+    square: &[Vec<bool>],
+    loose: &[u64],
+) {
+    let built: Vec<u64> = (0..plots.len())
+        .map(|b| {
+            let lots = cuts[b].lots.iter().zip(&square[b]);
+            let open = lots.filter(|(_, s)| !**s).map(|(l, _)| l.len() as u64);
+            if uses[b] == Use::Built { open.sum() } else { 0 }
+        })
+        .collect();
+    let mut loose = loose.to_vec();
     let mut area = vec![0u64; loose.len()];
     for (b, p) in plots.iter().enumerate() {
-        if holds(b, p) {
-            area[p.district] += free[b] as u64;
+        if !p.filler && built[b] == 0 {
+            loose[p.district] += p.size;
+        }
+        if p.filler {
+            area[p.district] += built[b];
         }
     }
     let mut given = vec![0u64; loose.len()];
@@ -144,18 +184,23 @@ fn share_loose(plots: &mut [Plot], uses: &[Use], free: &[usize], loose: &[u64]) 
             continue;
         }
         let k = p.district;
-        p.size = if holds(b, p) {
+        p.size = if built[b] > 0 {
             last[k] = Some(b);
-            (u128::from(loose[k]) * free[b] as u128 / u128::from(area[k])) as u64
+            (u128::from(loose[k]) * u128::from(built[b]) / u128::from(area[k])) as u64
         } else {
             0
         };
         given[k] += p.size;
     }
-    // Rounding leftovers go to the district's last holder.
-    for (k, b) in last.iter().enumerate() {
-        if let Some(b) = *b {
-            plots[b].size += loose[k] - given[k];
+    for (k, &left) in loose.iter().enumerate() {
+        // Rounding leftovers go to the district's last filler; with none, all to its biggest block.
+        let to = last[k].or_else(|| {
+            (0..plots.len())
+                .filter(|&b| plots[b].district == k && built[b] > 0)
+                .max_by_key(|&b| (built[b], Reverse(b)))
+        });
+        if let Some(b) = to {
+            plots[b].size += left - given[k];
         }
     }
 }

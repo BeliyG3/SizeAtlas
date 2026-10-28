@@ -147,11 +147,33 @@ fn streets_between_blocks(b: &Blocks) {
     }
 }
 
+/// Whether a cell of `cells` (all in block `block`) lies within `reach` cells of another block or
+/// off the blocks: the lot reaches its block's edge, where the street room trims it.
+fn at_block_edge(b: &Blocks, block: i32, cells: &[usize], reach: i64) -> bool {
+    let w = b.block.w as i64;
+    cells.iter().any(|&i| {
+        let (x, y) = (i as i64 % w, i as i64 / w);
+        (-reach..=reach).any(|dy| {
+            (-reach..=reach).any(|dx| {
+                let (nx, ny) = (x + dx, y + dy);
+                nx < 0
+                    || ny < 0
+                    || nx >= w
+                    || ny >= b.block.h as i64
+                    || b.block.data[(ny * w + nx) as usize] != block
+            })
+        })
+    })
+}
+
 #[test]
 fn lots_are_18_to_40_m_or_cut_by_the_block_edge() {
     let c = city(40_000.0, 3);
     let b = &c.blocks;
-    let (mut houses, mut fit) = (0, 0);
+    // Lots keep this far from a border; a lot this close to another block was trimmed by it.
+    let reach = ((5.5 + 2.0 * CELL) / CELL).ceil() as i64;
+    let mut sides = Vec::new();
+    let mut short = Vec::new();
     for (l, cells) in lot_cells(b).iter().enumerate() {
         if b.lots[l].kind != LotKind::House {
             continue;
@@ -165,13 +187,27 @@ fn lots_are_18_to_40_m_or_cut_by_the_block_edge() {
                 hi[a] = hi[a].max(p[a]);
             }
         }
-        houses += 1;
-        if (hi[0] - lo[0]).max(hi[1] - lo[1]) <= 40.0 {
-            fit += 1;
+        // Cell centres span one cell less than the lot.
+        let side = (hi[0] - lo[0]).max(hi[1] - lo[1]) + CELL;
+        sides.push(side);
+        if side < 18.0 - 1e-3 && !at_block_edge(b, block, cells, reach) {
+            short.push((l, side));
         }
     }
-    assert!(houses > 50, "{houses} houses");
-    assert!(fit as f32 >= 0.9 * houses as f32, "{fit} of {houses}");
+    assert!(sides.len() > 50, "{} houses", sides.len());
+    let fit = sides.iter().filter(|&&s| s <= 40.0 + CELL).count();
+    assert!(
+        fit as f32 >= 0.9 * sides.len() as f32,
+        "{fit} of {}",
+        sides.len()
+    );
+    sides.sort_by(f32::total_cmp);
+    let median = sides[sides.len() / 2];
+    assert!(median >= 18.0, "median {median} m");
+    assert!(
+        short.is_empty(),
+        "short houses inside their blocks: {short:?}"
+    );
 }
 
 #[test]
@@ -263,15 +299,56 @@ fn deterministic() {
     assert_eq!(city(30_000.0, 10).blocks, city(30_000.0, 10).blocks);
 }
 
+/// Bytes the lots hold, as a share of the districts' bytes.
+fn held_share(c: &City) -> f64 {
+    let total: u64 = c.districts.iter().map(|d| d.size).sum();
+    let held: u64 = c.blocks.lots.iter().map(|l| l.size).sum();
+    assert!(held <= total, "{held} of {total}");
+    held as f64 / total as f64
+}
+
 #[test]
 fn lots_hold_the_bytes_of_their_districts() {
     for (inner_empty, seed) in [(0.0, 11), (60_000.0, 12)] {
+        let share = held_share(&city(inner_empty, seed));
+        assert!(share >= 0.999, "{inner_empty}: {share}");
+    }
+}
+
+#[test]
+fn no_folder_leaves_the_map() {
+    // Half the land meant to stay empty is more than the fillers can give; seed 30 has a
+    // district too small for any lot.
+    for (inner_empty, seed) in [(300_000.0, 13), (300_000.0, 30), (20_000.0, 30)] {
         let c = city(inner_empty, seed);
-        let total: u64 = c.districts.iter().map(|d| d.size).sum();
-        let held: u64 = c.blocks.lots.iter().map(|l| l.size).sum();
-        assert!(
-            held <= total && held as f64 >= 0.95 * total as f64,
-            "{held} of {total}"
-        );
+        let share = held_share(&c);
+        assert!(share >= 0.999, "{inner_empty}/{seed}: {share}");
+        let b = &c.blocks;
+        let mut on_map = std::collections::BTreeSet::new();
+        let mut built = std::collections::BTreeSet::new();
+        for (l, cells) in lot_cells(b).iter().enumerate() {
+            built.insert(b.block_info[b.block.data[cells[0]] as usize].1);
+            match b.lots[l].kind {
+                LotKind::House => on_map.insert(b.lots[l].id),
+                LotKind::Filler => on_map.insert(b.lots[l].parent),
+                _ => false,
+            };
+        }
+        let mut folders = 0;
+        // A district with no lot at all is narrower than its streets: nothing can stand there.
+        for d in c.districts.iter().filter(|d| built.contains(&d.id)) {
+            for f in d.blocks.iter().take(28) {
+                folders += 1;
+                assert!(
+                    on_map.contains(&f.id),
+                    "{seed}: folder {} of {}",
+                    f.id,
+                    d.id
+                );
+            }
+        }
+        assert!(folders > 100, "{folders} folders");
+        let vacant = b.lots.iter().any(|l| l.kind == LotKind::Vacant);
+        assert!(vacant || inner_empty < 100_000.0);
     }
 }

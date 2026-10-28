@@ -4,12 +4,13 @@ use super::CELL;
 use super::lots::Cut;
 use super::plots::Plot;
 use super::rng::Rng;
+use std::cmp::Reverse;
 
 /// Share of the lots left open as squares.
 const SQUARE: f32 = 0.07;
 /// Share of the small filler blocks left open whole as plazas.
 const PLAZA: f32 = 0.2;
-/// A plaza is a block smaller than this, m².
+/// A plaza is a filler block smaller than this (all its cells), m².
 const PLAZA_BELOW: f32 = 4_000.0;
 /// Chance a block on a pass becomes vacant land while the empty space falls short.
 const VACANT: f32 = 0.35;
@@ -30,6 +31,8 @@ pub(super) enum Use {
 struct Choice<'a> {
     cuts: &'a [Cut],
     free: &'a [usize],
+    /// The lot each kept block keeps built: it holds a folder or its district's last bytes.
+    keep: Vec<Option<usize>>,
     uses: Vec<Use>,
     square: Vec<Vec<bool>>,
     empty: usize,
@@ -37,9 +40,11 @@ struct Choice<'a> {
 
 /// Picks what of the blocks (with `free` cells off the street room each) stays empty, so the
 /// empty cells come to about `target`: plazas and squares by chance, built back at random while
-/// they overshoot; then, while it falls short, vacant filler blocks, more squares among their
-/// lots, and only then vacant folder blocks, the smallest folders first. Returns each block's
-/// use and which of its lots are squares.
+/// they overshoot; then, while it falls short, vacant filler blocks and more squares among
+/// their lots. Only fillers go empty whole; a folder's block keeps its biggest lot, and so does
+/// one filler of a district with no folder lot, so no folder and no district leaves the map. A
+/// target the fillers cannot reach is left short. Returns each block's use and which of its
+/// lots are squares.
 pub(super) fn choose(
     plots: &[Plot],
     cuts: &[Cut],
@@ -51,6 +56,7 @@ pub(super) fn choose(
     let mut c = Choice {
         cuts,
         free,
+        keep: kept(plots, cuts),
         uses: vec![Use::Built; n],
         square: cuts.iter().map(|c| vec![false; c.lots.len()]).collect(),
         empty: 0,
@@ -58,15 +64,15 @@ pub(super) fn choose(
     // Picks: a whole block (`None`) or one lot of it.
     let mut picks: Vec<(usize, Option<usize>)> = Vec::new();
     for b in 0..n {
-        let small = (free[b] as f32) * CELL * CELL < PLAZA_BELOW;
-        if plots[b].filler && small && rng.unit() < PLAZA {
+        let small = (plots[b].cells.len() as f32) * CELL * CELL < PLAZA_BELOW;
+        if plots[b].filler && small && c.keep[b].is_none() && rng.unit() < PLAZA {
             c.uses[b] = Use::Plaza;
             c.empty += free[b];
             picks.push((b, None));
             continue;
         }
         for (i, lot) in cuts[b].lots.iter().enumerate() {
-            if rng.unit() < SQUARE {
+            if rng.unit() < SQUARE && Some(i) != c.keep[b] {
                 c.square[b][i] = true;
                 c.empty += lot.len();
                 picks.push((b, Some(i)));
@@ -95,9 +101,6 @@ pub(super) fn choose(
     shuffle(&mut fillers, rng);
     c.vacate(&fillers, want, rng);
     c.squares(&fillers, want, rng);
-    let mut folders: Vec<usize> = (0..n).filter(|&b| !plots[b].filler).collect();
-    folders.sort_by_key(|&b| plots[b].size);
-    c.vacate(&folders, want, rng);
     (c.uses, c.square)
 }
 
@@ -107,7 +110,8 @@ impl Choice<'_> {
     fn vacate(&mut self, order: &[usize], want: (usize, usize), rng: &mut Rng) {
         for _ in 0..PASSES {
             for &b in order {
-                if self.uses[b] != Use::Built || self.empty >= want.0 {
+                let kept = self.keep[b].is_some();
+                if kept || self.uses[b] != Use::Built || self.empty >= want.0 {
                     continue;
                 }
                 let lots = self.cuts[b].lots.iter().zip(&self.square[b]);
@@ -129,7 +133,7 @@ impl Choice<'_> {
             .iter()
             .filter(|&&b| self.uses[b] == Use::Built)
             .flat_map(|&b| (0..self.cuts[b].lots.len()).map(move |i| (b, i)))
-            .filter(|&(b, i)| !self.square[b][i])
+            .filter(|&(b, i)| !self.square[b][i] && Some(i) != self.keep[b])
             .collect();
         shuffle(&mut lots, rng);
         for (b, i) in lots {
@@ -143,6 +147,32 @@ impl Choice<'_> {
             }
         }
     }
+}
+
+/// The biggest lot of every folder block, and of the biggest filler block of each district
+/// whose folder blocks have no lot.
+fn kept(plots: &[Plot], cuts: &[Cut]) -> Vec<Option<usize>> {
+    let biggest = |b: usize| {
+        let lots = &cuts[b].lots;
+        (0..lots.len()).max_by_key(|&i| (lots[i].len(), Reverse(i)))
+    };
+    let mut keep: Vec<Option<usize>> = (0..plots.len())
+        .map(|b| if plots[b].filler { None } else { biggest(b) })
+        .collect();
+    let districts = plots.iter().map(|p| p.district + 1).max().unwrap_or(0);
+    for k in 0..districts {
+        let own = || (0..plots.len()).filter(move |&b| plots[b].district == k);
+        if own().any(|b| keep[b].is_some()) {
+            continue;
+        }
+        let filler = own()
+            .filter(|&b| !cuts[b].lots.is_empty())
+            .max_by_key(|&b| (plots[b].cells.len(), Reverse(b)));
+        if let Some(b) = filler {
+            keep[b] = biggest(b);
+        }
+    }
+    keep
 }
 
 fn shuffle<T>(v: &mut [T], rng: &mut Rng) {

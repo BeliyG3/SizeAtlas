@@ -14,8 +14,12 @@ const BLOCK_AREA: f32 = 12_000.0;
 const ROUNDS: usize = 20;
 /// Cells per block the weights are fitted on.
 const FIT_CELLS: usize = 100;
-/// Share of a block left to its lots once the street room is taken, roughly.
-const FREE: f32 = 0.6;
+/// The open fillers are given the empty space over this: their share left to lots once the
+/// street room is taken, less what the Voronoi leaves them short (tuned on test islands).
+const FREE: f32 = 0.5;
+/// Mean size of the filler blocks meant to stay empty, m²: about the size of their neighbours,
+/// so the Voronoi can give them their area.
+const OPEN_AREA: f32 = 6000.0;
 /// At most this share of the land is given to the fillers meant to stay empty.
 const MAX_OPEN: f32 = 0.9;
 
@@ -80,7 +84,7 @@ pub(super) fn plots<'a>(
         let total: f32 = weights.iter().sum();
         let mut targets: Vec<f32> = weights.iter().map(|v| v / total * built).collect();
         let spare = area - built;
-        let extra = (spare / BLOCK_AREA).ceil() as usize;
+        let extra = (spare / OPEN_AREA).ceil() as usize;
         targets.extend((0..extra).map(|_| spare / extra as f32 * rng.range(0.6, 1.4)));
 
         // The district's own crop of the field, seeds in its metres.
