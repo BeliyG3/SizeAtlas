@@ -29,7 +29,7 @@ fn parent_id(tree: &Tree, lot: &Lot) -> u32 {
 
 /// Records of a full tree: the root has `fanout[0]` folders, each of them `fanout[1]`, and
 /// so on; every folder of the last level holds one file of `size`.
-fn balanced(fanout: &[u32], size: u64) -> Vec<DirRec> {
+pub(super) fn balanced(fanout: &[u32], size: u64) -> Vec<DirRec> {
     fn grow(recs: &mut Vec<DirRec>, parent: u32, fanout: &[u32], size: u64) {
         let Some((&n, rest)) = fanout.split_first() else {
             recs[parent as usize].files.push(file("f", size));
@@ -156,6 +156,30 @@ fn the_budget_holds() {
     let (_, lots) = city_layout_with(&tree, ROOT, 100);
     let buildings = lots.iter().filter(|l| is_building(l)).count();
     assert!(buildings <= 100, "{buildings}");
+
+    // The default budget expands all 24 folder lots of the root, and they keep room for
+    // their children instead of collapsing into buildings.
+    let (_, lots) = city_layout(&tree, ROOT);
+    let buildings = lots.iter().filter(|l| is_building(l)).count();
+    assert!(buildings <= MAX_BUILDINGS, "{buildings}");
+    let top = lots
+        .iter()
+        .filter(|l| l.depth == 0 && l.kind != LotKind::Others);
+    let districts = top.clone().filter(|l| l.kind == LotKind::District).count();
+    assert_eq!(top.count(), 24);
+    assert!(districts * 10 >= 24 * 9, "{districts} districts");
+}
+
+#[test]
+fn the_field_grows_with_what_its_lots_need() {
+    let tree = tree_of(balanced(&[50, 50], 3));
+    let (side, _) = city_layout(&tree, ROOT);
+    // 24 districts of 25 depth-1 buildings each, and one Others lot at depth 0.
+    let building = |depth| MIN_BUILDING + 2.0 * inset(depth);
+    let district = 1.25 * (25.0 * building(1).powi(2)).sqrt() + 2.0 * inset(0);
+    let need = 1.2 * (24.0 * district.powi(2) + building(0).powi(2)).sqrt();
+    assert!(need > field_side(601) && need < 2400.0, "{need}");
+    assert!(side >= need - EPS, "{side} < {need}");
 }
 
 #[test]

@@ -73,15 +73,36 @@ pub fn inset(depth: u8) -> f32 {
     }
 }
 
+/// Widest field; a city that needs more keeps fewer districts and blocks.
+const MAX_FIELD: f32 = 2400.0;
+
 /// Side of the square field for this many buildings.
 pub fn field_side(buildings: usize) -> f32 {
-    (40.0 * (buildings as f32).sqrt()).clamp(400.0, 2400.0)
+    (40.0 * (buildings as f32).sqrt()).clamp(400.0, MAX_FIELD)
 }
 
-/// Smallest side of a lot of `depth`, its road room included.
-fn min_side(depth: u8) -> f64 {
-    let inner = if depth < 2 { MIN_BLOCK } else { MIN_BUILDING };
-    f64::from(inner + 2.0 * inset(depth))
+/// Smallest side of every planned lot, its road room included, children first: a building
+/// keeps [`MIN_BUILDING`], an expanded lot also the room its children need, with slack for
+/// the aspect ratios of squarify. Index 0, the root, gets the field side its lots need.
+fn least_sides(plan: &[Planned]) -> Vec<f64> {
+    let mut sides = vec![0.0; plan.len()];
+    for (i, p) in plan.iter().enumerate().rev() {
+        let need = p
+            .children
+            .iter()
+            .map(|&k| sides[k] * sides[k])
+            .sum::<f64>()
+            .sqrt();
+        let road = 2.0 * f64::from(inset(p.depth));
+        sides[i] = match p.kind {
+            _ if i == 0 => 1.2 * need,
+            LotKind::District | LotKind::Block => {
+                (f64::from(MIN_BLOCK) + road).max(1.25 * need + road)
+            }
+            _ => f64::from(MIN_BUILDING) + road,
+        };
+    }
+    sides
 }
 
 /// [`city_layout_with`] under the default budget [`MAX_BUILDINGS`].
@@ -93,8 +114,9 @@ pub fn city_layout(tree: &Tree, root: u32) -> (f32, Vec<Lot>) {
 /// parents before their children. The root itself is not a lot.
 pub fn city_layout_with(tree: &Tree, root: u32, max_buildings: usize) -> (f32, Vec<Lot>) {
     let (plan, buildings) = plan(tree, root, max_buildings);
-    let side = field_side(buildings);
-    (side, place(&plan, side))
+    let sides = least_sides(&plan);
+    let side = field_side(buildings).max(sides[0] as f32).min(MAX_FIELD);
+    (side, place(&plan, &sides, side))
 }
 
 /// A lot whose kind is decided but whose place is not yet.

@@ -1,6 +1,6 @@
 use super::super::*;
-use crate::tree::{DirRec, NO_PARENT};
-use crate::treemap::city::tests::{ROOT, named};
+use crate::tree::NO_PARENT;
+use crate::treemap::city::tests::{ROOT, balanced, named};
 use crate::treemap::tests::{dir, file, tree_of};
 
 const EPS: f32 = 1e-3;
@@ -17,14 +17,16 @@ fn unbalanced() -> Tree {
 }
 
 #[test]
-fn tiny_districts_keep_their_minimum_side() {
+fn tiny_districts_keep_room_for_their_children() {
     let tree = unbalanced();
     let (_, lots) = city_layout(&tree, ROOT);
-    let min = min_side(0) as f32 - EPS;
+    // One depth-1 building inside the highway room.
+    let least = 1.25 * (MIN_BUILDING + 2.0 * inset(1)) + 2.0 * inset(0) - EPS;
+    assert!(least > MIN_BLOCK + 2.0 * inset(0));
     for i in 1..=6 {
         let lot = named(&tree, &lots, &format!("d{i}"));
-        assert_eq!((lot.depth, lot.size), (0, 1));
-        assert!(lot.w >= min && lot.h >= min, "{lot:?}");
+        assert_eq!((lot.kind, lot.depth, lot.size), (LotKind::District, 0, 1));
+        assert!(lot.w >= least && lot.h >= least, "{lot:?}");
     }
 }
 
@@ -39,30 +41,28 @@ fn no_lot_comes_out_thinner_than_a_metre() {
 }
 
 #[test]
-fn a_block_too_small_for_its_children_stays_a_building() {
-    // Root -> D -> {H: one huge folder, s0..s7: 20 one-byte folders each}.
-    let mut recs: Vec<DirRec> = vec![dir(0, NO_PARENT, "/r", vec![]), dir(1, 0, "D", vec![])];
-    recs.push(dir(2, 1, "H", vec![]));
-    recs.push(dir(3, 2, "h", vec![file("f", 1_000_000_000)]));
-    for s in 0..8 {
-        let block = recs.len() as u32;
-        recs.push(dir(block, 1, &format!("s{s}"), vec![]));
-        for j in 0..20 {
-            let id = recs.len() as u32;
-            recs.push(dir(id, block, &format!("k{j:02}"), vec![file("f", 1)]));
-        }
+fn districts_without_room_at_the_cap_stay_buildings() {
+    // 24 × 24 × 24 folders need a field far wider than the cap.
+    let tree = tree_of(balanced(&[24, 24, 24], 1));
+    let (side, lots) = city_layout_with(&tree, ROOT, usize::MAX);
+    assert_eq!(side, 2400.0);
+    let collapsed: Vec<&Lot> = lots
+        .iter()
+        .filter(|l| l.kind == LotKind::Building && l.depth < 2)
+        .collect();
+    assert!(!collapsed.is_empty());
+    for c in collapsed {
+        assert!(tree.children(c.id).any(|k| tree.node(k).is_dir()));
+        assert!(!lots.iter().any(
+            |l| tree.node(l.id).parent == c.id || (l.id == c.id && l.kind != LotKind::Building)
+        ));
     }
-    let tree = tree_of(recs);
-    let (_, lots) = city_layout(&tree, ROOT);
-    assert_eq!(named(&tree, &lots, "D").kind, LotKind::District);
-    assert_eq!(named(&tree, &lots, "H").kind, LotKind::Block);
-    for s in 0..8 {
-        let block = named(&tree, &lots, &format!("s{s}"));
-        assert_eq!(
-            (block.kind, block.depth, block.size),
-            (LotKind::Building, 1, 20)
-        );
-        let inside = |l: &&Lot| l.id == block.id || tree.node(l.id).parent == block.id;
-        assert_eq!(lots.iter().filter(inside).count(), 1, "s{s} has children");
+    for lot in &lots {
+        let least = match lot.kind {
+            LotKind::District | LotKind::Block => MIN_BLOCK,
+            _ => MIN_BUILDING,
+        } + 2.0 * inset(lot.depth)
+            - EPS;
+        assert!(lot.w >= least && lot.h >= least, "{lot:?}");
     }
 }
