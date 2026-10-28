@@ -3,10 +3,14 @@
 // Used by the island layout from Task 6.
 #![allow(dead_code)]
 
+mod blocks;
+mod empty;
 mod grid;
 mod land;
+mod lots;
 mod path;
 mod plan;
+mod plots;
 mod rng;
 mod voronoi;
 

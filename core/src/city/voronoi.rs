@@ -24,6 +24,19 @@ pub(crate) fn voronoi(
     rot: f32,
     rounds: usize,
 ) -> Grid<i32> {
+    voronoi_sampled(mask, seeds, targets, rot, rounds, SAMPLE)
+}
+
+/// [`voronoi`] with the weights fitted on about `fit` cells (from `fit` to four times it, or
+/// every cell of a smaller mask), for splits whose few seeds need no finer fit.
+pub(crate) fn voronoi_sampled(
+    mask: &Grid<bool>,
+    seeds: &[[f32; 2]],
+    targets: &[f32],
+    rot: f32,
+    rounds: usize,
+    fit: usize,
+) -> Grid<i32> {
     let mut out = Grid::new(mask.w, mask.h, -1);
     if seeds.is_empty() {
         return out;
@@ -35,7 +48,7 @@ pub(crate) fn voronoi(
     let caps = caps(&turned);
 
     let cells = mask.data.iter().filter(|&&m| m).count();
-    let k = ((cells / SAMPLE) as f32).sqrt().floor().max(1.0) as usize;
+    let k = ((cells / fit.max(1)) as f32).sqrt().floor().max(1.0) as usize;
     let mut sample = Vec::with_capacity(cells / (k * k) + 1);
     for y in (k / 2..mask.h).step_by(k) {
         for x in (k / 2..mask.w).step_by(k) {
