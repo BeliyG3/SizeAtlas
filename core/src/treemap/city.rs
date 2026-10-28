@@ -11,10 +11,13 @@
 //! u16 0 | u64 size`, in metres; parents come before their children.
 
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, VecDeque};
+use std::collections::BinaryHeap;
 
-use super::{Area, header, squarify};
+use super::header;
 use crate::tree::Tree;
+use place::place;
+
+mod place;
 
 /// Road widths in metres.
 pub const HIGHWAY: f32 = 24.0;
@@ -185,60 +188,6 @@ fn child_lots(tree: &Tree, id: u32, depth: u8) -> Vec<Planned> {
     // Stable, so equal sizes keep the order above.
     lots.sort_by_key(|l| Reverse(l.size));
     lots
-}
-
-/// Places the planned lots level by level on a `side × side` field.
-fn place(plan: &[Planned], side: f32) -> Vec<Lot> {
-    let field = Area {
-        x: 0.0,
-        y: 0.0,
-        w: f64::from(side),
-        h: f64::from(side),
-    };
-    let mut lots = Vec::with_capacity(plan.len() - 1);
-    let mut queue = VecDeque::from([(0, field)]);
-    let mut areas = Vec::new();
-    let mut placed = Vec::new();
-    while let Some((parent, inner)) = queue.pop_front() {
-        let kids = &plan[parent].children;
-        let total: f64 = kids.iter().map(|&k| plan[k].size as f64).sum();
-        let room = inner.w * inner.h;
-        areas.clear();
-        areas.extend(kids.iter().map(|&k| {
-            let min = min_side(plan[k].depth);
-            (plan[k].size as f64 / total * room).max(min * min)
-        }));
-        let scale = room / areas.iter().sum::<f64>();
-        areas.iter_mut().for_each(|a| *a *= scale);
-        placed.clear();
-        squarify(&areas, inner, &mut placed);
-        for (&k, &a) in kids.iter().zip(&placed) {
-            let p = &plan[k];
-            lots.push(Lot {
-                x: a.x as f32,
-                y: a.y as f32,
-                w: a.w as f32,
-                h: a.h as f32,
-                id: p.id,
-                kind: p.kind,
-                depth: p.depth,
-                size: p.size,
-            });
-            if !p.children.is_empty() {
-                queue.push_back((k, shrink(a, f64::from(inset(p.depth)))));
-            }
-        }
-    }
-    lots
-}
-
-fn shrink(a: Area, by: f64) -> Area {
-    Area {
-        x: a.x + by,
-        y: a.y + by,
-        w: (a.w - 2.0 * by).max(0.0),
-        h: (a.h - 2.0 * by).max(0.0),
-    }
 }
 
 /// Serializes a city in the wire format described in the module docs.

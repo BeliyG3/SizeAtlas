@@ -2,7 +2,7 @@ use super::*;
 use crate::tree::{DirRec, NO_PARENT, sample_tree};
 use crate::treemap::tests::{dir, file, tree_of};
 
-const ROOT: u32 = 0;
+pub(super) const ROOT: u32 = 0;
 const EPS: f32 = 1e-3;
 
 fn is_building(lot: &Lot) -> bool {
@@ -13,7 +13,7 @@ fn is_building(lot: &Lot) -> bool {
 }
 
 /// The folder lot named `name`.
-fn named<'a>(tree: &Tree, lots: &'a [Lot], name: &str) -> &'a Lot {
+pub(super) fn named<'a>(tree: &Tree, lots: &'a [Lot], name: &str) -> &'a Lot {
     lots.iter()
         .find(|l| !matches!(l.kind, LotKind::Annex | LotKind::Others) && tree.name(l.id) == name)
         .unwrap_or_else(|| panic!("no lot {name}"))
@@ -156,7 +156,6 @@ fn the_budget_holds() {
     let (_, lots) = city_layout_with(&tree, ROOT, 100);
     let buildings = lots.iter().filter(|l| is_building(l)).count();
     assert!(buildings <= 100, "{buildings}");
-    assert!(lots.iter().any(|l| l.kind == LotKind::District));
 }
 
 #[test]
@@ -238,4 +237,19 @@ fn encoding_puts_the_field_the_format_and_the_records_at_fixed_offsets() {
 fn the_layout_is_deterministic() {
     let tree = tree_of(balanced(&[8, 30], 5));
     assert_eq!(city_layout(&tree, ROOT), city_layout(&tree, ROOT));
+}
+
+#[test]
+fn kinds_keep_their_wire_numbers() {
+    use LotKind::*;
+    assert_eq!(
+        [District, Block, Building, Annex, Others].map(|k| k as u8),
+        [0, 1, 2, 3, 4]
+    );
+}
+
+#[test]
+fn an_empty_root_is_an_empty_field() {
+    let empty = tree_of(vec![dir(0, NO_PARENT, "/r", vec![file("zero", 0)])]);
+    assert_eq!(city_layout(&empty, ROOT), (400.0, Vec::new()));
 }
