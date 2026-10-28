@@ -4,7 +4,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "target", "src-tauri", "core", "docs", ".superpowers"] },
+  { ignores: ["dist", "target", "src-tauri", "core", "docs", ".superpowers", "3D"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   reactHooks.configs.flat.recommended,
