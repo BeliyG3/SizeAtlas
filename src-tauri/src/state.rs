@@ -74,6 +74,8 @@ pub struct Shared {
     walked: Mutex<Option<cleanup::Walked>>,
     /// The duplicate search and its result (see `crate::duplicates`).
     pub duplicates: crate::duplicates::Duplicates,
+    /// The last island map (see `state/island.rs`).
+    city: island::CityCache,
 }
 
 #[derive(Clone)]
@@ -118,6 +120,7 @@ impl AppState {
             context,
             walked: Mutex::default(),
             duplicates: Default::default(),
+            city: Default::default(),
         }))
     }
 
@@ -336,6 +339,7 @@ mod change;
 mod charts;
 mod cleanup;
 mod growth;
+mod island;
 mod lists;
 mod live;
 mod paths;

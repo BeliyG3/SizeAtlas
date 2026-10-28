@@ -3,7 +3,7 @@
 //! CSV export in `export`, the duplicate search in `duplicates`.
 
 use sizeatlas_core::tree::{ListKind, ListOrder};
-use tauri::{State, Window};
+use tauri::{AppHandle, State, Window};
 
 use crate::details;
 use crate::dto::{
@@ -177,11 +177,13 @@ pub async fn get_treemap(
 /// Raw bytes of the whole root's island map (format in `sizeatlas_core::city`).
 #[tauri::command]
 pub async fn get_city(
+    app: AppHandle,
     state: State<'_, AppState>,
     generation: u64,
 ) -> Result<tauri::ipc::Response, CmdError> {
     let state = state.inner().clone();
-    let bytes = tauri::async_runtime::spawn_blocking(move || state.city(generation))
+    let dir = roots::cache_dir(&app)?;
+    let bytes = tauri::async_runtime::spawn_blocking(move || state.city(generation, &dir))
         .await
         .map_err(CmdError::from)??;
     Ok(tauri::ipc::Response::new(bytes))

@@ -186,7 +186,8 @@ fn city_maps_the_whole_root_as_an_island() {
     let state = AppState::default();
     let (_dir, tree) = scanned_tree();
     let generation = state.install_tree(tree);
-    let bytes = state.city(generation).unwrap();
+    let cache = tempfile::tempdir().unwrap();
+    let bytes = state.city(generation, cache.path()).unwrap();
     let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap()) as usize;
     assert_eq!(
         u64::from_le_bytes(bytes[..8].try_into().unwrap()),
@@ -203,7 +204,10 @@ fn city_maps_the_whole_root_as_an_island() {
             + city::EDGE_LEN * edges
             + city::GATE_LEN * gates
     );
-    assert_eq!(state.city(generation + 1), Err(CmdError::StaleId));
+    assert_eq!(
+        state.city(generation + 1, cache.path()),
+        Err(CmdError::StaleId)
+    );
 }
 
 #[test]
