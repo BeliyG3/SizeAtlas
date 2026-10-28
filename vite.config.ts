@@ -21,6 +21,8 @@ export default defineConfig({
     },
   },
   build: { target: "es2022" },
+  // The city's models (src/features/city/assets), loaded by URL.
+  assetsInclude: ["**/*.glb"],
   // Stylesheets read as text (src/styles/logical.test.ts) are not emptied by Vitest.
   test: { environment: "node", css: { include: /\.css\?raw$/ } },
 });
