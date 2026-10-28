@@ -12,7 +12,11 @@ use std::collections::BinaryHeap;
 use crate::tree::Tree;
 
 mod city;
-pub use city::{CITY_FIELD, CITY_RECORD_LEN, encode_city};
+pub use city::{
+    ALLEY, CITY_FORMAT, CITY_HEADER_LEN, CITY_RECORD_LEN, HIGHWAY, Lot, LotKind, MAX_BUILDINGS,
+    MAX_CHILDREN, MIN_BLOCK, MIN_BUILDING, SIDEWALK, STREET, city_layout, city_layout_with,
+    encode_city, field_side, inset,
+};
 
 pub const HEADER_LEN: usize = 24;
 pub const RECORD_LEN: usize = 24;

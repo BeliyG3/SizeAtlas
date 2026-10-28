@@ -48,18 +48,12 @@ impl AppState {
         })
     }
 
-    /// Encoded city of the whole root `generation`: a fixed-size layout with node sizes
-    /// (see `sizeatlas_core::treemap`).
+    /// Encoded city of the whole root `generation`: folder lots with room for roads and the
+    /// size of each (see `sizeatlas_core::treemap::city_layout`).
     pub fn city(&self, generation: u64) -> Result<Vec<u8>, CmdError> {
         self.with_live(generation, 0, |tree| {
-            let rects = treemap::layout(
-                tree,
-                0,
-                treemap::CITY_FIELD,
-                treemap::CITY_FIELD,
-                treemap::MAX_RECTS,
-            );
-            treemap::encode_city(generation, tree.rev, tree.approximate, &rects, tree)
+            let (field, lots) = treemap::city_layout(tree, 0);
+            treemap::encode_city(generation, tree.rev, tree.approximate, field, &lots)
         })
     }
 }
