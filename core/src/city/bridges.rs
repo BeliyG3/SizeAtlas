@@ -7,8 +7,9 @@ use super::lattice::{Line, P, metres, step};
 use super::road::Seg;
 use std::collections::HashMap;
 
-/// The longest bridge, metres.
-const MAX_BRIDGE: f32 = 32.0;
+/// The longest bridge, metres: the 26 m canal crossed at 45° is 36.8 m over water (a little
+/// more on the raster).
+const MAX_BRIDGE: f32 = 40.0;
 /// Roads are probed for water every this many units along their line.
 const PROBE: i64 = 16;
 /// A stretch over water "lands" when the road this far beyond its end is dry, metres.

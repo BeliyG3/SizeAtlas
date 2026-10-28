@@ -61,13 +61,15 @@ fn town() -> &'static (Island, f32) {
     &all()[0]
 }
 
-/// The town, then one island for each of the free space ratios `RATIOS` (no canal on them).
+/// The town, one island for each of the free space ratios `RATIOS` (no canal on them), and
+/// one whose canal runs at 45° to nearly all of its streets.
 fn all() -> &'static [(Island, f32)] {
     static ALL: OnceLock<Vec<(Island, f32)>> = OnceLock::new();
     ALL.get_or_init(|| {
         let town = assemble(&input(15, 2 * GIB, 0.6));
         let rest = RATIOS.iter().map(|&r| assemble(&input(1, 2 * GIB, r)));
-        [town].into_iter().chain(rest).collect()
+        let diagonal = assemble(&input(10, 2 * GIB, 0.6));
+        [town].into_iter().chain(rest).chain([diagonal]).collect()
     })
 }
 
@@ -250,20 +252,22 @@ fn the_empty_space_matches_the_free_space() {
 
 #[test]
 fn bridges_only_cross_the_canal() {
-    let (island, _) = town();
-    let water: Vec<&Poly> = island
-        .polys
-        .iter()
-        .filter(|p| p.kind == PolyKind::Water)
-        .collect();
-    assert_eq!(water.len(), 1);
-    let bridges: Vec<&Edge> = island.edges.iter().filter(|e| e.bridge).collect();
-    assert!(!bridges.is_empty());
-    for e in bridges {
-        let (a, b) = ends(island, e);
-        let mid = [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0];
-        assert!(inside(mid, &water[0].points), "{e:?} at {mid:?}");
-        assert!(length(&island.nodes, e) <= 32.0, "{e:?}");
+    // The town, and the island whose streets cross its canal at 45° (36.8 m over water).
+    for (island, _) in [town(), &all()[RATIOS.len() + 1]] {
+        let water: Vec<&Poly> = island
+            .polys
+            .iter()
+            .filter(|p| p.kind == PolyKind::Water)
+            .collect();
+        assert_eq!(water.len(), 1);
+        let bridges: Vec<&Edge> = island.edges.iter().filter(|e| e.bridge).collect();
+        assert!(!bridges.is_empty());
+        for e in bridges {
+            let (a, b) = ends(island, e);
+            let mid = [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0];
+            assert!(inside(mid, &water[0].points), "{e:?} at {mid:?}");
+            assert!(length(&island.nodes, e) <= 40.0, "{e:?}");
+        }
     }
 }
 
