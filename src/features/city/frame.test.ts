@@ -31,16 +31,16 @@ describe("frame", () => {
     expect(end).toBeLessThan(front);
   });
 
-  it("fits the whole ground in a 300 × 900 panel at the reset view", () => {
-    // The scene's fov 45 and reset polar 55°; the camera's far plane is 2000.
-    const { distance } = frame(ground, 45, 300 / 900, (55 * Math.PI) / 180);
-    expect(distance).toBeGreaterThan(400);
+  it("fits a 4 km island in a 300 × 900 panel at the reset view", () => {
+    // The scene's fov 45 and reset polar 55°.
+    const island: Box = { min: [0, 0, 0], max: [4000, 160, 4000] };
+    const { distance } = frame(island, 45, 300 / 900, (55 * Math.PI) / 180);
+    expect(distance).toBeGreaterThan(4000);
     expect(distance).toBeLessThan(MAX_DISTANCE);
-    expect(distance + Math.hypot(100, 100)).toBeLessThan(2000);
   });
 
   it("clamps to the distance limits", () => {
     expect(frame({ min: [0, 0, 0], max: [0.1, 0.1, 0.1] }, 60, 1, 1).distance).toBe(MIN_DISTANCE);
-    expect(frame({ min: [0, 0, 0], max: [1e4, 0, 1e4] }, 60, 1, 1).distance).toBe(MAX_DISTANCE);
+    expect(frame({ min: [0, 0, 0], max: [1e6, 0, 1e6] }, 60, 1, 1).distance).toBe(MAX_DISTANCE);
   });
 });

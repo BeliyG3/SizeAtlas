@@ -6,6 +6,7 @@ import { usePalette, useSettings, useSize } from "../../settings/react";
 import { placePopup } from "../duplicates/viewer/hover";
 import type { CityScene, CityTheme, Hover } from "./scene";
 import { useCityData } from "./useCityData";
+import type { Building } from "./world/buildings";
 import "./city.css";
 
 const TOOLTIP_DELAY_MS = 150;
@@ -22,19 +23,25 @@ interface Props {
   onFail: (e: unknown) => void;
 }
 
+/** The folder a building stands for: its own, or for a filler its block's. */
+const folderOf = (b: Building) => (b.kind === "filler" ? b.parent : b.id);
+
 const readTheme = (palette: Palette): CityTheme => ({
   palette,
   background:
     getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || palette.dirFill,
 });
 
-/** The whole root as a 3D city, lit around the selection; the folder tree is its keyboard counterpart. */
+/**
+ * The whole root as a living 3D island, lit around the selection; the folder tree is its keyboard
+ * counterpart.
+ */
 export function CityView({ generation, rev, selectedId, onSelect, onFail }: Props) {
   const { t } = useT();
   const sizeText = useSize();
   const palette = usePalette();
   const { resolved } = useSettings();
-  const { city, finish } = useCityData(generation, rev, selectedId, onFail);
+  const { world, finish } = useCityData(generation, rev, selectedId, onFail);
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [scene, setScene] = useState<CityScene | null>(null);
   const [status, setStatus] = useState<"ready" | "failed" | "lost">("ready");
@@ -63,7 +70,7 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
         if (cancelled) return;
         made = createScene(canvas, readTheme(latest.current.palette), {
           onHover: setHover,
-          onPick: (block) => latest.current.onSelect(block.id, block.isDir),
+          onPick: (building) => latest.current.onSelect(folderOf(building), true),
           onLost: (lost) => setStatus(lost ? "lost" : "ready"),
         });
         setScene(made);
@@ -86,12 +93,12 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
 
   useEffect(() => {
     if (!scene) return;
-    scene.setCity(city, generation);
+    scene.setCity(world, generation);
     finish?.();
-  }, [scene, city, generation, finish]);
+  }, [scene, world, generation, finish]);
 
-  // The name and path once the pointer rests on a block: one request per block.
-  const hoverId = hover?.block.id ?? null;
+  // The name and path once the pointer rests on a building: one request per folder.
+  const hoverId = hover ? folderOf(hover.building) : null;
   useEffect(() => {
     if (hoverId === null) return;
     let live = true;
@@ -132,7 +139,7 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
     );
   }
 
-  const named = hover && tip?.id === hover.block.id && tip.generation === generation ? tip : null;
+  const named = tip?.id === hoverId && tip.generation === generation ? tip : null;
 
   return (
     <div className="city">
@@ -146,6 +153,7 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
         {t("city.reset")}
       </button>
       {status === "lost" && <p className="city-message dim">{t("city.unavailable")}</p>}
+      {status === "ready" && !world && <p className="city-message dim">{t("city.building")}</p>}
       {hover && (
         <div className="city-tip" ref={tipRef}>
           {named && <div dir="auto">{named.name}</div>}
@@ -155,7 +163,8 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
             </div>
           )}
           <div>
-            {t(hover.block.isDir ? "city.folder" : "city.file")} · {sizeText(hover.block.size)}
+            {t(hover.building.kind === "filler" ? "city.others" : "city.folder")} ·{" "}
+            {sizeText(hover.building.size)}
           </div>
         </div>
       )}

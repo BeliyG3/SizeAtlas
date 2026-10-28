@@ -1,11 +1,11 @@
 /** Mouse input on the city canvas besides the camera's own: hover, click and double click. */
-import type { Block } from "./model";
+import type { Building } from "./world/buildings";
 
 /** A pointer movement shorter than this, in CSS pixels, between press and release is a click. */
 const CLICK_SLOP = 4;
 
 export interface Hover {
-  block: Block;
+  building: Building;
   /** Pointer position and canvas size, in CSS pixels. */
   x: number;
   y: number;
@@ -14,11 +14,11 @@ export interface Hover {
 }
 
 export interface PointerHandlers {
-  /** The block under a canvas point, or null. */
-  pick: (x: number, y: number) => Block | null;
+  /** The house or filler under a canvas point, or null. */
+  pick: (x: number, y: number) => Building | null;
   onHover: (hover: Hover | null) => void;
-  onPick: (block: Block) => void;
-  onFly: (block: Block) => void;
+  onPick: (building: Building) => void;
+  onFly: (building: Building) => void;
 }
 
 /**
@@ -48,8 +48,10 @@ export function attachPointer(canvas: HTMLCanvasElement, handlers: PointerHandle
       frame = 0;
       if (!last) return;
       const { x, y } = last;
-      const block = handlers.pick(x, y);
-      handlers.onHover(block && { block, x, y, w: canvas.clientWidth, h: canvas.clientHeight });
+      const building = handlers.pick(x, y);
+      handlers.onHover(
+        building && { building, x, y, w: canvas.clientWidth, h: canvas.clientHeight },
+      );
     });
   };
   const press = (e: PointerEvent) => {
@@ -62,13 +64,13 @@ export function attachPointer(canvas: HTMLCanvasElement, handlers: PointerHandle
     if (!from || e.button !== 0) return;
     const { x, y } = point(e);
     if (Math.hypot(x - from.x, y - from.y) >= CLICK_SLOP) return;
-    const block = handlers.pick(x, y);
-    if (block) handlers.onPick(block);
+    const building = handlers.pick(x, y);
+    if (building) handlers.onPick(building);
   };
   const double = (e: MouseEvent) => {
     const { x, y } = point(e);
-    const block = handlers.pick(x, y);
-    if (block) handlers.onFly(block);
+    const building = handlers.pick(x, y);
+    if (building) handlers.onFly(building);
   };
 
   canvas.addEventListener("pointermove", move);

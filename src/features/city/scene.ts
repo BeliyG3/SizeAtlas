@@ -1,184 +1,145 @@
 /**
- * The three.js side of the city: renderer, camera, controls, lights and the selection outline.
- * The only module (with what it imports) that loads three; CityView reaches it by `import()`.
+ * The three.js side of the city panel: the island's meshes on the stage, its moving life, the
+ * focus outline, picking and the camera flights. The only module (with what it imports) that
+ * loads three; CityView reaches it by `import()`.
  */
 import {
-  AmbientLight,
   BoxGeometry,
-  DirectionalLight,
   EdgesGeometry,
+  Group,
   LineBasicMaterial,
   LineSegments,
-  MeshLambertMaterial,
-  MOUSE,
-  PerspectiveCamera,
   Raycaster,
-  Scene,
   Vector2,
   Vector3,
-  WebGLRenderer,
 } from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { frame, MAX_DISTANCE, MIN_DISTANCE, type Box } from "./frame";
-import { buildLayers, paint, type CityTheme, type Layer } from "./meshes";
-import type { Block, City } from "./model";
+import type { Box } from "./frame";
+import type { Palette } from "../../palette";
+import { createLife } from "./panel/life";
+import { createStage } from "./panel/stage";
 import { attachPointer, type Hover } from "./pointer";
-import { createScheduler } from "./scheduler";
+import { groundMesh } from "./render/ground";
+import { houseMesh, type Houses } from "./render/houses";
+import { roadMesh } from "./render/roads";
+import type { Building, World } from "./world/buildings";
+import { buildRoads, type RoadGraph } from "./world/roads";
 
-export type { CityTheme } from "./meshes";
 export type { Hover } from "./pointer";
 
-const FOV = 45;
-/** The view a reset gives: this far from straight down, looking along the layout's rows. */
+/** Colours from the app theme: the palette and its page background (`--bg`), the sky. */
+export interface CityTheme {
+  palette: Palette;
+  background: string;
+}
+
+/** The view a reset gives: this far from straight down, looking along the map's rows. */
 const START_POLAR = (55 * Math.PI) / 180;
-const MAX_POLAR = (85 * Math.PI) / 180;
+/** A reset shows this much water around the island, in island sizes. */
+const SHORE_VIEW = 0.1;
+/** The camera sees this far past its target, in island sizes: the whole sea of the ground. */
+const REACH = 16;
 const FLY_MS = 400;
+/** The panel's frame rate cap while anything moves. */
+const FPS = 30;
 /** The outline sits this far outside the focus box, so its lines never sink into faces... */
-const OUTLINE_MARGIN = 0.01;
-/** ...and its base ring this far above the focus bottom, on the parent plate, not inside it. */
-const OUTLINE_LIFT = 0.002;
+const OUTLINE_MARGIN = 0.3;
+/** ...and its base ring this far above the ground. */
+const OUTLINE_LIFT = 0.2;
 
 export interface SceneEvents {
   onHover: (hover: Hover | null) => void;
-  onPick: (block: Block) => void;
+  onPick: (building: Building) => void;
   /** The WebGL context was lost (true) or restored (false). */
   onLost: (lost: boolean) => void;
 }
 
 export interface CityScene {
   /**
-   * Shows `city` (null: nothing); a new `generation` also resets the camera. A city of the
-   * shown `data` (only the focus moved) is repainted in place, keeping the meshes and the hover.
+   * Shows `world` (null: nothing); a new `generation` also resets the camera. A world of the
+   * shown `map` (only the focus moved) is repainted in place, keeping the meshes, the traffic
+   * and the hover; another map is built anew and the old one freed.
    */
-  setCity: (city: City | null, generation: number) => void;
+  setCity: (world: World | null, generation: number) => void;
   setTheme: (theme: CityTheme) => void;
   reset: () => void;
+  dispose: () => void;
+}
+
+/** The island's still meshes. */
+interface Island {
+  group: Group;
+  houses: Houses;
   dispose: () => void;
 }
 
 /** Throws when WebGL 2 is not available. */
 export function createScene(
   canvas: HTMLCanvasElement,
-  theme: CityTheme,
-  events: SceneEvents,
-): CityScene {
-  const renderer = new WebGLRenderer({ canvas, antialias: true });
-  // What a failing set-up has attached so far, released in reverse.
-  const undo: (() => void)[] = [];
-  try {
-    return setUp(renderer, canvas, theme, events, undo);
-  } catch (e) {
-    for (const release of undo.reverse()) release();
-    renderer.dispose();
-    renderer.forceContextLoss();
-    throw e;
-  }
-}
-
-function setUp(
-  renderer: WebGLRenderer,
-  canvas: HTMLCanvasElement,
   initialTheme: CityTheme,
   events: SceneEvents,
-  undo: (() => void)[],
 ): CityScene {
   let theme = initialTheme;
-  let city: City | null = null;
-  let layers: Layer[] = [];
+  let world: World | null = null;
+  let island: Island | null = null;
   let shownGeneration: number | null = null;
   let needsReset = true;
-  let lost = false;
-  let size = { w: canvas.clientWidth, h: canvas.clientHeight };
-  let ratio = Math.min(devicePixelRatio, 2);
-  let applied = { w: 0, h: 0, ratio: 0 };
 
-  const scene = new Scene();
-  const camera = new PerspectiveCamera(FOV, 1, 0.1, 2000);
-  scene.add(new AmbientLight(0xffffff, 0.6 * Math.PI));
-  const sun = new DirectionalLight(0xffffff, 0.5 * Math.PI);
-  sun.position.set(40, 100, 25);
-  scene.add(sun);
-  // A unit box on its base: an instance at y with height h spans y … y + h.
-  const geometry = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-  const material = new MeshLambertMaterial();
-  const outline = new LineSegments(new EdgesGeometry(geometry), new LineBasicMaterial());
+  const stage = createStage(canvas, {
+    beforeDraw() {
+      if (!needsReset || !world) return;
+      needsReset = false;
+      const { to, from } = stage.fit(overview(world), START_POLAR, 0);
+      stage.controls.target.copy(to);
+      stage.camera.position.copy(from);
+      stage.controls.update();
+    },
+    onLost(lost) {
+      if (lost) events.onHover(null);
+      events.onLost(lost);
+    },
+    onRestored: () => applyTheme(),
+  });
+  const { scene, camera, controls, scheduler } = stage;
+
+  // A unit box on its base: scaled to the focus box, it spans y … y + h.
+  const box = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+  const outline = new LineSegments(new EdgesGeometry(box), new LineBasicMaterial());
+  box.dispose();
   outline.visible = false;
   scene.add(outline);
 
-  const controls = new OrbitControls(camera, canvas);
-  controls.enableDamping = false;
-  controls.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.PAN };
-  controls.minDistance = MIN_DISTANCE;
-  controls.maxDistance = MAX_DISTANCE;
-  controls.maxPolarAngle = MAX_POLAR;
-  undo.push(() => controls.dispose());
-
-  const fit = (box: Box, polar: number, azimuth: number) => {
-    const { target, distance } = frame(box, FOV, camera.aspect, polar, azimuth);
-    const to = new Vector3(...target);
-    return { to, from: new Vector3().setFromSphericalCoords(distance, polar, azimuth).add(to) };
-  };
-
-  const draw = () => {
-    const { w, h } = size;
-    if (lost || w === 0 || h === 0) return;
-    if (applied.w !== w || applied.h !== h || applied.ratio !== ratio) {
-      renderer.setPixelRatio(ratio);
-      renderer.setSize(w, h, false);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      applied = { w, h, ratio };
-    }
-    if (needsReset && city) {
-      needsReset = false;
-      const { to, from } = fit(city.bounds, START_POLAR, 0);
-      controls.target.copy(to);
-      camera.position.copy(from);
-      controls.update();
-    }
-    renderer.render(scene, camera);
-  };
-  const scheduler = createScheduler(draw);
-  undo.push(() => scheduler.dispose());
-  const invalidate = () => scheduler.invalidate();
+  const life = createLife(scene, () => animate());
+  const step = (dt: number) => life.step(dt, camera.position);
+  const animate = () => scheduler.animate(life.active() ? step : null, FPS);
 
   const applyTheme = () => {
-    renderer.setClearColor(theme.background);
+    stage.renderer.setClearColor(theme.background);
     outline.material.color.set(theme.palette.selectedEdge);
-    if (city) for (const layer of layers) paint(layer, city.blocks, theme);
   };
   applyTheme();
 
   const raycaster = new Raycaster();
   const ndc = new Vector2();
-  const pick = (x: number, y: number): Block | null => {
-    if (lost || !city || size.w === 0 || size.h === 0) return null;
-    ndc.set((x / size.w) * 2 - 1, 1 - (y / size.h) * 2);
+  const pick = (x: number, y: number): Building | null => {
+    const { w, h } = stage.size();
+    if (stage.lost() || !world || !island || w === 0 || h === 0) return null;
+    ndc.set((x / w) * 2 - 1, 1 - (y / h) * 2);
     camera.updateMatrixWorld();
     raycaster.setFromCamera(ndc, camera);
-    // Nearest first, across both meshes; the outline is not a target.
-    const hit = raycaster.intersectObjects(
-      layers.map((l) => l.mesh),
-      false,
-    )[0];
-    const layer = hit && layers.find((l) => l.mesh === hit.object);
-    if (!layer || hit.instanceId === undefined) return null;
-    return city.blocks[layer.blocks[hit.instanceId]];
+    // Not recursive: the edge lines under the mesh have no faces.
+    const hit = raycaster.intersectObject(island.houses.mesh, false)[0];
+    if (hit?.faceIndex == null) return null;
+    return world.buildings[island.houses.houseOfFace[hit.faceIndex]] ?? null;
   };
 
-  const flyTo = (block: Block) => {
-    if (size.w === 0 || size.h === 0 || !city) return;
-    let top = block.y + block.h;
-    // A plate: frame what stands on it too.
-    if (block.kind === "plate")
-      for (const b of city.blocks)
-        if (Math.abs(b.x - block.x) <= block.w / 2 && Math.abs(b.z - block.z) <= block.d / 2)
-          top = Math.max(top, b.y + b.h);
-    const box: Box = {
-      min: [block.x - block.w / 2, block.y, block.z - block.d / 2],
-      max: [block.x + block.w / 2, top, block.z + block.d / 2],
-    };
-    const { to, from } = fit(box, controls.getPolarAngle(), controls.getAzimuthalAngle());
+  const flyTo = (building: Building) => {
+    const { w, h } = stage.size();
+    if (w === 0 || h === 0) return;
+    const { to, from } = stage.fit(
+      boxOf(building),
+      controls.getPolarAngle(),
+      controls.getAzimuthalAngle(),
+    );
     const startTarget = controls.target.clone();
     const startPosition = camera.position.clone();
     scheduler.fly((k) => {
@@ -195,122 +156,109 @@ function setUp(
     onPick: events.onPick,
     onFly: flyTo,
   });
-  undo.push(detachPointer);
-  controls.addEventListener("change", invalidate);
   const onStart = () => {
     scheduler.stopFly();
     events.onHover(null);
   };
   controls.addEventListener("start", onStart);
 
-  // Resizing redraws in the next frame, without waiting for the splitter to settle.
-  const observer = new ResizeObserver(([entry]) => {
-    size = { w: Math.floor(entry.contentRect.width), h: Math.floor(entry.contentRect.height) };
-    invalidate();
-  });
-  observer.observe(canvas);
-  undo.push(() => observer.disconnect());
-
-  // Moving the window to a monitor with another scale changes the ratio but not the size.
-  let ratioQuery: MediaQueryList | null = null;
-  const onRatio = () => {
-    ratioQuery?.removeEventListener("change", onRatio);
-    ratio = Math.min(devicePixelRatio, 2);
-    ratioQuery = matchMedia(`(resolution: ${devicePixelRatio}dppx)`);
-    ratioQuery.addEventListener("change", onRatio);
-    invalidate();
+  const clearIsland = () => {
+    if (!island) return;
+    scene.remove(island.group);
+    island.dispose();
+    island = null;
   };
-  onRatio();
 
-  const onVisibility = () => scheduler.visibility();
-  document.addEventListener("visibilitychange", onVisibility);
-
-  const onContextLost = (e: Event) => {
-    e.preventDefault();
-    lost = true;
-    scheduler.stopFly();
-    events.onHover(null);
-    events.onLost(true);
-  };
-  const onContextRestored = () => {
-    lost = false;
-    applied = { w: 0, h: 0, ratio: 0 };
-    // three resets the clear colour to black when it rebuilds its GL state.
-    applyTheme();
-    events.onLost(false);
-    invalidate();
-  };
-  canvas.addEventListener("webglcontextlost", onContextLost);
-  canvas.addEventListener("webglcontextrestored", onContextRestored);
-
-  const clearLayers = () => {
-    for (const layer of layers) {
-      scene.remove(layer.mesh);
-      layer.mesh.dispose();
-    }
-    layers = [];
+  const placeOutline = (focus: Box | null) => {
+    outline.visible = !!focus;
+    if (!focus) return;
+    const [x0, , z0] = focus.min;
+    const [x1, y1, z1] = focus.max;
+    const m = OUTLINE_MARGIN;
+    outline.position.set((x0 + x1) / 2, OUTLINE_LIFT, (z0 + z1) / 2);
+    outline.scale.set(x1 - x0 + 2 * m, y1 + m - OUTLINE_LIFT, z1 - z0 + 2 * m);
   };
 
   return {
     setCity(next, generation) {
-      const sameLayout = next !== null && next.data === city?.data;
-      city = next;
-      if (city && sameLayout) {
-        for (const layer of layers) paint(layer, city.blocks, theme);
+      const sameMap = next !== null && next.map === world?.map;
+      world = next;
+      if (world && sameMap && island) {
+        island.houses.paint(world);
       } else {
-        clearLayers();
-        if (city) {
-          layers = buildLayers(city.blocks, geometry, material, theme);
-          for (const layer of layers) scene.add(layer.mesh);
+        clearIsland();
+        const g = world && buildRoads(world.map);
+        if (world && g) {
+          island = buildIsland(world, g);
+          scene.add(island.group);
+          const { width, height } = world.map;
+          stage.setReach(REACH * Math.max(width, height, 1));
         }
+        life.populate(g, generation);
+        animate();
         events.onHover(null);
       }
-      const focus = city?.focusBox;
-      outline.visible = !!focus;
-      if (focus) {
-        const [x0, y0, z0] = focus.min;
-        const [x1, y1, z1] = focus.max;
-        const m = OUTLINE_MARGIN;
-        const bottom = y0 + OUTLINE_LIFT;
-        outline.position.set((x0 + x1) / 2, bottom, (z0 + z1) / 2);
-        outline.scale.set(x1 - x0 + 2 * m, y1 + m - bottom, z1 - z0 + 2 * m);
-      }
+      placeOutline(world?.focusBox ?? null);
       if (generation !== shownGeneration) {
         shownGeneration = generation;
         needsReset = true;
         scheduler.stopFly();
       }
-      invalidate();
+      scheduler.invalidate();
     },
     setTheme(next) {
       theme = next;
       applyTheme();
-      invalidate();
+      scheduler.invalidate();
     },
     reset() {
       scheduler.stopFly();
       needsReset = true;
-      invalidate();
+      scheduler.invalidate();
     },
     dispose() {
-      scheduler.dispose();
       detachPointer();
-      observer.disconnect();
-      ratioQuery?.removeEventListener("change", onRatio);
-      document.removeEventListener("visibilitychange", onVisibility);
-      canvas.removeEventListener("webglcontextlost", onContextLost);
-      canvas.removeEventListener("webglcontextrestored", onContextRestored);
-      controls.removeEventListener("change", invalidate);
       controls.removeEventListener("start", onStart);
-      controls.dispose();
-      clearLayers();
-      geometry.dispose();
-      material.dispose();
+      life.dispose();
+      clearIsland();
       outline.geometry.dispose();
       outline.material.dispose();
-      renderer.dispose();
-      // dispose() keeps the context; browsers allow only a few live ones.
-      renderer.forceContextLoss();
+      stage.dispose();
     },
   };
+}
+
+function buildIsland(world: World, g: RoadGraph): Island {
+  const ground = groundMesh(world.map);
+  const roads = roadMesh(world.map, g);
+  const houses = houseMesh(world);
+  const group = new Group();
+  group.add(ground.group, roads.group, houses.mesh);
+  return {
+    group,
+    houses,
+    dispose() {
+      ground.dispose();
+      roads.dispose();
+      houses.dispose();
+    },
+  };
+}
+
+/** The whole island and a strip of water around it. */
+function overview(world: World): Box {
+  const { min, max } = world.bounds;
+  const pad = SHORE_VIEW * Math.max(max[0] - min[0], max[2] - min[2]);
+  return { min: [min[0] - pad, min[1], min[2] - pad], max: [max[0] + pad, max[1], max[2] + pad] };
+}
+
+/** The box a building stands in. */
+function boxOf(b: Building): Box {
+  const lo = new Vector3(Infinity, 0, Infinity);
+  const hi = new Vector3(-Infinity, b.h, -Infinity);
+  for (let i = 0; i < b.points.length; i += 2) {
+    lo.set(Math.min(lo.x, b.points[i]), 0, Math.min(lo.z, b.points[i + 1]));
+    hi.set(Math.max(hi.x, b.points[i]), b.h, Math.max(hi.z, b.points[i + 1]));
+  }
+  return { min: lo.toArray(), max: hi.toArray() };
 }

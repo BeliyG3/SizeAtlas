@@ -8,9 +8,10 @@ export interface Box {
   max: Vec3;
 }
 
-/** The orbit controls' distance limits; `frame` stays inside them. */
+/** The orbit controls' distance limits, metres; `frame` stays inside them. */
 export const MIN_DISTANCE = 1;
-export const MAX_DISTANCE = 1500;
+/** The largest island is a few kilometres across and a narrow panel backs off several times that. */
+export const MAX_DISTANCE = 30_000;
 /** Room left around a fitted box. */
 const MARGIN = 1.1;
 

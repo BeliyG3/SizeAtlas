@@ -4,6 +4,7 @@ import { api } from "../../api/client";
 import { rt } from "../lists/hookRuntime";
 import { CityView } from "./CityView";
 import { createScene, type Hover } from "./scene";
+import type { Building } from "./world/buildings";
 
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
@@ -90,6 +91,8 @@ describe("CityView", () => {
     render();
     expect(texts()).not.toContain("city.unavailable");
     expect(texts()).toContain("city.reset");
+    // No island yet: the map is still being worked out.
+    expect(texts()).toContain("city.building");
     expect(scene.setCity).toHaveBeenCalledWith(null, 1);
     expect(scene.setTheme).toHaveBeenCalledWith({
       palette: expect.objectContaining({ dirFill: "#20232b" }),
@@ -98,9 +101,11 @@ describe("CityView", () => {
   });
 
   describe("the tooltip", () => {
-    const block = { id: 5, isDir: false, size: 10 };
-    const hover = (x: number, y: number) =>
-      vi.mocked(createScene).mock.calls[0][2].onHover({ block, x, y, w: 250, h: 300 } as Hover);
+    const house = { id: 5, parent: 4, kind: "folder", size: 10 } as Building;
+    const filler = { id: 7, parent: 6, kind: "filler", size: 30 } as Building;
+    const events = () => vi.mocked(createScene).mock.calls[0][2];
+    const hover = (x: number, y: number, building = house) =>
+      events().onHover({ building, x, y, w: 250, h: 300 } as Hover);
     const tip = () => elements(tree).find((el) => el.props.className === "city-tip");
     const fake = { offsetWidth: 200, offsetHeight: 40, style: {} as Record<string, string> };
 
@@ -145,5 +150,43 @@ describe("CityView", () => {
       expect(texts()).not.toContain("root1");
       vi.useRealTimers();
     });
+
+    it("names the folder of a house and the block of a filler", async () => {
+      vi.mocked(api.getCrumbs).mockImplementation((_, id) =>
+        Promise.resolve([{ id, name: `n${id}`, size: 1, rank: 0 }]),
+      );
+      await start();
+      vi.useFakeTimers();
+      hover(20, 20);
+      render();
+      await vi.advanceTimersByTimeAsync(200);
+      render();
+      expect(texts()).toContain("n5");
+      expect(texts()).toContain("city.folder");
+      hover(20, 20, filler);
+      render();
+      await vi.advanceTimersByTimeAsync(200);
+      render();
+      expect(api.getCrumbs).toHaveBeenLastCalledWith(1, 6);
+      expect(texts()).toContain("n6");
+      expect(texts()).toContain("city.others");
+      expect(texts()).not.toContain("city.folder");
+      vi.useRealTimers();
+    });
+  });
+
+  it("a click selects the house's folder, or the block of a filler", async () => {
+    const scene = { setCity: vi.fn(), setTheme: vi.fn(), reset: vi.fn(), dispose: vi.fn() };
+    vi.mocked(createScene).mockReturnValue(scene);
+    render();
+    (canvas()!.props.ref as (el: unknown) => void)({});
+    render();
+    await vi.dynamicImportSettled();
+    render();
+    const { onPick } = vi.mocked(createScene).mock.calls[0][2];
+    onPick({ id: 5, parent: 4, kind: "folder" } as Building);
+    expect(props.onSelect).toHaveBeenLastCalledWith(5, true);
+    onPick({ id: 7, parent: 6, kind: "filler" } as Building);
+    expect(props.onSelect).toHaveBeenLastCalledWith(6, true);
   });
 });

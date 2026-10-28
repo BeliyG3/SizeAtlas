@@ -293,3 +293,5 @@ The installers are named after the shown version, such as `SizeAtlas_2026.11_x64
 ## License
 
 MIT
+
+The residents of the 3D city are the walking figure from [Universal Base Characters](https://quaternius.com) by Quaternius, released under CC0.
