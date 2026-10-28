@@ -14,12 +14,10 @@ import {
 } from "three";
 import { LOOK, ORDER } from "../look";
 import { ROAD, type CityMap, type RoadKind } from "../world/map";
-import { roadHalf, type RoadGraph } from "../world/roads";
+import { BRIDGE_RISE, roadHalf, type RoadGraph } from "../world/roads";
 import { disposeAll } from "./dispose";
 import { flat } from "./flat";
 
-/** A bridge's deck stands this high, metres. */
-export const BRIDGE_RISE = 1;
 /** A gate's bridge stub reaches this far out, metres. */
 export const STUB = 400;
 /** The ribbons lie this high over the ground layers, and the axes this high over the ribbons. */

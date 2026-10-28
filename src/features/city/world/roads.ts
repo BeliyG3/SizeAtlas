@@ -33,6 +33,9 @@ export function buildRoads(map: CityMap): RoadGraph {
   return { nodes, edges, links };
 }
 
+/** A bridge's deck stands this high over the ground, metres. */
+export const BRIDGE_RISE = 1;
+
 /** Half the width of a road of class `cls`, metres. */
 export function roadHalf(cls: RoadKind): number {
   return ROAD_WIDTH[cls] / 2;

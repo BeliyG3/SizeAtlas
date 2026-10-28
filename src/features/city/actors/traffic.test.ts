@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ROAD, type RoadKind } from "../world/map";
 import { mapOf } from "../world/map.fixture";
-import { buildRoads, roadHalf } from "../world/roads";
+import { BRIDGE_RISE, buildRoads, roadHalf } from "../world/roads";
 import {
   AIR_LANES,
   AIR_SHARE,
@@ -192,6 +192,38 @@ describe("createTraffic", () => {
     );
     expect(createTraffic(loop, 500, 1).count).toBe(Math.floor((1600 * 4) / CAR_SPACING));
     expect(createTraffic(loop, 10, 1).count).toBe(10);
+  });
+
+  it("ground cars ride on the deck of a bridge", () => {
+    // A highway east to x = 1000, then a street on a bridge to x = 2000.
+    const bridged = buildRoads(
+      mapOf([], {
+        nodes: new Float32Array([0, 0, 1000, 0, 2000, 0]),
+        edges: [
+          { a: 0, b: 1, cls: ROAD.highway, bridge: false },
+          { a: 1, b: 2, cls: ROAD.street, bridge: true },
+        ],
+      }),
+    );
+    const t = createTraffic(bridged, 60, 5);
+    let on = 0;
+    let off = 0;
+    const check = () => {
+      for (let i = 0; i < t.count; i++) {
+        if (t.air[i] || Math.abs(t.x[i] - 1000) < 1) continue; // flying, or at the node
+        if (t.x[i] > 1000) {
+          expect(t.y[i]).toBe(BRIDGE_RISE);
+          on++;
+        } else {
+          expect(t.y[i]).toBe(0);
+          off++;
+        }
+      }
+    };
+    check();
+    run(t, 20, check);
+    expect(on).toBeGreaterThan(0);
+    expect(off).toBeGreaterThan(0);
   });
 
   it("positions are finite", () => {

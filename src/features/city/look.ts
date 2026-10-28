@@ -13,6 +13,9 @@ export const LOOK = {
   virus: "#ff2a40",
 };
 
+/** Hues a district's house edges lean toward, a little each (cyan, blue, violet). */
+export const DISTRICT_TINT = ["#56e6ff", "#6c8cff", "#a27bff"];
+
 /** Colours of the figures by role (`ROLE` in actors/residents): resident, police, virus. */
 export const ROLE_COLOR = [LOOK.wire, LOOK.police, LOOK.virus];
 

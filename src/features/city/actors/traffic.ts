@@ -1,6 +1,6 @@
 /** Cars driving on lanes and flying cars on air lanes; pure, no three.js. */
 import { ROAD, type RoadKind } from "../world/map";
-import { pointOn, type RoadEdge, type RoadGraph } from "../world/roads";
+import { BRIDGE_RISE, pointOn, type RoadEdge, type RoadGraph } from "../world/roads";
 import { advance, nextEdge, place, rng, type Track } from "./nav";
 
 /** Speeds in m/s. */
@@ -110,7 +110,8 @@ export function createTraffic(g: RoadGraph, count: number, seed: number): Traffi
     const off = laneOffset(e.cls, isAir ? 0 : lane[i]);
     const p = pointOn(g, t.edge[i], t.s[i], t.forward[i] === 1, off);
     out.x[i] = p.x;
-    out.y[i] = isAir ? AIR_LANES[(i - ground) % AIR_LANES.length] : 0;
+    if (isAir) out.y[i] = AIR_LANES[(i - ground) % AIR_LANES.length];
+    else out.y[i] = e.bridge ? BRIDGE_RISE : 0; // on the deck of a bridge
     out.z[i] = p.z;
     out.heading[i] = p.heading;
   }

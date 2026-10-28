@@ -8,15 +8,18 @@ import {
   Mesh,
   MeshStandardMaterial,
 } from "three";
-import { LOOK } from "../look";
+import { DISTRICT_TINT, LOOK } from "../look";
 import type { World } from "../world/buildings";
 import { disposeAll } from "./dispose";
 import { triangulate } from "./flat";
 
 /** The footprint is drawn this much inside its lot, metres, so neighbours part. */
 const INSET = 0.4;
-/** Edges of a dimmed house are the light edge colour this much darker. */
+/** Edges of a dimmed house are their lit colour this much darker. */
 const DIM_EDGE = 0.1;
+/** How far a district's lit edges lean from `LOOK.wire` toward its tint: between these shares. */
+const TINT_MIN = 0.08;
+const TINT_MAX = 0.15;
 
 export interface Houses {
   mesh: Mesh;
@@ -72,17 +75,35 @@ export function houseMesh(world: World): Houses {
   lineGeometry.setAttribute("color", colors);
   mesh.add(new LineSegments(lineGeometry, new LineBasicMaterial({ vertexColors: true })));
 
-  const lit = new Color(LOOK.wire);
-  const dim = lit.clone().multiplyScalar(DIM_EDGE);
+  const tints = new Map<number, { lit: Color; dim: Color }>();
+  const tintOf = (district: number) => {
+    let t = tints.get(district);
+    if (!t) {
+      const lit = districtEdge(district);
+      t = { lit, dim: lit.clone().multiplyScalar(DIM_EDGE) };
+      tints.set(district, t);
+    }
+    return t;
+  };
   function paint(w: World) {
     w.buildings.forEach((b, house) => {
-      const c = b.dim ? dim : lit;
+      const t = tintOf(b.district);
+      const c = b.dim ? t.dim : t.lit;
       for (let v = edgeStart[house]; v < edgeStart[house + 1]; v++) colors.setXYZ(v, c.r, c.g, c.b);
     });
     colors.needsUpdate = true;
   }
   paint(world);
   return { mesh, houseOfFace: Int32Array.from(faces), paint, dispose: () => disposeAll(mesh) };
+}
+
+/** The lit edge colour of a district's houses: `LOOK.wire` leaning a little to a hue of its own. */
+export function districtEdge(district: number): Color {
+  let h = Math.imul(district ^ 0x9e3779b9, 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  h = (h ^ (h >>> 16)) >>> 0;
+  const share = TINT_MIN + ((TINT_MAX - TINT_MIN) * (h >>> 8)) / 0xffffff;
+  return new Color(LOOK.wire).lerp(new Color(DISTRICT_TINT[h % DISTRICT_TINT.length]), share);
 }
 
 /**

@@ -41,11 +41,45 @@ describe("houseMesh", () => {
     const houses = houseMesh(buildWorld(map, null));
     const colors = lines(houses.mesh).geometry.getAttribute("color");
     const before = colors.getX(0);
-    expect(before).toBeCloseTo(new Color(LOOK.wire).r, 5);
+    // Both houses are in one district: one lit colour.
+    expect(colors.getX(colors.count - 1)).toBe(before);
     // Focus on the square: the L dims; its edges come first.
     houses.paint(buildWorld(map, 11));
     expect(colors.getX(0)).toBeLessThan(before * 0.5);
-    expect(colors.getX(colors.count - 1)).toBeCloseTo(before, 5);
+    expect(colors.getX(colors.count - 1)).toBe(before);
+  });
+
+  it("each district tints its lit edges a little", () => {
+    // The L in district 1, a square in district 3 and one more in district 1.
+    const other = square(POLY.house, 12, 4, 100, 140, 40, 10);
+    const same = square(POLY.house, 13, 2, 100, 70, 40, 10);
+    const tinted = mapOf([
+      district,
+      block,
+      square(POLY.district, 3, 0, 100, 100, 0, 100),
+      square(POLY.block, 4, 3, 100, 100, 0, 100),
+      diagonal,
+      other,
+      same,
+    ]);
+    const world = buildWorld(tinted, null);
+    const houses = houseMesh(world);
+    const colors = lines(houses.mesh).geometry.getAttribute("color");
+    // The first edge vertex of each house: two segments (4 vertices) per corner, the L has 7.
+    const first = (house: number) => {
+      const v = [0, 28, 28 + 16][house];
+      return new Color(colors.getX(v), colors.getY(v), colors.getZ(v));
+    };
+    const wire = new Color(LOOK.wire);
+    for (const house of [0, 1, 2]) {
+      const c = first(house);
+      expect(Math.abs(c.r - wire.r)).toBeLessThan(0.2);
+      expect(Math.abs(c.g - wire.g)).toBeLessThan(0.2);
+      expect(Math.abs(c.b - wire.b)).toBeLessThan(0.2);
+    }
+    expect(world.buildings.map((b) => b.district)).toEqual([1, 3, 1]);
+    expect(first(1).equals(first(0))).toBe(false);
+    expect(first(2).equals(first(0))).toBe(true);
   });
 
   it("a 45° house keeps its diagonal walls", () => {
