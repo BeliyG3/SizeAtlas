@@ -268,4 +268,4 @@ pub fn encode(generation: u64, rev: u64, approximate: bool, rects: &[Rect]) -> V
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

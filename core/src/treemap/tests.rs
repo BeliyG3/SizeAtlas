@@ -1,7 +1,7 @@
 use super::*;
 use crate::tree::{DirRec, FileRec, NO_PARENT, ScanMeta, SizeMode, sample_tree};
 
-pub(super) fn file(name: &str, size: u64) -> FileRec {
+pub(crate) fn file(name: &str, size: u64) -> FileRec {
     FileRec {
         name: name.into(),
         size,
@@ -12,7 +12,7 @@ pub(super) fn file(name: &str, size: u64) -> FileRec {
     }
 }
 
-pub(super) fn dir(id: u32, parent: u32, name: &str, files: Vec<FileRec>) -> DirRec {
+pub(crate) fn dir(id: u32, parent: u32, name: &str, files: Vec<FileRec>) -> DirRec {
     DirRec {
         id,
         parent,
@@ -24,7 +24,7 @@ pub(super) fn dir(id: u32, parent: u32, name: &str, files: Vec<FileRec>) -> DirR
 }
 
 /// A tree from scan records; the root record has id 0.
-pub(super) fn tree_of(records: Vec<DirRec>) -> Tree {
+pub(crate) fn tree_of(records: Vec<DirRec>) -> Tree {
     Tree::from_records(
         records,
         ScanMeta {
