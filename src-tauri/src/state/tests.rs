@@ -181,30 +181,28 @@ fn panels_and_treemap_describe_the_subtree() {
 }
 
 #[test]
-fn city_lays_out_the_whole_root_with_sizes() {
+fn city_maps_the_whole_root_as_an_island() {
+    use sizeatlas_core::city;
     let state = AppState::default();
     let (_dir, tree) = scanned_tree();
     let generation = state.install_tree(tree);
     let bytes = state.city(generation).unwrap();
+    let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap()) as usize;
     assert_eq!(
         u64::from_le_bytes(bytes[..8].try_into().unwrap()),
         generation
     );
-    let count = u32::from_le_bytes(bytes[16..20].try_into().unwrap()) as usize;
-    assert!(count > 0);
+    assert_eq!(word(24), city::CITY_FORMAT as usize);
+    let (polys, points, nodes, edges, gates) = (word(16), word(36), word(40), word(44), word(48));
+    assert!(polys > 0 && nodes > 0 && edges > 0);
     assert_eq!(
         bytes.len(),
-        treemap::CITY_HEADER_LEN + treemap::CITY_RECORD_LEN * count
+        city::CITY_HEADER_LEN
+            + city::POLY_LEN * polys
+            + city::POINT_LEN * (points + nodes)
+            + city::EDGE_LEN * edges
+            + city::GATE_LEN * gates
     );
-    assert_eq!(
-        u32::from_le_bytes(bytes[28..32].try_into().unwrap()),
-        treemap::CITY_FORMAT
-    );
-    let sizes: Vec<u64> = bytes[treemap::CITY_HEADER_LEN..]
-        .chunks(treemap::CITY_RECORD_LEN)
-        .map(|rec| u64::from_le_bytes(rec[24..32].try_into().unwrap()))
-        .collect();
-    assert!(sizes.iter().all(|&size| size > 0));
     assert_eq!(state.city(generation + 1), Err(CmdError::StaleId));
 }
 

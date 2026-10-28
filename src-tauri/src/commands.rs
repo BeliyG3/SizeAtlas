@@ -174,7 +174,7 @@ pub async fn get_treemap(
     Ok(tauri::ipc::Response::new(bytes))
 }
 
-/// Raw bytes of the whole root's city (format in `sizeatlas_core::treemap`).
+/// Raw bytes of the whole root's island map (format in `sizeatlas_core::city`).
 #[tauri::command]
 pub async fn get_city(
     state: State<'_, AppState>,

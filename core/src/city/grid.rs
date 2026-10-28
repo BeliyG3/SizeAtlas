@@ -169,6 +169,7 @@ pub(crate) fn erode(m: &Grid<bool>, r: f32) -> Grid<bool> {
 }
 
 /// Erode then dilate: removes specks and spurs thinner than `2 r`.
+#[allow(dead_code)] // The island opens its shore with `open_steps`; kept as the pair of `close`.
 pub(crate) fn open(m: &Grid<bool>, r: f32) -> Grid<bool> {
     dilate(&erode(m, r), r)
 }

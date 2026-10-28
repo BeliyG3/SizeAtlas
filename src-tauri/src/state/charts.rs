@@ -1,7 +1,7 @@
 //! Chart and side panel data for the open tree.
 
 use sizeatlas_core::categories::Category;
-use sizeatlas_core::treemap;
+use sizeatlas_core::{city, treemap};
 
 use super::AppState;
 use crate::dto::{TypeStatDto, TypeStatsDto};
@@ -48,12 +48,22 @@ impl AppState {
         })
     }
 
-    /// Encoded city of the whole root `generation`: folder lots with room for roads and the
-    /// size of each (see `sizeatlas_core::treemap::city_layout`).
+    /// Encoded island map of the whole root `generation` (see `sizeatlas_core::city`).
+    // No free space, neighbours or seed yet: the app does not gather them so far.
     pub fn city(&self, generation: u64) -> Result<Vec<u8>, CmdError> {
         self.with_live(generation, 0, |tree| {
-            let (field, lots) = treemap::city_layout(tree, 0);
-            treemap::encode_city(generation, tree.rev, tree.approximate, field, &lots)
+            let input = city::IslandInput {
+                root: city::summary(tree, 0, 3),
+                free: 0,
+                neighbours: vec![],
+                seed: 0,
+            };
+            city::encode_city(
+                generation,
+                tree.rev,
+                tree.approximate,
+                &city::island(&input),
+            )
         })
     }
 }

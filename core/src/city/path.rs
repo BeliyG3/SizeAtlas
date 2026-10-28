@@ -123,20 +123,35 @@ pub(crate) fn corners(a: [f32; 2], b: [f32; 2]) -> [[f32; 2]; 2] {
 }
 
 /// The corner that lets `a -> corner -> b` stay within `tol` of every point of `pts`
-/// (`a` and `b` being its first and last), preferring the smaller deviation.
-fn fit(pts: &[[f32; 2]], tol: f32) -> Option<[f32; 2]> {
+/// (`a` and `b` being its first and last), preferring the smaller deviation. With `inside`, no
+/// point may lie on the right of the piece it is nearest to (the inside of an outline walked with
+/// the region on the right, `y` down), so the new outline stays within the old one.
+fn fit(pts: &[[f32; 2]], tol: f32, inside: bool) -> Option<[f32; 2]> {
     let (a, b) = (pts[0], pts[pts.len() - 1]);
     corners(a, b)
         .into_iter()
         .filter_map(|c| {
-            let dev = pts
-                .iter()
-                .map(|&p| point_segment(p, a, c).min(point_segment(p, c, b)))
-                .fold(0.0, f32::max);
+            let mut dev = 0.0f32;
+            for &p in pts {
+                let (d1, d2) = (point_segment(p, a, c), point_segment(p, c, b));
+                let near_first = (d1 <= d2 && apart(a, c) > EPS) || apart(c, b) <= EPS;
+                let (from, to) = if near_first { (a, c) } else { (c, b) };
+                if inside && right_of(p, from, to) {
+                    return None;
+                }
+                dev = dev.max(d1.min(d2));
+            }
             (dev <= tol).then_some((dev, c))
         })
         .min_by(|x, y| x.0.total_cmp(&y.0))
         .map(|(_, c)| c)
+}
+
+/// Whether `p` lies more than 1 mm to the right of the segment `from`-`to`, `y` down.
+fn right_of(p: [f32; 2], from: [f32; 2], to: [f32; 2]) -> bool {
+    let (d, q) = (sub(to, from), sub(p, from));
+    let len = d[0].hypot(d[1]);
+    len > EPS && (d[0] * q[1] - d[1] * q[0]) / len > 1e-3
 }
 
 /// Failed endpoints tolerated before a piece stops growing (feasibility is not monotone).
@@ -148,6 +163,16 @@ const EPS: f32 = 1e-4;
 /// the farthest input point reachable by a straight-plus-diagonal pair of segments, so a
 /// straight 8-neighbour staircase collapses to a single diagonal.
 pub(crate) fn octilinear(points: &[[f32; 2]], tol: f32) -> Vec<[f32; 2]> {
+    straighten(points, tol, false)
+}
+
+/// [`octilinear`] for an outline walked with its region on the right (`y` down) that never
+/// leaves the region: every input point lies on the new line or outside it.
+pub(crate) fn octilinear_inside(points: &[[f32; 2]], tol: f32) -> Vec<[f32; 2]> {
+    straighten(points, tol, true)
+}
+
+fn straighten(points: &[[f32; 2]], tol: f32, inside: bool) -> Vec<[f32; 2]> {
     if points.len() < 2 {
         return points.to_vec();
     }
@@ -157,7 +182,7 @@ pub(crate) fn octilinear(points: &[[f32; 2]], tol: f32) -> Vec<[f32; 2]> {
         let mut best = (i + 1, None);
         let mut misses = 0;
         for j in i + 1..points.len() {
-            match fit(&points[i..=j], tol) {
+            match fit(&points[i..=j], tol, inside) {
                 Some(c) => {
                     best = (j, Some(c));
                     misses = 0;

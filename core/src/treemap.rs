@@ -11,13 +11,6 @@ use std::collections::BinaryHeap;
 
 use crate::tree::Tree;
 
-mod city;
-pub use city::{
-    ALLEY, CITY_FORMAT, CITY_HEADER_LEN, CITY_RECORD_LEN, HIGHWAY, Lot, LotKind, MAX_BUILDINGS,
-    MAX_CHILDREN, MIN_BLOCK, MIN_BUILDING, SIDEWALK, STREET, city_layout, city_layout_with,
-    encode_city, field_side, inset,
-};
-
 pub const HEADER_LEN: usize = 24;
 pub const RECORD_LEN: usize = 24;
 /// Rectangle budget of one response: plenty of detail, about 480 KB.
@@ -239,7 +232,7 @@ fn squarify(areas: &[f64], mut r: Area, out: &mut Vec<Area>) {
 
 /// The 24-byte header shared by the treemap and the city responses; the buffer has room
 /// for `count` records of `record_len` bytes.
-fn header(
+pub(crate) fn header(
     generation: u64,
     rev: u64,
     approximate: bool,

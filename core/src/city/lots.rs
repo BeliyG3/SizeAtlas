@@ -139,8 +139,9 @@ pub(super) fn cut(cells: &[u32], w: usize, rot: f32, room: &[bool], rng: &mut Rn
     out
 }
 
-/// The lanes along the line `q[a] = at` through the `gap` cells: one per run of the cells on
-/// the line (within half a cell of it) without a break, from its first cell to its last.
+/// The lanes along the middle of the `gap` cells cut at `q[a] = at`: one per run of the cells on
+/// the line (within half a cell of it) without a break, from its first cell to its last. In the
+/// middle of the gap the lots on both sides keep the same room from the lane.
 fn lanes(
     uv: &[[f32; 2]],
     gap: &[u32],
@@ -150,6 +151,13 @@ fn lanes(
     rot: f32,
     out: &mut Vec<Lane>,
 ) {
+    let (lo, hi) = gap
+        .iter()
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), &j| {
+            let q = uv[j as usize][a];
+            (lo.min(q), hi.max(q))
+        });
+    let at = if lo <= hi { 0.5 * (lo + hi) } else { at };
     let mut along: Vec<f32> = gap
         .iter()
         .map(|&j| uv[j as usize])
