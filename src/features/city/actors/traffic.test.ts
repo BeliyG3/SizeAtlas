@@ -95,6 +95,35 @@ describe("createTraffic", () => {
     expect(nearest).toBeGreaterThanOrEqual(MIN_GAP - 0.5);
   });
 
+  it("cars keep their distance across junctions", () => {
+    // The true distance of every two ground cars going the same way, side by side within 2 m.
+    for (const [g, seed] of [
+      [line, 3],
+      [line, 8],
+      [ring, 5],
+      [ring, 9],
+    ] as const) {
+      const t = createTraffic(g, 200, seed);
+      let nearest = Infinity;
+      let moved = 0;
+      run(t, 30, () => {
+        for (let i = 0; i < t.count; i++) {
+          if (t.air[i]) continue;
+          for (let j = i + 1; j < t.count; j++) {
+            if (t.air[j] || Math.cos(t.heading[i] - t.heading[j]) < 0.99) continue;
+            const dx = t.x[j] - t.x[i];
+            const dz = t.z[j] - t.z[i];
+            const side = dx * Math.cos(t.heading[i]) - dz * Math.sin(t.heading[i]);
+            if (Math.abs(side) < 2) nearest = Math.min(nearest, Math.hypot(dx, dz));
+          }
+        }
+      });
+      for (let i = 0; i < t.count; i++) moved += Math.abs(t.x[i]) + Math.abs(t.z[i]);
+      expect(moved).toBeGreaterThan(0);
+      expect(nearest).toBeGreaterThanOrEqual(MIN_GAP - 0.5);
+    }
+  });
+
   it("flying cars stay over highways at their lanes", () => {
     const t = createTraffic(ring, 200, 5);
     const flying = Array.from(t.air.keys()).filter((i) => t.air[i]);
