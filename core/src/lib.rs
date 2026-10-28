@@ -3,6 +3,7 @@
 pub mod baseline;
 pub mod cache;
 pub mod categories;
+pub mod city;
 pub mod cleanup;
 pub mod details;
 pub mod duplicates;
