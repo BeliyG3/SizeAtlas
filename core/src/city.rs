@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 
 mod blocks;
+mod canal;
 mod empty;
 mod gates;
 mod grid;
@@ -16,7 +17,9 @@ mod plan;
 mod plots;
 mod ring;
 mod rng;
+mod shore;
 mod voronoi;
+mod widths;
 mod world;
 
 pub use plan::{Folder, IslandInput, built_area, empty_ratio, summary};

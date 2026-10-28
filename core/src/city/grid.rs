@@ -178,6 +178,41 @@ pub(crate) fn close(m: &Grid<bool>, r: f32) -> Grid<bool> {
     erode(&dilate(m, r), r)
 }
 
+/// Opening by the cells within `steps` 4-neighbour steps (the same as [`open`] with `r = steps`
+/// for `steps <= 2`), without distance transforms. The outside of the grid counts as `true` while
+/// eroding and `false` while dilating, as in [`erode`] and [`dilate`].
+pub(crate) fn open_steps(m: &Grid<bool>, steps: usize) -> Grid<bool> {
+    let mut cur = m.clone();
+    for grow in [false, true] {
+        for _ in 0..steps {
+            cur = cross(&cur, grow);
+        }
+    }
+    cur
+}
+
+/// One 4-neighbour step: erosion (`grow == false`) or dilation (`grow == true`).
+fn cross(m: &Grid<bool>, grow: bool) -> Grid<bool> {
+    let (w, h) = (m.w, m.h);
+    let mut out = m.clone();
+    let at = |x: usize, y: usize| m.data[y * w + x];
+    for y in 0..h {
+        for x in 0..w {
+            let around = [
+                x > 0 && at(x - 1, y) == grow,
+                x + 1 < w && at(x + 1, y) == grow,
+                y > 0 && at(x, y - 1) == grow,
+                y + 1 < h && at(x, y + 1) == grow,
+            ];
+            // Eroding, a `false` neighbour clears the cell; dilating, a `true` one sets it.
+            if around.contains(&true) {
+                out.data[y * w + x] = grow;
+            }
+        }
+    }
+    out
+}
+
 /// Fills every `false` region that cannot reach the grid edge through 8-connected `false` cells
 /// (the pairing that goes with the 4-connected components of [`label`]).
 pub(crate) fn fill_holes(m: &Grid<bool>) -> Grid<bool> {

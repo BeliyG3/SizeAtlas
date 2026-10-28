@@ -137,3 +137,17 @@ fn borders_mark_cells_before_a_label_change() {
     let (l, _) = label(&mask_from(&["#", "."]));
     assert!(borders(&l).get(0, 0), "cell above a different label");
 }
+
+#[test]
+fn open_steps_matches_open_up_to_two() {
+    let (w, h) = (31, 23);
+    let mut seed = 777u32;
+    let mut m = Grid::new(w, h, false);
+    for b in m.data.iter_mut() {
+        seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+        *b = !(seed >> 24).is_multiple_of(5);
+    }
+    for steps in [1, 2] {
+        assert_eq!(open_steps(&m, steps), open(&m, steps as f32), "{steps}");
+    }
+}
