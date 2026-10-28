@@ -5,16 +5,22 @@
 
 mod blocks;
 mod empty;
+mod gates;
 mod grid;
+mod highways;
 mod land;
 mod lots;
+mod net;
 mod path;
 mod plan;
 mod plots;
+mod ring;
 mod rng;
 mod voronoi;
+mod world;
 
 pub use plan::{Folder, IslandInput, built_area, empty_ratio, summary};
+pub use world::directions;
 
 /// Raster cell size in metres.
 pub const CELL: f32 = 1.5;

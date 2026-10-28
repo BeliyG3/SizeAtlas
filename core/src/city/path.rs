@@ -95,10 +95,23 @@ pub(crate) fn point_segment(p: [f32; 2], a: [f32; 2], b: [f32; 2]) -> f32 {
     (ap[0] - t * ab[0]).hypot(ap[1] - t * ab[1])
 }
 
+/// Distance between two points.
+pub(crate) fn apart(a: [f32; 2], b: [f32; 2]) -> f32 {
+    let d = sub(a, b);
+    d[0].hypot(d[1])
+}
+
+/// Distance from `p` to the polyline `line`.
+pub(crate) fn point_line(p: [f32; 2], line: &[[f32; 2]]) -> f32 {
+    line.windows(2)
+        .map(|w| point_segment(p, w[0], w[1]))
+        .fold(f32::INFINITY, f32::min)
+}
+
 /// The two ways to get from `a` to `b` with a straight piece and a diagonal piece: the corner
 /// with the straight piece first, and the corner with the diagonal piece first. When the delta is
 /// already a multiple of 45 degrees a corner coincides with an end.
-fn corners(a: [f32; 2], b: [f32; 2]) -> [[f32; 2]; 2] {
+pub(crate) fn corners(a: [f32; 2], b: [f32; 2]) -> [[f32; 2]; 2] {
     let [dx, dy] = sub(b, a);
     let (sx, sy) = (dx.signum(), dy.signum());
     let m = dx.abs().min(dy.abs());
