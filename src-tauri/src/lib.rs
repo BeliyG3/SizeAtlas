@@ -63,6 +63,7 @@ pub fn run() {
             commands::trash_refused,
             commands::get_treemap,
             commands::get_city,
+            commands::get_archipelago,
             commands::export::export_table,
             commands::items::copy_paths,
             commands::items::copy_text,

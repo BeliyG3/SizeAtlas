@@ -296,3 +296,25 @@ export interface TrashProgress {
   /** While a trash of duplicates reads the copy that stays (`current`) again: bytes read, of its length. */
   rehash?: [number, number];
 }
+
+/** An island of the archipelago, moved by `(x, z)` metres. */
+export interface ArchipelagoIsland {
+  generation: number;
+  root: string;
+  x: number;
+  z: number;
+}
+
+/** A bridge between two gates; each end is `[index in islands, gate node]`, `points` run from `a` to `b` in world metres. */
+export interface ArchipelagoBridge {
+  a: [number, number];
+  b: [number, number];
+  points: [number, number][];
+  level: number;
+}
+
+/** The open drives in the order of their size on disk, with their bridges; a root that is no drive lies alone. */
+export interface Archipelago {
+  islands: ArchipelagoIsland[];
+  bridges: ArchipelagoBridge[];
+}

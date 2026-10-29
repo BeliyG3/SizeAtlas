@@ -6,6 +6,10 @@ use sizeatlas_core::tree::{SizeMode, Tree, flags};
 
 use crate::error::CmdError;
 
+mod archipelago;
+
+pub use archipelago::{ArchipelagoBridgeDto, ArchipelagoDto, ArchipelagoIslandDto};
+
 mod cleanup;
 
 #[cfg(test)]

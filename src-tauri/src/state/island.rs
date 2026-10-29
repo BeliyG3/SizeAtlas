@@ -142,8 +142,6 @@ impl CityCache {
     }
 
     /// The island last built for `generation`, if it is still open.
-    // Read by the placement and the bridges of the archipelago (next task).
-    #[allow(dead_code)]
     pub fn island(&self, generation: u64) -> Option<Arc<city::Island>> {
         let kept = self.kept.lock().unwrap_or_else(|e| e.into_inner());
         kept.get(&generation).map(|(_, island, _)| island.clone())
@@ -151,7 +149,7 @@ impl CityCache {
 }
 
 /// Every mount point, and `(mount, free bytes)` of the disks that answer.
-fn survey(cache_dir: &Path) -> (Vec<String>, Vec<(String, u64)>) {
+pub(super) fn survey(cache_dir: &Path) -> (Vec<String>, Vec<(String, u64)>) {
     let known = sources::list(cache_dir);
     let mounts = known.disks.iter().map(|d| d.mount.clone()).collect();
     let disks = known
@@ -164,7 +162,7 @@ fn survey(cache_dir: &Path) -> (Vec<String>, Vec<(String, u64)>) {
 }
 
 /// [`members`] of the open `trees`; a drive no disk answers for has the free space its scan knew.
-fn members_of(
+pub(super) fn members_of(
     trees: &[(u64, Arc<Tree>)],
     mounts: &[String],
     disks: &[(String, u64)],
@@ -184,14 +182,6 @@ fn members_of(
 }
 
 impl AppState {
-    /// The islands of the archipelago: the open drives (see [`members`]).
-    // Read by the placement and the bridges of the archipelago (next task).
-    #[allow(dead_code)]
-    pub fn members(&self, cache_dir: &Path) -> Vec<Member> {
-        let (mounts, disks) = survey(cache_dir);
-        members_of(&self.open_trees(), &mounts, &disks)
-    }
-
     /// Encoded island map of the whole root `generation` (see `sizeatlas_core::city`). Its
     /// neighbours are the other open drives; a root that is not a drive has none.
     pub fn city(&self, generation: u64, cache_dir: &Path) -> Result<Vec<u8>, CmdError> {
@@ -202,7 +192,7 @@ impl AppState {
     }
 
     /// [`AppState::city`] with the mount points and the free space of the disks given.
-    fn city_in(
+    pub(super) fn city_in(
         &self,
         generation: u64,
         mounts: &[String],

@@ -335,6 +335,7 @@ impl AppState {
     }
 }
 
+mod archipelago;
 mod change;
 mod charts;
 mod cleanup;

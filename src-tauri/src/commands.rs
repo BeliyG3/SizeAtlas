@@ -7,7 +7,8 @@ use tauri::{AppHandle, State, Window};
 
 use crate::details;
 use crate::dto::{
-    ChildrenDto, CrumbDto, DetailsDto, ListDto, Summary, TrashPreviewDto, TypeStatsDto,
+    ArchipelagoDto, ChildrenDto, CrumbDto, DetailsDto, ListDto, Summary, TrashPreviewDto,
+    TypeStatsDto,
 };
 use crate::elevate::{self, StartupRescans};
 use crate::error::CmdError;
@@ -187,6 +188,21 @@ pub async fn get_city(
         .await
         .map_err(CmdError::from)??;
     Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// The islands of the open drives with their places and bridges, or `selected` alone if it is
+/// no drive.
+#[tauri::command]
+pub async fn get_archipelago(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    selected: u64,
+) -> Result<ArchipelagoDto, CmdError> {
+    let state = state.inner().clone();
+    let dir = roots::cache_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || state.archipelago(selected, &dir))
+        .await
+        .map_err(CmdError::from)?
 }
 
 #[tauri::command]

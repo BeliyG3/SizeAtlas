@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { DupEstimate, DupRef, DupScope, DupStatus, Duplicates } from "./duplicates";
 import type {
+  Archipelago,
   ChildrenPage,
   CmdError,
   Crumb,
@@ -92,6 +93,8 @@ export const api = {
     invoke<ArrayBuffer>("get_treemap", { generation, id, width, height }),
   /** Raw bytes of the whole root's city; decode with `parseCity`. */
   getCity: (generation: number) => invoke<ArrayBuffer>("get_city", { generation }),
+  /** The islands around the root `selected` with their places, and the bridges between them. */
+  getArchipelago: (selected: number) => invoke<Archipelago>("get_archipelago", { selected }),
   /** One path per line. */
   copyPaths: (generation: number, ids: number[]) => invoke<void>("copy_paths", { generation, ids }),
   /** `text` as it is, such as the path of a deleted folder, which the tree no longer has. */
