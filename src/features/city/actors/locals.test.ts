@@ -109,7 +109,8 @@ describe("createLocals", () => {
       locals.update(RECHECK, { x, z: 50_000, r }, at, move);
       return scanned;
     };
-    expect(step(0)).toBe(1); // the first look: the whole circle, one edge once
+    expect(step(0)).toBe(0); // the first look: the strays shrink away
+    expect(step(0)).toBe(1); // gone, they ask for the whole circle: one edge once
     expect(step(0)).toBe(1); // then the ring
     expect(step(0)).toBe(0);
     expect(step(40)).toBe(0); // within 5 % of r
@@ -219,11 +220,20 @@ describe("the locals", () => {
     const around = { x: 0, z: 0, r: localRadius(1000) };
     for (const crowd of [createTraffic(road, 40, 3), createResidents(road, 60, 3)]) {
       expect(Array.from(crowd.appear).every((a) => a === 1)).toBe(true);
+      // The first look: the strays shrink away where they are; the next one puts them down.
+      const [x0, z0] = [Float32Array.from(crowd.x), Float32Array.from(crowd.z)];
       crowd.update(RECHECK, around);
-      const moved = all(crowd).filter((i) => crowd.appear[i] === 0);
+      // None jumped: each went on no farther than it drives (or walks) in that time.
+      for (const i of all(crowd)) {
+        expect(Math.hypot(crowd.x[i] - x0[i], crowd.z[i] - z0[i])).toBeLessThan(
+          SPEED.highway * RECHECK + 1,
+        );
+      }
+      crowd.update(RECHECK, around);
+      const moved = all(crowd).filter(
+        (i) => crowd.appear[i] === 0 && dist(crowd, i, around) <= around.r,
+      );
       expect(moved.length).toBeGreaterThan(0);
-      // The first look fills the circle.
-      for (const i of moved) expect(dist(crowd, i, around)).toBeLessThanOrEqual(around.r);
       // One well inside it, so that no look moves it again.
       const i = moved.find((k) => dist(crowd, k, around) < around.r - 50)!;
       crowd.update(APPEAR / 2, around);

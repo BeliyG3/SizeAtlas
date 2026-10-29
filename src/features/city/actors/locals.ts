@@ -138,14 +138,15 @@ export function localIds(from: number, count: number): number[] {
 /** What a local's next look does with it: where a stray goes, or one moved anyway. */
 const TASK = { ring: 0, disc: 1, rim: 2 } as const;
 type Task = (typeof TASK)[keyof typeof TASK];
-/** Where a local that shrinks away goes. */
-const GOING = { no: 0, rim: 1, off: 2 } as const;
+/** What a local that shrinks away does once gone: moves (to the spots of its `dest`) or leaves. */
+const GOING = { no: 0, move: 1, off: 2 } as const;
 
 /**
  * The locals of a crowd of `n`: the movers `ids` keep near a circle. Round the list, each is
  * looked at once per `RECHECK` seconds; one that has strayed farther than `r` (horizontally) from
- * the centre goes to `move`, which puts it on one of the spots it asks for (for the edges it may
- * use) and says whether it could. The spots are the ring of the circle, where the circle creeps
+ * the centre shrinks away (`appear` to 0 over `FADE` seconds) and then goes to `move`, which puts
+ * it on one of the spots it asks for (for the edges it may use) and says whether it could; if it
+ * could not, it grows back where it is. The spots are the ring of the circle, where the circle creeps
  * on; after a jump of more than `r` (the first look too) the whole circle, so the new place is
  * full at once; and as the circle grows `ZOOM_OUT` times, each local goes, at a chance of the
  * new area's share, to the rim the old circle leaves, so the life thins out evenly: it shrinks
@@ -166,8 +167,9 @@ export function createLocals(
   const appear = new Float32Array(n).fill(1);
   const live = new Uint8Array(n).fill(1);
   const task = new Uint8Array(n).fill(TASK.disc);
-  // What a local shrinking away goes to: nothing, the rim, or off the roads.
+  // What a local shrinking away goes to: nothing, a move, or off the roads; where a move goes.
   const going = new Uint8Array(n);
+  const dest = new Uint8Array(n);
   let next = 0;
   let due = 0;
   // The circle as the locals last moved all together, its radius the least since.
@@ -231,7 +233,7 @@ export function createLocals(
       for (const i of ids) {
         if (!going[i] || appear[i] > 0) continue;
         if (going[i] === GOING.off) live[i] = 0;
-        else if (live[i]) move(i, spots[TASK.rim]);
+        else if (live[i]) move(i, spots[dest[i]]);
         going[i] = GOING.no;
       }
       due = Math.min(ids.length, due + (ids.length * dt) / RECHECK);
@@ -251,8 +253,9 @@ export function createLocals(
         const kind = task[i] as Task;
         task[i] = TASK.ring;
         const stray = Math.hypot(at.x[i] - c.x, at.z[i] - c.z) > c.r;
-        if (kind === TASK.rim && !stray) going[i] = GOING.rim;
-        else if (stray && move(i, spots[kind])) appear[i] = 0;
+        // A stray may well be in view (the camera looks far past the circle): it shrinks away
+        // first, as one sent to the rim does.
+        if (stray || kind === TASK.rim) [going[i], dest[i]] = [GOING.move, kind];
       }
     },
   };
