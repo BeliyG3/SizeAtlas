@@ -27,10 +27,9 @@ interface Loaded {
  * is a selected root that is none of the islands shown; moving the selection between the islands
  * asks nothing. A new `rev` of an island (or of the selected root) is asked for at most once per
  * pause, the latest one when the pause ends; the revisions of other roots are none of its
- * business. An answer that arrives after a newer request is dropped, and so is one for an island
- * that kept changing: the old picture stays. What is shown never has an island of a root that is
- * gone: it waits for the next answer. `finish` books the refresh cost once the picture is on
- * screen.
+ * business. An answer that arrives after a newer request is dropped: the old picture stays. What
+ * is shown never has an island of a root that is gone: it waits for the next answer. `finish`
+ * books the refresh cost once the picture is on screen, or once the answer is dropped or failed.
  */
 export function useArchipelago(
   roots: readonly { generation: number; rev: number }[],
@@ -91,11 +90,14 @@ export function useArchipelago(
     const finish = beginRefresh("city");
     readArchipelago(ask.selected, cache.current).then(
       (read) => {
-        if (!live || !read) return;
+        if (!live) return finish();
         keepOnly(cache.current, read.islands);
         setLoaded({ map: read.map, islands: read.islands, finish });
       },
-      (e: unknown) => live && onFail(e),
+      (e: unknown) => {
+        finish();
+        if (live) onFail(e);
+      },
     );
     return () => {
       live = false;

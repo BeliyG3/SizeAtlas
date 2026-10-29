@@ -55,6 +55,7 @@
   "error.Protected": "Nicht gelöscht: Das Element enthält etwas, das SizeAtlas nie löscht, oder ist nicht mehr zur Bereinigung vorgesehen. Aktualisieren Sie die Liste.",
   "error.LastCopy": "Nichts verschoben: Es bliebe keine Kopie außerhalb der Systemordner übrig, oder die Kopien sind dieselbe Datei.",
   "error.Cancelled": "Abgebrochen.",
+  "error.BuildGone": "Die Stadtkarte hat sich beim Laden geändert.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "{folders} Ordner konnte nicht gelesen werden.",
   "banner.access_other": "{folders} Ordner konnten nicht gelesen werden.",

@@ -59,6 +59,7 @@
   "error.Protected": "Non eliminato: contiene qualcosa che SizeAtlas non elimina mai, oppure non è più un elemento da pulire. Aggiorna l’elenco.",
   "error.LastCopy": "Nulla è stato spostato: non resterebbe alcuna copia fuori dalle cartelle di sistema, oppure le copie sono lo stesso file.",
   "error.Cancelled": "Annullato.",
+  "error.BuildGone": "La mappa della città è cambiata durante il caricamento.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "Impossibile leggere {folders} cartella.",
   "banner.access_many": "Impossibile leggere {folders} di cartelle.",

@@ -91,8 +91,12 @@ export const api = {
   /** Raw bytes; decode with `parseTreemap`. */
   getTreemap: (generation: number, id: number, width: number, height: number) =>
     invoke<ArrayBuffer>("get_treemap", { generation, id, width, height }),
-  /** Raw bytes of the whole root's city; decode with `parseCity`. */
-  getCity: (generation: number) => invoke<ArrayBuffer>("get_city", { generation }),
+  /**
+   * Raw bytes of the island `build` of the whole root, as `getArchipelago` named it; decode with
+   * `parseCity`. Refused (`BuildGone`) once a newer layout replaced it.
+   */
+  getCity: (generation: number, build: number) =>
+    invoke<ArrayBuffer>("get_city", { generation, build }),
   /** The islands around the root `selected` with their places, and the bridges between them. */
   getArchipelago: (selected: number) => invoke<Archipelago>("get_archipelago", { selected }),
   /** One path per line. */

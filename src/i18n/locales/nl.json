@@ -55,6 +55,7 @@
   "error.Protected": "Niet verwijderd: het item bevat iets wat SizeAtlas nooit verwijdert, of komt niet meer in aanmerking voor opschonen. Vernieuw de lijst.",
   "error.LastCopy": "Niets verplaatst: er zou geen kopie buiten de systeemmappen overblijven, of de kopieën zijn hetzelfde bestand.",
   "error.Cancelled": "Geannuleerd.",
+  "error.BuildGone": "De stadskaart is tijdens het laden gewijzigd.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "{folders} map kon niet worden gelezen.",
   "banner.access_other": "{folders} mappen konden niet worden gelezen.",

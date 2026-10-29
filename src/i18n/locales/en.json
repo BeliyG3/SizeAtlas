@@ -55,6 +55,7 @@
   "error.Protected": "Not deleted: this holds something SizeAtlas never deletes, or it is no longer a clean-up item. Refresh the list.",
   "error.LastCopy": "Nothing moved: no copy would be left outside the system folders, or the copies are the same file.",
   "error.Cancelled": "Cancelled.",
+  "error.BuildGone": "The city map changed while it was loading.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "{folders} folder could not be read.",
   "banner.access_other": "{folders} folders could not be read.",

@@ -55,6 +55,7 @@
   "error.Protected": "Silinmedi: SizeAtlas’ın asla silmediği bir şey içeriyor ya da artık temizlenecekler arasında değil. Listeyi yenileyin.",
   "error.LastCopy": "Hiçbir şey taşınmadı: sistem klasörlerinin dışında hiç kopya kalmayacak ya da kopyalar aynı dosya.",
   "error.Cancelled": "İptal edildi.",
+  "error.BuildGone": "Şehir haritası yüklenirken değişti.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "{folders} klasör okunamadı.",
   "banner.access_other": "{folders} klasör okunamadı.",

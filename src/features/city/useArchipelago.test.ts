@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../api/client";
 import type { Archipelago, Crumb } from "../../api/types";
 import { rt } from "../lists/hookRuntime";
+import { beginRefresh } from "../scan/cadence";
 import { focusIn } from "./world/buildings";
 import { POLY } from "./world/map";
 import { encodeCity, mapOf, square } from "./world/map.fixture";
@@ -12,7 +13,13 @@ vi.mock("./world/buildings", async (original) => {
   const buildings = await original<typeof import("./world/buildings")>();
   return { ...buildings, focusIn: vi.fn(buildings.focusIn) };
 });
-vi.mock("../../api/client", () => ({
+// No refresh cost is booked: one booked under fake timers would slow the later tests.
+vi.mock("../scan/cadence", async (original) => ({
+  ...(await original<typeof import("../scan/cadence")>()),
+  beginRefresh: vi.fn(() => () => {}),
+}));
+vi.mock("../../api/client", async (original) => ({
+  ...(await original<typeof import("../../api/client")>()),
   api: { getArchipelago: vi.fn(), getCity: vi.fn(), getCrumbs: vi.fn() },
 }));
 
@@ -59,6 +66,12 @@ function archipelago(selected: number): Archipelago {
     bridges: [],
   };
 }
+
+/** The bytes of build `build` of an island while it is the one the backend has, as `get_city`. */
+const getCity = (generation: number, build: number) =>
+  build === (builds.get(generation) ?? 0)
+    ? Promise.resolve(city(generation, revs.get(generation)!))
+    : Promise.reject({ code: "BuildGone" });
 
 /** A new rev of an island's tree: the backend builds the island again, under a new build. */
 function rebuild(generation: number, rev: number) {
@@ -110,7 +123,7 @@ beforeEach(() => {
   folders.clear();
   revs.set(1, 1).set(2, 1);
   vi.mocked(api.getArchipelago).mockImplementation((g) => Promise.resolve(archipelago(g)));
-  vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, revs.get(g)!)));
+  vi.mocked(api.getCity).mockImplementation(getCity);
   vi.mocked(api.getCrumbs).mockResolvedValue(crumbs([0]));
 });
 
@@ -312,22 +325,6 @@ describe("useArchipelago", () => {
     expect(shown.islands.map((i) => i.generation)).toEqual([1, 2, 3]);
   });
 
-  it("reads again when an island was rebuilt between the two requests", async () => {
-    vi.mocked(api.getArchipelago).mockImplementation((g) => {
-      revs.set(2, 2);
-      return Promise.resolve(archipelago(g));
-    });
-    vi.mocked(api.getCity)
-      .mockResolvedValueOnce(city(1, 1))
-      .mockResolvedValueOnce(city(2, 1))
-      .mockResolvedValueOnce(city(2, 2));
-    render();
-    await settle();
-    expect(api.getArchipelago).toHaveBeenCalledTimes(2);
-    expect(shown.islands).toHaveLength(2);
-    expect(onFail).not.toHaveBeenCalled();
-  });
-
   it("reads an island again that was rebuilt under the same rev, and merges the new map", async () => {
     render();
     await settle();
@@ -343,64 +340,57 @@ describe("useArchipelago", () => {
     expect(onFail).not.toHaveBeenCalled();
   });
 
-  it("asks the archipelago again when the bytes are of another build than it named", async () => {
+  it("asks the archipelago once more when an island's build is gone before it is read", async () => {
     // The archipelago names build 0 of island 2, which is rebuilt before its bytes are read.
     vi.mocked(api.getArchipelago).mockImplementationOnce((g) => {
       const named = archipelago(g);
-      builds.set(2, 2);
+      rebuild(2, 2);
       return Promise.resolve(named);
     });
     render();
     await settle();
     expect(api.getArchipelago).toHaveBeenCalledTimes(2);
-    expect(shown.islands.map((i) => i.build)).toEqual([0, 2]);
-    expect(houses()).toContainEqual([1, 102]);
+    expect(vi.mocked(api.getCity).mock.calls).toEqual([
+      [1, 0],
+      [2, 0],
+      [2, 1],
+    ]);
+    expect(shown.islands.map((i) => i.build)).toEqual([0, 1]);
+    expect(houses()).toContainEqual([1, 101]);
     expect(onFail).not.toHaveBeenCalled();
   });
 
-  it("keeps the old picture, without an error, when the bytes keep another build", async () => {
+  it("passes a build gone twice on, asking the archipelago no more", async () => {
     render();
     await settle();
     const before = shown.world;
-    vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, revs.get(g)!, 99)));
+    vi.mocked(api.getCity).mockRejectedValue({ code: "BuildGone" });
     revs.set(3, 1);
     render();
     await settle();
-    expect(api.getArchipelago).toHaveBeenCalledTimes(1 + 3);
-    expect(onFail).not.toHaveBeenCalled();
+    expect(api.getArchipelago).toHaveBeenCalledTimes(1 + 2);
+    expect(onFail).toHaveBeenCalledExactlyOnceWith({ code: "BuildGone" });
     expect(shown.world).toBe(before);
   });
 
-  it("keeps the old picture, without an error, when an island keeps changing", async () => {
+  it("books the refresh cost of a request that fails or is dropped", async () => {
+    const failed = vi.fn();
+    vi.mocked(beginRefresh).mockReturnValueOnce(failed);
+    vi.mocked(api.getArchipelago).mockRejectedValueOnce(new Error("gone"));
     render();
     await settle();
-    const before = shown.world;
-    vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, 99)));
-    rebuild(2, 2);
+    expect(failed).toHaveBeenCalledOnce();
+    const dropped = vi.fn();
+    vi.mocked(beginRefresh).mockReturnValueOnce(dropped);
+    const answer = deferred<Archipelago>();
+    vi.mocked(api.getArchipelago).mockReturnValueOnce(answer.promise);
+    revs.set(3, 1);
     render();
-    await vi.advanceTimersByTimeAsync(REFRESH_MS);
+    revs.delete(3);
     render();
+    answer.resolve(archipelago(1));
     await settle();
-    expect(api.getArchipelago).toHaveBeenCalledTimes(1 + 3);
-    expect(onFail).not.toHaveBeenCalled();
-    expect(shown.world).toBe(before);
-    // The next revision asks again, and gets through.
-    vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, revs.get(g)!)));
-    rebuild(2, 3);
-    render();
-    await vi.advanceTimersByTimeAsync(REFRESH_MS);
-    render();
-    await settle();
-    expect(shown.world).not.toBe(before);
-    expect(onFail).not.toHaveBeenCalled();
-  });
-
-  it("shows nothing, without an error, when the first picture keeps changing", async () => {
-    vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, 99)));
-    render();
-    await settle();
-    expect(onFail).not.toHaveBeenCalled();
-    expect(shown.world).toBeNull();
+    expect(dropped).toHaveBeenCalledOnce();
   });
 
   it("lights the selected folder's block on its own island only", async () => {

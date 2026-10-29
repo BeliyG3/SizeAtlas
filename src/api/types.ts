@@ -25,7 +25,8 @@ export type CmdError =
         | "NoTrash"
         | "Protected"
         | "LastCopy"
-        | "Cancelled";
+        | "Cancelled"
+        | "BuildGone";
     }
   | { code: "NoAccess"; path: string }
   | { code: "Io"; path: string; osMessage: string };

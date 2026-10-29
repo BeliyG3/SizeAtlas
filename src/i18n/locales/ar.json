@@ -71,6 +71,7 @@
   "error.Protected": "لم يُحذف: يحتوي هذا على شيء لا يحذفه SizeAtlas أبدًا، أو لم يعد من عناصر التنظيف. حدّث القائمة.",
   "error.LastCopy": "لم يُنقل شيء: لن تبقى أي نسخة خارج مجلدات النظام، أو أن النسخ هي الملف نفسه.",
   "error.Cancelled": "تم الإلغاء.",
+  "error.BuildGone": "تغيّرت خريطة المدينة أثناء تحميلها.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_zero": "تعذّرت قراءة {folders} مجلد.",
   "banner.access_one": "تعذّرت قراءة {folders} مجلد.",

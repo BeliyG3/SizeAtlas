@@ -104,23 +104,19 @@ struct CityKey {
 }
 
 /// A built island map: its key, the island, the encoded bytes and the id of the build.
-type Built = (CityKey, Arc<city::Island>, Vec<u8>, u32);
+type Built = (CityKey, Arc<city::Island>, Arc<[u8]>, u32);
 
 /// An island as the archipelago takes it: the rev of the tree it was built from (the one its
 /// encoded map carries), the island, its encoded map and the id of the build (in the map's
 /// header too).
-pub(super) type Kept = (u64, Arc<city::Island>, Vec<u8>, u32);
-
-/// The archipelago last laid out: its members' `(generation, rev, used)`, then their islands
-/// (in member order) and where they stand.
-pub(super) type World = (Vec<(u64, u64, u64)>, Vec<Kept>, Vec<[f32; 2]>);
+pub(super) type Kept = (u64, Arc<city::Island>, Arc<[u8]>, u32);
 
 /// The island maps of every open root, by generation, the one last asked for last.
 #[derive(Default)]
 pub struct CityCache {
     kept: Mutex<HashMap<u64, Vec<Built>>>,
     /// Held while an archipelago is laid out, so that callers at once wait for it.
-    pub(super) world: Mutex<Option<World>>,
+    pub(super) layout: Mutex<()>,
     /// The id of the last island built; each build gets the next, from 1.
     last_build: AtomicU32,
     /// How many maps were built, for the tests.
@@ -139,7 +135,7 @@ impl CityCache {
         key: CityKey,
         open: &[u64],
         build: impl FnOnce(u32) -> (Arc<city::Island>, Vec<u8>),
-    ) -> (Arc<city::Island>, Vec<u8>, u32) {
+    ) -> (Arc<city::Island>, Arc<[u8]>, u32) {
         let lock = || self.kept.lock().unwrap_or_else(|e| e.into_inner());
         {
             let mut kept = lock();
@@ -158,6 +154,7 @@ impl CityCache {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let id = self.last_build.fetch_add(1, Ordering::Relaxed) + 1;
         let (island, bytes) = build(id);
+        let bytes: Arc<[u8]> = bytes.into();
         let mut kept = lock();
         let list = kept.entry(generation).or_default();
         list.retain(|(have, ..)| *have != key);
@@ -166,6 +163,13 @@ impl CityCache {
             list.remove(0);
         }
         (island, bytes, id)
+    }
+
+    /// The encoded map of the build `build` of `generation`, while it is kept.
+    pub(super) fn bytes(&self, generation: u64, build: u32) -> Option<Arc<[u8]>> {
+        let kept = self.kept.lock().unwrap_or_else(|e| e.into_inner());
+        let list = kept.get(&generation)?;
+        (list.iter().find(|(.., id)| *id == build)).map(|(_, _, bytes, _)| bytes.clone())
     }
 
     /// The island last asked for of `generation`, if it is still open, with the `rev` of the

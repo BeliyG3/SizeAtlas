@@ -51,6 +51,7 @@
   "error.Protected": "Không bị xóa: mục này có thứ mà SizeAtlas không bao giờ xóa, hoặc không còn là mục để dọn dẹp. Hãy làm mới danh sách.",
   "error.LastCopy": "Chưa di chuyển gì: sẽ không còn bản sao nào bên ngoài các thư mục hệ thống, hoặc các bản sao là cùng một tệp.",
   "error.Cancelled": "Đã hủy.",
+  "error.BuildGone": "Bản đồ thành phố đã thay đổi trong khi đang tải.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_other": "Không đọc được {folders} thư mục.",
   "banner.hintWindows": "Chạy SizeAtlas với tư cách quản trị viên để tính cả các thư mục này.",

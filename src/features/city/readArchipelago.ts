@@ -1,4 +1,4 @@
-import { api } from "../../api/client";
+import { api, isCmdError } from "../../api/client";
 import type { ArchipelagoIsland } from "../../api/types";
 import { mergeIslands } from "./world/archipelago";
 import { parseCity, type CityMap } from "./world/map";
@@ -9,9 +9,6 @@ import { parseCity, type CityMap } from "./world/map";
  */
 export type IslandCache = Map<string, Promise<CityMap>>;
 
-/** How often the archipelago is asked for again when an island is rebuilt while it is read. */
-const ATTEMPTS = 3;
-
 const keyOf = (island: ArchipelagoIsland) => `${island.generation}:${island.build}`;
 
 /** The cache with only the islands in `islands`. */
@@ -20,54 +17,46 @@ export function keepOnly(cache: IslandCache, islands: readonly ArchipelagoIsland
   for (const key of [...cache.keys()]) if (!keep.has(key)) cache.delete(key);
 }
 
-/** Are `map`'s bytes the island the archipelago named? */
-const fits = (map: CityMap, island: ArchipelagoIsland) =>
-  map.generation === island.generation && map.rev === island.rev && map.build === island.build;
-
 function readIsland(island: ArchipelagoIsland, cache: IslandCache): Promise<CityMap> {
   const key = keyOf(island);
   const hit = cache.get(key);
   if (hit) return hit;
-  // A response that does not parse fails like a request that does. Neither a failure nor an
-  // island of another rev or build than the archipelago named stays: the next request reads it
-  // again.
+  // A response that does not parse fails like a request that does; a failure does not stay: the
+  // next request reads it again.
   const read: Promise<CityMap> = api
-    .getCity(island.generation)
+    .getCity(island.generation, island.build)
     .then(parseCity)
-    .then(
-      (map) => {
-        if (!fits(map, island)) cache.delete(key);
-        return map;
-      },
-      (e: unknown) => {
-        cache.delete(key);
-        throw e;
-      },
-    );
+    .catch((e: unknown) => {
+      cache.delete(key);
+      throw e;
+    });
   cache.set(key, read);
   return read;
 }
 
+/** The archipelago around the root `selected` and the bytes of each of its islands. */
+async function readOnce(selected: number, cache: IslandCache) {
+  const { islands, bridges } = await api.getArchipelago(selected);
+  const maps = await Promise.all(islands.map((island) => readIsland(island, cache)));
+  return { islands, bridges, maps };
+}
+
 /**
- * The archipelago around the root `selected` as one map. The offsets and the gates of a bridge fit
- * the bytes of an island only while their `rev` and `build` are the ones the archipelago names: if
- * an island was rebuilt in between (a live scan, or new neighbours that turn its gates), the
- * archipelago is asked again, never merged from both. If it keeps changing, the answer is null
- * (no new picture): the next revision asks again.
+ * The archipelago around the root `selected` as one map. Each island is read as the build the
+ * archipelago named, so the offsets and the gates of a bridge fit its bytes. Where a newer layout
+ * replaced a build before it was read (`BuildGone`: a live scan, or new neighbours that turn its
+ * gates), the archipelago is asked once more; a second failure is passed on.
  */
 export async function readArchipelago(selected: number, cache: IslandCache) {
-  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    const { islands, bridges } = await api.getArchipelago(selected);
-    const maps = await Promise.all(islands.map((island) => readIsland(island, cache)));
-    if (maps.every((m, i) => fits(m, islands[i]))) {
-      const parts = islands.map((island, i) => ({
-        generation: island.generation,
-        map: maps[i],
-        x: island.x,
-        z: island.z,
-      }));
-      return { map: mergeIslands(parts, bridges), islands };
-    }
-  }
-  return null;
+  const { islands, bridges, maps } = await readOnce(selected, cache).catch((e: unknown) => {
+    if (!isCmdError(e) || e.code !== "BuildGone") throw e;
+    return readOnce(selected, cache);
+  });
+  const parts = islands.map((island, i) => ({
+    generation: island.generation,
+    map: maps[i],
+    x: island.x,
+    z: island.z,
+  }));
+  return { map: mergeIslands(parts, bridges), islands };
 }

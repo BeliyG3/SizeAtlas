@@ -36,6 +36,9 @@ pub enum CmdError {
     LastCopy,
     /// The user declined the system prompt (the UAC prompt of a restart as administrator).
     Cancelled,
+    /// The island an archipelago named is no longer in memory (a newer layout replaced it): the
+    /// archipelago is to be asked again.
+    BuildGone,
     Io {
         path: String,
         os_message: String,

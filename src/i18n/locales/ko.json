@@ -51,6 +51,7 @@
   "error.Protected": "삭제되지 않음: SizeAtlas가 삭제하지 않는 항목이 들어 있거나 더 이상 정리 대상이 아닙니다. 목록을 새로 고치세요.",
   "error.LastCopy": "이동된 항목 없음: 시스템 폴더 밖에 남는 사본이 없거나, 사본이 같은 파일입니다.",
   "error.Cancelled": "취소되었습니다.",
+  "error.BuildGone": "불러오는 동안 도시 지도가 변경되었습니다.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_other": "폴더 {folders}개를 읽을 수 없습니다.",
   "banner.hintWindows": "이 폴더도 포함하려면 SizeAtlas를 관리자 권한으로 실행하세요.",

@@ -59,6 +59,7 @@
   "error.Protected": "Não excluído: o item contém algo que o SizeAtlas nunca exclui ou não faz mais parte da limpeza. Atualize a lista.",
   "error.LastCopy": "Nada foi movido: nenhuma cópia ficaria fora das pastas do sistema, ou as cópias são o mesmo arquivo.",
   "error.Cancelled": "Cancelado.",
+  "error.BuildGone": "O mapa da cidade mudou enquanto carregava.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "Não foi possível ler {folders} pasta.",
   "banner.access_many": "Não foi possível ler {folders} de pastas.",

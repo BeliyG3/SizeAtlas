@@ -151,7 +151,7 @@ fn get_city_matches_archipelago() {
     let dirs: Vec<_> = (0..4).map(|_| tempfile::tempdir().unwrap()).collect();
     let state = AppState::default();
     let (_, mounts) = four_drives(&state, &dirs);
-    let (list, revs) = state.open_members(&mounts, &[]);
+    let (list, open) = state.open_members(&mounts, &[]);
     let sizes: Vec<(u64, u64)> = list.iter().map(|m| (m.used, m.free)).collect();
     let turned: Vec<Vec<f32>> = (0..list.len())
         .map(|i| {
@@ -159,11 +159,11 @@ fn get_city_matches_archipelago() {
             ahead.map(|a| a + std::f32::consts::FRAC_PI_2).collect()
         })
         .collect();
-    let (kept, at) = state.settle_with(&list, &revs, &turned, true).unwrap();
+    let (kept, at) = state.settle_with(&list, &turned, &open).unwrap();
     assert_eq!(builds(&state), 2 * list.len());
     let bridges = city::bridges(&kept.iter().map(|k| &*k.1).collect::<Vec<_>>(), &at);
     for (k, (member, (rev, island, _, build))) in list.iter().zip(&kept).enumerate() {
-        let bytes = state.city_in(member.generation, &mounts, &[]).unwrap();
+        let bytes = state.city(member.generation, *build).unwrap();
         let tree = state.tree(member.generation).unwrap();
         assert_eq!(*rev, tree.rev);
         let want = city::encode_city(member.generation, *rev, *build, tree.approximate, island);
@@ -181,7 +181,8 @@ fn get_city_matches_archipelago() {
     assert_eq!(builds(&state), 2 * list.len());
 }
 
-/// Callers that find the cache cold at once wait for one of them to settle the archipelago.
+/// Callers that find the cache cold at once wait for one of them to lay the archipelago out,
+/// then find its islands in memory.
 #[test]
 fn cold_callers_build_once() {
     let dirs: Vec<_> = (0..2).map(|_| tempfile::tempdir().unwrap()).collect();
@@ -192,67 +193,92 @@ fn cold_callers_build_once() {
     let mounts: Vec<String> = dirs.iter().map(path_of).collect();
     let start = std::sync::Barrier::new(3);
     std::thread::scope(|scope| {
-        let city = |g: u64| {
+        let ask = |g: u64| {
             let (state, start, mounts) = (&state, &start, &mounts);
             move || {
                 start.wait();
-                state.city_in(g, mounts, &[]).unwrap();
+                state.archipelago_in(g, mounts, &[]).unwrap();
             }
         };
-        scope.spawn(city(generations[0]));
-        scope.spawn(city(generations[1]));
+        scope.spawn(ask(generations[0]));
+        scope.spawn(ask(generations[1]));
         start.wait();
         state.archipelago_in(generations[0], &mounts, &[]).unwrap();
     });
     assert_eq!(builds(&state), 2);
 }
 
-/// `get_city` serves the island the archipelago placed, whatever the free space did since: a
-/// change shows when the archipelago is laid out again.
+/// The build id in the header of an island's bytes (the last word of its 56 bytes).
+fn build_in(bytes: &[u8]) -> u32 {
+    u32::from_le_bytes(bytes[52..56].try_into().unwrap())
+}
+
+/// A new rev of a tree each time.
+fn change(state: &AppState, generation: u64) {
+    state.change_tree(generation, |tree| {
+        tree.rev += 1;
+        Some(())
+    });
+}
+
+/// `get_city` serves the bytes of the build the archipelago named though a scan changed a tree
+/// since: nothing is built or laid out again.
 #[test]
-fn get_city_keeps_the_archipelago_island_when_free_space_moves() {
-    const GIB: u64 = 1 << 30;
+fn get_city_serves_the_named_build_after_a_change() {
     let dirs: Vec<_> = (0..2).map(|_| tempfile::tempdir().unwrap()).collect();
     let state = AppState::default();
     let generations: Vec<u64> = (dirs.iter().zip([10_000, 20_000]))
         .map(|(d, bytes)| state.install_tree(tree_in(d.path(), bytes)))
         .collect();
     let mounts: Vec<String> = dirs.iter().map(path_of).collect();
-    let disks =
-        |free: u64| -> Vec<(String, u64)> { mounts.iter().map(|m| (m.clone(), free)).collect() };
-    let world = state
-        .archipelago_in(generations[0], &mounts, &disks(GIB))
-        .unwrap();
-    let laid = state.city_in(generations[1], &mounts, &disks(GIB)).unwrap();
+    let world = state.archipelago_in(generations[0], &mounts, &[]).unwrap();
+    let read = || -> Vec<Vec<u8>> {
+        (world.islands.iter())
+            .map(|i| state.city(i.generation, i.build).unwrap())
+            .collect()
+    };
+    let laid = read();
     let built = builds(&state);
-    let later = state
-        .city_in(generations[1], &mounts, &disks(9 * GIB))
-        .unwrap();
-    assert!(later == laid, "get_city moved off the archipelago's island");
-    assert_eq!(builds(&state), built);
-    assert_eq!(
-        state.0.city.island(generations[1]).unwrap().0,
-        world.islands[1].rev
+    change(&state, generations[1]);
+    assert!(
+        read() == laid,
+        "get_city moved off the archipelago's islands"
     );
-    // Laid out again, the archipelago takes the new free space.
-    state
-        .archipelago_in(generations[0], &mounts, &disks(9 * GIB))
-        .unwrap();
-    assert_eq!(builds(&state), built + 2);
+    for (island, bytes) in world.islands.iter().zip(&laid) {
+        assert_eq!(build_in(bytes), island.build);
+    }
+    assert_eq!(builds(&state), built);
 }
 
-/// With no island in memory, `get_city` of a member builds the archipelago's island: the
-/// archipelago then builds nothing more.
+/// A build that newer layouts pushed out of memory, or one never made, is `BuildGone`: the
+/// archipelago is to be asked again. A closed root stays `StaleId`.
 #[test]
-fn get_city_first_builds_the_archipelago() {
-    let dirs: Vec<_> = (0..4).map(|_| tempfile::tempdir().unwrap()).collect();
+fn a_build_no_longer_kept_is_gone() {
+    let dirs: Vec<_> = (0..2).map(|_| tempfile::tempdir().unwrap()).collect();
     let state = AppState::default();
-    let (generations, mounts) = four_drives(&state, &dirs);
-    let bytes = state.city_in(generations[1], &mounts, &[]).unwrap();
-    let built = builds(&state);
-    state.archipelago_in(generations[0], &mounts, &[]).unwrap();
-    assert_eq!(builds(&state), built);
-    assert_eq!(state.city_in(generations[1], &mounts, &[]).unwrap(), bytes);
+    let generations: Vec<u64> = (dirs.iter().zip([10_000, 20_000]))
+        .map(|(d, bytes)| state.install_tree(tree_in(d.path(), bytes)))
+        .collect();
+    let mounts: Vec<String> = dirs.iter().map(path_of).collect();
+    let island = |world: &ArchipelagoDto| {
+        let i = world
+            .islands
+            .iter()
+            .find(|i| i.generation == generations[1]);
+        i.unwrap().build
+    };
+    let old = island(&state.archipelago_in(generations[0], &mounts, &[]).unwrap());
+    // Two islands of the same root are kept: two newer revs push the first out.
+    for _ in 0..2 {
+        change(&state, generations[1]);
+        state.archipelago_in(generations[0], &mounts, &[]).unwrap();
+    }
+    assert_eq!(state.city(generations[1], old), Err(CmdError::BuildGone));
+    assert_eq!(
+        state.city(generations[0], u32::MAX),
+        Err(CmdError::BuildGone)
+    );
+    assert_eq!(state.city(generations[1] + 1, old), Err(CmdError::StaleId));
 }
 
 /// One island, or two (the second always on its ray from the first), already face where they
@@ -298,10 +324,7 @@ fn a_change_meanwhile_does_not_deadlock() {
         std::thread::spawn(move || {
             for _ in 0..200 {
                 // A new rev, so every layout builds this island again.
-                state.change_tree(changed, |tree| {
-                    tree.rev += 1;
-                    Some(())
-                });
+                change(&state, changed);
                 std::thread::sleep(std::time::Duration::from_millis(2));
             }
             done.send(()).unwrap();

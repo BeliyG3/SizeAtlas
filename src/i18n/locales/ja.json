@@ -51,6 +51,7 @@
   "error.Protected": "削除されませんでした: SizeAtlas が削除しないものが含まれているか、すでにクリーンアップ対象ではありません。一覧を更新してください。",
   "error.LastCopy": "何も移動されませんでした: システムフォルダー以外にコピーが残らないか、コピーが同じファイルです。",
   "error.Cancelled": "キャンセルしました。",
+  "error.BuildGone": "読み込み中に都市マップが変更されました。",
   "error.Io": "{path}: {osMessage}",
   "banner.access_other": "{folders} 個のフォルダーを読み取れませんでした。",
   "banner.hintWindows": "これらを含めるには、SizeAtlas を管理者として実行してください。",

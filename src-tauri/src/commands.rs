@@ -175,16 +175,16 @@ pub async fn get_treemap(
     Ok(tauri::ipc::Response::new(bytes))
 }
 
-/// Raw bytes of the whole root's island map (format in `sizeatlas_core::city`).
+/// Raw bytes of the island `build` of the whole root, as `get_archipelago` named it (format in
+/// `sizeatlas_core::city`); `BuildGone` once a newer layout replaced it.
 #[tauri::command]
 pub async fn get_city(
-    app: AppHandle,
     state: State<'_, AppState>,
     generation: u64,
+    build: u32,
 ) -> Result<tauri::ipc::Response, CmdError> {
     let state = state.inner().clone();
-    let dir = roots::cache_dir(&app)?;
-    let bytes = tauri::async_runtime::spawn_blocking(move || state.city(generation, &dir))
+    let bytes = tauri::async_runtime::spawn_blocking(move || state.city(generation, build))
         .await
         .map_err(CmdError::from)??;
     Ok(tauri::ipc::Response::new(bytes))

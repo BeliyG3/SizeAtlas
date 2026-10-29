@@ -59,6 +59,7 @@
   "error.Protected": "לא נמחק: יש כאן משהו ש-SizeAtlas לעולם לא מוחק, או שהוא כבר אינו פריט לניקוי. רעננו את הרשימה.",
   "error.LastCopy": "לא הועבר דבר: לא יישאר אף עותק מחוץ לתיקיות המערכת, או שהעותקים הם אותו קובץ.",
   "error.Cancelled": "בוטל.",
+  "error.BuildGone": "מפת העיר השתנתה בזמן הטעינה.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "לא ניתן היה לקרוא {folders} תיקייה.",
   "banner.access_two": "לא ניתן היה לקרוא {folders} תיקיות.",

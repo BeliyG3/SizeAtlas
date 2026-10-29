@@ -63,6 +63,7 @@
   "error.Protected": "Nie usunięto: element zawiera coś, czego SizeAtlas nigdy nie usuwa, lub nie nadaje się już do wyczyszczenia. Odśwież listę.",
   "error.LastCopy": "Nic nie zostało przeniesione: poza folderami systemowymi nie zostałaby żadna kopia albo kopie to ten sam plik.",
   "error.Cancelled": "Anulowano.",
+  "error.BuildGone": "Mapa miasta zmieniła się podczas wczytywania.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_one": "Nie udało się odczytać {folders} folderu.",
   "banner.access_few": "Nie udało się odczytać {folders} folderów.",

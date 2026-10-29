@@ -59,6 +59,7 @@
   "error.Protected": "Non supprimé : l’élément contient quelque chose que SizeAtlas ne supprime jamais, ou ne fait plus partie du nettoyage. Actualisez la liste.",
   "error.LastCopy": "Rien n’a été déplacé : aucune copie ne resterait en dehors des dossiers système, ou les copies sont le même fichier.",
   "error.Cancelled": "Annulé.",
+  "error.BuildGone": "La carte de la ville a changé pendant son chargement.",
   "error.Io": "{path} : {osMessage}",
   "banner.access_one": "{folders} dossier n’a pas pu être lu.",
   "banner.access_many": "{folders} de dossiers n’ont pas pu être lus.",

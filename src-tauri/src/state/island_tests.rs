@@ -129,13 +129,13 @@ fn city_answers_from_memory_for_the_same_key() {
     let generation = state.install_tree(tree_in(dir.path()));
     // The free space given: a real disk's changes while other tests write their files.
     let disks = [(path_of(&dir), GIB)];
-    let first = state.city_in(generation, &[], &disks).unwrap();
-    let second = state.city_in(generation, &[], &disks).unwrap();
+    let first = state.archipelago_in(generation, &[], &disks).unwrap();
+    let second = state.archipelago_in(generation, &[], &disks).unwrap();
     assert_eq!(first, second);
     assert_eq!(state.0.city.builds.load(Ordering::Relaxed), 1);
     // Another generation (here another root) is another key.
     let other = state.install_tree(tree_in(&dir.path().join("sub")));
-    state.city_in(other, &[], &disks).unwrap();
+    state.archipelago_in(other, &[], &disks).unwrap();
     assert_eq!(state.0.city.builds.load(Ordering::Relaxed), 2);
 }
 
@@ -144,15 +144,9 @@ fn city_keeps_stale_id_for_another_generation() {
     let (dir, cache) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let state = AppState::default();
     let generation = state.install_tree(tree_in(dir.path()));
-    assert_eq!(
-        state.city(generation + 1, cache.path()),
-        Err(CmdError::StaleId)
-    );
-    state.city(generation, cache.path()).unwrap();
-    assert_eq!(
-        state.city(generation + 1, cache.path()),
-        Err(CmdError::StaleId)
-    );
+    assert_eq!(state.city(generation + 1, 1), Err(CmdError::StaleId));
+    state.archipelago(generation, cache.path()).unwrap();
+    assert_eq!(state.city(generation + 1, 1), Err(CmdError::StaleId));
 }
 
 #[test]
@@ -166,15 +160,16 @@ fn city_neighbours_are_open_drives() {
     let ga = state.install_tree(tree_in(a.path()));
     let gb = state.install_tree(tree_in(b.path()));
     let mounts = vec![path_of(&a), path_of(&b), path_of(&c)];
-    state.city_in(ga, &mounts, &[]).unwrap();
+    state.archipelago_in(ga, &mounts, &[]).unwrap();
     assert_eq!(gates_of(&state, ga), [vec![0]]);
-    // Saved scans are not read at all (`city_in` has no cache dir); an open folder adds no gate.
+    // Saved scans are not read at all (`archipelago_in` has no cache dir); an open folder adds no
+    // gate.
     let folder = state.install_tree(tree_in(&a.path().join("sub")));
-    state.city_in(ga, &mounts, &[]).unwrap();
+    state.archipelago_in(ga, &mounts, &[]).unwrap();
     assert_eq!(gates_of(&state, ga), [vec![0]]);
-    state.city_in(gb, &mounts, &[]).unwrap();
+    state.archipelago_in(gb, &mounts, &[]).unwrap();
     assert_eq!(gates_of(&state, gb), [vec![0]]);
-    state.city_in(folder, &mounts, &[]).unwrap();
+    state.archipelago_in(folder, &mounts, &[]).unwrap();
     assert!(gates_of(&state, folder).is_empty());
 }
 
@@ -184,10 +179,12 @@ fn city_alone_without_gates() {
     let state = AppState::default();
     let generation = state.install_tree(tree_in(dir.path()));
     // A folder, not a drive.
-    state.city(generation, cache.path()).unwrap();
+    state.archipelago(generation, cache.path()).unwrap();
     assert!(gates_of(&state, generation).is_empty());
     // The only open drive.
-    state.city_in(generation, &[path_of(&dir)], &[]).unwrap();
+    state
+        .archipelago_in(generation, &[path_of(&dir)], &[])
+        .unwrap();
     assert!(gates_of(&state, generation).is_empty());
 }
 
@@ -199,7 +196,7 @@ fn cache_keeps_every_member() {
     let gb = state.install_tree(tree_in(b.path()));
     let mounts = vec![path_of(&a), path_of(&b)];
     for generation in [ga, gb, ga] {
-        state.city_in(generation, &mounts, &[]).unwrap();
+        state.archipelago_in(generation, &mounts, &[]).unwrap();
     }
     assert_eq!(state.0.city.builds.load(Ordering::Relaxed), 2);
     assert!(state.0.city.island(gb).is_some());
@@ -212,10 +209,10 @@ fn cache_drops_closed_roots() {
     let ga = state.install_tree(tree_in(a.path()));
     let gb = state.install_tree(tree_in(b.path()));
     let mounts = vec![path_of(&a), path_of(&b)];
-    state.city_in(ga, &mounts, &[]).unwrap();
-    state.city_in(gb, &mounts, &[]).unwrap();
+    state.archipelago_in(ga, &mounts, &[]).unwrap();
+    state.archipelago_in(gb, &mounts, &[]).unwrap();
     assert!(state.close_path(&path_of(&a)));
-    state.city_in(gb, &mounts, &[]).unwrap();
+    state.archipelago_in(gb, &mounts, &[]).unwrap();
     assert!(state.0.city.island(ga).is_none());
     assert!(state.0.city.island(gb).is_some());
 }
@@ -227,7 +224,7 @@ fn city_notices_free_space_of_a_folder() {
     let generation = state.install_tree(tree_in(dir.path()));
     for free in [10 * GIB, 20 * GIB, 20 * GIB] {
         let disks = [(path_of(&dir), free)];
-        state.city_in(generation, &[], &disks).unwrap();
+        state.archipelago_in(generation, &[], &disks).unwrap();
     }
     assert_eq!(state.0.city.builds.load(Ordering::Relaxed), 2);
 }
@@ -259,7 +256,7 @@ fn a_new_layout_gives_an_island_a_new_build_while_its_rev_stays() {
     assert_ne!(before.build, after.build);
     assert_ne!(two.islands[0].build, two.islands[1].build);
     for island in &two.islands {
-        let bytes = state.city_in(island.generation, &mounts, &[]).unwrap();
+        let bytes = state.city(island.generation, island.build).unwrap();
         assert_eq!(build_in(&bytes), island.build);
     }
 }

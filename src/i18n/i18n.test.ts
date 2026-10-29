@@ -93,6 +93,7 @@ describe("locales", () => {
       "Protected",
       "LastCopy",
       "Cancelled",
+      "BuildGone",
       "Io",
     ])
       expect(en).toHaveProperty([`error.${code}`]);

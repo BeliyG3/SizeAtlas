@@ -51,6 +51,7 @@
   "error.Protected": "Tidak dihapus: item ini berisi data yang tidak pernah dihapus oleh SizeAtlas, atau tidak lagi memenuhi syarat untuk dibersihkan. Segarkan daftar.",
   "error.LastCopy": "Tidak ada yang dipindahkan: tidak akan ada salinan yang tersisa di luar folder sistem, atau salinan tersebut adalah file yang sama.",
   "error.Cancelled": "Dibatalkan.",
+  "error.BuildGone": "Peta kota berubah saat sedang dimuat.",
   "error.Io": "{path}: {osMessage}",
   "banner.access_other": "{folders} folder tidak dapat dibaca.",
   "banner.hintWindows": "Jalankan SizeAtlas sebagai administrator untuk menyertakannya.",

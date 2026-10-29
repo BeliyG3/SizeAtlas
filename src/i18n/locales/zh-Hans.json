@@ -51,6 +51,7 @@
   "error.Protected": "未删除：其中有 SizeAtlas 从不删除的内容，或它已不再是清理项目。请刷新列表。",
   "error.LastCopy": "未移动任何内容：系统文件夹之外不会留下任何副本，或者这些副本是同一个文件。",
   "error.Cancelled": "已取消。",
+  "error.BuildGone": "城市地图在加载时发生了变化。",
   "error.Io": "{path}：{osMessage}",
   "banner.access_other": "有 {folders} 个文件夹无法读取。",
   "banner.hintWindows": "以管理员身份运行 SizeAtlas 即可包含这些文件夹。",
