@@ -1,6 +1,8 @@
 import { buildWorld, type World } from "../world/buildings";
 import { POLY, ROAD, type MapEdge, type Poly } from "../world/map";
 import { mapOf } from "../world/map.fixture";
+import { deckLift } from "../world/bridgeChains";
+import { RAMP, rampedEdges } from "../world/bridgeRamps";
 import { buildRoads, type RoadGraph } from "../world/roads";
 import { createSolids, type Solids } from "./solids";
 
@@ -58,6 +60,48 @@ export function canalWorld(houses: House[] = []): {
   );
   const world = buildWorld(map, null);
   world.buildings.forEach((b, i) => (b.h = houses[i].h));
+  const roads = buildRoads(map);
+  return { world, roads, solids: createSolids(world, roads) };
+}
+
+/**
+ * Two 100 × 100 m islands (x 0…100 and 240…340) with the sea between, joined by a bridge between
+ * their gates at (100, 50) and (240, 50): it climbs from the gate to the deck of level 0 over
+ * its first run, `climb` metres long, and comes down over its last 40 m, as the archipelago
+ * lifts its bridges. A highway on each island leads to its gate. For tests.
+ */
+export function bridgeWorld(climb = RAMP): { world: World; roads: RoadGraph; solids: Solids } {
+  // Nodes: the island roads' ends, the gates (1, 2), then the bridge's turns (4, 5).
+  const nodes = [60, 50, 100, 50, 240, 50, 280, 50, 100 + climb, 50, 200, 50];
+  const ground = (a: number, b: number): MapEdge => ({
+    a,
+    b,
+    cls: ROAD.highway,
+    bridge: false,
+    liftA: 0,
+    liftB: 0,
+  });
+  const runs = [
+    [1, 4],
+    [4, 5],
+    [5, 2],
+  ].map(([a, b]) => ({ a, b, deck: deckLift(0) }));
+  const deck = rampedEdges(
+    runs,
+    (n) => [nodes[n * 2], nodes[n * 2 + 1]],
+    (n) => n === 1 || n === 2,
+    (x, z) => nodes.push(x, z) / 2 - 1,
+  );
+  const map = mapOf(
+    [rect(POLY.island, 1, 0, 0, 100, 100), rect(POLY.island, 2, 240, 0, 100, 100)],
+    {
+      width: 340,
+      height: 100,
+      nodes: new Float32Array(nodes),
+      edges: [ground(0, 1), ground(2, 3), ...deck],
+    },
+  );
+  const world = buildWorld(map, null);
   const roads = buildRoads(map);
   return { world, roads, solids: createSolids(world, roads) };
 }

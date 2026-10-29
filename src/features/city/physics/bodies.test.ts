@@ -6,12 +6,18 @@ import {
   CAR_RADIUS,
   PERSON_DISCS,
   PERSON_RADIUS,
+  SLIDE_DRAG,
+  CAR_SLOPE,
+  HEADROOM,
   collideBodies,
+  collideStatic,
   moveBody,
   type Body,
 } from "./bodies";
+import { deckLift } from "../world/bridgeChains";
+import { BRIDGE_RISE } from "../world/map";
 import type { Solids } from "./solids";
-import { canalWorld, type House } from "./world.fixture";
+import { bridgeWorld, canalWorld, type House } from "./world.fixture";
 
 const DT = 1 / 60;
 /** The step a person walks up; the walking (task 5) owns its value. */
@@ -56,13 +62,32 @@ function centres(b: Body): [number, number][] {
 }
 
 /** Runs `steps` steps of `b` against `solids`; `each` sees every step. Returns the hardest hit. */
-function run(b: Body, solids: Solids, steps: number, climb: number, each = () => {}): number {
+function run(b: Body, solids: Solids, steps: number, each = () => {}, slope = slopeOf(b)): number {
+  const climb = b.discs === CAR_DISCS ? CAR_CLIMB : STEP;
   let hit = 0;
   for (let i = 0; i < steps; i++) {
-    hit = Math.max(hit, moveBody(b, DT, solids, climb));
+    hit = Math.max(hit, moveBody(b, DT, solids, climb, slope));
     each();
   }
   return hit;
+}
+
+function slopeOf(b: Body): number {
+  return b.discs === CAR_DISCS ? CAR_SLOPE : 0;
+}
+
+/** Runs a car on the ground: its height follows what it stands on. */
+function drive(c: Body, solids: Solids, steps: number, each = () => {}, slope = slopeOf(c)) {
+  run(
+    c,
+    solids,
+    steps,
+    () => {
+      c.y = solids.heightAt(c.x, c.z, c.y + CAR_CLIMB);
+      each();
+    },
+    slope,
+  );
 }
 
 describe("collideStatic", () => {
@@ -74,7 +99,7 @@ describe("collideStatic", () => {
     const c = car(30 - 2 - 1.4 - CAR_RADIUS, 20, EAST, 30);
     let before = 0;
     let after = 0;
-    const hit = run(c, solids, 60, CAR_CLIMB, () => {
+    const hit = run(c, solids, 60, () => {
       for (const [x, z] of centres(c)) expect(solids.roofAt(x, z)).toBeNull();
       if (c.vx > 0) before = c.vx;
       else after = after || -c.vx;
@@ -88,7 +113,7 @@ describe("collideStatic", () => {
   it.each([1, 0.2])("a car at 38 m/s does not pass through a house %f m thick", (w) => {
     const { solids } = canalWorld([wall(w)]);
     const c = car(20, 20, EAST, 38);
-    run(c, solids, 60, CAR_CLIMB, () => {
+    run(c, solids, 60, () => {
       for (const [x, z] of centres(c)) {
         expect(solids.roofAt(x, z)).toBeNull();
         expect(x).toBeLessThan(30);
@@ -100,14 +125,14 @@ describe("collideStatic", () => {
     const { solids } = canalWorld([wall(0.2)]);
     const p = person(25, 20);
     p.vx = 38;
-    run(p, solids, 60, STEP, () => expect(p.x).toBeLessThan(30));
+    run(p, solids, 60, () => expect(p.x).toBeLessThan(30));
   });
 
   it("a person walking into a wall slides along it", () => {
     const { solids } = canalWorld([wall(10)]);
     const p = person(30 - PERSON_RADIUS - 0.01, 10);
     const speed = 2;
-    run(p, solids, 30, STEP, () => {
+    run(p, solids, 30, () => {
       expect(solids.roofAt(p.x, p.z)).toBeNull();
       // The walking sets the speed again every step.
       p.vx = speed;
@@ -125,7 +150,7 @@ describe("collideStatic", () => {
     const high = person(29, 30);
     for (const p of [low, high]) {
       p.vx = 1.4;
-      run(p, solids, 60, STEP);
+      run(p, solids, 60);
     }
     expect(low.x).toBeGreaterThan(30);
     expect(high.x).toBeLessThan(30);
@@ -136,19 +161,71 @@ describe("collideStatic", () => {
     const { solids } = canalWorld();
     const ground = car(80, 80, EAST, 15);
     const flying = { ...car(80, 80, EAST, 15), y: 5, flying: true };
-    run(ground, solids, 180, CAR_CLIMB, () => {
+    run(ground, solids, 180, () => {
       for (const [x, z] of centres(ground)) expect(solids.isWater(x, z)).toBe(false);
     });
-    run(flying, solids, 180, CAR_CLIMB);
+    run(flying, solids, 180);
     expect(ground.x).toBeLessThan(90);
     expect(flying.x).toBeGreaterThan(110);
   });
 
-  it("a car drives onto the canal bridge and under nothing", () => {
+  it("a car drives onto the canal bridge", () => {
     const { solids } = canalWorld();
     const c = car(70, 50, EAST, 10);
-    run(c, solids, 120, CAR_CLIMB, () => (c.y = solids.heightAt(c.x, c.z, c.y + CAR_CLIMB)));
+    drive(c, solids, 120);
     expect(c.x).toBeGreaterThan(85);
+    expect(c.y).toBeCloseTo(BRIDGE_RISE);
+  });
+
+  it("a car at 10 m/s drives up an island bridge and across to the other island", () => {
+    const { solids } = bridgeWorld();
+    const c = car(70, 50, EAST, 10);
+    let top = 0;
+    drive(c, solids, 20 * 60, () => {
+      expect(solids.isWater(c.x, c.z, c.y + HEADROOM)).toBe(false);
+      top = Math.max(top, c.y);
+    });
+    expect(c.x).toBeGreaterThan(260);
+    expect(top).toBeCloseTo(deckLift(0));
+    expect(c.vx).toBeCloseTo(10);
+  });
+
+  it("a car follows a ramp steeper than its climb over its length; a kerb as high stops it", () => {
+    // 1 m to 8 m over 17.5 m: 0.4 m a metre, 1 m from the middle of the car to its nose.
+    const { solids } = bridgeWorld(17.5);
+    const up = car(70, 50, EAST, 10);
+    drive(up, solids, 6 * 60);
+    expect(up.x).toBeGreaterThan(125);
+    const stuck = car(70, 50, EAST, 10);
+    drive(stuck, solids, 6 * 60, () => {}, 0);
+    expect(stuck.x).toBeLessThan(110);
+    // A step of 1 m (a house that low) is no ramp.
+    const kerb = canalWorld([{ x: 30, z: 0, w: 10, d: 40, h: 1 }]);
+    const c = car(20, 20, EAST, 10);
+    drive(c, kerb.solids, 120);
+    expect(c.x).toBeLessThan(30 - 1.4);
+  });
+
+  it("a body inside a house backs out the way it came", () => {
+    const { solids } = canalWorld([wall(10)]);
+    const p = person(35, 20);
+    p.vx = 1;
+    expect(collideStatic(p, solids, STEP, DT)).toBeCloseTo(1);
+    expect(p.x).toBeLessThan(35);
+    expect(p.vx).toBeLessThan(0);
+  });
+
+  it("the drag along a wall is the same at any speed", () => {
+    const { solids } = canalWorld([wall(10)]);
+    const kept = [1, 40].map((speed) => {
+      const p = person(30 - PERSON_RADIUS + 0.01, 10);
+      p.vx = 0.5;
+      p.vz = speed;
+      moveBody(p, DT, solids, STEP);
+      return p.vz / speed;
+    });
+    expect(kept[0]).toBeCloseTo(Math.exp(-SLIDE_DRAG * DT));
+    expect(kept[1]).toBeCloseTo(kept[0]);
   });
 });
 

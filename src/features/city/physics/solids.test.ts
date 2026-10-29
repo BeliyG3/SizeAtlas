@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { deckLift } from "../world/bridgeChains";
+import { RAMP } from "../world/bridgeRamps";
 import { buildWorld } from "../world/buildings";
 import { BRIDGE_RISE, POLY, ROAD } from "../world/map";
 import { mapOf, square } from "../world/map.fixture";
 import { buildRoads } from "../world/roads";
 import { createSolids } from "./solids";
-import { canalWorld } from "./world.fixture";
+import { HEADROOM } from "./bodies";
+import { bridgeWorld, canalWorld } from "./world.fixture";
 
 describe("createSolids", () => {
   const { solids } = canalWorld([
@@ -28,12 +31,29 @@ describe("createSolids", () => {
     expect(solids.heightAt(100, 80)).toBe(0);
   });
 
-  it("the deck comes down to the ground at the ends that meet the street", () => {
-    expect(solids.heightAt(80, 50)).toBe(0);
-    expect(solids.heightAt(76, 50)).toBe(0);
-    const up = [80, 82, 84, 86, 88].map((x) => solids.heightAt(x, 50));
-    for (let i = 1; i < up.length; i++) expect(up[i]).toBeGreaterThan(up[i - 1]);
-    expect(solids.heightAt(88, 50)).toBeCloseTo(BRIDGE_RISE);
+  it("the deck is the drawn one; its end on the street slopes up to it", () => {
+    for (const x of [80, 90, 100, 120]) expect(solids.heightAt(x, 50)).toBeCloseTo(BRIDGE_RISE);
+    // The deck reaches 5 m (half the street) past its node at x = 80.
+    expect(solids.heightAt(75, 50)).toBe(0);
+    expect(solids.heightAt(77.5, 50)).toBeCloseTo(BRIDGE_RISE / 2);
+    expect(solids.heightAt(74, 50)).toBe(0);
+  });
+
+  it("an island bridge stands on its edges' lifts, ramps and all", () => {
+    const { solids: s, roads } = bridgeWorld();
+    const ramp = roads.edges.find((e) => e.bridge && e.liftA === BRIDGE_RISE)!;
+    expect(ramp.liftB).toBe(deckLift(0));
+    expect(s.heightAt(100, 50)).toBeCloseTo(BRIDGE_RISE);
+    expect(s.heightAt(100 + RAMP / 2, 50)).toBeCloseTo((BRIDGE_RISE + deckLift(0)) / 2);
+    expect(s.heightAt(170, 50)).toBeCloseTo(deckLift(0));
+  });
+
+  it("the sea under a high deck is water to a body under it, not to one on it", () => {
+    const { solids: s } = bridgeWorld();
+    expect(s.isWater(170, 50, 0 + HEADROOM)).toBe(true);
+    expect(s.isWater(170, 50, deckLift(0) + HEADROOM)).toBe(false);
+    expect(s.isWater(170, 50)).toBe(false);
+    expect(s.isWater(170, 70, deckLift(0) + HEADROOM)).toBe(true);
   });
 
   it("a deck over the body's top passes overhead", () => {

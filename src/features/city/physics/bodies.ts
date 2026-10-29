@@ -32,52 +32,95 @@ export const CAR_RADIUS = 1.2;
 /** A car drives up anything this high over its wheels; higher is a wall. */
 export const CAR_CLIMB = 0.6;
 
+/** A car follows a continuous rise up to this steep, metres per metre: ramps, deck ends. */
+export const CAR_SLOPE = 0.5;
+
 /** A step moves a body in parts no longer than this (and than its radius), so it cannot pass a thin wall. */
 export const MAX_STEP_MOVE = 0.5;
 /** What is left of the speed into a wall or another body after the hit, the other way. */
 export const BOUNCE = 0.3;
-/** What is left of the speed along a wall after a hit. */
-export const SLIDE_KEEP = 0.9;
+/** The speed along a wall a body is pressed to falls by this part a second (about 0.1 a step at 60 Hz). */
+export const SLIDE_DRAG = 6;
 /** A surface higher than this over a body passes overhead: a bridge deck above. */
 export const HEADROOM = 2;
 
-/** Points around a disc's rim that probe the world. */
+/** Points around a disc's rim that probe the world, then its centre (no direction). */
 const RIM = 12;
-const RIM_X = Float64Array.from({ length: RIM }, (_, i) => Math.cos((i * 2 * Math.PI) / RIM));
-const RIM_Z = Float64Array.from({ length: RIM }, (_, i) => Math.sin((i * 2 * Math.PI) / RIM));
+const PROBES = RIM + 1;
+const PROBE_X = Float64Array.from({ length: PROBES }, (_, i) =>
+  i < RIM ? Math.cos((i * 2 * Math.PI) / RIM) : 0,
+);
+const PROBE_Z = Float64Array.from({ length: PROBES }, (_, i) =>
+  i < RIM ? Math.sin((i * 2 * Math.PI) / RIM) : 0,
+);
 /** A push out of a wall moves the body this part of its radius, at most this many times. */
 const PUSH = 1 / 8;
 const PUSHES = 8;
+/** A rise is walked from the body's centre out to a probe in steps this long, metres. */
+const TRACE = 0.3;
 
-function blocked(b: Body, s: Solids, climb: number, x: number, z: number): boolean {
-  return s.heightAt(x, z, b.y + HEADROOM) > b.y + climb || (!b.flying && s.isWater(x, z));
+/**
+ * Whether the probe (x, z) stops `b`: water (unless it flies), or a rise over `climb` that is
+ * not a ramp, one the body can follow from its centre with no step over `climb` on the way
+ * and no steeper than `slope` overall.
+ */
+function blocked(b: Body, s: Solids, climb: number, slope: number, x: number, z: number): boolean {
+  const top = b.y + HEADROOM;
+  if (!b.flying && s.isWater(x, z, top)) return true;
+  const rise = s.heightAt(x, z, top) - b.y;
+  if (rise <= climb) return false;
+  const dx = x - b.x;
+  const dz = z - b.z;
+  const d = Math.hypot(dx, dz);
+  if (rise > climb + slope * d) return true;
+  const steps = Math.ceil(d / TRACE);
+  let prev = b.y;
+  for (let i = 1; i <= steps; i++) {
+    const h = s.heightAt(b.x + (dx * i) / steps, b.z + (dz * i) / steps, top);
+    if (h - prev > climb) return true;
+    prev = h;
+  }
+  return false;
 }
 
 /**
- * Pushes `b` out of the walls (anything higher than `climb` over it) and, unless it flies, out of
- * the water; its speed into the wall bounces back `BOUNCE` of itself and that along it keeps
- * `SLIDE_KEEP`. Returns the hit: the speed into the wall before it, m/s (0 for none).
+ * Pushes `b` out of the walls (see `blocked`; `slope` 0: any rise over `climb` is a wall) and,
+ * unless it flies, out of the water; its speed into the wall bounces back `BOUNCE` of itself,
+ * that along it loses `SLIDE_DRAG` a second over `dt`. Returns the hit: the speed into the wall
+ * before it, m/s (0 for none).
  */
-export function collideStatic(b: Body, s: Solids, climb: number): number {
+export function collideStatic(b: Body, s: Solids, climb: number, dt: number, slope = 0): number {
   let impact = 0;
+  const keep = Math.exp(-SLIDE_DRAG * dt);
+  // The way it came, before any bounce here.
+  const backX = -b.vx;
+  const backZ = -b.vz;
   for (let push = 0; push < PUSHES; push++) {
     let px = 0;
     let pz = 0;
+    let hits = 0;
     const sin = Math.sin(b.yaw);
     const cos = Math.cos(b.yaw);
     for (let k = 0; k < b.discs.length; k++) {
       const cx = b.x + sin * b.discs[k];
       const cz = b.z + cos * b.discs[k];
-      for (let i = 0; i < RIM; i++) {
-        if (blocked(b, s, climb, cx + RIM_X[i] * b.radius, cz + RIM_Z[i] * b.radius)) {
-          px -= RIM_X[i];
-          pz -= RIM_Z[i];
+      for (let i = 0; i < PROBES; i++) {
+        if (blocked(b, s, climb, slope, cx + PROBE_X[i] * b.radius, cz + PROBE_Z[i] * b.radius)) {
+          px -= PROBE_X[i];
+          pz -= PROBE_Z[i];
+          hits++;
         }
       }
     }
-    const len = Math.hypot(px, pz);
-    // Nothing in the way, or walls all round: no way out to push along.
-    if (len < 1e-9) break;
+    if (hits === 0) break;
+    let len = Math.hypot(px, pz);
+    if (len < 1e-9) {
+      // Walls on every side, or only under a centre: back the way it came.
+      px = backX;
+      pz = backZ;
+      len = Math.hypot(px, pz);
+      if (len < 1e-9) break;
+    }
     const nx = px / len;
     const nz = pz / len;
     b.x += nx * b.radius * PUSH;
@@ -87,8 +130,8 @@ export function collideStatic(b: Body, s: Solids, climb: number): number {
       impact = Math.max(impact, -vn);
       const tx = b.vx - vn * nx;
       const tz = b.vz - vn * nz;
-      b.vx = tx * SLIDE_KEEP - BOUNCE * vn * nx;
-      b.vz = tz * SLIDE_KEEP - BOUNCE * vn * nz;
+      b.vx = tx * keep - BOUNCE * vn * nx;
+      b.vz = tz * keep - BOUNCE * vn * nz;
     }
   }
   return impact;
@@ -96,19 +139,24 @@ export function collideStatic(b: Body, s: Solids, climb: number): number {
 
 /**
  * Moves `b` by its speed over `dt` in parts no longer than `MAX_STEP_MOVE` and its radius,
- * colliding with the world after each (see `collideStatic`). Returns the hardest hit, m/s.
+ * colliding with the world after each (see `collideStatic`; `slope` as there). A body touching a
+ * wall is in touch for the rest of the step: the slide drag counts once, over all of `dt`, so it
+ * is the same at any speed. Returns the hardest hit, m/s.
  */
-export function moveBody(b: Body, dt: number, s: Solids, climb: number): number {
+export function moveBody(b: Body, dt: number, s: Solids, climb: number, slope = 0): number {
   const parts = Math.max(
     1,
     Math.ceil((Math.hypot(b.vx, b.vz) * dt) / Math.min(MAX_STEP_MOVE, b.radius)),
   );
   const h = dt / parts;
   let impact = 0;
+  let drag = dt;
   for (let i = 0; i < parts; i++) {
     b.x += b.vx * h;
     b.z += b.vz * h;
-    impact = Math.max(impact, collideStatic(b, s, climb));
+    const hit = collideStatic(b, s, climb, drag, slope);
+    if (hit > 0) drag = 0;
+    impact = Math.max(impact, hit);
   }
   return impact;
 }
