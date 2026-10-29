@@ -8,9 +8,12 @@ export interface Box {
   max: Vec3;
 }
 
-/** The orbit controls' distance limits, metres; `frame` stays inside them. */
+/** The orbit controls' least distance, metres; `frame` keeps to it. */
 export const MIN_DISTANCE = 1;
-/** The largest island is a few kilometres across and a narrow panel backs off several times that. */
+/**
+ * Their most at first, metres. It grows to reach any frame: the largest archipelago, 14 km
+ * across, needs some 60 km in a narrow panel.
+ */
 export const MAX_DISTANCE = 30_000;
 /** Room left around a fitted box. */
 const MARGIN = 1.1;
@@ -48,7 +51,7 @@ export function frame(
     const need = dot(back) + Math.max(Math.abs(dot(right)) / tanH, Math.abs(dot(up)) / tanV);
     distance = Math.max(distance, need);
   }
-  return { target, distance: Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, distance)) };
+  return { target, distance: Math.max(MIN_DISTANCE, distance) };
 }
 
 /** The selected root on screen and the generations of the islands shown, in their order. */

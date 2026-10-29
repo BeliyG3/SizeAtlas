@@ -186,6 +186,8 @@ function setUp(
     lost: () => lost,
     fit(box, polar, azimuth) {
       const { target, distance } = frame(box, FOV, camera.aspect, polar, azimuth);
+      // The camera can back off as far as a frame took it: the far plane follows the distance.
+      controls.maxDistance = Math.max(controls.maxDistance, distance);
       const to = new Vector3(...target);
       return { to, from: new Vector3().setFromSphericalCoords(distance, polar, azimuth).add(to) };
     },

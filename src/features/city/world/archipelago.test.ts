@@ -28,7 +28,6 @@ function island(generation: number): CityMap {
 }
 
 const part = (generation: number, x: number, z: number): IslandPart => ({
-  generation,
   map: island(generation),
   x,
   z,
@@ -65,7 +64,7 @@ function connected(map: CityMap, from: number, to: number): boolean {
 describe("mergeIslands", () => {
   it("leaves a single island as it is", () => {
     const one = island(3);
-    const merged = mergeIslands([{ generation: 3, map: one, x: 0, z: 0 }], []);
+    const merged = mergeIslands([{ map: one, x: 0, z: 0 }], []);
     expect(merged.generation).toBe(3);
     expect(merged.rev).toBe(13);
     expect([merged.width, merged.height]).toEqual([100, 100]);

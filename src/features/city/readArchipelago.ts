@@ -52,11 +52,6 @@ export async function readArchipelago(selected: number, cache: IslandCache) {
     if (!isCmdError(e) || e.code !== "BuildGone") throw e;
     return readOnce(selected, cache);
   });
-  const parts = islands.map((island, i) => ({
-    generation: island.generation,
-    map: maps[i],
-    x: island.x,
-    z: island.z,
-  }));
+  const parts = islands.map((island, i) => ({ map: maps[i], x: island.x, z: island.z }));
   return { map: mergeIslands(parts, bridges), islands };
 }

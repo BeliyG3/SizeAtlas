@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cameraMove, frame, MAX_DISTANCE, MIN_DISTANCE, type Box } from "./frame";
+import { cameraMove, frame, MIN_DISTANCE, type Box, type Vec3 } from "./frame";
 
 const ground: Box = { min: [0, 0, 0], max: [100, 0, 100] };
 
@@ -36,12 +36,36 @@ describe("frame", () => {
     const island: Box = { min: [0, 0, 0], max: [4000, 160, 4000] };
     const { distance } = frame(island, 45, 300 / 900, (55 * Math.PI) / 180);
     expect(distance).toBeGreaterThan(4000);
-    expect(distance).toBeLessThan(MAX_DISTANCE);
   });
 
-  it("clamps to the distance limits", () => {
+  it("puts every corner of the largest archipelago in a narrow panel", () => {
+    // 14 km across, the scene's fov 45, at the reset polar 55° and turned half way round.
+    const world: Box = { min: [0, 0, 0], max: [13_500, 160, 13_500] };
+    const [fov, aspect, polar] = [45, 0.4, (55 * Math.PI) / 180];
+    for (const azimuth of [0, Math.PI / 4]) {
+      const { target, distance } = frame(world, fov, aspect, polar, azimuth);
+      const sp = Math.sin(polar);
+      const back: Vec3 = [sp * Math.sin(azimuth), Math.cos(polar), sp * Math.cos(azimuth)];
+      const right: Vec3 = [Math.cos(azimuth), 0, -Math.sin(azimuth)];
+      const up: Vec3 = [
+        back[1] * right[2] - back[2] * right[1],
+        back[2] * right[0] - back[0] * right[2],
+        back[0] * right[1] - back[1] * right[0],
+      ];
+      const eye = target.map((t, i) => t + distance * back[i]);
+      const tanV = Math.tan((fov * Math.PI) / 360);
+      for (let corner = 0; corner < 8; corner++) {
+        const p = [0, 1, 2].map((i) => ((corner >> i) & 1 ? world.max : world.min)[i] - eye[i]);
+        const dot = (v: Vec3) => p[0] * v[0] + p[1] * v[1] + p[2] * v[2];
+        const depth = -dot(back);
+        expect(Math.abs(dot(right)) / depth).toBeLessThanOrEqual(tanV * aspect + 1e-9);
+        expect(Math.abs(dot(up)) / depth).toBeLessThanOrEqual(tanV + 1e-9);
+      }
+    }
+  });
+
+  it("keeps to the least distance", () => {
     expect(frame({ min: [0, 0, 0], max: [0.1, 0.1, 0.1] }, 60, 1, 1).distance).toBe(MIN_DISTANCE);
-    expect(frame({ min: [0, 0, 0], max: [1e6, 0, 1e6] }, 60, 1, 1).distance).toBe(MAX_DISTANCE);
   });
 });
 

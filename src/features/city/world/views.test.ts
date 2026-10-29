@@ -19,8 +19,8 @@ const island = (generation: number) =>
 const world = buildWorld(
   mergeIslands(
     [
-      { generation: 1, map: island(1), x: 0, z: 0 },
-      { generation: 2, map: island(2), x: 300, z: 0 },
+      { map: island(1), x: 0, z: 0 },
+      { map: island(2), x: 300, z: 0 },
     ],
     [],
   ),

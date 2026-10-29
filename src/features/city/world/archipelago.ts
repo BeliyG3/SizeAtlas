@@ -10,7 +10,6 @@ export { deckLift } from "./bridgeChains";
 
 /** One island's map and where it lies: `(x, z)` is added to its own coordinates. */
 export interface IslandPart {
-  generation: number;
   map: CityMap;
   x: number;
   z: number;
@@ -25,8 +24,9 @@ export interface IslandPart {
  * island, then the nodes of the bridges; the edges and the gates of an island keep their order,
  * the bridges' edges follow. Each polygon carries its part's index as `island`.
  *
- * `generation` and `rev` are those of `parts[0]` (the caller orders the parts; the first one
- * is the one whose revision the view follows), `approximate` holds if any part is.
+ * The whole has no root of its own: its `generation` and `rev` are copied from the first part's
+ * map and its `build` is 0 (each island's are in the archipelago's list); `approximate` holds if
+ * any part is.
  */
 export function mergeIslands(parts: IslandPart[], allBridges: ArchipelagoBridge[]): CityMap {
   if (parts.length === 0) throw new Error("an archipelago needs an island");
@@ -93,7 +93,7 @@ export function mergeIslands(parts: IslandPart[], allBridges: ArchipelagoBridge[
   edges.push(...chains.edges);
 
   return {
-    generation: parts[0].generation,
+    generation: parts[0].map.generation,
     rev: parts[0].map.rev,
     build: 0,
     approximate: parts.some((p) => p.map.approximate),

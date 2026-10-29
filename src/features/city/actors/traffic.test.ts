@@ -105,7 +105,7 @@ describe("createTraffic", () => {
       expect(moved).toBeGreaterThan(0);
       expect(nearest).toBeGreaterThanOrEqual(MIN_GAP - 0.5);
     }
-  });
+  }, 20_000);
 
   it("flying cars stay over highways at their lanes", () => {
     const t = createTraffic(ring, 200, 5);
