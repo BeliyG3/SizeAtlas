@@ -47,6 +47,8 @@ export const HEADROOM = 2;
 /** Points around a disc's rim that probe the world, then its centre (no direction). */
 const RIM = 12;
 const PROBES = RIM + 1;
+// A rise of exactly the climb limit (0.6 over a 1 m hover onto a 1.6 m roof) is no wall: float slack.
+const EPS = 1e-6;
 const PROBE_X = Float64Array.from({ length: PROBES }, (_, i) =>
   i < RIM ? Math.cos((i * 2 * Math.PI) / RIM) : 0,
 );
@@ -76,7 +78,7 @@ function blocked(
   const top = b.y + HEADROOM;
   if (!b.flying && s.isWater(x, z, top)) return true;
   const rise = s.heightAt(x, z, top) - base;
-  if (rise <= climb) return false;
+  if (rise <= climb + EPS) return false;
   const dx = x - b.x;
   const dz = z - b.z;
   const d = Math.hypot(dx, dz);
@@ -85,7 +87,7 @@ function blocked(
   let prev = base;
   for (let i = 1; i <= steps; i++) {
     const h = s.heightAt(b.x + (dx * i) / steps, b.z + (dz * i) / steps, top);
-    if (h - prev > climb) return true;
+    if (h - prev > climb + EPS) return true;
     prev = h;
   }
   return false;

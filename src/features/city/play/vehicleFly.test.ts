@@ -105,6 +105,28 @@ describe("flyStep", () => {
     expect(most).toBeLessThanOrEqual(0.15);
   });
 
+  it("landing as it crosses onto a low roof climbs onto it, not up in a step", () => {
+    const { solids } = canalWorld([{ x: 40, z: 40, w: 20, d: 20, h: 0.55 }]);
+    const c = flying(solids, 37, 0.4, 50, EAST, 6);
+    toggleFlight(c, solids); // landing: coming down while it drifts over the roof's edge
+    let prev = c.y;
+    let most = 0;
+    fly(c, makeActions(), solids, 4, () => {
+      most = Math.max(most, Math.abs(c.y - prev));
+      prev = c.y;
+    });
+    expect(c.flying).toBe(false);
+    expect(c.y).toBeCloseTo(0.55);
+    expect(most).toBeLessThanOrEqual(0.15);
+  });
+
+  it("hovering at 1 m flies onto a roof exactly the climb limit higher", () => {
+    const { solids } = canalWorld([{ x: 40, z: 40, w: 20, d: 20, h: HOVER + 0.6 }]);
+    const c = flying(solids, 34, HOVER, 50, EAST, 8);
+    fly(c, makeActions(), solids, 3);
+    expect(c.x).toBeGreaterThan(42); // over it, not stopped at its edge as at a wall
+  });
+
   it("off the throttle it slows down from 20 m/s and hovers with a light bob", () => {
     const { solids } = canalWorld();
     const c = flying(solids, 10, 10, 50, EAST, 20);

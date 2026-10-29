@@ -92,8 +92,8 @@ export function flyStep(c: Car, a: Actions, dt: number, s: Solids): void {
   }
   c.y = y;
   c.lift = Math.max(0, c.lift - dt);
-  if (c.landing && c.y <= g + 0.02) {
-    // Down: the driving takes over.
+  // Down (a floor that rose under it is climbed first, not jumped onto): the driving takes over.
+  if (c.landing && Math.abs(c.y - g) <= 0.02) {
     c.flying = false;
     c.landing = false;
     c.y = g;
