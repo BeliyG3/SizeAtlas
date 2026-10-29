@@ -52,7 +52,7 @@ export function startGame(
       leave();
       return;
     }
-    scene.look(actions.look);
+    scene.frame(actions);
     for (let i = 0; i < steps; i++) scene.step(actions, FIXED);
     scene.draw(alpha, dt);
   };

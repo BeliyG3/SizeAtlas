@@ -37,6 +37,8 @@ export interface World {
   /** The size of the biggest house: the one that stands `MAX_H` high. */
   tallest: number;
   bounds: Box;
+  /** The folder the view is focused on (see `focusIn`), null for none. */
+  focus: Focus | null;
   focusBox: Box | null;
 }
 
@@ -110,6 +112,7 @@ export function buildWorld(map: CityMap, focus: Focus | null): World {
     buildings,
     tallest,
     bounds,
+    focus,
     focusBox: focus === null ? null : boxOf(map, buildings, focus),
   };
 }

@@ -50,6 +50,12 @@ describe("actionsFrom", () => {
     expect(actionsFrom(NONE, NONE, still, pad({ ly: -1 })).move.y).toBe(1);
   });
 
+  it("a move is analog only when the stick alone makes it", () => {
+    expect(actionsFrom(NONE, NONE, still, pad({ ly: -1 })).analog).toBe(true);
+    expect(actionsFrom(new Set(["KeyW"]), NONE, still, pad({ ly: -1 })).analog).toBe(false);
+    expect(actionsFrom(NONE, NONE, still, pad({})).analog).toBe(false);
+  });
+
   it("triggers are throttle and brake, bumpers climb and descend", () => {
     const a = actionsFrom(NONE, NONE, still, pad({ rt: 0.6, lt: 0.3, rb: true }));
     expect(a.throttle).toBe(0.6);

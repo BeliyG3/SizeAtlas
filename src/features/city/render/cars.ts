@@ -68,6 +68,23 @@ function materials(): Record<string, Material> {
   };
 }
 
+/**
+ * One car: the model in the traffic's look, `CAR_LENGTH` long, on the ground, nose to +z, inside
+ * a group to place. It shares the model's geometry: `dispose` frees only its own materials.
+ */
+export function carModel(car: Object3D): { group: Group; dispose(): void } {
+  const looks = materials();
+  const model = car.clone(true);
+  model.traverse((o) => {
+    if (o instanceof Mesh) o.material = looks[(o.material as Material).name] ?? looks.Body;
+  });
+  const box = new Box3().setFromObject(model);
+  model.scale.multiplyScalar(CAR_LENGTH / (box.max.z - box.min.z || CAR_LENGTH));
+  const group = new Group();
+  group.add(model);
+  return { group, dispose: () => Object.values(looks).forEach((m) => m.dispose()) };
+}
+
 export function carInstances(
   car: Object3D,
   max: number,

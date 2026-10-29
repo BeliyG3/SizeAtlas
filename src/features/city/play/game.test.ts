@@ -9,7 +9,12 @@ const setFullscreen = vi.hoisted(() =>
 );
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({ setFullscreen }) }));
 
-const scene = vi.hoisted(() => ({ look: vi.fn(), step: vi.fn(), draw: vi.fn(), dispose: vi.fn() }));
+const scene = vi.hoisted(() => ({
+  frame: vi.fn(),
+  step: vi.fn(),
+  draw: vi.fn(),
+  dispose: vi.fn(),
+}));
 vi.mock("./playScene", () => ({ createPlayScene: () => scene }));
 
 // The real input, with its reset watched.

@@ -7,6 +7,8 @@ export { PAD_A, PAD_B, PAD_START, type PadState };
 export interface Actions {
   /** On foot: x right, y forward. */
   move: { x: number; y: number };
+  /** The move is the stick's alone (no keys): its tilt sets the pace. */
+  analog: boolean;
   /** Camera turn: x right, y down. */
   look: { x: number; y: number };
   throttle: number;
@@ -54,6 +56,7 @@ const PAD_LOOK_Y = 1.6;
 export function makeActions(): Actions {
   return {
     move: { x: 0, y: 0 },
+    analog: false,
     look: { x: 0, y: 0 },
     throttle: 0,
     brake: 0,
@@ -119,6 +122,7 @@ export function actionsFrom(
   }
   out.move.x = mx;
   out.move.y = my;
+  out.analog = right === 0 && fwd === 0 && (px !== 0 || py !== 0);
   out.look.x = lookX;
   out.look.y = lookY;
   out.throttle = Math.max(held(keys, "KeyW", "ArrowUp"), rt);
