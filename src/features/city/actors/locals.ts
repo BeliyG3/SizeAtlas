@@ -138,6 +138,8 @@ export function localIds(from: number, count: number): number[] {
 /** What a local's next look does with it: where a stray goes, or one moved anyway. */
 const TASK = { ring: 0, disc: 1, rim: 2 } as const;
 type Task = (typeof TASK)[keyof typeof TASK];
+/** Where a local that shrinks away goes. */
+const GOING = { no: 0, rim: 1, off: 2 } as const;
 
 /**
  * The locals of a crowd of `n`: the movers `ids` keep near a circle. Round the list, each is
@@ -150,9 +152,9 @@ type Task = (typeof TASK)[keyof typeof TASK];
  * away first (`appear` 1 to 0 over `FADE` seconds), as its place is still in view. A moved one
  * grows in: its `appear` goes from 0 to 1 over `APPEAR` seconds.
  *
- * The first `capped` of `ids` are no more than the `cap` an update gives: those past it leave the
- * roads (`live` 0) as they are looked at, and come back, put down in the circle, when the cap
- * lets them.
+ * The first `capped` of `ids` are no more than the `cap` an update gives: those past it shrink
+ * away as they are looked at and then leave the roads (`live` 0), and come back, put down in the
+ * circle, when the cap lets them.
  */
 export function createLocals(
   g: RoadGraph,
@@ -164,7 +166,8 @@ export function createLocals(
   const appear = new Float32Array(n).fill(1);
   const live = new Uint8Array(n).fill(1);
   const task = new Uint8Array(n).fill(TASK.disc);
-  const going = new Uint8Array(n); // 1 while it shrinks away to the rim
+  // What a local shrinking away goes to: nothing, the rim, or off the roads.
+  const going = new Uint8Array(n);
   let next = 0;
   let due = 0;
   // The circle as the locals last moved all together, its radius the least since.
@@ -223,19 +226,22 @@ export function createLocals(
         spotsOf = { ...c };
         found = new Map();
       }
-      // Gone from sight: now it moves, and grows in where it is put (or back where it was).
+      // Gone from sight: now it leaves the roads, or moves and grows in where it is put (or back
+      // where it was).
       for (const i of ids) {
         if (!going[i] || appear[i] > 0) continue;
-        going[i] = 0;
-        if (live[i]) move(i, spots[TASK.rim]);
+        if (going[i] === GOING.off) live[i] = 0;
+        else if (live[i]) move(i, spots[TASK.rim]);
+        going[i] = GOING.no;
       }
       due = Math.min(ids.length, due + (ids.length * dt) / RECHECK);
       for (; due >= 1; due--) {
         const k = next;
         const i = ids[k];
         next = (next + 1) % ids.length;
+        if (going[i]) continue; // on its way already; until it is gone it still takes its room
         if (k < capped && k >= cap) {
-          live[i] = 0;
+          if (live[i]) going[i] = GOING.off;
           continue;
         }
         if (!live[i]) {
@@ -245,7 +251,7 @@ export function createLocals(
         const kind = task[i] as Task;
         task[i] = TASK.ring;
         const stray = Math.hypot(at.x[i] - c.x, at.z[i] - c.z) > c.r;
-        if (kind === TASK.rim && !stray) going[i] = 1;
+        if (kind === TASK.rim && !stray) going[i] = GOING.rim;
         else if (stray && move(i, spots[kind])) appear[i] = 0;
       }
     },

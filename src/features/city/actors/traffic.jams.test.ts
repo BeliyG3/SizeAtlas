@@ -3,7 +3,7 @@ import { ROAD, type RoadKind } from "../world/map";
 import { mapOf } from "../world/map.fixture";
 import { buildRoads } from "../world/roads";
 import { MIN_GAP } from "./junctions";
-import type { Circle } from "./locals";
+import { FADE, type Circle } from "./locals";
 import { CAR_SPACING, createTraffic, type Traffic } from "./traffic";
 
 function graphOf(nodes: number[], edges: [number, number, RoadKind][]) {
@@ -121,6 +121,33 @@ describe("cars near the camera", () => {
     // A wider circle takes them all back.
     for (let n = 0; n < 60; n++) t.update(1 / 30, { ...near, r: 600 });
     expect(onRoads(t)).toBe(t.count);
+  });
+});
+
+describe("cars leaving the roads", () => {
+  const road = graphOf([0, 0, 5000, 0], [[0, 1, ROAD.street]]);
+
+  it("shrink away first as the view closes in", () => {
+    const t = createTraffic(road, 40, 6);
+    const wide = { x: 2500, z: 0, r: 600 };
+    for (let n = 0; n < 60; n++) t.update(1 / 30, wide);
+    expect(t.live.every((v) => v === 1)).toBe(true);
+    // Three times closer: room for 400 m · 2 lanes / CAR_SPACING cars.
+    const close = { ...wide, r: 200 };
+    let left = 0;
+    for (let n = 0; n < 45; n++) {
+      const seen = Float32Array.from(t.appear);
+      const was = Uint8Array.from(t.live);
+      t.update(1 / 30, close);
+      for (let i = 0; i < t.count; i++) {
+        if (!was[i] || t.live[i]) continue;
+        left++;
+        // All but gone the frame before (the view of the wide circle is still around it).
+        expect(seen[i]).toBeLessThanOrEqual(1 / 30 / FADE + 1e-6);
+      }
+    }
+    expect(left).toBeGreaterThan(0);
+    expect(t.live.reduce((n, v) => n + v, 0)).toBe(Math.floor((2 * 400) / CAR_SPACING));
   });
 });
 
