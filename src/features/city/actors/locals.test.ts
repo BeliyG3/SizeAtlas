@@ -14,7 +14,8 @@ import {
 } from "./locals";
 import { rng, type Allow, type Track } from "./nav";
 import { createResidents, WALK, WALK_SPREAD } from "./residents";
-import { createTraffic, MIN_GAP, SPEED } from "./traffic";
+import { MIN_GAP } from "./junctions";
+import { createTraffic, SPEED } from "./traffic";
 
 function graphOf(nodes: number[], edges: [number, number, RoadKind][]) {
   return buildRoads(

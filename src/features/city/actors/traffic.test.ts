@@ -3,16 +3,8 @@ import { ROAD, type RoadKind } from "../world/map";
 import { mapOf } from "../world/map.fixture";
 import { BRIDGE_RISE } from "../world/map";
 import { buildRoads, roadHalf } from "../world/roads";
-import {
-  AIR_LANES,
-  AIR_SHARE,
-  CAR_SPACING,
-  MIN_GAP,
-  createTraffic,
-  laneOffset,
-  lanes,
-  type Traffic,
-} from "./traffic";
+import { AIR_LANES, AIR_SHARE, CAR_SPACING, createTraffic, type Traffic } from "./traffic";
+import { laneOffset, MIN_GAP } from "./junctions";
 
 function graphOf(nodes: number[], edges: [number, number, RoadKind][]) {
   return buildRoads(
@@ -62,16 +54,6 @@ function toRing(x: number, z: number): number {
   ];
   return Math.min(...sides.map(([sx, sz]) => Math.hypot(x - sx, z - sz)));
 }
-
-describe("lanes and offsets", () => {
-  it("counts lanes per direction and puts them right of the axis", () => {
-    expect([ROAD.highway, ROAD.ring, ROAD.ramp, ROAD.street, ROAD.lane].map(lanes)).toEqual([
-      2, 2, 2, 1, 0,
-    ]);
-    expect([laneOffset(ROAD.highway, 0), laneOffset(ROAD.highway, 1)]).toEqual([2, 6]);
-    expect(laneOffset(ROAD.street, 0)).toBe(1.5);
-  });
-});
 
 describe("createTraffic", () => {
   it("cars keep their distance on a lane", () => {

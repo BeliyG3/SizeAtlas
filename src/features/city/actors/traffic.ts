@@ -1,13 +1,12 @@
 /** Cars driving on lanes and flying cars on air lanes; pure, no three.js. */
 import { ROAD, type RoadKind } from "../world/map";
 import { pointOn, type RoadEdge, type RoadGraph } from "../world/roads";
+import { createJunctions, lanes, laneOffset, MIN_GAP } from "./junctions";
 import { createLocals, localIds, placeOn, type Circle, type Spots } from "./locals";
 import { advance, nextEdge, place, rng, type Allow, type Track } from "./nav";
 
 /** Speeds in m/s. */
 export const SPEED = { highway: 22, street: 12, air: 30 };
-/** Least centre-to-centre distance to the car ahead, metres. */
-export const MIN_GAP = 8;
 /** Seconds to cover the free road ahead before the car in front is reached. */
 export const HEADWAY = 1;
 /** Road length per car, metres, when the city is full. */
@@ -25,17 +24,6 @@ const MAX_DT = 0.25;
 const PLACE_TRIES = 40;
 /** Seconds a car waits at a node for the lane it wants before it gives the wish up. */
 export const STUCK = 1;
-
-/** Lanes per direction. */
-export function lanes(cls: RoadKind): number {
-  if (cls === ROAD.street) return 1;
-  return cls === ROAD.lane ? 0 : 2;
-}
-
-/** Distance of a lane's centre from the road axis, to the right of the travel, metres. */
-export function laneOffset(cls: RoadKind, lane: number): number {
-  return cls === ROAD.street ? 1.5 : 2 + 4 * lane;
-}
 
 /** Where a ground car starts, instead of a random spot: `lane` it is in, `want` it prefers. */
 export interface CarStart {
@@ -90,8 +78,7 @@ export function createTraffic(
   const nextF = new Uint8Array(n);
   const nextL = new Uint8Array(n);
   const held = new Float32Array(n); // seconds standing at the node, the lane it wants not free
-  // When each car chose its way at the node ahead, on the traffic's clock; its turn there is the
-  // earliest of its lane from it back (see `takeTurns`).
+  // When each car chose its way at the node ahead, on the traffic's clock, and its turn there.
   const since = new Float64Array(n);
   const turn = new Float64Array(n);
   let clock = 0;
@@ -114,29 +101,17 @@ export function createTraffic(
   out.air.fill(1, ground);
 
   const laneAt = (i: number, edge: number) => Math.min(want[i], lanes(g.edges[edge].cls) - 1);
-
-  /**
-   * Is a car of the first `upTo` within `MIN_GAP` of this spot of this lane (ignoring `skip`),
-   * counting the cars that are about to enter the lane as standing before its start?
-   */
-  function crowded(
-    edge: number,
-    forward: number,
-    ln: number,
-    s: number,
-    skip: number,
-    upTo: number,
-  ) {
-    for (let j = 0; j < upTo; j++) {
-      if (j === skip) continue;
-      if (t.edge[j] === edge && t.forward[j] === forward && lane[j] === ln) {
-        if (Math.abs(t.s[j] - s) < MIN_GAP) return true;
-      } else if (nextE[j] === edge && nextF[j] === forward && nextL[j] === ln) {
-        if (s + g.edges[t.edge[j]].len - t.s[j] < MIN_GAP) return true;
-      }
-    }
-    return false;
-  }
+  const { crowded, endNode, gapAhead, takeTurns } = createJunctions({
+    g,
+    t,
+    lane,
+    nextE,
+    nextF,
+    nextL,
+    since,
+    turn,
+    ground,
+  });
 
   function put(i: number) {
     const e = g.edges[t.edge[i]];
@@ -168,7 +143,7 @@ export function createTraffic(
       nextL[i] = Math.min(want[i], lanes(e.cls) - 1, lanes(g.edges[next].cls) - 1);
     }
     if (held[i] > STUCK) giveUp(i);
-    if (lane[i] === nextL[i] || crowded(t.edge[i], t.forward[i], nextL[i], t.s[i], i, ground)) {
+    if (lane[i] === nextL[i] || crowded(t.edge[i], t.forward[i], nextL[i], t.s[i], i)) {
       return;
     }
     // Beside it the lane is clear; the cars ahead, across the node too, must be as far.
@@ -194,97 +169,6 @@ export function createTraffic(
     nextE[i] = other;
     nextF[i] = g.edges[other].a === node ? 1 : 0;
     nextL[i] = lane[i];
-  }
-
-  const inNext = (j: number, i: number) =>
-    t.edge[j] === nextE[i] && t.forward[j] === nextF[i] && lane[j] === nextL[i];
-
-  /** Component `k` (0: x, 1: z) of the unit vector of travel along an edge. */
-  function dir(edge: number, forward: number, k: number): number {
-    const e = g.edges[edge];
-    const from = forward === 1 ? e.a : e.b;
-    const to = forward === 1 ? e.b : e.a;
-    return (g.nodes[to * 2 + k] - g.nodes[from * 2 + k]) / (e.len || 1);
-  }
-
-  /** Do two lanes of two edges lie on one line: the same heading, less than 2 m apart sideways? */
-  function aligned(e1: number, f1: number, l1: number, e2: number, f2: number, l2: number) {
-    const o1 = laneOffset(g.edges[e1].cls, l1);
-    const o2 = laneOffset(g.edges[e2].cls, l2);
-    if (Math.abs(o1 - o2) >= 2) return false;
-    return dir(e1, f1, 0) * dir(e2, f2, 0) + dir(e1, f1, 1) * dir(e2, f2, 1) > 0.99;
-  }
-
-  const endNode = (edge: number, forward: number) =>
-    forward === 1 ? g.edges[edge].b : g.edges[edge].a;
-
-  /**
-   * Distance along the way from car `i` to car `j`, if `j` is in front of `i` at the node `i` is
-   * coming to, else Infinity. In front: just past the node on the line `i` comes in on (even if `i`
-   * turns off) or on the lane `i` goes out on; or coming to the node too, having chosen its way
-   * there first (its `turn`; at the same turn the nearer one), when its line meets the one of `i`
-   * (the same lane out, or one continuing the other). Then the distance is how much nearer to the
-   * node `j` is, below zero if it is farther: `i` waits until `j` is through. First come, first
-   * served: a car that stopped as it came near the node keeps its turn, where "the nearer goes
-   * first" let every newcomer pass it for ever.
-   */
-  function crossing(i: number, j: number, node: number): number {
-    if (t.edge[j] === t.edge[i] && t.forward[j] === t.forward[i]) return Infinity;
-    const left = g.edges[t.edge[i]].len - t.s[i];
-    const ej = g.edges[t.edge[j]];
-    if ((t.forward[j] === 1 ? ej.a : ej.b) === node) {
-      // j has just left the node
-      const onMyLine = aligned(t.edge[i], t.forward[i], lane[i], t.edge[j], t.forward[j], lane[j]);
-      return onMyLine || inNext(j, i) ? left + t.s[j] : Infinity;
-    }
-    if (nextE[j] < 0 || endNode(t.edge[j], t.forward[j]) !== node) return Infinity;
-    // j is coming to the node too
-    const d = left - (ej.len - t.s[j]);
-    if (turn[j] > turn[i] || (turn[j] === turn[i] && (d < 0 || (d === 0 && j < i)))) {
-      return Infinity;
-    }
-    const meets =
-      (nextE[j] === nextE[i] && nextF[j] === nextF[i] && nextL[j] === nextL[i]) ||
-      aligned(t.edge[i], t.forward[i], lane[i], nextE[j], nextF[j], nextL[j]) ||
-      aligned(nextE[i], nextF[i], nextL[i], t.edge[j], t.forward[j], lane[j]);
-    return meets ? d : Infinity;
-  }
-
-  /**
-   * Centre-to-centre distance along the way to the nearest car ahead of `i`: on its own lane and
-   * across the node it is coming to (see `crossing`).
-   */
-  // ponytail: every car looks at every other (n² ≤ 150² a frame); sort per lane if it ever shows.
-  function gapAhead(i: number): number {
-    let gap = Infinity;
-    const node = endNode(t.edge[i], t.forward[i]);
-    for (let j = 0; j < ground; j++) {
-      if (j === i) continue;
-      if (t.edge[j] === t.edge[i] && t.forward[j] === t.forward[i] && lane[j] === lane[i]) {
-        const d = t.s[j] - t.s[i];
-        if (d < gap && (d > 0 || (d === 0 && j > i))) gap = d;
-      }
-      if (nextE[i] >= 0) gap = Math.min(gap, crossing(i, j, node));
-    }
-    return gap;
-  }
-
-  /**
-   * The turn of each car at its node: the earliest choice of its lane from it back, so a car
-   * never has the turn over one queued in front of it. Every wait at a node is then for a car
-   * earlier in one order (turn, then nearness), and no ring of cars can wait on each other.
-   */
-  function takeTurns() {
-    for (let i = 0; i < ground; i++) turn[i] = nextE[i] >= 0 ? since[i] : Infinity;
-    for (let i = 0; i < ground; i++) {
-      if (nextE[i] < 0) continue;
-      for (let j = 0; j < ground; j++) {
-        const behind = t.s[j] < t.s[i] || (t.s[j] === t.s[i] && j < i);
-        const queue =
-          t.edge[j] === t.edge[i] && t.forward[j] === t.forward[i] && lane[j] === lane[i];
-        if (queue && behind && nextE[j] >= 0) turn[i] = Math.min(turn[i], since[j]);
-      }
-    }
   }
 
   /** Drives car `i` on by `dist`, into the lane it planned when it passes the node. */
@@ -329,7 +213,7 @@ export function createTraffic(
       put(i);
       if (
         isAir ||
-        (!crowded(t.edge[i], t.forward[i], lane[i], t.s[i], i, ground) && !tooClose(i, ground))
+        (!crowded(t.edge[i], t.forward[i], lane[i], t.s[i], i) && !tooClose(i, ground))
       ) {
         nextE[i] = -1;
         return true;
