@@ -2,8 +2,24 @@
 //! 45°, straight in; and a jog where the gates face each other a little off line.
 
 use super::path::simplify;
-use super::span::{DIRS, SHORT};
 use std::f64::consts::{FRAC_1_SQRT_2, SQRT_2};
+
+/// A bridge leaves its gate and reaches the other one straight for at least this far, metres.
+pub(crate) const LEAVE: f64 = 30.0;
+/// A run shorter than this, but not nil, is a near miss and left out: its angle would not
+/// survive `f32` far out, metres.
+pub(crate) const SHORT: f64 = 4.0;
+/// The eight directions a bridge's runs can take, `k · 45°` with `y` down.
+pub(crate) const DIRS: [[f64; 2]; 8] = [
+    [1.0, 0.0],
+    [FRAC_1_SQRT_2, FRAC_1_SQRT_2],
+    [0.0, 1.0],
+    [-FRAC_1_SQRT_2, FRAC_1_SQRT_2],
+    [-1.0, 0.0],
+    [-FRAC_1_SQRT_2, -FRAC_1_SQRT_2],
+    [0.0, -1.0],
+    [FRAC_1_SQRT_2, -FRAC_1_SQRT_2],
+];
 
 /// The shortest path `ok` takes from `a` out along `da` (at least `least.0`), one run, then in to
 /// `b` against `db` (at least `least.1`). A straight of 0 leaves it out.
@@ -107,6 +123,7 @@ fn cross(a: [f64; 2], b: [f64; 2]) -> f64 {
 /// towards `b`'s side, `SHORT` on, a diagonal of `SHORT` back, in to `b` (at least `least.1`).
 /// The first diagonal is longer by what makes up the offset; the jog lies midway where the
 /// straights allow. `None` where `ok` refuses it.
+/// The jog is two 45° kinks `SHORT` apart: an S a few metres wide, visible in a 16 m deck.
 pub(crate) fn jog(
     a: [f32; 2],
     da: [f32; 2],

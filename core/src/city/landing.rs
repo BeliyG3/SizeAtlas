@@ -1,14 +1,14 @@
 //! Where a way over the sea lands on the straights out of its gates.
 
 use super::coast::{CLEAR, Coast};
-use super::simple::snap;
-use super::span::{LEAVE, SHORT};
+use super::simple::{LEAVE, SHORT, snap};
 
 /// A gate's straight is not followed past this to where it keeps clear of its coast, metres.
 const FAR: f64 = 300.0;
 
 /// How far the straight from gate `p` along `d` runs over or near its island's `coast` (within
-/// `CLEAR`), but at least `LEAVE`, metres: a bridge turns off it no sooner.
+/// `CLEAR`), but at least `LEAVE`, metres: a bridge turns off it no sooner. A straight that runs
+/// along the coast past `FAR` gives `LEAVE`: the clearance check alone then decides.
 pub(crate) fn clears(coast: &Coast, p: [f32; 2], d: [f32; 2]) -> f64 {
     let d = snap(d);
     let at = |s: f64| {
@@ -21,7 +21,7 @@ pub(crate) fn clears(coast: &Coast, p: [f32; 2], d: [f32; 2]) -> f64 {
     while s < FAR && coast.near(at(s), CLEAR) {
         s += 1.0;
     }
-    s
+    if s < FAR { s } else { LEAVE }
 }
 
 /// Where the first (`first`) or the last run of `way` runs alongside the straight through `p`

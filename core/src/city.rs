@@ -35,6 +35,8 @@ mod simple;
 mod span;
 mod split;
 mod streets;
+#[cfg(test)]
+mod test_sets;
 mod trim;
 mod vector;
 mod voronoi;

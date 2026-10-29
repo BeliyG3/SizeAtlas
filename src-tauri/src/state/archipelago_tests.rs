@@ -143,44 +143,102 @@ fn four_drives(state: &AppState, dirs: &[tempfile::TempDir]) -> (Vec<u64>, Vec<S
 
 /// `get_city` of a member serves the island the archipelago placed and bridged, built again
 /// facing where the others stand: its bytes, its rev, the gates its bridges start from; asking
-/// again builds nothing.
+/// again builds nothing. The first pass foresees every direction a quarter turn off, so the
+/// second always runs.
 #[test]
 fn get_city_matches_archipelago() {
-    // Each root's island is seeded by its path: most sets of four tiny ones are not where
-    // `directions` foresees them, and get the second pass.
-    let (state, generations, mounts, world, _dirs) = (0..10)
-        .find_map(|_| {
-            let dirs: Vec<_> = (0..4).map(|_| tempfile::tempdir().unwrap()).collect();
-            let state = AppState::default();
-            let (generations, mounts) = four_drives(&state, &dirs);
-            let world = state.archipelago_in(generations[0], &mounts, &[]).unwrap();
-            (builds(&state) > 4).then_some((state, generations, mounts, world, dirs))
+    let dirs: Vec<_> = (0..4).map(|_| tempfile::tempdir().unwrap()).collect();
+    let state = AppState::default();
+    let (_, mounts) = four_drives(&state, &dirs);
+    let trees = state.open_trees();
+    let list = members_of(&trees, &mounts, &[]);
+    let sizes: Vec<(u64, u64)> = list.iter().map(|m| (m.used, m.free)).collect();
+    let turned: Vec<Vec<f32>> = (0..list.len())
+        .map(|i| {
+            let ahead = city::directions(&sizes, i).into_iter();
+            ahead.map(|a| a + std::f32::consts::FRAC_PI_2).collect()
         })
-        .expect("a second pass");
-    let built = builds(&state);
-    for (k, island) in world.islands.iter().enumerate() {
-        let bytes = state.city_in(island.generation, &mounts, &[]).unwrap();
-        let (rev, kept) = state.0.city.island(island.generation).unwrap();
-        assert_eq!(rev, island.rev);
-        let tree = state.tree(island.generation).unwrap();
-        let want = city::encode_city(island.generation, rev, tree.approximate, &kept);
+        .collect();
+    let (kept, at) = state.settle_with(&list, &trees, &turned, true).unwrap();
+    assert_eq!(builds(&state), 2 * list.len());
+    let bridges = city::bridges(&kept.iter().map(|k| &*k.1).collect::<Vec<_>>(), &at);
+    for (k, (member, (rev, island, _))) in list.iter().zip(&kept).enumerate() {
+        let bytes = state.city_in(member.generation, &mounts, &[]).unwrap();
+        let tree = state.tree(member.generation).unwrap();
+        assert_eq!(*rev, tree.rev);
+        let want = city::encode_city(member.generation, *rev, tree.approximate, island);
         assert!(
             bytes == want,
             "island {k}: get_city bytes are another island"
         );
-        for b in &world.bridges {
-            for [i, node] in [b.a, b.b] {
-                let gate = kept.gates.iter().any(|g| g.node == node);
-                assert!(
-                    i as usize != k || gate,
-                    "island {k}: no gate at node {node}"
-                );
+        for b in &bridges {
+            for (i, node) in [b.a, b.b] {
+                let gate = island.gates.iter().any(|g| g.node == node);
+                assert!(i != k || gate, "island {k}: no gate at node {node}");
             }
         }
     }
+    assert_eq!(builds(&state), 2 * list.len());
+}
+
+/// Callers that find the cache cold at once wait for one of them to settle the archipelago.
+#[test]
+fn cold_callers_build_once() {
+    let dirs: Vec<_> = (0..2).map(|_| tempfile::tempdir().unwrap()).collect();
+    let state = AppState::default();
+    let generations: Vec<u64> = (dirs.iter().zip([10_000, 20_000]))
+        .map(|(d, bytes)| state.install_tree(tree_in(d.path(), bytes)))
+        .collect();
+    let mounts: Vec<String> = dirs.iter().map(path_of).collect();
+    let start = std::sync::Barrier::new(3);
+    std::thread::scope(|scope| {
+        let city = |g: u64| {
+            let (state, start, mounts) = (&state, &start, &mounts);
+            move || {
+                start.wait();
+                state.city_in(g, mounts, &[]).unwrap();
+            }
+        };
+        scope.spawn(city(generations[0]));
+        scope.spawn(city(generations[1]));
+        start.wait();
+        state.archipelago_in(generations[0], &mounts, &[]).unwrap();
+    });
+    assert_eq!(builds(&state), 2);
+}
+
+/// `get_city` serves the island the archipelago placed, whatever the free space did since: a
+/// change shows when the archipelago is laid out again.
+#[test]
+fn get_city_keeps_the_archipelago_island_when_free_space_moves() {
+    const GIB: u64 = 1 << 30;
+    let dirs: Vec<_> = (0..2).map(|_| tempfile::tempdir().unwrap()).collect();
+    let state = AppState::default();
+    let generations: Vec<u64> = (dirs.iter().zip([10_000, 20_000]))
+        .map(|(d, bytes)| state.install_tree(tree_in(d.path(), bytes)))
+        .collect();
+    let mounts: Vec<String> = dirs.iter().map(path_of).collect();
+    let disks =
+        |free: u64| -> Vec<(String, u64)> { mounts.iter().map(|m| (m.clone(), free)).collect() };
+    let world = state
+        .archipelago_in(generations[0], &mounts, &disks(GIB))
+        .unwrap();
+    let laid = state.city_in(generations[1], &mounts, &disks(GIB)).unwrap();
+    let built = builds(&state);
+    let later = state
+        .city_in(generations[1], &mounts, &disks(9 * GIB))
+        .unwrap();
+    assert!(later == laid, "get_city moved off the archipelago's island");
     assert_eq!(builds(&state), built);
-    state.archipelago_in(generations[2], &mounts, &[]).unwrap();
-    assert_eq!(builds(&state), built);
+    assert_eq!(
+        state.0.city.island(generations[1]).unwrap().0,
+        world.islands[1].rev
+    );
+    // Laid out again, the archipelago takes the new free space.
+    state
+        .archipelago_in(generations[0], &mounts, &disks(9 * GIB))
+        .unwrap();
+    assert_eq!(builds(&state), built + 2);
 }
 
 /// With no island in memory, `get_city` of a member builds the archipelago's island: the

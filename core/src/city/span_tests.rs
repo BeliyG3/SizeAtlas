@@ -1,8 +1,10 @@
 use super::*;
 use crate::city::archipelago::bearings;
 use crate::city::archipelago::tests::{
-    add, crossing, five, five_real, four, four_real, gate, inside, len, outline, point_segment,
-    probes, refs, sides, sub, three, three_real,
+    add, crossing, gate, inside, len, outline, point_segment, probes, refs, sides, sub,
+};
+use crate::city::test_sets::{
+    eight, five, five_real, four, four_real, four_turned, three, three_real,
 };
 use crate::city::{Island, place};
 use std::f32::consts::{FRAC_PI_4, PI, TAU};
@@ -35,14 +37,16 @@ fn near(shape: &[Vec<[f32; 2]>], p: [f32; 2], r: f32) -> bool {
 
 #[test]
 fn every_pair_bridged_gate_to_gate() {
-    for set in [
+    let sets = [
         three(),
         four(),
         five(),
         three_real(),
         four_real(),
         five_real(),
-    ] {
+        eight(),
+    ];
+    for set in sets {
         let (at, _, all) = laid(set);
         let mut pairs: Vec<_> = all.iter().map(|b| (b.a.0, b.b.0)).collect();
         pairs.sort_unstable();
@@ -225,14 +229,16 @@ fn turns(p: &[[f32; 2]]) -> Vec<f32> {
 /// gates' highways.
 #[test]
 fn no_sharp_corners() {
-    for set in [
+    let sets = [
         three(),
         four(),
         five(),
         three_real(),
         four_real(),
         five_real(),
-    ] {
+        eight(),
+    ];
+    for set in sets {
         for b in laid(set).2 {
             let (da, db) = (gate(&set[b.a.0], b.a.1).dir, gate(&set[b.b.0], b.b.1).dir);
             let (p, n) = (&b.points, b.points.len());
@@ -247,26 +253,34 @@ fn no_sharp_corners() {
     }
 }
 
-/// After the second pass a gate faces the island it is bridged to: a bridge of the simple shape
-/// (at most three runs) sets out within 45° of the way to the middle of the other island, give
-/// or take the 2° the second placement may move it.
-#[test]
-fn real_directions_aim_gates() {
-    let set = four_real();
-    let (at, _, all) = laid(set);
-    let aims = bearings(&refs(set), &at);
-    let simple: Vec<&Bridge> = all.iter().filter(|b| b.points.len() <= 4).collect();
-    assert!(!simple.is_empty());
-    for b in simple {
-        let (p, n) = (&b.points, b.points.len());
-        let ends = [
-            (b.a.0, b.b.0, sub(p[1], p[0])),
-            (b.b.0, b.a.0, sub(p[n - 2], p[n - 1])),
-        ];
-        for (i, j, run) in ends {
-            let want = aims[i][j - usize::from(j > i)];
-            let off = (run[1].atan2(run[0]) - want + PI).rem_euclid(TAU) - PI;
-            assert!(off.abs() <= 47f32.to_radians(), "{i} -> {j}: {off}: {b:?}");
+/// The most any gate of `set` (placed by `place`) turns off the octant of the islands it faces:
+/// the mean of the directions to them, as a highway shared by several turns onto, radians.
+fn aim_off(set: &[Island]) -> f32 {
+    let aims = bearings(&refs(set), &place(&refs(set)));
+    let mut worst = 0.0f32;
+    for (i, island) in set.iter().enumerate() {
+        for g in &island.gates {
+            let (s, c) = (g.neighbours.iter()).fold((0.0f32, 0.0f32), |(s, c), &n| {
+                let a = aims[i][n as usize];
+                (s + a.sin(), c + a.cos())
+            });
+            let off = (g.dir[1].atan2(g.dir[0]) - s.atan2(c) + PI).rem_euclid(TAU) - PI;
+            worst = worst.max(off.abs());
         }
     }
+    worst
+}
+
+/// Built facing the real directions, every gate faces the octant of the islands it serves,
+/// give or take the 2° the second placement moves them; built facing directions a quarter turn
+/// off, they do not.
+#[test]
+fn real_directions_aim_gates() {
+    let near = (22.5f32 + 2.0).to_radians();
+    for set in [three_real(), four_real(), five_real()] {
+        let off = aim_off(set);
+        assert!(off <= near, "{}°", off.to_degrees());
+    }
+    let off = aim_off(four_turned());
+    assert!(off > near, "{}°", off.to_degrees());
 }

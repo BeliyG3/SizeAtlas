@@ -36,9 +36,14 @@ fn a_single_corner_lies_on_both_straights() {
     let (pa, pb) = ((0, a, [1.0, 0.0]), (1, b, [-FRAC_1_SQRT_2, -FRAC_1_SQRT_2]));
     let mut sea = Sea::new(&shapes);
     let (from, to) = (sea.out(&coasts(&shapes), pa), sea.out(&coasts(&shapes), pb));
-    let way = sea.cheapest(from.unwrap(), 0, to.unwrap(), 1).unwrap();
+    let way = sea
+        .cheapest(from.unwrap(), 0, to.unwrap(), 1, f32::INFINITY)
+        .unwrap();
     assert_eq!(way.len(), 3, "{way:?}");
-    assert_line(sea.route(&coasts(&shapes), pa, pb), &[a, corner, b]);
+    assert_line(
+        sea.route(&coasts(&shapes), pa, pb, f32::INFINITY),
+        &[a, corner, b],
+    );
 }
 
 /// Both straights set out from the same cell: they meet where they cross, the shortest way.
@@ -53,7 +58,10 @@ fn straights_from_one_cell_meet() {
     let from = sea.out(&coasts(&shapes), pa);
     assert!(from.is_some());
     assert_eq!(from, sea.out(&coasts(&shapes), pb));
-    assert_line(sea.route(&coasts(&shapes), pa, pb), &[a, [-58.0, 1.7], b]);
+    assert_line(
+        sea.route(&coasts(&shapes), pa, pb, f32::INFINITY),
+        &[a, [-58.0, 1.7], b],
+    );
 }
 
 /// The turns at the corners of `p`, radians.
@@ -81,7 +89,7 @@ fn seaway_turns_at_most_45() {
     for (b, db, lo) in cases {
         let shapes = [square([0.0, 0.0]), square(lo)];
         let (pa, pb) = ((0, a, [1.0, 0.0]), (1, b, db));
-        let way = Sea::new(&shapes).route(&coasts(&shapes), pa, pb);
+        let way = Sea::new(&shapes).route(&coasts(&shapes), pa, pb, f32::INFINITY);
         let way = way.expect("a way");
         assert_eq!((way[0], way[way.len() - 1]), (a, b));
         let mut line = vec![[a[0] - 10.0, a[1]]];
@@ -91,4 +99,16 @@ fn seaway_turns_at_most_45() {
             assert!(t <= FRAC_PI_4 + 1e-3, "{}°: {way:?}", t.to_degrees());
         }
     }
+}
+
+/// A way that would cost more than the bound is not searched for: round the island behind the
+/// gate is some 750 m and six turns.
+#[test]
+fn seaway_gives_up_past_its_bound() {
+    let (a, b) = ([200.0, 100.0], [-300.0, 100.0]);
+    let shapes = [square([0.0, 0.0]), square([-500.0, 0.0])];
+    let (pa, pb) = ((0, a, [1.0, 0.0]), (1, b, [1.0, 0.0]));
+    let mut sea = Sea::new(&shapes);
+    assert!(sea.route(&coasts(&shapes), pa, pb, 600.0).is_none());
+    assert!(sea.route(&coasts(&shapes), pa, pb, 3000.0).is_some());
 }

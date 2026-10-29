@@ -7,8 +7,7 @@ use super::coast::{CLEAR, Coast, keeps_clear};
 use super::grid::distance;
 use super::landing::{clears, meet, onto};
 use super::path::simplify;
-use super::simple::{route, snap};
-use super::span::{DIRS, LEAVE};
+use super::simple::{DIRS, LEAVE, route, snap};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::f32::consts::SQRT_2;
@@ -21,7 +20,7 @@ const OPEN: f32 = CLEAR + 2.0 * WORLD_CELL;
 /// A way sets out where a gate's straight first lies this far from every outline, metres.
 const OUT: f32 = CLEAR + 3.0 * WORLD_CELL;
 /// A gate's straight runs out at most this far before its way, metres.
-const REACH: f32 = 300.0;
+const REACH: f32 = 600.0;
 /// A turn costs as much as this many cells of way, per 45°.
 const TURN: f32 = BEND / WORLD_CELL;
 /// A search gives up after this many states.
@@ -77,14 +76,16 @@ impl Sea {
     /// every outline, the cheapest way over the open sea to where `b`'s straight does, in along
     /// that; the way's first and last corner are reached from the gates by the shape of
     /// [`route`]. No corner turns more than 45°. `None` where it cannot keep clear (see
-    /// [`keeps_clear`]).
-    pub fn route(&mut self, coasts: &[Coast], a: End, b: End) -> Option<Vec<[f32; 2]>> {
+    /// [`keeps_clear`]), or where the way over the open sea costs more than `bound` (metres, a
+    /// 45° turn as `BEND`).
+    pub fn route(&mut self, coasts: &[Coast], a: End, b: End, bound: f32) -> Option<Vec<[f32; 2]>> {
         let ((i, pa, da), (j, pb, db)) = (a, b);
         let (from, to) = (self.out(coasts, a)?, self.out(coasts, b)?);
         let mut way = if from == to {
             vec![self.world.centre(from)]
         } else {
-            self.cheapest(from, heading(da), to, heading([-db[0], -db[1]]))?
+            let goal = heading([-db[0], -db[1]]);
+            self.cheapest(from, heading(da), to, goal, bound / WORLD_CELL)?
         };
         // From `a` to the way's corner `c`, there heading `d` on to `next`; from the corner `c`
         // heading `d`, come from `prev`, to `b`. The gates' straights go on until they keep clear
@@ -174,14 +175,16 @@ impl Sea {
 
     /// The corners of the cheapest way (A*) over the open sea from cell `from`, heading `dir`
     /// (an index of `DIRS`), to cell `to`, there heading `goal`: a step costs its length in
-    /// cells and turns at most 45°, which costs `TURN`. Cell centres, both ends included; `None`
-    /// past `MAX_POPS` states.
+    /// cells and turns at most 45°, which costs `TURN`. States that cannot reach `to` within
+    /// `bound` (cells) are left out. Cell centres, both ends included; `None` past `MAX_POPS`
+    /// states.
     fn cheapest(
         &mut self,
         from: usize,
         dir: usize,
         to: usize,
         goal: usize,
+        bound: f32,
     ) -> Option<Vec<[f32; 2]>> {
         if self.best.is_empty() {
             return None;
@@ -189,15 +192,16 @@ impl Sea {
         let (w, h) = (self.world.land.w as isize, self.world.land.h as isize);
         let xy = |c: usize| (c as isize % w, c as isize / w);
         let (tx, ty) = xy(to);
-        let guess = |c: usize| {
+        // The way left as the crow flies along the eight directions, and the turns onto `goal`.
+        let guess = |c: usize, d: usize| {
             let (x, y) = xy(c);
             let (dx, dy) = ((x - tx).abs() as f32, (y - ty).abs() as f32);
-            dx.max(dy) + (SQRT_2 - 1.0) * dx.min(dy)
+            dx.max(dy) + (SQRT_2 - 1.0) * dx.min(dy) + TURN * turn(d, goal) as f32
         };
         let mut touched = vec![from * 8 + dir];
         let mut heap = BinaryHeap::new();
         self.best[from * 8 + dir] = 0.0;
-        heap.push(Reverse((guess(from).to_bits(), from * 8 + dir)));
+        heap.push(Reverse((guess(from, dir).to_bits(), from * 8 + dir)));
         let mut found = None;
         for _ in 0..MAX_POPS {
             let Some(Reverse((_, s))) = heap.pop() else {
@@ -227,11 +231,12 @@ impl Sea {
                 let step = if diagonal { SQRT_2 } else { 1.0 };
                 let (n, cost) = ((ny * w + nx) as usize, g + step + TURN * turn as f32);
                 let next = n * 8 + k;
-                if cost < self.best[next] && self.back[next] & DONE == 0 {
+                let reach = cost + guess(n, k);
+                if reach <= bound && cost < self.best[next] && self.back[next] & DONE == 0 {
                     self.best[next] = cost;
                     self.back[next] = d as u8;
                     touched.push(next);
-                    heap.push(Reverse(((cost + guess(n)).to_bits(), next)));
+                    heap.push(Reverse((reach.to_bits(), next)));
                 }
             }
         }

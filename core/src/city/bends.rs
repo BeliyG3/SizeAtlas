@@ -1,8 +1,7 @@
 //! The corners of a bridge: how sharp they turn, what they cost, and two turns the same way
 //! drawn apart so they do not look like one.
 
-use super::simple::snap;
-use super::span::SHORT;
+use super::simple::{SHORT, snap};
 use std::f32::consts::FRAC_PI_4;
 use std::f64::consts::SQRT_2;
 

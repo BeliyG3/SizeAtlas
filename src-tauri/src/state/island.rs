@@ -109,10 +109,16 @@ type Built = (CityKey, Arc<city::Island>, Vec<u8>);
 /// encoded map carries), the island and its encoded map.
 pub(super) type Kept = (u64, Arc<city::Island>, Vec<u8>);
 
+/// The archipelago last laid out: its members' `(generation, rev, used)`, then their islands
+/// (in member order) and where they stand.
+pub(super) type World = (Vec<(u64, u64, u64)>, Vec<Kept>, Vec<[f32; 2]>);
+
 /// The island maps of every open root, by generation, the one last asked for last.
 #[derive(Default)]
 pub struct CityCache {
     kept: Mutex<HashMap<u64, Vec<Built>>>,
+    /// Held while an archipelago is laid out, so that callers at once wait for it.
+    pub(super) world: Mutex<Option<World>>,
     /// How many maps were built, for the tests.
     #[cfg(test)]
     pub builds: AtomicUsize,

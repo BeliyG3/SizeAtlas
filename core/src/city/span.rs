@@ -2,7 +2,7 @@
 //! onto a multiple of 45°, straight in; round the islands over the open sea where that shape
 //! cannot keep off them or is the longer way. No corner turns more than 45°.
 
-use super::bends::{cost, ease, length};
+use super::bends::{BEND, cost, ease, length};
 use super::chart::shape;
 use super::coast::{Coast, keeps_clear};
 use super::gates::segments_apart;
@@ -10,28 +10,14 @@ use super::landing::clears;
 use super::map::{Gate, Island};
 use super::seaway::Sea;
 use super::simple::{jog, route};
-use std::f64::consts::FRAC_1_SQRT_2;
 
-/// A bridge leaves its gate and reaches the other one straight for at least this far, metres.
-pub(crate) const LEAVE: f64 = 30.0;
-/// A run shorter than this, but not nil, is a near miss and left out: its angle would not
-/// survive `f32` far out, metres.
-pub(crate) const SHORT: f64 = 4.0;
 /// The way over the sea is taken where it is shorter than this share of the simple shape.
 const SHORTER: f32 = 0.75;
+/// Without a simple shape, the way over the sea is searched up to this many times as long as
+/// the gates lie apart, and eight turns.
+const DETOUR: f32 = 4.0;
 /// Bridges nearer than a deck's width and a margin stand on different levels, metres.
 const APART: f32 = 16.0 + 4.0;
-/// The eight directions a bridge's runs can take, `k · 45°` with `y` down.
-pub(crate) const DIRS: [[f64; 2]; 8] = [
-    [1.0, 0.0],
-    [FRAC_1_SQRT_2, FRAC_1_SQRT_2],
-    [0.0, 1.0],
-    [-FRAC_1_SQRT_2, FRAC_1_SQRT_2],
-    [-1.0, 0.0],
-    [-FRAC_1_SQRT_2, -FRAC_1_SQRT_2],
-    [0.0, -1.0],
-    [FRAC_1_SQRT_2, -FRAC_1_SQRT_2],
-];
 
 /// A bridge from gate `a` to gate `b`, each `(island, gate node)`, `a`'s island the lower; its
 /// points run from `a`'s node to `b`'s in world metres. Its deck stands on `level`.
@@ -77,8 +63,15 @@ pub fn bridges(islands: &[&Island], offsets: &[[f32; 2]]) -> Vec<Bridge> {
             let least = (clears(&coasts[i], a, ga.dir), clears(&coasts[j], b, gb.dir));
             let simple = route(a, ga.dir, b, gb.dir, least, clear)
                 .or_else(|| jog(a, ga.dir, b, gb.dir, least, clear));
-            let points = pick(simple, sea.route(&coasts, (i, a, ga.dir), (j, b, gb.dir)))
-                .map(|p| ease(p, least, clear));
+            // The sea's way can only be taken where it costs less than the simple shape, or is
+            // `SHORTER` of it (allowing it those turns); with none, at most `DETOUR` times
+            // the way as the crow flies.
+            let bound = match &simple {
+                Some(p) => cost(p) / SHORTER,
+                None => DETOUR * (b[0] - a[0]).hypot(b[1] - a[1]) + 8.0 * BEND,
+            };
+            let way = sea.route(&coasts, (i, a, ga.dir), (j, b, gb.dir), bound);
+            let points = pick(simple, way).map(|p| ease(p, least, clear));
             if let Some(points) = points {
                 out.push(Bridge {
                     a: (i, ga.node),
