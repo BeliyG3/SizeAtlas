@@ -3,7 +3,9 @@ import { ROAD, type RoadKind } from "../world/map";
 import { mapOf } from "../world/map.fixture";
 import { BRIDGE_RISE } from "../world/map";
 import { buildRoads, roadHalf } from "../world/roads";
-import { AIR_LANES, AIR_SHARE, CAR_SPACING, createTraffic, type Traffic } from "./traffic";
+import { AIR_LANES, AIR_SHARE, CAR_SPACING, createTraffic, SPEED, type Traffic } from "./traffic";
+import { LANE_SHIFT } from "./carPose";
+import { CORNER } from "./corners";
 import { laneOffset, MIN_GAP } from "./junctions";
 
 function graphOf(nodes: number[], edges: [number, number, RoadKind][]) {
@@ -43,6 +45,13 @@ const run = (t: Traffic, seconds: number, each?: () => void) => {
   }
 };
 
+const DT = 1 / 30;
+const snap = (t: Traffic) => ({
+  x: Float32Array.from(t.x),
+  z: Float32Array.from(t.z),
+  h: Float32Array.from(t.heading),
+});
+
 /** Distance from (x, z) to the nearest side of the square ring. */
 function toRing(x: number, z: number): number {
   const inside = (v: number) => Math.min(Math.max(v, 0), 400);
@@ -79,7 +88,11 @@ describe("createTraffic", () => {
   });
 
   it("cars keep their distance across junctions", () => {
-    // The true distance of every two ground cars going the same way, side by side within 2 m.
+    // The true distance of every two ground cars going the same way, side by side within 2 m,
+    // both on their lanes: a car drawn moving across to another lane, or on the curve through a
+    // node, is not (its heading is off the roads', which here run along the axes). The lane it
+    // left is free at once, so the car behind may come up while it is drawn halfway over.
+    const onLane = (h: number) => Math.abs(Math.sin(2 * h)) < 1e-3;
     for (const [g, seed] of [
       [line, 3],
       [line, 8],
@@ -91,9 +104,10 @@ describe("createTraffic", () => {
       let moved = 0;
       run(t, 30, () => {
         for (let i = 0; i < t.count; i++) {
-          if (t.air[i]) continue;
+          if (t.air[i] || !onLane(t.heading[i])) continue;
           for (let j = i + 1; j < t.count; j++) {
-            if (t.air[j] || Math.cos(t.heading[i] - t.heading[j]) < 0.99) continue;
+            if (t.air[j] || !onLane(t.heading[j]) || Math.cos(t.heading[i] - t.heading[j]) < 0.99)
+              continue;
             const dx = t.x[j] - t.x[i];
             const dz = t.z[j] - t.z[i];
             const side = dx * Math.cos(t.heading[i]) - dz * Math.sin(t.heading[i]);
@@ -131,14 +145,16 @@ describe("createTraffic", () => {
         const d = Math.abs(t.z[i]);
         expect(t.z[i] * right).toBeGreaterThan(0);
         if (x > 15 && x < 985) {
-          seen.add(d);
-          expect([2, 6].some((o) => Math.abs(d - o) < 1e-3)).toBe(true);
+          seen.add(Math.round(d * 1000) / 1000);
+          // On one of the two lanes, or drawn moving across between them.
+          expect(d).toBeGreaterThan(2 - 1e-3);
+          expect(d).toBeLessThan(6 + 1e-3);
         } else if (x > 1015 && x < 1985) {
           expect(d).toBeCloseTo(laneOffset(ROAD.street, 0), 3);
         }
       }
     });
-    expect([...seen].map((d) => Math.round(d)).sort()).toEqual([2, 6]);
+    expect(seen.has(2) && seen.has(6)).toBe(true);
   });
 
   it("no cars on lanes", () => {
@@ -146,7 +162,8 @@ describe("createTraffic", () => {
     expect(createTraffic(lanesOnly, 50, 1).count).toBe(0);
     expect(createTraffic(graphOf([], []), 50, 1).count).toBe(0);
 
-    // Streets east-west through the centre, lanes north-south: no car leaves the street axis.
+    // Streets east-west through the centre, lanes north-south: no car leaves the street (it
+    // turns back at the dead ends across it).
     const cross = graphOf(
       [0, 0, 400, 0, -400, 0, 0, 400, 0, -400],
       [
@@ -159,7 +176,7 @@ describe("createTraffic", () => {
     const t = createTraffic(cross, 20, 2);
     expect(t.count).toBe(20);
     run(t, 30, () => {
-      for (let i = 0; i < t.count; i++) expect(Math.abs(t.z[i])).toBeCloseTo(1.5, 3);
+      for (let i = 0; i < t.count; i++) expect(Math.abs(t.z[i])).toBeLessThan(1.5 + 1e-3);
     });
   });
 
@@ -218,5 +235,60 @@ describe("createTraffic", () => {
         expect(Array.from(a).every(Number.isFinite)).toBe(true);
       }
     }
+  });
+
+  it("cars turn on a curve without a jump", () => {
+    // A 400 m square of streets: every node a 90 degree corner, no dead end to turn back at.
+    const square = graphOf(
+      [0, 0, 400, 0, 400, 400, 0, 400],
+      [
+        [0, 1, ROAD.street],
+        [1, 2, ROAD.street],
+        [2, 3, ROAD.street],
+        [3, 0, ROAD.street],
+      ],
+    );
+    // The tightest curve is a right turn, its ends `CORNER - offset` from the lanes' crossing.
+    const rMin = (CORNER - laneOffset(ROAD.street, 0)) / Math.SQRT2;
+    const t = createTraffic(square, 40, 4);
+    t.update(DT); // the cars put down near a node choose their way out: now they are drawn turning
+    let was = snap(t);
+    let bent = 0;
+    for (let n = 0; n < 20 * 30; n++) {
+      t.update(DT);
+      for (let i = 0; i < t.count; i++) {
+        if (t.air[i]) continue;
+        const turn = Math.atan2(
+          Math.sin(t.heading[i] - was.h[i]),
+          Math.cos(t.heading[i] - was.h[i]),
+        );
+        expect(Math.hypot(t.x[i] - was.x[i], t.z[i] - was.z[i])).toBeLessThanOrEqual(
+          SPEED.street * DT + 0.05,
+        );
+        expect(Math.abs(turn)).toBeLessThanOrEqual((SPEED.street * DT) / rMin + 1e-3);
+        if (Math.abs(Math.sin(2 * t.heading[i])) > 0.1) bent++;
+      }
+      was = snap(t);
+    }
+    expect(bent).toBeGreaterThan(0);
+  });
+
+  it("cars move across to another lane without a jump", () => {
+    // Going east off the highway onto the street, the cars of the second lane move to the first.
+    const t = createTraffic(line, 100, 3);
+    let was = snap(t);
+    let between = 0;
+    for (let n = 0; n < 30 * 30; n++) {
+      t.update(DT);
+      for (let i = 0; i < t.count; i++) {
+        if (t.air[i] || Math.min(t.x[i], was.x[i]) < 20 || Math.max(t.x[i], was.x[i]) > 1980) {
+          continue; // turning back at a dead end
+        }
+        expect(Math.abs(t.z[i] - was.z[i])).toBeLessThanOrEqual(LANE_SHIFT * DT + 0.01);
+        if (Math.abs(t.z[i]) > 2.1 && Math.abs(t.z[i]) < 5.9) between++;
+      }
+      was = snap(t);
+    }
+    expect(between).toBeGreaterThan(0);
   });
 });

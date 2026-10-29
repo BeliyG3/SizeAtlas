@@ -1,7 +1,8 @@
 /** Cars driving on lanes and flying cars on air lanes; pure, no three.js. */
 import { ROAD, type RoadKind } from "../world/map";
 import { pointOn, type RoadEdge, type RoadGraph } from "../world/roads";
-import { createJunctions, lanes, laneOffset, MIN_GAP } from "./junctions";
+import { createPoses } from "./carPose";
+import { createJunctions, lanes, MIN_GAP } from "./junctions";
 import {
   createLocals,
   drifted,
@@ -131,17 +132,22 @@ export function createTraffic(
     ground,
   });
   const live = locals.live;
+  const poses = createPoses(g, t, lane, nextE, nextF);
+  const spot = { x: 0, y: 0, z: 0, heading: 0 };
 
   function put(i: number) {
-    const e = g.edges[t.edge[i]];
-    const isAir = i >= ground;
-    const off = laneOffset(e.cls, isAir ? 0 : lane[i]);
-    const p = pointOn(g, t.edge[i], t.s[i], t.forward[i] === 1, off);
+    if (i < ground) return poses.put(i, out);
+    const p = pointOn(g, t.edge[i], t.s[i], t.forward[i] === 1, 0, spot);
     out.x[i] = p.x;
-    if (isAir) out.y[i] = AIR_LANES[(i - ground) % AIR_LANES.length];
-    else out.y[i] = p.y; // on the deck of a bridge
+    out.y[i] = AIR_LANES[(i - ground) % AIR_LANES.length];
     out.z[i] = p.z;
     out.heading[i] = p.heading;
+  }
+
+  /** Puts car `i` down where its track says, drawn on its lane. */
+  function putNew(i: number) {
+    poses.reset(i);
+    put(i);
   }
 
   /**
@@ -214,19 +220,22 @@ export function createTraffic(
     return roomFor;
   }
 
-  /** Drives car `i` on by `dist`, into the lane it planned when it passes the node. */
-  function drive(i: number, dist: number) {
+  /** Drives car `i` on by `dist`, into the lane it planned when it passes the node; the metres it moved. */
+  function drive(i: number, dist: number): number {
     const len = g.edges[t.edge[i]].len;
     const s = t.s[i] + dist;
     if (s <= len || nextE[i] < 0 || lane[i] !== nextL[i]) {
+      const was = t.s[i];
       t.s[i] = Math.min(s, len);
-      return;
+      return t.s[i] - was;
     }
+    poses.crossing(i);
     // ponytail: one node a frame; an edge shorter than the step is crossed over the next frames.
     t.edge[i] = nextE[i];
     t.forward[i] = nextF[i];
     t.s[i] = Math.min(s - len, g.edges[nextE[i]].len);
     nextE[i] = -1;
+    return dist;
   }
 
   function update(dt: number, around: Circle | null = null) {
@@ -237,7 +246,7 @@ export function createTraffic(
     for (let i = 0; i < ground; i++) {
       if (!live[i]) continue;
       const free = Math.max(0, (gapAhead(i) - MIN_GAP) / HEADWAY);
-      drive(i, Math.min(speedOn(g.edges[t.edge[i]].cls), free) * h);
+      poses.ease(i, h, drive(i, Math.min(speedOn(g.edges[t.edge[i]].cls), free) * h));
       const atNode = t.s[i] >= g.edges[t.edge[i]].len && nextE[i] >= 0;
       held[i] = atNode ? held[i] + h : 0;
     }
@@ -253,16 +262,22 @@ export function createTraffic(
   function relocate(i: number, spots: (allow: Allow) => Spots): boolean {
     const isAir = i >= ground;
     const ring = spots(isAir ? flies : drives);
-    const was = { edge: t.edge[i], s: t.s[i], forward: t.forward[i], lane: lane[i] };
+    const was = {
+      edge: t.edge[i],
+      s: t.s[i],
+      forward: t.forward[i],
+      lane: lane[i],
+      next: nextE[i],
+    };
+    nextE[i] = -1; // no curve to its old way out is drawn at a new spot
     for (let tries = 0; tries < PLACE_TRIES; tries++) {
-      if (!placeOn(g, t, i, ring, rand)) return false;
+      if (!placeOn(g, t, i, ring, rand)) break;
       if (!isAir) lane[i] = laneAt(i, t.edge[i]);
-      put(i);
+      putNew(i);
       if (
         isAir ||
         (!crowded(t.edge[i], t.forward[i], lane[i], t.s[i], i, CAR_SPACING) && !tooClose(i, ground))
       ) {
-        nextE[i] = -1;
         held[i] = 0;
         return true;
       }
@@ -271,7 +286,8 @@ export function createTraffic(
     t.s[i] = was.s;
     t.forward[i] = was.forward;
     lane[i] = was.lane;
-    put(i);
+    nextE[i] = was.next;
+    putNew(i);
     return false;
   }
 
@@ -294,7 +310,7 @@ export function createTraffic(
     if (at) {
       [t.edge[i], t.s[i], t.forward[i]] = [at.edge, at.s, at.forward ? 1 : 0];
       [lane[i], want[i]] = [at.lane, at.want];
-      put(i);
+      putNew(i);
       continue;
     }
     for (let tries = 0; tries < PLACE_TRIES; tries++) {
@@ -302,10 +318,10 @@ export function createTraffic(
       if (isAir) break;
       want[i] = Math.floor(rand() * 2);
       lane[i] = laneAt(i, t.edge[i]);
-      put(i);
+      putNew(i);
       if (!tooClose(i, i)) break;
     }
-    put(i);
+    putNew(i);
   }
   return out;
 }

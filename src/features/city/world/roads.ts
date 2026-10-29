@@ -45,11 +45,19 @@ export function roadHalf(cls: RoadKind): number {
   return ROAD_WIDTH[cls] / 2;
 }
 
+/** A point on a road and the heading of the travel there. */
+export interface RoadPoint {
+  x: number;
+  y: number;
+  z: number;
+  heading: number;
+}
+
 /**
  * The point `s` metres from the start of `edge` along the way (`forward`: from a to b), moved
  * `offset` metres to the right of the direction of travel (going toward +X, right is +Z).
  * `heading` is `atan2(dx, dz)` of the direction. `y` is the road's height there, between the
- * lifts of the edge's ends.
+ * lifts of the edge's ends. Written into `out`, so a frame can reuse one.
  */
 export function pointOn(
   g: RoadGraph,
@@ -57,7 +65,8 @@ export function pointOn(
   s: number,
   forward: boolean,
   offset: number,
-): { x: number; y: number; z: number; heading: number } {
+  out: RoadPoint = { x: 0, y: 0, z: 0, heading: 0 },
+): RoadPoint {
   const e = g.edges[edge];
   const [from, to] = forward ? [e.a, e.b] : [e.b, e.a];
   const x0 = g.nodes[from * 2];
@@ -66,10 +75,9 @@ export function pointOn(
   const [y0, y1] = forward ? [e.liftA, e.liftB] : [e.liftB, e.liftA];
   const dx = (g.nodes[to * 2] - x0) / len;
   const dz = (g.nodes[to * 2 + 1] - z0) / len;
-  return {
-    x: x0 + dx * s - dz * offset,
-    y: y0 + ((y1 - y0) * s) / len,
-    z: z0 + dz * s + dx * offset,
-    heading: Math.atan2(dx, dz),
-  };
+  out.x = x0 + dx * s - dz * offset;
+  out.y = y0 + ((y1 - y0) * s) / len;
+  out.z = z0 + dz * s + dx * offset;
+  out.heading = Math.atan2(dx, dz);
+  return out;
 }
