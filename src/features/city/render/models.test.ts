@@ -3,7 +3,7 @@ import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { describe, expect, it } from "vitest";
 import type { Residents } from "../actors/residents";
 import type { Traffic } from "../actors/traffic";
-import { carInstances, CAR_LENGTH, CAR_NEAR } from "./cars";
+import { carInstances, CAR_LENGTH, CAR_MID, CAR_NEAR, midCar } from "./cars";
 import carUrl from "../assets/skycar.glb?inline";
 import walkerUrl from "../assets/walker.glb?inline";
 import { bakeWalk, peopleInstances, POSES } from "./people";
@@ -81,9 +81,9 @@ describe("carInstances", () => {
     const car = (await load(carUrl)).scene;
     const cars = carInstances(car, 60);
     const all = cars.group.children as InstancedMesh[];
-    const meshes = all.filter((m) => m.name !== "car far");
+    const meshes = all.filter((m) => m.name !== "car far" && m.name !== "car mid");
     expect(meshes.length).toBe(8); // nine materials, the panel is drawn as the body
-    expect(all.length).toBe(9);
+    expect(all.length).toBe(10);
     const box = new Box3();
     for (const mesh of meshes) {
       mesh.geometry.computeBoundingBox();
@@ -108,26 +108,35 @@ describe("carInstances", () => {
     cars.dispose();
   });
 
-  it("far cars are boxes, near ones the model, each car once; a moved one grows in", async () => {
+  it("near cars are the model, then a cabin car, then boxes; a moved one grows in", async () => {
     const cars = carInstances((await load(carUrl)).scene, 10);
     const all = cars.group.children as InstancedMesh[];
     const far = all.find((m) => m.name === "car far")!;
-    const body = all.find((m) => m.name !== "car far")!;
-    const four = traffic([0, 250, 600, 1200]);
+    const mid = all.find((m) => m.name === "car mid")!;
+    const body = all.find((m) => m.name !== "car far" && m.name !== "car mid")!;
+    const four = traffic([0, 150, 600, 1200]);
     four.appear[2] = 0.5;
-    // The camera right over the first car: the others are more than CAR_NEAR away.
+    // The camera right over the first car: the second is a cabin car, the others boxes.
     cars.update(four, new Vector3(0, 10, 0));
-    expect(body.count).toBe(1);
-    expect(far.count).toBe(3);
-    expect(body.count + far.count).toBe(four.count);
+    expect([body.count, mid.count, far.count]).toEqual([1, 1, 2]);
     const m = new Matrix4();
-    far.getMatrixAt(1, m);
+    far.getMatrixAt(0, m);
     expect(new Vector3().setFromMatrixPosition(m).x).toBe(600);
     expect(new Vector3().setFromMatrixScale(m).x).toBeCloseTo(0.5, 5);
-    // Between the second and the third car, those two are near.
-    cars.update(four, new Vector3(425, 0, 0));
-    expect([body.count, far.count]).toEqual([2, 2]);
-    expect(CAR_NEAR).toBe(200);
+    // Over the third car: the others are 450 m and more away, all boxes.
+    cars.update(four, new Vector3(600, 0, 0));
+    expect([body.count, mid.count, far.count]).toEqual([1, 0, 3]);
+    expect([CAR_NEAR, CAR_MID]).toEqual([80, 250]);
     cars.dispose();
+  });
+
+  it("the middle car has at most 32 triangles and the model's length", () => {
+    const g = midCar();
+    const triangles = (g.index ? g.index.count : g.getAttribute("position").count) / 3;
+    expect(triangles).toBeLessThanOrEqual(32);
+    g.computeBoundingBox();
+    expect(g.boundingBox!.max.z - g.boundingBox!.min.z).toBeCloseTo(CAR_LENGTH, 5);
+    expect(g.boundingBox!.min.y).toBeCloseTo(0, 5);
+    g.dispose();
   });
 });

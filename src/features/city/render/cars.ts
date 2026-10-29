@@ -1,6 +1,7 @@
 /**
  * The traffic as instanced cars: near the camera the model, its parts merged by material into one
- * instanced mesh each, all sharing one set of instance matrices; farther off a plain lit box.
+ * instanced mesh each, all sharing one set of instance matrices; farther off a body with a cabin
+ * of a few faces, and farthest a plain box, both of the body's material.
  */
 import {
   Box3,
@@ -21,15 +22,16 @@ import {
   type Object3D,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { splitNear } from "../actors/residents";
 import type { Traffic } from "../actors/traffic";
 import { LOOK } from "../look";
 import { disposeAll } from "./dispose";
 
 /** A car is this long, metres; the model is scaled to it. */
 export const CAR_LENGTH = 4.2;
-/** Cars within this many metres of the camera are drawn as models, the rest as boxes. */
-export const CAR_NEAR = 200;
+/** Cars within this many metres of the camera are drawn as models... */
+export const CAR_NEAR = 80;
+/** ...then up to this many as a body with a cabin (`midCar`), the rest as boxes. */
+export const CAR_MID = 250;
 /** The far car: a box this wide and tall, `CAR_LENGTH` long, metres. */
 export const CAR_BOX = [1.8, 1.3] as const;
 
@@ -102,15 +104,21 @@ export function carInstances(
     group.add(mesh);
     return mesh;
   });
-  // From afar a box of the body's own material: one draw for every far car.
-  const brick = new BoxGeometry(CAR_BOX[0], CAR_BOX[1], CAR_LENGTH).translate(0, CAR_BOX[1] / 2, 0);
-  const far = new InstancedMesh(brick, looks.Body, max);
-  far.count = 0;
-  far.frustumCulled = false;
-  far.name = "car far";
-  group.add(far);
+  // Farther off one draw for every car of each band, in the body's own material.
+  const lod = (geometry: BufferGeometry, name: string) => {
+    const mesh = new InstancedMesh(geometry, looks.Body, max);
+    mesh.count = 0;
+    mesh.frustumCulled = false;
+    mesh.name = name;
+    group.add(mesh);
+    return mesh;
+  };
+  const mid = lod(midCar(), "car mid");
+  const far = lod(
+    new BoxGeometry(CAR_BOX[0], CAR_BOX[1], CAR_LENGTH).translate(0, CAR_BOX[1] / 2, 0),
+    "car far",
+  );
 
-  const split = { near: new Int32Array(max), far: new Int32Array(max) };
   const matrix = new Matrix4();
   const at = new Vector3();
   const turn = new Quaternion();
@@ -122,14 +130,40 @@ export function carInstances(
     size.setScalar(t.appear[i]);
     matrix.compose(at.set(t.x[i], t.y[i], t.z[i]), turn, size).toArray(array, slot * 16);
   };
+  const bands = [matrices, mid.instanceMatrix, far.instanceMatrix];
+  const near2 = CAR_NEAR * CAR_NEAR;
+  const mid2 = CAR_MID * CAR_MID;
   function update(t: Traffic, camera: Vector3) {
-    const got = splitNear(t, Math.min(t.count, max), camera, CAR_NEAR, split);
-    const farMatrices = far.instanceMatrix;
-    for (let k = 0; k < got.near; k++) put(t, split.near[k], matrices.array as Float32Array, k);
-    for (let k = 0; k < got.far; k++) put(t, split.far[k], farMatrices.array as Float32Array, k);
-    matrices.needsUpdate = farMatrices.needsUpdate = true;
-    for (const m of meshes) m.count = got.near;
-    far.count = got.far;
+    const counts = [0, 0, 0];
+    for (let i = 0; i < Math.min(t.count, max); i++) {
+      const d2 = (t.x[i] - camera.x) ** 2 + (t.y[i] - camera.y) ** 2 + (t.z[i] - camera.z) ** 2;
+      const band = d2 <= near2 ? 0 : d2 <= mid2 ? 1 : 2;
+      put(t, i, bands[band].array as Float32Array, counts[band]++);
+    }
+    for (const b of bands) b.needsUpdate = true;
+    for (const m of meshes) m.count = counts[0];
+    mid.count = counts[1];
+    far.count = counts[2];
   }
   return { group, update, dispose: () => disposeAll(group) };
+}
+
+/**
+ * The car at a middle distance, 24 triangles: the body as a low box and on it a cabin narrowing
+ * to its roof, `CAR_LENGTH` long, on the ground, nose to +z like the model.
+ */
+export function midCar(): BufferGeometry {
+  const [w, h] = CAR_BOX;
+  const body = new BoxGeometry(w, h * 0.55, CAR_LENGTH).translate(0, h * 0.275, 0);
+  const cabin = new BoxGeometry(w * 0.9, h * 0.45, CAR_LENGTH * 0.5);
+  const p = cabin.getAttribute("position");
+  for (let i = 0; i < p.count; i++) {
+    if (p.getY(i) > 0) p.setXYZ(i, p.getX(i) * 0.8, p.getY(i), p.getZ(i) * 0.6);
+  }
+  cabin.computeVertexNormals();
+  cabin.translate(0, h * 0.775, -CAR_LENGTH * 0.05);
+  const car = mergeGeometries([body, cabin])!;
+  body.dispose();
+  cabin.dispose();
+  return car;
 }
