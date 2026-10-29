@@ -23,6 +23,8 @@ const OUT: f32 = CLEAR + 3.0 * WORLD_CELL;
 const REACH: f32 = 600.0;
 /// A turn costs as much as this many cells of way, per 45°.
 const TURN: f32 = BEND / WORLD_CELL;
+/// A step along an earlier bridge costs this share of one: later ways join its corridor.
+const JOIN: f32 = 0.3;
 /// A search gives up after this many states.
 const MAX_POPS: usize = 2_000_000;
 /// No way is searched on a raster of more states (cells · headings) than this.
@@ -52,6 +54,8 @@ pub(crate) struct Sea {
     open: Vec<bool>,
     best: Vec<f32>,
     back: Vec<u8>,
+    /// Cells an earlier bridge runs over: a way along them costs `JOIN` of a step.
+    used: Vec<bool>,
 }
 
 impl Sea {
@@ -66,9 +70,28 @@ impl Sea {
         };
         Self {
             world,
-            open,
             best: vec![f32::INFINITY; states],
             back: vec![START; states],
+            used: vec![false; open.len()],
+            open,
+        }
+    }
+
+    /// Marks the cells the bridge `points` runs over, so later ways go along it.
+    pub fn mark(&mut self, points: &[[f32; 2]]) {
+        for w in points.windows(2) {
+            let l = (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]);
+            let n = (2.0 * l / WORLD_CELL).ceil() as usize;
+            for k in 0..=n {
+                let t = k as f32 / n.max(1) as f32;
+                let p = [
+                    w[0][0] + t * (w[1][0] - w[0][0]),
+                    w[0][1] + t * (w[1][1] - w[0][1]),
+                ];
+                if let Some(c) = self.world.cell(p) {
+                    self.used[c] = true;
+                }
+            }
         }
     }
 
@@ -229,7 +252,9 @@ impl Sea {
                     continue;
                 }
                 let step = if diagonal { SQRT_2 } else { 1.0 };
-                let (n, cost) = ((ny * w + nx) as usize, g + step + TURN * turn as f32);
+                let n = (ny * w + nx) as usize;
+                let step = if self.used[n] { JOIN * step } else { step };
+                let cost = g + step + TURN * turn as f32;
                 let next = n * 8 + k;
                 let reach = cost + guess(n, k);
                 if reach <= bound && cost < self.best[next] && self.back[next] & DONE == 0 {

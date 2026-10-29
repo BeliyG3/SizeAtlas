@@ -4,7 +4,7 @@ use crate::city::archipelago::tests::{
     add, crossing, gate, inside, len, outline, point_segment, probes, refs, sides, sub,
 };
 use crate::city::test_sets::{
-    eight, five, five_real, four, four_real, four_turned, three, three_real,
+    eight, five, five_real, four, four_real, four_turned, six, three, three_real,
 };
 use crate::city::{Island, place, place_on_rays};
 use std::f32::consts::{FRAC_PI_4, PI, TAU};
@@ -44,6 +44,7 @@ fn every_pair_bridged_gate_to_gate() {
         three_real(),
         four_real(),
         five_real(),
+        six(),
         eight(),
     ];
     for set in sets {
@@ -67,12 +68,27 @@ fn every_pair_bridged_gate_to_gate() {
     }
 }
 
+/// `p` without the points where it runs straight on: a fork of a trunk splits a straight.
+fn straights(p: &[[f32; 2]]) -> Vec<[f32; 2]> {
+    let mut out = vec![p[0]];
+    for w in p.windows(3) {
+        let (u, v) = (sub(w[1], w[0]), sub(w[2], w[1]));
+        if (u[0] * v[1] - u[1] * v[0]).abs() > 1e-3 * len(u) * len(v) {
+            out.push(w[1]);
+        }
+    }
+    out.push(p[p.len() - 1]);
+    out
+}
+
+/// Every run lies along a multiple of 45°; every straight (runs one after another along one
+/// line are one) is at least 4 m long, those out of the gates 30 m, along the gates.
 #[test]
 fn bridges_are_octilinear_and_leave_square() {
-    for set in [four(), five(), four_real(), five_real()] {
+    for set in [four(), five(), four_real(), five_real(), six(), eight()] {
         for b in &laid(set).2 {
-            let p = &b.points;
-            assert!(p.windows(2).all(|w| octilinear(w[0], w[1])), "{b:?}");
+            assert!(b.points.windows(2).all(|w| octilinear(w[0], w[1])), "{b:?}");
+            let p = &straights(&b.points);
             assert!(
                 p.windows(2).all(|w| len(sub(w[1], w[0])) >= 4.0 - 1e-3),
                 "{b:?}"
@@ -152,37 +168,30 @@ fn segments_apart(a: [f32; 2], b: [f32; 2], c: [f32; 2], d: [f32; 2]) -> f32 {
     (ends.iter()).fold(f32::INFINITY, |m, &(p, s, e)| m.min(point_segment(p, s, e)))
 }
 
-/// The run of `b` at its gate `g`, if `g` is one of its gates.
-fn gate_run(b: &Bridge, g: (usize, u32)) -> Option<usize> {
-    (b.a == g)
-        .then_some(0)
-        .or((b.b == g).then(|| b.points.len() - 2))
-}
-
-/// The least distance between the runs of `x` and of `y`, but for their two runs at a gate
-/// both take, against each other (they fork there).
+/// The least distance between the runs of `x` and of `y`, but for runs they share (a trunk)
+/// and runs that meet end to end (they fork or join there).
 fn apart(x: &Bridge, y: &Bridge) -> f32 {
-    let skip: Vec<_> = [x.a, x.b]
-        .into_iter()
-        .filter_map(|g| Some((gate_run(x, g)?, gate_run(y, g)?)))
-        .collect();
     let mut best = f32::INFINITY;
     for r in 0..x.points.len() - 1 {
-        for q in (0..y.points.len() - 1).filter(|&q| !skip.contains(&(r, q))) {
+        for q in 0..y.points.len() - 1 {
             let (s, t) = (&x.points[r..r + 2], &y.points[q..q + 2]);
-            best = best.min(segments_apart(s[0], s[1], t[0], t[1]));
+            if !crate::city::trunk::one_run(s, t) && !crate::city::trunk::touch(s, t) {
+                best = best.min(segments_apart(s[0], s[1], t[0], t[1]));
+            }
         }
     }
     best
 }
 
 /// Bridges nearer than a deck and a margin (16 + 4 m) stand on different levels, and the same
-/// level keeps a deck apart; a bridge near no other stands on level 0.
+/// level keeps a deck apart (but where they share a trunk or fork); a bridge near no other and
+/// on no trunk stands on level 0.
 #[test]
 fn crossing_bridges_get_levels() {
     let mut near = 0;
     for set in [four(), five()] {
         let all = laid(set).2;
+        let trunk = trunks(&all);
         for (i, x) in all.iter().enumerate() {
             let mut alone = true;
             for (j, y) in all.iter().enumerate().filter(|&(j, _)| j != i) {
@@ -191,9 +200,16 @@ fn crossing_bridges_get_levels() {
                     alone = false;
                     near += usize::from(i < j);
                 }
-                assert!(x.level != y.level || d >= 16.0, "{d}: {x:?} {y:?}");
+                // One level per bridge: the bridges of a trunk stand on its level even where,
+                // off the trunk, they pass near each other.
+                let one_trunk = trunk[i] == trunk[j];
+                assert!(
+                    x.level != y.level || d >= 16.0 || one_trunk,
+                    "{d}: {x:?} {y:?}"
+                );
             }
-            if alone {
+            // A trunk stands on one level: a bridge alone but on a trunk takes the trunk's.
+            if alone && trunk.iter().filter(|&&t| t == trunk[i]).count() == 1 {
                 assert_eq!(x.level, 0, "{x:?}");
             }
         }
@@ -236,6 +252,7 @@ fn no_sharp_corners() {
         three_real(),
         four_real(),
         five_real(),
+        six(),
         eight(),
     ];
     for set in sets {

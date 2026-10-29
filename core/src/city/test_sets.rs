@@ -129,6 +129,12 @@ pub(crate) fn five_real() -> &'static [Island] {
     SET.get_or_init(|| second(&FIVE, five()))
 }
 
+/// From 32 GiB halving down to 1 GiB.
+pub(crate) fn six() -> &'static [Island] {
+    static SET: OnceLock<Vec<Island>> = OnceLock::new();
+    SET.get_or_init(|| archipelago(&(0..6).map(|i| (32 * GIB) >> i).collect::<Vec<_>>()))
+}
+
 /// From 256 GiB halving down to 2 GiB.
 pub(crate) fn eight() -> &'static [Island] {
     static SET: OnceLock<Vec<Island>> = OnceLock::new();
