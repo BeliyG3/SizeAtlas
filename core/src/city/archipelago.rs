@@ -5,12 +5,15 @@ use super::coast::{Coast, inside};
 use super::grid::distance;
 use super::map::Island;
 use super::world::{SPIRAL, STRAIT};
+use std::f32::consts::{PI, TAU};
 
 /// The raster's distances are off by up to a cell's diagonal at either end; within this band of
 /// `STRAIT` a contour point is measured against the outlines themselves.
 const BAND: f32 = 2.0 * WORLD_CELL;
 /// Bisection steps along an island's ray.
 const ROUNDS: usize = 30;
+/// Gates built facing directions this close to the real ones face them well enough, radians.
+const SETTLED: f32 = 2.0 * PI / 180.0;
 
 /// Where each island goes: the shift added to its points. The islands come in the order of
 /// [`super::directions`]; the first has the middle of its outline's bounding box at `(0, 0)`, the
@@ -73,6 +76,35 @@ pub fn place(islands: &[&Island]) -> Vec<[f32; 2]> {
         at.push(offset);
     }
     at
+}
+
+/// Directions (radians) from each island moved by `offsets` (see [`place`]) to every other one,
+/// in their order without it: between the middles of their outlines' bounding boxes. These are
+/// what the gates should face; [`super::directions`] only foresees them.
+pub fn bearings(islands: &[&Island], offsets: &[[f32; 2]]) -> Vec<Vec<f32>> {
+    let mids: Vec<[f32; 2]> = (islands.iter().zip(offsets))
+        .map(|(island, &at)| {
+            let (lo, hi) = bounds(shape(island, at).iter().flatten());
+            [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0]
+        })
+        .collect();
+    (mids.iter().enumerate())
+        .map(|(i, a)| {
+            (mids.iter().enumerate())
+                .filter(|&(j, _)| j != i)
+                .map(|(_, b)| (b[1] - a[1]).atan2(b[0] - a[0]))
+                .collect()
+        })
+        .collect()
+}
+
+/// Whether every direction of `real` lies within `SETTLED` of the one of `used` it stands for:
+/// islands built facing `used` need not be built again facing `real`.
+pub fn settled(used: &[Vec<f32>], real: &[Vec<f32>]) -> bool {
+    let off = |a: f32, b: f32| ((a - b + PI).rem_euclid(TAU) - PI).abs();
+    used.len() == real.len()
+        && (used.iter().zip(real))
+            .all(|(u, r)| u.len() == r.len() && u.iter().zip(r).all(|(&a, &b)| off(a, b) < SETTLED))
 }
 
 #[cfg(test)]

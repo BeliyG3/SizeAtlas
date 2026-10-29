@@ -1,10 +1,11 @@
 use super::*;
+use crate::city::archipelago::bearings;
 use crate::city::archipelago::tests::{
-    add, crossing, five, four, gate, inside, len, outline, point_segment, probes, refs, sides, sub,
-    three,
+    add, crossing, five, five_real, four, four_real, gate, inside, len, outline, point_segment,
+    probes, refs, sides, sub, three, three_real,
 };
 use crate::city::{Island, place};
-use std::f32::consts::FRAC_PI_4;
+use std::f32::consts::{FRAC_PI_4, PI, TAU};
 use std::time::Instant;
 
 /// No bridge comes nearer than this to an island's outline, but on its way out of its gates.
@@ -34,7 +35,14 @@ fn near(shape: &[Vec<[f32; 2]>], p: [f32; 2], r: f32) -> bool {
 
 #[test]
 fn every_pair_bridged_gate_to_gate() {
-    for set in [three(), four(), five()] {
+    for set in [
+        three(),
+        four(),
+        five(),
+        three_real(),
+        four_real(),
+        five_real(),
+    ] {
         let (at, _, all) = laid(set);
         let mut pairs: Vec<_> = all.iter().map(|b| (b.a.0, b.b.0)).collect();
         pairs.sort_unstable();
@@ -57,7 +65,7 @@ fn every_pair_bridged_gate_to_gate() {
 
 #[test]
 fn bridges_are_octilinear_and_leave_square() {
-    for set in [four(), five()] {
+    for set in [four(), five(), four_real(), five_real()] {
         for b in &laid(set).2 {
             let p = &b.points;
             assert!(p.windows(2).all(|w| octilinear(w[0], w[1])), "{b:?}");
@@ -80,7 +88,7 @@ fn bridges_are_octilinear_and_leave_square() {
 /// over those only on the straight from or to their gates.
 #[test]
 fn bridges_avoid_third_islands() {
-    for set in [four(), five()] {
+    for set in [four(), five(), four_real(), five_real()] {
         let (_, shapes, all) = laid(set);
         let shapes = &shapes;
         for b in all {
@@ -103,7 +111,7 @@ fn bridges_avoid_third_islands() {
 /// and its last run likewise.
 #[test]
 fn bridges_keep_off_the_coasts() {
-    for set in [four(), five()] {
+    for set in [four(), five(), four_real(), five_real()] {
         let (_, shapes, all) = laid(set);
         let shapes = &shapes;
         for b in all {
@@ -200,4 +208,65 @@ fn deterministic() {
     let all = bridges(&refs(set), &at);
     eprintln!("5 islands: placed and bridged in {:?}", start.elapsed());
     assert_eq!(all, bridges(&refs(set), &place(&refs(set))));
+}
+
+/// The turn at every corner of `p`, radians.
+fn turns(p: &[[f32; 2]]) -> Vec<f32> {
+    (p.windows(3))
+        .map(|w| {
+            let (u, v) = (sub(w[1], w[0]), sub(w[2], w[1]));
+            let cos = (u[0] * v[0] + u[1] * v[1]) / (len(u) * len(v));
+            cos.clamp(-1.0, 1.0).acos()
+        })
+        .collect()
+}
+
+/// No corner of a bridge turns more than 45°, nor where it goes on from the straights of its
+/// gates' highways.
+#[test]
+fn no_sharp_corners() {
+    for set in [
+        three(),
+        four(),
+        five(),
+        three_real(),
+        four_real(),
+        five_real(),
+    ] {
+        for b in laid(set).2 {
+            let (da, db) = (gate(&set[b.a.0], b.a.1).dir, gate(&set[b.b.0], b.b.1).dir);
+            let (p, n) = (&b.points, b.points.len());
+            let back = |q: [f32; 2], d: [f32; 2]| [q[0] - 10.0 * d[0], q[1] - 10.0 * d[1]];
+            let mut line = vec![back(p[0], da)];
+            line.extend_from_slice(p);
+            line.push(back(p[n - 1], db));
+            for t in turns(&line) {
+                assert!(t <= FRAC_PI_4 + 1e-3, "{}°: {b:?}", t.to_degrees());
+            }
+        }
+    }
+}
+
+/// After the second pass a gate faces the island it is bridged to: a bridge of the simple shape
+/// (at most three runs) sets out within 45° of the way to the middle of the other island, give
+/// or take the 2° the second placement may move it.
+#[test]
+fn real_directions_aim_gates() {
+    let set = four_real();
+    let (at, _, all) = laid(set);
+    let aims = bearings(&refs(set), &at);
+    let simple: Vec<&Bridge> = all.iter().filter(|b| b.points.len() <= 4).collect();
+    assert!(!simple.is_empty());
+    for b in simple {
+        let (p, n) = (&b.points, b.points.len());
+        let ends = [
+            (b.a.0, b.b.0, sub(p[1], p[0])),
+            (b.b.0, b.a.0, sub(p[n - 2], p[n - 1])),
+        ];
+        for (i, j, run) in ends {
+            let want = aims[i][j - usize::from(j > i)];
+            let off = (run[1].atan2(run[0]) - want + PI).rem_euclid(TAU) - PI;
+            assert!(off.abs() <= 47f32.to_radians(), "{i} -> {j}: {off}: {b:?}");
+        }
+    }
 }

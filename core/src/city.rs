@@ -1,6 +1,7 @@
 //! Island city layout: raster tools and the vector map built on top of them.
 
 mod archipelago;
+mod bends;
 mod blocks;
 mod bridges;
 mod canal;
@@ -30,6 +31,7 @@ mod rng;
 mod road;
 mod seaway;
 mod shore;
+mod simple;
 mod span;
 mod split;
 mod streets;
@@ -39,7 +41,7 @@ mod voronoi;
 mod widths;
 mod world;
 
-pub use archipelago::place;
+pub use archipelago::{bearings, place, settled};
 pub use encode::{
     CITY_FORMAT, CITY_HEADER_LEN, EDGE_LEN, GATE_LEN, POINT_LEN, POLY_LEN, encode_city,
 };

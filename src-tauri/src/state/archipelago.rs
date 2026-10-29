@@ -1,5 +1,6 @@
-//! The archipelago: the islands of the open drives, each moved to its place, and the bridges
-//! between them (see `sizeatlas_core::city::place` and `bridges`).
+//! The archipelago: the islands of the open drives, each built facing the others where they
+//! stand and moved to its place, and the bridges between them (see `sizeatlas_core::city::place`
+//! and `bridges`). A drive's `get_city` serves its island of the archipelago.
 
 use std::panic::resume_unwind;
 use std::path::Path;
@@ -8,9 +9,13 @@ use std::thread;
 use sizeatlas_core::city::{self, Island};
 
 use super::AppState;
-use super::island::{members_of, survey};
+use super::island::{Kept, Member, free_space, members_of, step, survey};
 use crate::dto::{ArchipelagoBridgeDto, ArchipelagoDto, ArchipelagoIslandDto};
 use crate::error::CmdError;
+
+fn refs(kept: &[Kept]) -> Vec<&Island> {
+    kept.iter().map(|(_, island, _)| &**island).collect()
+}
 
 impl AppState {
     /// The world around the root `selected`: all open drives if it is one, else only itself.
@@ -29,31 +34,20 @@ impl AppState {
         disks: &[(String, u64)],
     ) -> Result<ArchipelagoDto, CmdError> {
         let root = self.with_live(selected, 0, |tree| tree.name(0).to_owned())?;
-        let list = members_of(&self.open_trees(), mounts, disks);
+        let trees = self.open_trees();
+        let list = members_of(&trees, mounts, disks);
+        let open: Vec<u64> = trees.iter().map(|(g, _)| *g).collect();
         // `(generation, root)` in the order of the members; a root that is no member is alone.
-        let roots: Vec<(u64, String)> = if list.iter().any(|m| m.generation == selected) {
-            list.into_iter().map(|m| (m.generation, m.root)).collect()
+        let (roots, kept, offsets) = if list.iter().any(|m| m.generation == selected) {
+            let (kept, offsets) = self.settle(&list, &open)?;
+            let roots = list.into_iter().map(|m| (m.generation, m.root)).collect();
+            (roots, kept, offsets)
         } else {
-            vec![(selected, root)]
+            let kept = vec![self.alone(selected, disks, &open)?];
+            let offsets = city::place(&refs(&kept));
+            (vec![(selected, root)], kept, offsets)
         };
-        // Each island is built the way `city` builds it, so that it lands in the cache under the
-        // key `city` will ask for; those the cache has answer at once.
-        // ponytail: scoped threads, one per island (at most eight), as the app has no rayon.
-        let built: Vec<Result<Vec<u8>, CmdError>> = thread::scope(|scope| {
-            let jobs: Vec<_> = (roots.iter())
-                .map(|(generation, _)| scope.spawn(|| self.city_in(*generation, mounts, disks)))
-                .collect();
-            (jobs.into_iter())
-                .map(|job| job.join().unwrap_or_else(|panic| resume_unwind(panic)))
-                .collect()
-        });
-        built.into_iter().try_for_each(|r| r.map(drop))?;
-        let kept = (roots.iter())
-            .map(|(generation, _)| self.0.city.island(*generation).ok_or(CmdError::StaleId))
-            .collect::<Result<Vec<_>, _>>()?;
-        let refs: Vec<&Island> = kept.iter().map(|(_, island)| &**island).collect();
-        let offsets = city::place(&refs);
-        let bridges = city::bridges(&refs, &offsets);
+        let bridges = city::bridges(&refs(&kept), &offsets);
         // serde_json writes a number that is not finite as `null`.
         debug_assert!(offsets.iter().flatten().all(|v| v.is_finite()));
         debug_assert!(
@@ -64,7 +58,7 @@ impl AppState {
         Ok(ArchipelagoDto {
             islands: (roots.into_iter().zip(&offsets).zip(&kept))
                 .map(
-                    |(((generation, root), at), (rev, _))| ArchipelagoIslandDto {
+                    |(((generation, root), at), (rev, ..))| ArchipelagoIslandDto {
                         generation,
                         rev: *rev,
                         root,
@@ -77,6 +71,89 @@ impl AppState {
                 .into_iter()
                 .map(ArchipelagoBridgeDto::from)
                 .collect(),
+        })
+    }
+
+    /// Encoded island map of the whole root `generation` (see `sizeatlas_core::city`). A drive's
+    /// is its island of the archipelago, gates facing the other open drives; a root that is not
+    /// a drive has none.
+    pub fn city(&self, generation: u64, cache_dir: &Path) -> Result<Vec<u8>, CmdError> {
+        // A stale generation answers before the disks are listed.
+        self.with_live(generation, 0, |_| ())?;
+        let (mounts, disks) = survey(cache_dir);
+        self.city_in(generation, &mounts, &disks)
+    }
+
+    /// [`AppState::city`] with the mount points and the free space of the disks given.
+    pub(super) fn city_in(
+        &self,
+        generation: u64,
+        mounts: &[String],
+        disks: &[(String, u64)],
+    ) -> Result<Vec<u8>, CmdError> {
+        let trees = self.open_trees();
+        let list = members_of(&trees, mounts, disks);
+        let open: Vec<u64> = trees.iter().map(|(g, _)| *g).collect();
+        let (_, _, bytes) = match list.iter().position(|m| m.generation == generation) {
+            Some(me) => self.settle(&list, &open)?.0.swap_remove(me),
+            None => self.alone(generation, disks, &open)?,
+        };
+        Ok(bytes)
+    }
+
+    /// The island of a root that is no drive: no gates, the free space of its disk.
+    fn alone(
+        &self,
+        generation: u64,
+        disks: &[(String, u64)],
+        open: &[u64],
+    ) -> Result<Kept, CmdError> {
+        let free = self.with_live(generation, 0, |tree| {
+            step(free_space(tree.name(0), disks, tree.volume))
+        })?;
+        self.island_in(generation, free, &[], open)
+    }
+
+    /// The islands of the members `list` (in its order) and where they stand. They are built
+    /// facing the places [`city::directions`] foresees; where [`city::place`] puts them
+    /// elsewhere (not [`city::settled`]), built again facing where they stand and placed again.
+    /// Either way the same members give the same world.
+    fn settle(
+        &self,
+        list: &[Member],
+        open: &[u64],
+    ) -> Result<(Vec<Kept>, Vec<[f32; 2]>), CmdError> {
+        let sizes: Vec<(u64, u64)> = list.iter().map(|m| (m.used, m.free)).collect();
+        let foreseen: Vec<Vec<f32>> = (0..list.len())
+            .map(|me| city::directions(&sizes, me))
+            .collect();
+        let first = self.build(list, &foreseen, open)?;
+        let at = city::place(&refs(&first));
+        let real = city::bearings(&refs(&first), &at);
+        if city::settled(&foreseen, &real) {
+            return Ok((first, at));
+        }
+        let second = self.build(list, &real, open)?;
+        let at = city::place(&refs(&second));
+        Ok((second, at))
+    }
+
+    /// The island of every member of `list`, its gates facing `aims`, side by side; those in
+    /// memory answer at once.
+    fn build(
+        &self,
+        list: &[Member],
+        aims: &[Vec<f32>],
+        open: &[u64],
+    ) -> Result<Vec<Kept>, CmdError> {
+        // ponytail: scoped threads, one per island (at most eight), as the app has no rayon.
+        thread::scope(|scope| {
+            let jobs: Vec<_> = (list.iter().zip(aims))
+                .map(|(m, aim)| scope.spawn(|| self.island_in(m.generation, m.free, aim, open)))
+                .collect();
+            (jobs.into_iter())
+                .map(|job| job.join().unwrap_or_else(|panic| resume_unwind(panic)))
+                .collect()
         })
     }
 }

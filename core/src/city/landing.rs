@@ -1,6 +1,28 @@
 //! Where a way over the sea lands on the straights out of its gates.
 
-use super::span::{LEAVE, SHORT, snap};
+use super::coast::{CLEAR, Coast};
+use super::simple::snap;
+use super::span::{LEAVE, SHORT};
+
+/// A gate's straight is not followed past this to where it keeps clear of its coast, metres.
+const FAR: f64 = 300.0;
+
+/// How far the straight from gate `p` along `d` runs over or near its island's `coast` (within
+/// `CLEAR`), but at least `LEAVE`, metres: a bridge turns off it no sooner.
+pub(crate) fn clears(coast: &Coast, p: [f32; 2], d: [f32; 2]) -> f64 {
+    let d = snap(d);
+    let at = |s: f64| {
+        [
+            (f64::from(p[0]) + s * d[0]) as f32,
+            (f64::from(p[1]) + s * d[1]) as f32,
+        ]
+    };
+    let mut s = LEAVE;
+    while s < FAR && coast.near(at(s), CLEAR) {
+        s += 1.0;
+    }
+    s
+}
 
 /// Where the first (`first`) or the last run of `way` runs alongside the straight through `p`
 /// along `d`, a few metres off it, moves the corner after (before) it along the next (previous)
@@ -53,19 +75,4 @@ pub(crate) fn meet(
     let (s, t) = (cross(d, db) / k, cross(d, da) / k);
     let out = s >= LEAVE - 1e-6 && t >= LEAVE - 1e-6;
     out.then(|| [(a[0] + s * da[0]) as f32, (a[1] + s * da[1]) as f32])
-}
-
-pub(crate) fn length(points: &[[f32; 2]]) -> f32 {
-    (points.windows(2))
-        .map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]))
-        .sum()
-}
-
-/// Whether the line `points` turns right round anywhere.
-pub(crate) fn turns_back(points: &[[f32; 2]]) -> bool {
-    points.windows(3).any(|w| {
-        let u = [w[1][0] - w[0][0], w[1][1] - w[0][1]];
-        let v = [w[2][0] - w[1][0], w[2][1] - w[1][1]];
-        u[0] * v[0] + u[1] * v[1] < (-1.0 + 1e-3) * u[0].hypot(u[1]) * v[0].hypot(v[1])
-    })
 }

@@ -1,12 +1,14 @@
 //! A bridge's way round the islands where the simple shape cannot keep clear of them: the
 //! cheapest way with few turns over the open sea of the world raster, joined to the gates.
 
+use super::bends::{BEND, length, sharp};
 use super::chart::{WORLD_CELL, World};
 use super::coast::{CLEAR, Coast, keeps_clear};
 use super::grid::distance;
-use super::landing::{length, meet, onto, turns_back};
+use super::landing::{clears, meet, onto};
 use super::path::simplify;
-use super::span::{DIRS, LEAVE, route, snap};
+use super::simple::{route, snap};
+use super::span::{DIRS, LEAVE};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::f32::consts::SQRT_2;
@@ -21,7 +23,7 @@ const OUT: f32 = CLEAR + 3.0 * WORLD_CELL;
 /// A gate's straight runs out at most this far before its way, metres.
 const REACH: f32 = 300.0;
 /// A turn costs as much as this many cells of way, per 45°.
-const TURN: f32 = 5.0;
+const TURN: f32 = BEND / WORLD_CELL;
 /// A search gives up after this many states.
 const MAX_POPS: usize = 2_000_000;
 /// No way is searched on a raster of more states (cells · headings) than this.
@@ -74,25 +76,38 @@ impl Sea {
     /// The bridge from gate `a` to gate `b`: out along `a`'s straight until it lies `OUT` from
     /// every outline, the cheapest way over the open sea to where `b`'s straight does, in along
     /// that; the way's first and last corner are reached from the gates by the shape of
-    /// [`route`]. `None` where it cannot keep clear (see [`keeps_clear`]).
+    /// [`route`]. No corner turns more than 45°. `None` where it cannot keep clear (see
+    /// [`keeps_clear`]).
     pub fn route(&mut self, coasts: &[Coast], a: End, b: End) -> Option<Vec<[f32; 2]>> {
         let ((i, pa, da), (j, pb, db)) = (a, b);
         let (from, to) = (self.out(coasts, a)?, self.out(coasts, b)?);
-        let mut way = self.cheapest(from, heading(da), to)?;
-        let head = |c: [f32; 2], d: [f32; 2]| {
-            let clear = |p: &[[f32; 2]]| keeps_clear(coasts, p, Some(i), None);
-            route(pa, da, c, [-d[0], -d[1]], (LEAVE, 0.0), clear)
+        let mut way = if from == to {
+            vec![self.world.centre(from)]
+        } else {
+            self.cheapest(from, heading(da), to, heading([-db[0], -db[1]]))?
         };
-        let tail = |c: [f32; 2], d: [f32; 2]| {
-            let clear = |p: &[[f32; 2]]| keeps_clear(coasts, p, None, Some(j));
-            route(c, d, pb, db, (0.0, LEAVE), clear)
+        // From `a` to the way's corner `c`, there heading `d` on to `next`; from the corner `c`
+        // heading `d`, come from `prev`, to `b`. The gates' straights go on until they keep clear
+        // of their coasts.
+        let (sa, sb) = (clears(&coasts[i], pa, da), clears(&coasts[j], pb, db));
+        let head = |c: [f32; 2], d: [f32; 2], next: [f32; 2]| {
+            let clear = |p: &[[f32; 2]]| {
+                keeps_clear(coasts, p, Some(i), None) && !sharp(&[p, &[next]].concat())
+            };
+            route(pa, da, c, [-d[0], -d[1]], (sa, 0.0), clear)
+        };
+        let tail = |c: [f32; 2], d: [f32; 2], prev: [f32; 2]| {
+            let clear = |p: &[[f32; 2]]| {
+                keeps_clear(coasts, p, None, Some(j)) && !sharp(&[&[prev], p].concat())
+            };
+            route(c, d, pb, db, (0.0, sb), clear)
         };
         let join = |head: Vec<[f32; 2]>, middle: &[[f32; 2]], tail: Vec<[f32; 2]>| {
             let mut all = head;
             all.extend_from_slice(middle);
             all.extend_from_slice(&tail[1..]);
             let all = simplify(all);
-            (!turns_back(&all) && keeps_clear(coasts, &all, Some(i), Some(j))).then_some(all)
+            (!sharp(&all) && keeps_clear(coasts, &all, Some(i), Some(j))).then_some(all)
         };
         // The two straights on to where they cross.
         let direct = || meet((pa, da), (pb, db)).and_then(|x| join(vec![pa, x], &[], vec![x, pb]));
@@ -101,8 +116,9 @@ impl Sea {
             // ways through the cell's centre.
             1 => {
                 let through = DIRS.iter().filter_map(|m| {
-                    let m = m.map(|x| x as f32);
-                    join(head(way[0], m)?, &[], tail(way[0], m)?)
+                    let (m, c) = (m.map(|x| x as f32), way[0]);
+                    let (next, prev) = ([c[0] + m[0], c[1] + m[1]], [c[0] - m[0], c[1] - m[1]]);
+                    join(head(c, m, next)?, &[], tail(c, m, prev)?)
                 });
                 let shortest =
                     |p: &Vec<[f32; 2]>, q: &Vec<[f32; 2]>| length(p).total_cmp(&length(q));
@@ -121,13 +137,20 @@ impl Sea {
         }
         let n = way.len() - 1;
         let dir = |k: usize| [way[k][0] - way[k - 1][0], way[k][1] - way[k - 1][1]];
-        // `a` joins the way at the first corner it can reach, `b` at the last one after that.
+        // `a` joins the way at the first corner it can reach, `b` at the last one after that
+        // where the whole keeps clear and turns at most 45° at every corner.
         let last = (n - 1).max(1);
-        let (k, h) = (1..=last).find_map(|k| head(way[k], dir(k)).map(|h| (k, h)))?;
-        let (l, t) = (k..=last)
-            .rev()
-            .find_map(|l| tail(way[l], dir((l + 1).min(n))).map(|t| (l, t)))?;
-        join(h, &way[k + 1..=l], t)
+        (1..=last).find_map(|k| {
+            // Past the way's last corner the tail goes on the way it heads.
+            let next =
+                (way.get(k + 1).copied()).unwrap_or([way[k][0] + dir(k)[0], way[k][1] + dir(k)[1]]);
+            let h = head(way[k], dir(k), next)?;
+            (k..=last).rev().find_map(|l| {
+                let prev = if l > k { way[l - 1] } else { h[h.len() - 2] };
+                let t = tail(way[l], dir((l + 1).min(n)), prev)?;
+                join(h.clone(), &way[k + 1..=l], t)
+            })
+        })
     }
 
     /// The open cell where the way from gate `(k, p, d)` sets out: the first point every
@@ -150,10 +173,16 @@ impl Sea {
     }
 
     /// The corners of the cheapest way (A*) over the open sea from cell `from`, heading `dir`
-    /// (an index of `DIRS`), to cell `to`: a step costs its length in cells, a turn `TURN` per
-    /// 45°, and a way never turns right round. Cell centres, both ends included; `None` past
-    /// `MAX_POPS` states.
-    fn cheapest(&mut self, from: usize, dir: usize, to: usize) -> Option<Vec<[f32; 2]>> {
+    /// (an index of `DIRS`), to cell `to`, there heading `goal`: a step costs its length in
+    /// cells and turns at most 45°, which costs `TURN`. Cell centres, both ends included; `None`
+    /// past `MAX_POPS` states.
+    fn cheapest(
+        &mut self,
+        from: usize,
+        dir: usize,
+        to: usize,
+        goal: usize,
+    ) -> Option<Vec<[f32; 2]>> {
         if self.best.is_empty() {
             return None;
         }
@@ -179,17 +208,16 @@ impl Sea {
             }
             self.back[s] |= DONE;
             let (c, d) = (s / 8, s % 8);
-            if c == to {
+            if c == to && d == goal {
                 found = Some(s);
                 break;
             }
             let (g, (x, y)) = (self.best[s], xy(c));
             for (k, (mx, my)) in MOVES.into_iter().enumerate() {
-                let turn = (k + 8 - d) % 8;
-                let turn = turn.min(8 - turn);
+                let turn = turn(d, k);
                 let (nx, ny) = (x + mx, y + my);
                 let open = |x: isize, y: isize| self.open[(y * w + x) as usize];
-                if turn == 4 || nx < 0 || ny < 0 || nx >= w || ny >= h || !open(nx, ny) {
+                if turn > 1 || nx < 0 || ny < 0 || nx >= w || ny >= h || !open(nx, ny) {
                     continue;
                 }
                 let diagonal = mx != 0 && my != 0;
@@ -223,6 +251,12 @@ impl Sea {
         }
         way
     }
+}
+
+/// How many steps of 45° lie between the headings `a` and `b` (indices of `DIRS`).
+fn turn(a: usize, b: usize) -> usize {
+    let t = (b + 8 - a) % 8;
+    t.min(8 - t)
 }
 
 /// The index of the direction of `DIRS` nearest to `d`.

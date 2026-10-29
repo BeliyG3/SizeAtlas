@@ -1,5 +1,5 @@
 use super::*;
-use std::f32::consts::FRAC_1_SQRT_2;
+use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_4};
 
 /// A 200 m square from `lo`.
 fn square(lo: [f32; 2]) -> Vec<Vec<[f32; 2]>> {
@@ -36,7 +36,7 @@ fn a_single_corner_lies_on_both_straights() {
     let (pa, pb) = ((0, a, [1.0, 0.0]), (1, b, [-FRAC_1_SQRT_2, -FRAC_1_SQRT_2]));
     let mut sea = Sea::new(&shapes);
     let (from, to) = (sea.out(&coasts(&shapes), pa), sea.out(&coasts(&shapes), pb));
-    let way = sea.cheapest(from.unwrap(), 0, to.unwrap()).unwrap();
+    let way = sea.cheapest(from.unwrap(), 0, to.unwrap(), 1).unwrap();
     assert_eq!(way.len(), 3, "{way:?}");
     assert_line(sea.route(&coasts(&shapes), pa, pb), &[a, corner, b]);
 }
@@ -44,12 +44,51 @@ fn a_single_corner_lies_on_both_straights() {
 /// Both straights set out from the same cell: they meet where they cross, the shortest way.
 #[test]
 fn straights_from_one_cell_meet() {
-    let (a, b) = ([-100.0, 1.7], [-57.0, -39.3]);
-    let shapes = [square([-300.0, -20.0]), square([-157.0, -239.3])];
-    let (pa, pb) = ((0, a, [1.0, 0.0]), (1, b, [0.0, 1.0]));
+    // `b` is a corner of its island, its gate facing south-west onto `a`'s straight 42 m out.
+    let s = 42.0 * FRAC_1_SQRT_2;
+    let (a, b) = ([-100.0, 1.7], [-58.0 + s, 1.7 - s]);
+    let shapes = [square([-300.0, -20.0]), square([b[0], b[1] - 200.0])];
+    let (pa, pb) = ((0, a, [1.0, 0.0]), (1, b, [-FRAC_1_SQRT_2, FRAC_1_SQRT_2]));
     let mut sea = Sea::new(&shapes);
     let from = sea.out(&coasts(&shapes), pa);
     assert!(from.is_some());
     assert_eq!(from, sea.out(&coasts(&shapes), pb));
-    assert_line(sea.route(&coasts(&shapes), pa, pb), &[a, [-57.0, 1.7], b]);
+    assert_line(sea.route(&coasts(&shapes), pa, pb), &[a, [-58.0, 1.7], b]);
+}
+
+/// The turns at the corners of `p`, radians.
+fn turns(p: &[[f32; 2]]) -> Vec<f32> {
+    (p.windows(3))
+        .map(|w| {
+            let u = [w[1][0] - w[0][0], w[1][1] - w[0][1]];
+            let v = [w[2][0] - w[1][0], w[2][1] - w[1][1]];
+            let cos = (u[0] * v[0] + u[1] * v[1]) / (u[0].hypot(u[1]) * v[0].hypot(v[1]));
+            cos.clamp(-1.0, 1.0).acos()
+        })
+        .collect()
+}
+
+/// The other island lies beside or behind the gate: the way goes out and round, never turning
+/// more than 45° at a corner, the gates' straights included.
+#[test]
+fn seaway_turns_at_most_45() {
+    let a = [200.0, 100.0];
+    // Up beside `a`'s straight, its gate facing down onto it; behind `a`'s island, facing it.
+    let cases = [
+        ([242.0, -400.0], [0.0, 1.0], [142.0, -600.0]),
+        ([-300.0, 100.0], [1.0, 0.0], [-500.0, 0.0]),
+    ];
+    for (b, db, lo) in cases {
+        let shapes = [square([0.0, 0.0]), square(lo)];
+        let (pa, pb) = ((0, a, [1.0, 0.0]), (1, b, db));
+        let way = Sea::new(&shapes).route(&coasts(&shapes), pa, pb);
+        let way = way.expect("a way");
+        assert_eq!((way[0], way[way.len() - 1]), (a, b));
+        let mut line = vec![[a[0] - 10.0, a[1]]];
+        line.extend_from_slice(&way);
+        line.push([b[0] - 10.0 * db[0], b[1] - 10.0 * db[1]]);
+        for t in turns(&line) {
+            assert!(t <= FRAC_PI_4 + 1e-3, "{}°: {way:?}", t.to_degrees());
+        }
+    }
 }

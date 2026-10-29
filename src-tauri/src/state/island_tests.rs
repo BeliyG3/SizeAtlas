@@ -124,16 +124,18 @@ fn gates_of(state: &AppState, generation: u64) -> Vec<Vec<u32>> {
 
 #[test]
 fn city_answers_from_memory_for_the_same_key() {
-    let (dir, cache) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let dir = tempfile::tempdir().unwrap();
     let state = AppState::default();
     let generation = state.install_tree(tree_in(dir.path()));
-    let first = state.city(generation, cache.path()).unwrap();
-    let second = state.city(generation, cache.path()).unwrap();
+    // The free space given: a real disk's changes while other tests write their files.
+    let disks = [(path_of(&dir), GIB)];
+    let first = state.city_in(generation, &[], &disks).unwrap();
+    let second = state.city_in(generation, &[], &disks).unwrap();
     assert_eq!(first, second);
     assert_eq!(state.0.city.builds.load(Ordering::Relaxed), 1);
     // Another generation (here another root) is another key.
     let other = state.install_tree(tree_in(&dir.path().join("sub")));
-    state.city(other, cache.path()).unwrap();
+    state.city_in(other, &[], &disks).unwrap();
     assert_eq!(state.0.city.builds.load(Ordering::Relaxed), 2);
 }
 

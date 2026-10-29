@@ -44,9 +44,15 @@ fn root(seed: u64, used: u64) -> Folder {
     folder(size, children)
 }
 
-/// Islands of about `used` bytes each, biggest first, their gates facing each other by
-/// `directions`; built side by side.
-fn archipelago(used: &[u64]) -> Vec<Island> {
+const ONE: [u64; 1] = [2 * GIB];
+const THREE: [u64; 3] = [4 * GIB, 2 * GIB, GIB];
+/// From 2 TiB down to 1 GiB.
+const FOUR: [u64; 4] = [2048 * GIB, 64 * GIB, 8 * GIB, GIB];
+const FIVE: [u64; 5] = [16 * GIB, 8 * GIB, 4 * GIB, 2 * GIB, GIB];
+
+/// Islands of about `used` bytes each, biggest first, the gates of the `i`-th facing
+/// `aim(sizes, i)` (`(used, free)` of every island); built side by side.
+fn build(used: &[u64], aim: impl Fn(&[(u64, u64)], usize) -> Vec<f32>) -> Vec<Island> {
     let roots: Vec<Folder> = (used.iter().enumerate())
         .map(|(i, &u)| root(i as u64 + 1, u))
         .collect();
@@ -60,7 +66,7 @@ fn archipelago(used: &[u64]) -> Vec<Island> {
                 let input = IslandInput {
                     root: r.clone(),
                     free: sizes[i].1,
-                    neighbours: directions(&sizes, i),
+                    neighbours: aim(&sizes, i),
                     seed: i as u64 + 1,
                 };
                 s.spawn(move || island(&input))
@@ -70,25 +76,51 @@ fn archipelago(used: &[u64]) -> Vec<Island> {
     })
 }
 
+/// The first pass: the gates face the others by [`directions`].
+fn archipelago(used: &[u64]) -> Vec<Island> {
+    build(used, directions)
+}
+
+/// The second pass: the islands of `first` built again, their gates facing where `place` put
+/// the others.
+fn second(used: &[u64], first: &[Island]) -> Vec<Island> {
+    let aims = bearings(&refs(first), &place(&refs(first)));
+    build(used, |_, i| aims[i].clone())
+}
+
 fn one() -> &'static [Island] {
     static SET: OnceLock<Vec<Island>> = OnceLock::new();
-    SET.get_or_init(|| archipelago(&[2 * GIB]))
+    SET.get_or_init(|| archipelago(&ONE))
 }
 
 pub(crate) fn three() -> &'static [Island] {
     static SET: OnceLock<Vec<Island>> = OnceLock::new();
-    SET.get_or_init(|| archipelago(&[4 * GIB, 2 * GIB, GIB]))
+    SET.get_or_init(|| archipelago(&THREE))
 }
 
-/// From 2 TiB down to 1 GiB.
 pub(crate) fn four() -> &'static [Island] {
     static SET: OnceLock<Vec<Island>> = OnceLock::new();
-    SET.get_or_init(|| archipelago(&[2048 * GIB, 64 * GIB, 8 * GIB, GIB]))
+    SET.get_or_init(|| archipelago(&FOUR))
 }
 
 pub(crate) fn five() -> &'static [Island] {
     static SET: OnceLock<Vec<Island>> = OnceLock::new();
-    SET.get_or_init(|| archipelago(&[16 * GIB, 8 * GIB, 4 * GIB, 2 * GIB, GIB]))
+    SET.get_or_init(|| archipelago(&FIVE))
+}
+
+pub(crate) fn three_real() -> &'static [Island] {
+    static SET: OnceLock<Vec<Island>> = OnceLock::new();
+    SET.get_or_init(|| second(&THREE, three()))
+}
+
+pub(crate) fn four_real() -> &'static [Island] {
+    static SET: OnceLock<Vec<Island>> = OnceLock::new();
+    SET.get_or_init(|| second(&FOUR, four()))
+}
+
+pub(crate) fn five_real() -> &'static [Island] {
+    static SET: OnceLock<Vec<Island>> = OnceLock::new();
+    SET.get_or_init(|| second(&FIVE, five()))
 }
 
 pub(crate) fn refs(set: &[Island]) -> Vec<&Island> {
@@ -240,4 +272,27 @@ fn island_i_on_its_ray() {
 fn deterministic() {
     let set = five();
     assert_eq!(place(&refs(set)), place(&refs(set)));
+}
+
+#[test]
+fn bearings_join_the_box_middles() {
+    let set = four();
+    let at = place(&refs(set));
+    let aims = bearings(&refs(set), &at);
+    let mid = |i: usize| add(centre(&set[i]), at[i]);
+    for (i, row) in aims.iter().enumerate() {
+        let others = (0..set.len()).filter(|&j| j != i);
+        for (j, &a) in others.zip(row) {
+            let d = sub(mid(j), mid(i));
+            assert!((d[1].atan2(d[0]) - a).abs() < 1e-4, "{i} -> {j}");
+        }
+    }
+}
+
+#[test]
+fn settled_within_two_degrees_across_the_seam() {
+    let deg = |d: f32| d.to_radians();
+    let used = [vec![PI - deg(0.5)], vec![deg(10.0)]];
+    assert!(settled(&used, &[vec![-PI + deg(1.0)], vec![deg(11.9)]]));
+    assert!(!settled(&used, &[vec![-PI + deg(1.0)], vec![deg(12.1)]]));
 }
