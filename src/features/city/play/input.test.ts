@@ -219,6 +219,29 @@ describe("createInput", () => {
     input.dispose();
   });
 
+  it("Alt+Tab whose lock loss comes before the blur still pauses", () => {
+    const d = fakeDom();
+    const input = createInput(d.canvas);
+    d.press();
+    d.browserUnlock(); // the browser lets the lock go first...
+    d.win.dispatchEvent(new Event("blur")); // ...and only then says the window lost focus
+    expect(input.read(1 / 60).exit).toBe(false);
+    input.dispose();
+  });
+
+  it("a hidden tab shown again takes a later lock loss as an Esc", () => {
+    const d = fakeDom();
+    const input = createInput(d.canvas);
+    d.doc.hidden = true;
+    d.doc.dispatchEvent(new Event("visibilitychange"));
+    d.doc.hidden = false;
+    d.doc.dispatchEvent(new Event("visibilitychange"));
+    d.press();
+    d.browserUnlock();
+    expect(input.read(1 / 60).exit).toBe(true);
+    input.dispose();
+  });
+
   it("a lock lost while the window has no focus or is hidden is not an exit", () => {
     for (const lose of ["focused", "hidden"] as const) {
       const d = fakeDom();

@@ -165,6 +165,9 @@ export function createInput(target: HTMLElement): Input {
   let dragging = false;
   let releasing = false;
   let blurred = false;
+  // A lock lost while we did not release it: decided on the next read, once a blur that may
+  // arrive just after it has had its turn (the browser does not order the two).
+  let lostLock = false;
 
   const reset = () => {
     pressed.clear();
@@ -185,8 +188,10 @@ export function createInput(target: HTMLElement): Input {
     }
   };
   const onKeyUp = (e: KeyboardEvent) => void keys.delete(e.code);
+  const away = () => blurred || document.hidden || document.hasFocus?.() === false;
   const onBlur = () => {
     blurred = true;
+    lostLock = false;
     keys.clear();
     dragging = false;
     reset();
@@ -196,6 +201,7 @@ export function createInput(target: HTMLElement): Input {
   };
   const onHidden = () => {
     if (document.hidden) onBlur();
+    else blurred = false;
   };
   const onMouseMove = (e: MouseEvent) => {
     if (!locked && !dragging) return;
@@ -204,6 +210,7 @@ export function createInput(target: HTMLElement): Input {
   };
   const onDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
+    blurred = false; // a click: the player is here
     dragging = true;
     try {
       // Newer browsers return a promise that rejects when the lock is refused; dragging then stands in.
@@ -217,8 +224,7 @@ export function createInput(target: HTMLElement): Input {
   };
   const onLockChange = () => {
     const now = document.pointerLockElement === target;
-    const away = blurred || document.hidden || document.hasFocus?.() === false;
-    if (locked && !now && !releasing && !away) pressed.add("Escape");
+    if (locked && !now && !releasing) lostLock = true;
     releasing = false;
     locked = now;
   };
@@ -243,6 +249,10 @@ export function createInput(target: HTMLElement): Input {
 
   return {
     read(dt) {
+      if (lostLock) {
+        lostLock = false;
+        if (!away()) pressed.add("Escape");
+      }
       const p = pads.read(pad, pressed);
       actionsFrom(keys, pressed, mouse, p, dt, out);
       pressed.clear();
