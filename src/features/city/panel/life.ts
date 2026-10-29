@@ -3,7 +3,7 @@
  * models have loaded (the island shows without them until then).
  */
 import type { Object3D, Vector3 } from "three";
-import { localRadius } from "../actors/nav";
+import { localRadius } from "../actors/locals";
 import { createResidents, type Residents } from "../actors/residents";
 import { createTraffic, type Traffic } from "../actors/traffic";
 import { loadAssets } from "../render/assets";
@@ -35,7 +35,7 @@ export interface Life {
   populate: (g: RoadGraph | null, seed: number, islands: number) => void;
   /**
    * Moves everyone on `dt` seconds. `eye` is the camera: near cars and figures are drawn as
-   * models. Half of them keep near `target`, the closer the camera the tighter.
+   * models. They keep near `target`, the closer the camera the tighter.
    */
   step: (dt: number, eye: Vector3, target: Vector3) => void;
   dispose: () => void;

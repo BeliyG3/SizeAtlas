@@ -1,19 +1,8 @@
 /** Cars driving on lanes and flying cars on air lanes; pure, no three.js. */
 import { ROAD, type RoadKind } from "../world/map";
 import { pointOn, type RoadEdge, type RoadGraph } from "../world/roads";
-import {
-  advance,
-  createLocals,
-  localIds,
-  nextEdge,
-  place,
-  placeOn,
-  rng,
-  type Allow,
-  type Circle,
-  type Spots,
-  type Track,
-} from "./nav";
+import { createLocals, localIds, placeOn, type Circle, type Spots } from "./locals";
+import { advance, nextEdge, place, rng, type Allow, type Track } from "./nav";
 
 /** Speeds in m/s. */
 export const SPEED = { highway: 22, street: 12, air: 30 };
@@ -68,7 +57,7 @@ export interface Traffic {
   air: Uint8Array;
   /** How far a car has grown in after it was moved near the camera, `0…1`. */
   appear: Float32Array;
-  /** Drives on `dt` seconds; half the cars keep to `around` (see `createLocals`). */
+  /** Drives on `dt` seconds; the cars keep to `around` (see `createLocals`). */
   update(dt: number, around?: Circle | null): void;
 }
 
@@ -106,7 +95,12 @@ export function createTraffic(
   const since = new Float64Array(n);
   const turn = new Float64Array(n);
   let clock = 0;
-  const locals = createLocals(g, n, [...localIds(0, ground), ...localIds(ground, n - ground)]);
+  const locals = createLocals(
+    g,
+    n,
+    [...localIds(0, ground), ...localIds(ground, n - ground)],
+    rand,
+  );
   const out: Traffic = {
     count: n,
     x: new Float32Array(n),
