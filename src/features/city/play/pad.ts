@@ -12,6 +12,8 @@ export interface PadState {
   lb: boolean;
   /** Left stick click. */
   l3: boolean;
+  /** The west face button (X). */
+  x: boolean;
 }
 
 /** Names the pad's edges take in the `pressed` set. */
@@ -79,6 +81,7 @@ export function createPadReader(): PadReader {
       out.lb = !!v[4]?.pressed;
       out.rb = !!v[5]?.pressed;
       out.l3 = !!v[10]?.pressed;
+      out.x = !!v[2]?.pressed;
       const na = !!v[0]?.pressed;
       const nb = !!v[1]?.pressed;
       const ns = !!v[9]?.pressed;

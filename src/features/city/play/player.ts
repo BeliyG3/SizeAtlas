@@ -13,9 +13,10 @@ import { createCam, followCar, followWalker, turnCam, type CarView } from "./cam
 import { createCharacter, type Character } from "./character";
 import type { Actions } from "./input";
 import { spawnPoint } from "./spawn";
+import { canBoard, exitSpot } from "./boarding";
 import { createCar, setOwner, type Car } from "./vehicle";
 import { carStep, hoverBob, toggleFlight } from "./vehicleFly";
-import { createWalker, gaitOf, JUMP_BUFFER, STEP, stepWalk, type Walker } from "./walk";
+import { createWalker, gaitOf, JUMP_BUFFER, STEP, stepWalk } from "./walk";
 
 export interface Player {
   /** This frame's actions, once: the view turns at once, a jump press waits for the next step. */
@@ -28,11 +29,6 @@ export interface Player {
   dispose(): void;
 }
 
-// ponytail: a temporary way in and out of the car (E within `REACH` of it, out beside it at a
-// standstill on the ground); Task 7 replaces it with the clips and the driver's door.
-const REACH = 3;
-const BESIDE = 2.4;
-
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
@@ -44,27 +40,6 @@ interface CarPose {
   yaw: number;
   roll: number;
   pitch: number;
-}
-
-/** The car's nearest disc to (x, z) is within `REACH`. */
-function near(car: Car, x: number, z: number): boolean {
-  for (const off of car.discs) {
-    const dx = car.x + Math.sin(car.yaw) * off - x;
-    const dz = car.z + Math.cos(car.yaw) * off - z;
-    if (Math.hypot(dx, dz) <= REACH) return true;
-  }
-  return false;
-}
-
-/** A walker beside the car: on its left if there is room, else on its right. */
-function stepOut(car: Car, s: Solids): Walker {
-  const lx = Math.cos(car.yaw);
-  const lz = -Math.sin(car.yaw);
-  const free = (x: number, z: number) => !s.isWater(x, z) && s.heightAt(x, z) <= car.y + STEP;
-  const side = free(car.x + lx * BESIDE, car.z + lz * BESIDE) ? 1 : -1;
-  const w = createWalker({ x: car.x + lx * BESIDE * side, z: car.z + lz * BESIDE * side }, s);
-  w.face = car.yaw;
-  return w;
 }
 
 /** The player on `solids`, the world's physics shared with everything else that moves. */
@@ -134,18 +109,25 @@ export function createPlayer(scene: Scene, city: CitySnapshot, solids: Solids): 
     (e: unknown) => console.warn("The player's models did not load", e),
   );
 
+  // ponytail: a temporary way in and out (see `boarding`); Task 7 replaces it.
   const getIn = (c: Car) => {
     driving = true;
     setOwner(c, "player");
     cam.pitch = 0.22;
     cam.idle = 2;
   };
+  const spot = { x: 0, z: 0 };
   const getOut = (c: Car) => {
+    if (!exitSpot(c, solids, spot)) return;
     driving = false;
     c.vx = c.vz = c.vf = c.steer = c.flyT = 0;
     setOwner(c, "empty");
     Object.assign(carBefore, carNow);
-    walker = stepOut(c, solids);
+    walker = createWalker(spot, solids);
+    // On the car's level: under a deck, not up on it.
+    const y = solids.heightAt(spot.x, spot.z, c.y + STEP);
+    walker.body.y = walker.shownY = walker.support = y;
+    walker.face = c.yaw;
     keep(now);
     keep(before);
     cam.yaw = walker.face;
@@ -161,7 +143,8 @@ export function createPlayer(scene: Scene, city: CitySnapshot, solids: Solids): 
         if (a.use && !car.flying && car.vy === 0 && Math.abs(car.vf) < 1.5) getOut(car);
         return;
       }
-      if (car && a.use && walker.grounded && near(car, walker.body.x, walker.body.z)) {
+      const b = walker.body;
+      if (car && a.use && walker.grounded && canBoard(car, b.x, b.y, b.z)) {
         getIn(car);
         return;
       }

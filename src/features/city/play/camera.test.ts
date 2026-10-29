@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { canalWorld } from "../physics/world.fixture";
-import { CAM, CHASE, createCam, damp, followCar, followWalker, turnCam } from "./camera";
+import {
+  CAM,
+  CHASE,
+  CHASE_REACH,
+  createCam,
+  damp,
+  followCar,
+  followWalker,
+  turnCam,
+} from "./camera";
 
 const DT = 1 / 60;
 const EAST = Math.PI / 2;
@@ -85,5 +94,25 @@ describe("followCar", () => {
     expect(back).toBeCloseTo(CHASE.dist, 3);
     expect(c.eye.x).toBeLessThan(car.x - 6);
     expect(c.at.x).toBeGreaterThan(car.x);
+  });
+
+  it("keeps close behind a car climbing and turning at the top speed", () => {
+    const { solids } = canalWorld();
+    const c = createCam(EAST);
+    // In the air at 38 m/s, climbing 9 m/s, turning right at 0.6 rad/s.
+    const car = { x: 100, y: 5, z: 50, yaw: EAST, vx: 0, vz: 0, steer: 1, flying: true, flyT: 1 };
+    let farthest = 0;
+    for (let i = 0; i < 10 / DT; i++) {
+      car.yaw -= 0.6 * DT;
+      car.vx = Math.sin(car.yaw) * 38;
+      car.vz = Math.cos(car.yaw) * 38;
+      car.x += car.vx * DT;
+      car.z += car.vz * DT;
+      car.y += 9 * DT;
+      followCar(c, car, DT, solids);
+      farthest = Math.max(farthest, Math.hypot(c.eye.x - car.x, c.eye.y - car.y, c.eye.z - car.z));
+    }
+    expect(farthest).toBeLessThanOrEqual(CHASE.dist * CHASE_REACH + 1e-9);
+    expect(farthest).toBeGreaterThan(CHASE.dist * 0.8);
   });
 });

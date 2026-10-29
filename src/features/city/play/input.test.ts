@@ -14,6 +14,7 @@ const pad = (p: Partial<PadState>): PadState => ({
   rb: false,
   lb: false,
   l3: false,
+  x: false,
   ...p,
 });
 
@@ -62,6 +63,16 @@ describe("actionsFrom", () => {
     expect(a.brake).toBe(0.3);
     expect(a.up).toBe(true);
     expect(a.down).toBe(false);
+    expect(a.handbrake).toBe(false);
+  });
+
+  it("Space and the pad's X are the handbrake; Space also climbs", () => {
+    const space = actionsFrom(new Set(["Space"]), NONE, still, null);
+    expect(space.handbrake).toBe(true);
+    expect(space.up).toBe(true);
+    const x = actionsFrom(NONE, NONE, still, pad({ x: true }));
+    expect(x.handbrake).toBe(true);
+    expect(x.up).toBe(false);
   });
 
   it("mouse and right stick turn the view", () => {

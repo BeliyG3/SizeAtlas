@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Solids } from "../physics/solids";
-import { canalWorld } from "../physics/world.fixture";
+import { HEADROOM } from "../physics/bodies";
+import { bridgeWorld, canalWorld } from "../physics/world.fixture";
+import { deckLift } from "../world/bridgeChains";
 import { makeActions, type Actions } from "./input";
 import { CAR, createCar, driveStep, type Car } from "./vehicle";
 import { carStep, HOVER, hoverBob, MAX_ROLL, toggleFlight } from "./vehicleFly";
@@ -60,6 +62,47 @@ describe("flyStep", () => {
     fly(c, a, solids, 60, () => (top = Math.max(top, c.y)));
     expect(c.y).toBeCloseTo(solids.tallest + CAR.ceilingAbove);
     expect(top).toBeLessThanOrEqual(40 + CAR.ceilingAbove);
+    // Held there it does not keep climbing: let go and descend, and it comes down at once.
+    expect(c.vy).toBeLessThanOrEqual(0);
+    a.up = false;
+    a.down = true;
+    fly(c, a, solids, 0.3);
+    expect(c.y).toBeLessThan(solids.tallest + CAR.ceilingAbove - 0.3);
+  });
+
+  it("climbing under a bridge deck stops under it, not through it", () => {
+    const { solids } = bridgeWorld();
+    const deck = deckLift(0);
+    const c = flying(solids, 170, HOVER, 50, EAST);
+    const a = makeActions();
+    a.up = true;
+    fly(c, a, solids, 5, () => expect(c.y).toBeLessThanOrEqual(deck - HEADROOM + 1e-9));
+    expect(c.y).toBeCloseTo(deck - HEADROOM);
+    expect(c.vy).toBe(0);
+  });
+
+  it("touches down and flies onto a low roof without a jump", () => {
+    const { solids } = canalWorld([{ x: 40, z: 40, w: 20, d: 20, h: 1.5 }]);
+    const c = flying(solids, 20, 10, 50, EAST);
+    toggleFlight(c, solids);
+    let prev = c.y;
+    let most = 0;
+    const each = (car: Car) => () => {
+      most = Math.max(most, Math.abs(car.y - prev));
+      prev = car.y;
+    };
+    fly(c, makeActions(), solids, 10, each(c));
+    expect(c.flying).toBe(false);
+    expect(c.y).toBe(0);
+    expect(most).toBeLessThanOrEqual(0.15);
+    // Hovering at 1 m, sideways over a 1.5 m roof: the hover height rises 1.5 m under it.
+    const low = flying(solids, 34, HOVER, 50, EAST, 8);
+    prev = low.y;
+    most = 0;
+    fly(low, makeActions(), solids, 3, each(low));
+    expect(low.x).toBeGreaterThan(42);
+    expect(low.y).toBeCloseTo(1.5 + HOVER);
+    expect(most).toBeLessThanOrEqual(0.15);
   });
 
   it("off the throttle it slows down from 20 m/s and hovers with a light bob", () => {

@@ -14,6 +14,7 @@ const pad = (p: Partial<PadState>): PadState => ({
   rb: false,
   lb: false,
   l3: false,
+  x: false,
   ...p,
 });
 

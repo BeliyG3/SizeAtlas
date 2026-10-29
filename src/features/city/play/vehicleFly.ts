@@ -3,7 +3,7 @@
  * bank it, off the throttle it slows to a hover; take-off and landing on the ground, a road or a
  * roof, never on water; pure, no three.js, and nothing is allocated in a step.
  */
-import { CAR_CLIMB, CAR_SLOPE, moveBody } from "../physics/bodies";
+import { CAR_CLIMB, CAR_SLOPE, HEADROOM, moveBody } from "../physics/bodies";
 import type { Solids } from "../physics/solids";
 import { CAR, driveStep, ease, type Car } from "./vehicle";
 import type { Actions } from "./input";
@@ -14,6 +14,8 @@ export const LIFT = 0.6;
 export const CLIMB_SPEED = 9;
 /** The car hovers at least this high over what is under it, metres. */
 export const HOVER = 1;
+/** How fast the car rises onto a hover height that rose under it, m/s. */
+const RISE = 6;
 /** The deepest bank, radians. */
 export const MAX_ROLL = 0.5;
 /** How far past the map's edge a car may fly, metres. */
@@ -42,7 +44,7 @@ export function toggleFlight(c: Car, s: Solids): void {
 /**
  * One step of `dt` seconds in the air. Steering right turns right (the yaw falls) and banks the
  * right side down; `up` and `down` climb and descend, up to `CAR.ceilingAbove` over the tallest
- * house and never under `HOVER` over what is below. A landing that finds water under the car is
+ * house (and never into a deck over it) and never under `HOVER` over what is below. A landing that finds water under the car is
  * called off (`cantLand`).
  */
 export function flyStep(c: Car, a: Actions, dt: number, s: Solids): void {
@@ -71,14 +73,26 @@ export function flyStep(c: Car, a: Actions, dt: number, s: Solids): void {
   const climb = (a.up || c.lift > 0 ? 1 : 0) - (a.down ? 1 : 0);
   const target = c.landing ? -Math.min(8, (c.y - g) * 1.2 + 0.6) : climb * CLIMB_SPEED;
   c.vy = ease(c.vy, target, c.landing ? 4 : 3, dt);
-  c.y = Math.min(c.y + c.vy * dt, s.tallest + CAR.ceilingAbove);
-  c.lift = Math.max(0, c.lift - dt);
-  if (c.y < g + HOVER) {
-    // A take-off climbs to it by itself, no jump; anything else stops on it.
-    c.y = c.lift > 0 ? Math.max(c.y, g) : g + HOVER;
+  let y = c.y + c.vy * dt;
+  // The sky's ceiling, or lower a deck over the car: the car stops `HEADROOM` under it.
+  const over = s.heightAt(c.x, c.z, y + HEADROOM);
+  const sky = s.tallest + CAR.ceilingAbove;
+  const top = over > g ? Math.min(sky, Math.max(c.y, over - HEADROOM)) : sky;
+  if (y >= top) {
+    y = top;
+    c.vy = Math.min(c.vy, 0);
+  }
+  // Landing, it comes down onto the support; otherwise it hovers over it.
+  const floor = g + (c.landing ? 0 : HOVER);
+  if (y < floor) {
+    // Its own descent stops on the floor; a floor that rose under it (a low roof flown onto, a
+    // take-off) is climbed at `RISE`, not in a step.
+    y = c.y >= floor ? floor : Math.min(floor, Math.max(y, c.y) + RISE * dt);
     if (c.vy < 0 && !c.landing) c.vy = 0;
   }
-  if (c.landing && c.y <= g + HOVER + 0.02) {
+  c.y = y;
+  c.lift = Math.max(0, c.lift - dt);
+  if (c.landing && c.y <= g + 0.02) {
     // Down: the driving takes over.
     c.flying = false;
     c.landing = false;

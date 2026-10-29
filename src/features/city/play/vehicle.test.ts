@@ -44,6 +44,22 @@ describe("driveStep", () => {
     expect(left.x).toBeLessThan(39);
   });
 
+  it("on the handbrake the car slides out in a turn", () => {
+    const { solids } = canalWorld();
+    const slip = (handbrake: boolean) => {
+      const c = moving(solids, 20, 80, Math.PI / 2, 15);
+      const a = makeActions();
+      a.steer = 1;
+      a.handbrake = handbrake;
+      drive(c, a, solids, 0.8);
+      // The speed across the car, a part of the speed.
+      const across = -c.vx * Math.cos(c.yaw) + c.vz * Math.sin(c.yaw);
+      return Math.abs(across) / Math.hypot(c.vx, c.vz);
+    };
+    expect(slip(true)).toBeGreaterThan(0.3);
+    expect(slip(true)).toBeGreaterThan(3 * slip(false));
+  });
+
   it("full throttle for 5 s on the straight stays under the top speed", () => {
     const { solids } = canalWorld();
     const c = createCar(5, 20, EAST, solids, "player");

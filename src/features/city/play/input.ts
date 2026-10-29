@@ -15,6 +15,8 @@ export interface Actions {
   brake: number;
   /** Car steering, right is positive. */
   steer: number;
+  /** The car's handbrake on the ground (held). */
+  handbrake: boolean;
   /** Flight: climb and descend (held). */
   up: boolean;
   down: boolean;
@@ -61,6 +63,7 @@ export function makeActions(): Actions {
     throttle: 0,
     brake: 0,
     steer: 0,
+    handbrake: false,
     up: false,
     down: false,
     jump: false,
@@ -128,6 +131,7 @@ export function actionsFrom(
   out.throttle = Math.max(held(keys, "KeyW", "ArrowUp"), rt);
   out.brake = Math.max(held(keys, "KeyS", "ArrowDown"), lt);
   out.steer = clamp(right + px);
+  out.handbrake = keys.has("Space") || !!pad?.x;
   out.up = keys.has("Space") || !!pad?.rb;
   out.down = keys.has("ShiftLeft") || keys.has("ShiftRight") || !!pad?.lb;
   out.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight") || !!pad?.l3;
@@ -162,6 +166,7 @@ export function createInput(target: HTMLElement): Input {
     rb: false,
     lb: false,
     l3: false,
+    x: false,
   };
   const pads = createPadReader();
   const out = makeActions();

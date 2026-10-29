@@ -102,11 +102,11 @@ function followGround(c: Car, dt: number, s: Solids) {
 
 /**
  * One step of `dt` seconds on the ground. Steering right turns the car right (its yaw falls);
- * Space (`up`, the pad's RB) is the handbrake. The brake stops the car and does not carry it past
- * a standstill: held on from rest, it backs up to `CAR.reverse`.
+ * `handbrake` (Space, the pad's X) lets the grip go in a turn. The brake stops the car and does
+ * not carry it past a standstill: held on from rest, it backs up to `CAR.reverse`.
  */
 export function driveStep(c: Car, a: Actions, dt: number, s: Solids): void {
-  const hb = a.up;
+  const hb = a.handbrake;
   let vf = c.vx * Math.sin(c.yaw) + c.vz * Math.cos(c.yaw);
   // Steering eases in, and is lighter at speed.
   const want = a.steer / (1 + (vf / 10) ** 2);

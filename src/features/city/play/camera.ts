@@ -8,6 +8,10 @@ import type { Solids } from "../physics/solids";
 export const CAM = { dist: 2.6, min: 1.8, max: 8, pivotH: 1.55, shoulder: 0.45, fov: 55 };
 /** The chase behind the car, metres, and its range. */
 export const CHASE = { dist: 7, min: 4, max: 14 };
+/** The chase is never farther from the car than this many times its distance... */
+export const CHASE_REACH = 1.6;
+/** ...and its pivot lags the car by at most this many metres, at any speed. */
+const CHASE_LAG = 1.5;
 /** How far the view may look up and down, radians (up is negative). */
 const PITCH = { min: -0.2, max: 1.15 };
 /** How far to the side the shoulder looks for a wall, metres. */
@@ -225,7 +229,18 @@ export function followCar(c: Cam, car: CarView, dt: number, s: Solids) {
   const by = Math.sin(c.pitch);
   const bz = -cy * cp;
   const lead = Math.min(speed * 0.05, 1.5);
-  follow(c, car.x + sy * lead, car.y + 1.3, car.z + cy * lead, 0.2, dt);
+  const px = car.x + sy * lead;
+  const py = car.y + 1.3;
+  const pz = car.z + cy * lead;
+  follow(c, px, py, pz, 0.2, dt);
+  const piv = c.pivot;
+  const lag = Math.hypot(piv.x.x - px, piv.y.x - py, piv.z.x - pz);
+  if (lag > CHASE_LAG) {
+    const k = CHASE_LAG / lag;
+    piv.x.x = px + (piv.x.x - px) * k;
+    piv.y.x = py + (piv.y.x - py) * k;
+    piv.z.x = pz + (piv.z.x - pz) * k;
+  }
   const ox = c.pivot.x.x;
   const oy = c.pivot.y.x;
   const oz = c.pivot.z.x;
@@ -235,6 +250,15 @@ export function followCar(c: Cam, car: CarView, dt: number, s: Solids) {
   c.eye.x = ox + bx * c.shown;
   c.eye.y = Math.max(oy + by * c.shown, 0.4);
   c.eye.z = oz + bz * c.shown;
+  // Fast, climbing and turning, the car keeps its size on screen.
+  const reach = c.chase * CHASE_REACH;
+  const far = Math.hypot(c.eye.x - car.x, c.eye.y - car.y, c.eye.z - car.z);
+  if (far > reach) {
+    const k = reach / far;
+    c.eye.x = car.x + (c.eye.x - car.x) * k;
+    c.eye.y = car.y + (c.eye.y - car.y) * k;
+    c.eye.z = car.z + (c.eye.z - car.z) * k;
+  }
   c.at.x = ox + sy * 2;
   c.at.y = oy;
   c.at.z = oz + cy * 2;
