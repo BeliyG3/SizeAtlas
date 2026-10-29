@@ -3,8 +3,8 @@
  * over its shoulder drawn in between, and its own car parked where it starts.
  */
 import { Vector3, type PerspectiveCamera, type Scene } from "three";
-import { CAR_DISCS, CAR_RADIUS, collideBodies, type Body } from "../physics/bodies";
-import { createSolids } from "../physics/solids";
+import { CAR_DISCS, CAR_RADIUS, collideBodies, collideStatic, type Body } from "../physics/bodies";
+import type { Solids } from "../physics/solids";
 import { loadAssets } from "../render/assets";
 import { carModel } from "../render/cars";
 import type { CitySnapshot } from "../scene";
@@ -12,7 +12,7 @@ import { createCam, followWalker, turnCam } from "./camera";
 import { createCharacter, type Character } from "./character";
 import type { Actions } from "./input";
 import { spawnPoint } from "./spawn";
-import { createWalker, gaitOf, JUMP_BUFFER, stepWalk } from "./walk";
+import { createWalker, gaitOf, JUMP_BUFFER, STEP, stepWalk } from "./walk";
 
 export interface Player {
   /** This frame's actions, once: the view turns at once, a jump press waits for the next step. */
@@ -27,12 +27,10 @@ export interface Player {
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
-export function createPlayer(scene: Scene, city: CitySnapshot): Player {
+/** The player on `solids`, the world's physics shared with everything else that moves. */
+export function createPlayer(scene: Scene, city: CitySnapshot, solids: Solids): Player {
   const { world, graph } = city;
-  const solids = createSolids(world, graph);
-  const spawn = spawnPoint(world, graph, solids, world.focus);
-  // ponytail: no road with room (an island without streets) starts in the map's middle, carless.
-  const start = spawn ?? { x: world.map.width / 2, z: world.map.height / 2, yaw: 0, car: null };
+  const start = spawnPoint(world, graph, solids, world.focus);
   const walker = createWalker(start, solids);
   walker.face = start.yaw;
   const cam = createCam(start.yaw);
@@ -91,7 +89,11 @@ export function createPlayer(scene: Scene, city: CitySnapshot): Player {
     step(a, dt) {
       Object.assign(before, now);
       stepWalk(walker, a, cam.heading.x, dt, solids);
-      if (car) collideBodies(walker.body, car);
+      if (car) {
+        // Pushed off the car, then out of any wall or water that push put it into.
+        collideBodies(walker.body, car);
+        collideStatic(walker.body, solids, STEP, dt);
+      }
       keep(now);
     },
     draw(camera, alpha, dt) {

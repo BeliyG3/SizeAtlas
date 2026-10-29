@@ -20,7 +20,10 @@ export const JUMP_H = 1.2;
 export const COYOTE = 0.1;
 /** ...and a press this long before landing. */
 export const JUMP_BUFFER = 0.1;
-/** The deepest drop walked or jumped off, metres; a deeper edge (a roof's) is a wall: down by car. */
+/**
+ * The deepest drop walked or jumped off the ground or a deck, metres; deeper is a wall. A roof's
+ * edge is a wall for any drop past `STEP`: roofs are left only by car.
+ */
 export const LEDGE = 3;
 /** A stick tilted past this runs; under it the pace is the walk, scaled by the tilt. */
 const STICK_RUN = 0.8;
@@ -46,12 +49,14 @@ export interface Walker {
   jumped: boolean;
   /** Seconds since leaving the ground without a jump. */
   coyote: number;
-  /** Seconds a jump press still waits. */
+  /** Seconds a jump press still waits: set to `JUMP_BUFFER` once per frame with a press. */
   buffer: number;
   /** Seconds of a stagger after a hard landing. */
   stagger: number;
   /** The height last stood on: a drop is measured from it. */
   support: number;
+  /** What was last stood on is a roof. */
+  roof: boolean;
   /** The feet as drawn: steps eased, not snapped. */
   shownY: number;
 }
@@ -85,8 +90,15 @@ export function createWalker(start: { x: number; z: number }, s: Solids): Walker
     buffer: 0,
     stagger: 0,
     support: y,
+    roof: onRoof(s, start.x, y, start.z),
     shownY: y,
   };
+}
+
+/** Feet at height `y` over (x, z) stand on a house's roof. */
+function onRoof(s: Solids, x: number, y: number, z: number): boolean {
+  const roof = s.roofAt(x, z);
+  return roof !== null && y >= roof - 1e-6;
 }
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
@@ -100,9 +112,9 @@ function paceOf(a: Actions, tilt: number): number {
   return GAIT.walk * Math.min(1, tilt / STICK_RUN);
 }
 
-/** Whether standing at (x, z) is a drop of more than `LEDGE` from where the walker last stood. */
+/** Whether (x, z) lies past an edge too deep to go down (see `LEDGE`) from where the walker last stood. */
 function overEdge(w: Walker, s: Solids, x: number, z: number): boolean {
-  return s.heightAt(x, z, w.body.y + STEP) < w.support - LEDGE;
+  return s.heightAt(x, z, w.body.y + STEP) < w.support - (w.roof ? STEP : LEDGE);
 }
 
 /**
@@ -155,6 +167,7 @@ function moveUpDown(w: Walker, dt: number, s: Solids) {
     // Exact under constant gravity: the peak is the jump's height at any step.
     b.y += w.vy * dt - 0.5 * GRAVITY * dt * dt;
     w.vy -= GRAVITY * dt;
+    // Lands falling, or still rising onto a rise no higher than a step (as in the prototype).
     if (b.y <= ground && (w.vy <= 0 || ground - b.y <= STEP)) {
       if (w.support - ground > HARD_FALL) w.stagger = STAGGER;
       b.y = ground;
@@ -165,20 +178,23 @@ function moveUpDown(w: Walker, dt: number, s: Solids) {
       w.shownY = ground;
     }
   }
-  if (w.grounded) w.support = b.y;
+  if (w.grounded) {
+    w.support = b.y;
+    w.roof = onRoof(s, b.x, b.y, b.z);
+  }
   w.shownY = w.grounded ? w.shownY + (b.y - w.shownY) * (1 - Math.exp(-18 * dt)) : b.y;
 }
 
 /**
  * One step of `dt` seconds. `camYaw` is the camera's heading (`atan2(x, z)` of its forward): the
- * move is relative to it. Shift (or a stick past `STICK_RUN`) runs.
+ * move is relative to it. Shift (or a stick past `STICK_RUN`) runs. A jump is pressed by setting
+ * `w.buffer`, once a frame: a frame of several steps jumps once.
  */
 export function stepWalk(w: Walker, a: Actions, camYaw: number, dt: number, s: Solids): void {
   const ix = a.move.x;
   const iz = a.move.y;
   const tilt = Math.min(1, Math.hypot(ix, iz));
   const want = paceOf(a, tilt);
-  if (a.jump) w.buffer = JUMP_BUFFER;
   w.buffer = Math.max(0, w.buffer - dt);
   w.stagger = Math.max(0, w.stagger - dt);
 

@@ -5,6 +5,7 @@
 import { PerspectiveCamera, Scene, WebGLRenderer } from "three";
 import { LOOK } from "../look";
 import { createLife, type Limits } from "../panel/life";
+import { createSolids } from "../physics/solids";
 import { islandMeshes } from "../render/island";
 import { addLights } from "../render/lighting";
 import type { CitySnapshot } from "../scene";
@@ -66,7 +67,9 @@ function setUp(
   const life = createLife(scene, () => {}, GAME);
   life.populate(city.graph, city.seed, city.islands);
 
-  const player = createPlayer(scene, city);
+  // One physics world for all that moves in it.
+  const solids = createSolids(city.world, city.graph);
+  const player = createPlayer(scene, city, solids);
 
   let applied = { w: 0, h: 0 };
   const render = () => {

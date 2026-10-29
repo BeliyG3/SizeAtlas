@@ -104,6 +104,7 @@ export function createCharacter(walker: GLTF): Character {
     dispose() {
       mixer.stopAllAction();
       mixer.uncacheRoot(model);
+      for (const skeleton of new Set(skins.map((o) => o.skeleton))) skeleton.dispose();
       // The geometry is the shared model's; only the looks are this figure's own.
       for (const m of [body, wire] as Material[]) m.dispose();
     },
