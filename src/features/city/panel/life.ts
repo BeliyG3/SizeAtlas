@@ -9,6 +9,7 @@ import { createTraffic, type Traffic } from "../actors/traffic";
 import { loadAssets } from "../render/assets";
 import { carInstances } from "../render/cars";
 import { peopleInstances } from "../render/people";
+import { trailMesh } from "../render/trails";
 import type { RoadGraph } from "../world/roads";
 
 /** The panel's limits: cars (flying ones included) and residents, however many islands. */
@@ -45,23 +46,28 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
   let models: {
     cars: ReturnType<typeof carInstances>;
     people: ReturnType<typeof peopleInstances>;
+    trails: ReturnType<typeof trailMesh>;
   } | null = null;
   let pools: { traffic: Traffic; residents: Residents } | null = null;
   let disposed = false;
   // Hidden from a new island until its first step, so no car of the last one shows on it.
   const show = (visible: boolean) => {
-    if (models) models.cars.group.visible = models.people.group.visible = visible;
+    if (!models) return;
+    models.cars.group.visible = models.people.group.visible = visible;
+    models.trails.mesh.visible = visible;
   };
 
   loadAssets().then(
     (assets) => {
       if (disposed) return;
+      const cars = carInstances(assets.car, CARS);
       models = {
-        cars: carInstances(assets.car, CARS),
+        cars,
         people: peopleInstances(assets.walker, PEOPLE),
+        trails: trailMesh(CARS, cars.tail),
       };
       show(false);
-      parent.add(models.cars.group, models.people.group);
+      parent.add(models.cars.group, models.people.group, models.trails.mesh);
       onReady();
     },
     // ponytail: without its models the island stays still; the next panel tries again.
@@ -83,14 +89,16 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
       pools.traffic.update(dt, around);
       pools.residents.update(dt, around);
       models.cars.update(pools.traffic, eye);
+      models.trails.update(pools.traffic, eye, dt);
       models.people.update(pools.residents, eye);
       show(true);
     },
     dispose() {
       disposed = true;
       if (!models) return;
-      parent.remove(models.cars.group, models.people.group);
+      parent.remove(models.cars.group, models.people.group, models.trails.mesh);
       models.cars.dispose();
+      models.trails.dispose();
       models.people.dispose();
       models = null;
     },

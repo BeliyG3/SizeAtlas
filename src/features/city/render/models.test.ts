@@ -90,6 +90,10 @@ describe("carInstances", () => {
       box.union(mesh.geometry.boundingBox!);
     }
     expect(box.max.z - box.min.z).toBeCloseTo(CAR_LENGTH, 3);
+    // The tail lights sit at the back, above the ground.
+    expect(cars.tail.z - box.min.z).toBeLessThan(0.5);
+    expect(cars.tail.y).toBeGreaterThan(0.2);
+    expect(Math.abs(cars.tail.x)).toBeLessThan(0.1);
     const two: Traffic = {
       ...traffic([10, 20]),
       y: Float32Array.from([0, 35]),

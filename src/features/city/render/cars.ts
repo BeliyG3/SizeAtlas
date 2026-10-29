@@ -64,7 +64,13 @@ function materials(): Record<string, Material> {
 export function carInstances(
   car: Object3D,
   max: number,
-): { group: Group; update(t: Traffic, camera: Vector3): void; dispose(): void } {
+): {
+  group: Group;
+  /** The tail lights' middle at the back, in the car's own space (nose to +z, on the ground). */
+  tail: Vector3;
+  update(t: Traffic, camera: Vector3): void;
+  dispose(): void;
+} {
   const looks = materials();
   const parts = new Map<string, BufferGeometry[]>();
   car.updateMatrixWorld(true);
@@ -104,6 +110,13 @@ export function carInstances(
     group.add(mesh);
     return mesh;
   });
+  // Where a trail leaves the car: the middle of the back of its tail lights.
+  const lights = geometries.find(([name]) => name === "Tail")?.[1];
+  lights?.computeBoundingBox();
+  const lit = lights?.boundingBox;
+  const tail = lit
+    ? new Vector3((lit.min.x + lit.max.x) / 2, (lit.min.y + lit.max.y) / 2, lit.min.z)
+    : new Vector3(0, CAR_BOX[1] / 2, -CAR_LENGTH / 2);
   // Farther off one draw for every car of each band, in the body's own material.
   const lod = (geometry: BufferGeometry, name: string) => {
     const mesh = new InstancedMesh(geometry, looks.Body, max);
@@ -145,7 +158,7 @@ export function carInstances(
     mid.count = counts[1];
     far.count = counts[2];
   }
-  return { group, update, dispose: () => disposeAll(group) };
+  return { group, tail, update, dispose: () => disposeAll(group) };
 }
 
 /**
