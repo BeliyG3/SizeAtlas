@@ -206,6 +206,18 @@ describe("collideStatic", () => {
     expect(c.x).toBeLessThan(30 - 1.4);
   });
 
+  it.each([
+    [0.45, true],
+    [0.55, false],
+  ])("a ramp of %f m a metre: the car drives up it, %s", (slope, climbs) => {
+    // From the gate at 1 m to the deck at 8 m.
+    const { solids } = bridgeWorld(7 / slope);
+    const c = car(70, 50, EAST, 10);
+    drive(c, solids, 6 * 60);
+    expect(c.y > 7).toBe(climbs);
+    expect(CAR_SLOPE).toBe(0.5);
+  });
+
   it("a body inside a house backs out the way it came", () => {
     const { solids } = canalWorld([wall(10)]);
     const p = person(35, 20);

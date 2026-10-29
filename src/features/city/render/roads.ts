@@ -90,9 +90,9 @@ export function roadMesh(map: CityMap, g: RoadGraph): { group: Group; dispose():
 }
 
 /**
- * Two triangles facing up: the road from (x0, z0) to (x1, z1), `half` to each side, its ends
- * carried `half` past the nodes so the ribbons of a junction close up. The start stands at height
- * `y0`, the end at `y1`.
+ * The road from (x0, z0) to (x1, z1), `half` to each side, as triangles facing up, its ends
+ * carried `half` past the nodes so the ribbons of a junction close up. Its height follows
+ * `pointOn`: `y0` up to the start node, from `y0` to `y1` between the nodes, `y1` past the end.
  */
 function ribbon(
   out: number[],
@@ -108,14 +108,31 @@ function ribbon(
   if (!(len > 0)) return;
   const ux = ((x1 - x0) / len) * half;
   const uz = ((z1 - z0) / len) * half;
+  if (y0 === y1) {
+    strip(out, x0 - ux, z0 - uz, x1 + ux, z1 + uz, ux, uz, y0, y1);
+    return;
+  }
+  strip(out, x0 - ux, z0 - uz, x0, z0, ux, uz, y0, y0);
+  strip(out, x0, z0, x1, z1, ux, uz, y0, y1);
+  strip(out, x1, z1, x1 + ux, z1 + uz, ux, uz, y1, y1);
+}
+
+/**
+ * Two triangles facing up: a piece of road from (xa, za) at height `ya` to (xb, zb) at `yb`,
+ * `(ux, uz)` (along the road, `half` long) to each side.
+ */
+function strip(
+  out: number[],
+  xa: number,
+  za: number,
+  xb: number,
+  zb: number,
+  ux: number,
+  uz: number,
+  ya: number,
+  yb: number,
+) {
   // a, b: the start's left and right; c, d: the end's. Left of the way is (−uz, ux).
-  const ax = x0 - ux - uz;
-  const az = z0 - uz + ux;
-  const bx = x0 - ux + uz;
-  const bz = z0 - uz - ux;
-  const cx = x1 + ux - uz;
-  const cz = z1 + uz + ux;
-  const dx = x1 + ux + uz;
-  const dz = z1 + uz - ux;
-  out.push(ax, y0, az, cx, y1, cz, bx, y0, bz, bx, y0, bz, cx, y1, cz, dx, y1, dz);
+  out.push(xa - uz, ya, za + ux, xb - uz, yb, zb + ux, xa + uz, ya, za - ux);
+  out.push(xa + uz, ya, za - ux, xb - uz, yb, zb + ux, xb + uz, yb, zb - ux);
 }
