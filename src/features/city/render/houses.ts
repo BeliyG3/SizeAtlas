@@ -134,9 +134,13 @@ export function districtEdge(district: number): Color {
   return new Color(LOOK.wire).lerp(new Color(DISTRICT_TINT[h % DISTRICT_TINT.length]), share);
 }
 
+/** A mitred corner moves at most this many times `by`; the sharpest a lot has, 45° inside, moves 2.6. */
+const MITRE_MAX = 4;
+
 /**
  * `points` with every side moved `by` metres inward (the inside is on the left of the way round),
- * corners mitred. A lot too small to take it is kept as it is.
+ * corners mitred. A lot too small to take it, or with a corner the mitre throws far, is kept as
+ * it is.
  */
 export function inset(points: Float32Array, by: number): Float32Array {
   const n = points.length / 2;
@@ -150,6 +154,10 @@ export function inset(points: Float32Array, by: number): Float32Array {
     out[i * 2] = points[i * 2] + (ax + bx) * k;
     out[i * 2 + 1] = points[i * 2 + 1] + (az + bz) * k;
   }
+  // At a spur that doubles back the mitre divides by almost 0 and the corner flies off by
+  // kilometres, with a positive area all the same; such a lot keeps its outline.
+  const far = by * MITRE_MAX;
+  for (let i = 0; i < out.length; i++) if (!(Math.abs(out[i] - points[i]) <= far)) return points;
   return area(out) > 0 && area(out) > area(points) * 0.25 ? out : points;
 }
 

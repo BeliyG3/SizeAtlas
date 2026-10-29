@@ -11,7 +11,7 @@ import { EDGE_FADE, LOOK } from "../look";
 import { buildWorld } from "../world/buildings";
 import { POLY, type Poly } from "../world/map";
 import { mapOf, square } from "../world/map.fixture";
-import { houseMesh } from "./houses";
+import { houseMesh, inset } from "./houses";
 
 const district = square(POLY.district, 1, 0, 300, 0, 0, 100);
 const block = square(POLY.block, 2, 1, 300, 0, 0, 100);
@@ -143,5 +143,29 @@ describe("houseMesh", () => {
     for (const g of geometries) g.addEventListener("dispose", () => freed.add(g));
     houses.dispose();
     expect(freed).toEqual(geometries);
+  });
+});
+
+describe("inset", () => {
+  // A filler lot of a real archipelago (float32): vertex 0 is the tip of a spur that doubles back, where
+  // the mitre divides by almost 0; nudged by one float32 step it flew some 6 km out.
+  const spur = [
+    3468.32177734375, 1013.178284, 3484.82177734375, 1029.677856, 3484.821533203125,
+    1034.1785888671875, 3483.32177734375, 1034.1783447265625, 3469.822021484375, 1047.678345,
+    3469.821533203125, 1014.678284,
+  ];
+
+  it("never moves a corner far, whatever the rounding at a spur", () => {
+    const by = 0.5;
+    for (let ulp = -4; ulp <= 4; ulp++) {
+      const points = Float32Array.from(spur);
+      const view = new Uint32Array(points.buffer);
+      view[0] += ulp; // the tip, one float32 step at a time
+      const out = inset(points, by);
+      for (let i = 0; i < out.length; i++) {
+        expect(Number.isFinite(out[i])).toBe(true);
+        expect(Math.abs(out[i] - points[i])).toBeLessThanOrEqual(by * 4 + 1e-3);
+      }
+    }
   });
 });
