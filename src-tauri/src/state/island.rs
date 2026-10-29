@@ -1,20 +1,21 @@
-//! The island of the open root: its input from the saved scans and the disks' free space, and
-//! the last result kept in memory.
+//! The island of an open root: its neighbours are the other open drives, the disks give the free
+//! space, and the built islands are kept in memory, one per open root.
 
+use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Mutex;
 #[cfg(test)]
 use std::sync::atomic::AtomicUsize;
+use std::sync::{Arc, Mutex};
 
-use sizeatlas_core::cache::{cache_path, fnv1a64, read_header};
+use sizeatlas_core::cache::fnv1a64;
 use sizeatlas_core::city;
-use sizeatlas_core::tree::VolumeUsage;
+use sizeatlas_core::tree::{Tree, VolumeUsage};
 
 use super::AppState;
 use crate::error::CmdError;
 use crate::sources;
 
-/// Islands in the world, the open one included.
+/// Islands in the world.
 const MAX_ISLANDS: usize = 8;
 
 /// Free space is rounded down to this many bytes: a busy disk changes it all the time, and a
@@ -36,43 +37,43 @@ fn parts(path: &str) -> Vec<String> {
         .collect()
 }
 
-/// The islands `(used, free)` and the place of the open one among them. The open root always
-/// stands; of the saved `scans` (`(root, used)`) those inside it or around it are left out, of
-/// two nested ones the outer stays, and the biggest fill the rest of [`MAX_ISLANDS`]. The order
-/// is by size, so every island sees the same world whichever root is open.
-pub fn islands(
-    open_root: &str,
-    open_used: u64,
-    scans: &[(String, u64)],
+/// An open root that is a whole drive: one island of the archipelago.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Member {
+    pub generation: u64,
+    pub root: String,
+    pub used: u64,
+    /// Free bytes, rounded down to [`FREE_STEP`].
+    pub free: u64,
+}
+
+/// The archipelago: of the open roots `(generation, root, used)` those that are a mount point of
+/// `mounts` (a folder is not an island), the biggest [`MAX_ISLANDS`], by `used` downwards. The
+/// order is by size, so every island sees the same world whichever root is selected.
+pub fn members(
+    open: &[(u64, String, u64)],
+    mounts: &[String],
     free_of: impl Fn(&str) -> u64,
-) -> (Vec<(u64, u64)>, usize) {
-    // (folders, root, used, is the open one)
-    type Entry<'a> = (Vec<String>, &'a str, u64, bool);
-    let open = parts(open_root);
-    let mut others: Vec<Entry> = scans
+) -> Vec<Member> {
+    let mounts: Vec<Vec<String>> = mounts.iter().map(|m| parts(m)).collect();
+    let mut list: Vec<Member> = open
         .iter()
-        .map(|(root, used)| (parts(root), root.as_str(), *used, false))
-        .filter(|(p, ..)| !p.starts_with(&open) && !open.starts_with(p))
+        .filter(|(_, root, _)| mounts.contains(&parts(root)))
+        .map(|(generation, root, used)| Member {
+            generation: *generation,
+            root: root.clone(),
+            used: *used,
+            free: step(free_of(root)),
+        })
         .collect();
-    // Outer first: a nested scan then finds its outer one already kept.
-    others.sort_by_key(|(p, ..)| p.len());
-    let mut kept: Vec<Entry> = Vec::new();
-    for scan in others {
-        if !kept.iter().any(|(k, ..)| scan.0.starts_with(k)) {
-            kept.push(scan);
-        }
-    }
-    let by_size = |a: &Entry, b: &Entry| b.2.cmp(&a.2).then_with(|| a.0.cmp(&b.0));
-    kept.sort_by(by_size);
-    kept.truncate(MAX_ISLANDS - 1);
-    kept.push((open, open_root, open_used, true));
-    kept.sort_by(by_size);
-    let me = kept.iter().position(|e| e.3).unwrap_or(0);
-    let list = kept
-        .iter()
-        .map(|&(_, root, used, _)| (used, free_of(root)))
-        .collect();
-    (list, me)
+    list.sort_by(|a, b| b.used.cmp(&a.used).then_with(|| a.root.cmp(&b.root)));
+    list.truncate(MAX_ISLANDS);
+    list
+}
+
+/// `free` rounded down to [`FREE_STEP`].
+fn step(free: u64) -> u64 {
+    free - free % FREE_STEP
 }
 
 /// Free bytes on the disk of `root`: the one with the longest mount point that contains it
@@ -92,92 +93,145 @@ pub fn free_space(root: &str, disks: &[(String, u64)], cached: Option<VolumeUsag
 /// What an island map depends on: the same key gives the same bytes.
 #[derive(PartialEq)]
 struct CityKey {
-    generation: u64,
     rev: u64,
+    /// `(used, free)` of every member: the directions to the other islands come from them.
     islands: Vec<(u64, u64)>,
 }
 
-/// The last island map; one entry is enough, the panel shows one root.
+/// A built island map: its key, the island and the encoded bytes.
+type Built = (CityKey, Arc<city::Island>, Vec<u8>);
+
+/// The island map of every open root, by generation.
 #[derive(Default)]
 pub struct CityCache {
-    last: Mutex<Option<(CityKey, Vec<u8>)>>,
+    kept: Mutex<HashMap<u64, Built>>,
     /// How many maps were built, for the tests.
     #[cfg(test)]
     pub builds: AtomicUsize,
 }
 
 impl CityCache {
-    /// The bytes kept for `key`, else `build()` stored under it. Building takes no lock, so two
-    /// calls with a new key may both build.
-    fn get_or_build(&self, key: CityKey, build: impl FnOnce() -> Vec<u8>) -> Vec<u8> {
-        let lock = || self.last.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((kept, bytes)) = lock().as_ref()
-            && *kept == key
+    /// The bytes kept for `generation` under `key`, else what `build()` gives, stored. Entries of
+    /// generations not in `open` are dropped. Building takes no lock, so two calls with a new
+    /// key may both build.
+    fn get_or_build(
+        &self,
+        generation: u64,
+        key: CityKey,
+        open: &[u64],
+        build: impl FnOnce() -> (Arc<city::Island>, Vec<u8>),
+    ) -> Vec<u8> {
+        let lock = || self.kept.lock().unwrap_or_else(|e| e.into_inner());
         {
-            return bytes.clone();
+            let mut kept = lock();
+            kept.retain(|g, _| open.contains(g));
+            if let Some((have, _, bytes)) = kept.get(&generation)
+                && *have == key
+            {
+                return bytes.clone();
+            }
         }
         #[cfg(test)]
         self.builds
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let bytes = build();
-        *lock() = Some((key, bytes.clone()));
+        let (island, bytes) = build();
+        lock().insert(generation, (key, island, bytes.clone()));
         bytes
+    }
+
+    /// The island last built for `generation`, if it is still open.
+    // Read by the placement and the bridges of the archipelago (next task).
+    #[allow(dead_code)]
+    pub fn island(&self, generation: u64) -> Option<Arc<city::Island>> {
+        let kept = self.kept.lock().unwrap_or_else(|e| e.into_inner());
+        kept.get(&generation).map(|(_, island, _)| island.clone())
     }
 }
 
+/// Every mount point, and `(mount, free bytes)` of the disks that answer.
+fn survey(cache_dir: &Path) -> (Vec<String>, Vec<(String, u64)>) {
+    let known = sources::list(cache_dir);
+    let mounts = known.disks.iter().map(|d| d.mount.clone()).collect();
+    let disks = known
+        .disks
+        .into_iter()
+        .filter(|d| d.connected)
+        .map(|d| (d.mount, d.available))
+        .collect();
+    (mounts, disks)
+}
+
+/// [`members`] of the open `trees`; a drive no disk answers for has the free space its scan knew.
+fn members_of(
+    trees: &[(u64, Arc<Tree>)],
+    mounts: &[String],
+    disks: &[(String, u64)],
+) -> Vec<Member> {
+    let open: Vec<(u64, String, u64)> = trees
+        .iter()
+        .map(|(g, t)| (*g, t.name(0).to_owned(), t.node(0).size))
+        .collect();
+    let free_of = |root: &str| {
+        let cached = trees
+            .iter()
+            .find(|(_, t)| t.name(0) == root)
+            .and_then(|(_, t)| t.volume);
+        free_space(root, disks, cached)
+    };
+    members(&open, mounts, free_of)
+}
+
 impl AppState {
-    /// Encoded island map of the whole root `generation` (see `sizeatlas_core::city`). The saved
-    /// scans in `cache_dir` and the disks give the other islands and the free space.
+    /// The islands of the archipelago: the open drives (see [`members`]).
+    // Read by the placement and the bridges of the archipelago (next task).
+    #[allow(dead_code)]
+    pub fn members(&self, cache_dir: &Path) -> Vec<Member> {
+        let (mounts, disks) = survey(cache_dir);
+        members_of(&self.open_trees(), &mounts, &disks)
+    }
+
+    /// Encoded island map of the whole root `generation` (see `sizeatlas_core::city`). Its
+    /// neighbours are the other open drives; a root that is not a drive has none.
     pub fn city(&self, generation: u64, cache_dir: &Path) -> Result<Vec<u8>, CmdError> {
+        let (mounts, disks) = survey(cache_dir);
+        self.city_in(generation, &mounts, &disks)
+    }
+
+    /// [`AppState::city`] with the mount points and the free space of the disks given.
+    fn city_in(
+        &self,
+        generation: u64,
+        mounts: &[String],
+        disks: &[(String, u64)],
+    ) -> Result<Vec<u8>, CmdError> {
         self.with_live(generation, 0, |tree| {
-            let known = sources::list(cache_dir);
-            let disks: Vec<(String, u64)> = known
-                .disks
-                .into_iter()
-                .filter(|d| d.connected)
-                .map(|d| (d.mount, d.available))
-                .collect();
-            let scans: Vec<(String, u64)> = known
-                .scans
-                .into_iter()
-                .filter(|s| !s.outdated)
-                .map(|s| (s.root, s.total))
-                .collect();
+            let trees = self.open_trees();
+            let list = members_of(&trees, mounts, disks);
             let root = tree.name(0);
-            let free_of = |r: &str| {
-                let cached = if r == root {
-                    tree.volume
-                } else {
-                    read_header(&cache_path(cache_dir, Path::new(r)))
-                        .ok()
-                        .and_then(|h| h.volume)
-                };
-                free_space(r, &disks, cached)
+            let free = step(free_space(root, disks, tree.volume));
+            let (islands, neighbours) = match list.iter().position(|m| m.generation == generation) {
+                Some(me) => {
+                    let islands: Vec<(u64, u64)> = list.iter().map(|m| (m.used, m.free)).collect();
+                    let neighbours = city::directions(&islands, me);
+                    (islands, neighbours)
+                }
+                None => (Vec::new(), Vec::new()),
             };
-            let (mut islands, me) = islands(root, tree.node(0).size, &scans, free_of);
-            for (_, free) in &mut islands {
-                *free -= *free % FREE_STEP;
-            }
-            let neighbours = city::directions(&islands, me);
-            let free = islands[me].1;
+            let open: Vec<u64> = trees.iter().map(|(g, _)| *g).collect();
             let key = CityKey {
-                generation,
                 rev: tree.rev,
                 islands,
             };
-            self.0.city.get_or_build(key, || {
+            self.0.city.get_or_build(generation, key, &open, || {
                 let input = city::IslandInput {
                     root: city::island_summary(tree, 0),
                     free,
                     neighbours,
                     seed: fnv1a64(root.as_bytes()),
                 };
-                city::encode_city(
-                    generation,
-                    tree.rev,
-                    tree.approximate,
-                    &city::island(&input),
-                )
+                let island = city::island(&input);
+                let bytes = city::encode_city(generation, tree.rev, tree.approximate, &island);
+                (Arc::new(island), bytes)
             })
         })
     }
