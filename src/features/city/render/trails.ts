@@ -1,5 +1,5 @@
 /**
- * Short glowing trails behind the cars' tail lights: a flat ribbon along where the light has been
+ * Short glowing trails behind the cars' lights: a flat ribbon along where a light has been
  * over the last `TRAIL_SECONDS`, so it bends through a turn and shrinks to nothing as the car
  * stops. One mesh, one draw, for every trail.
  */
@@ -8,6 +8,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
+  type ColorRepresentation,
   DoubleSide,
   DynamicDrawUsage,
   Mesh,
@@ -34,10 +35,11 @@ const POINTS = TRAIL_POINTS + 1;
 // Seconds between two samples: the samples always reach `TRAIL_SECONDS` back.
 const SAMPLE = TRAIL_SECONDS / (TRAIL_POINTS - 1);
 
-/** Trails of up to `max` cars whose light is at `tail` in the car's own space. */
+/** Trails of up to `max` cars whose light is at `tail` in the car's own space, in `tint`. */
 export function trailMesh(
   max: number,
   tail: Vector3,
+  tint: ColorRepresentation = LOOK.virus,
 ): { mesh: Mesh; update(t: Traffic, camera: Vector3, dt: number): void; dispose(): void } {
   const position = new BufferAttribute(new Float32Array(max * POINTS * 6), 3);
   const color = new BufferAttribute(new Float32Array(max * POINTS * 6), 3);
@@ -75,7 +77,7 @@ export function trailMesh(
   const len = new Int32Array(max);
   // Where each light was in the last step, to see a jump.
   const last = new Float32Array(max * 3);
-  const red = new Color(LOOK.virus);
+  const red = new Color(tint);
   let traffic: Traffic | null = null;
   let now = 0;
 

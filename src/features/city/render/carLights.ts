@@ -8,7 +8,7 @@ import {
   Color,
   DynamicDrawUsage,
   type Points,
-  type Vector3,
+  Vector3,
 } from "three";
 import type { Traffic } from "../actors/traffic";
 import { LOOK } from "../look";
@@ -54,6 +54,7 @@ export function carLights(
   );
   const p = position.array as Float32Array;
   const c = color.array as Float32Array;
+  const head = headOf(tail);
 
   function update(t: Traffic) {
     let slots = 0;
@@ -65,7 +66,7 @@ export function carLights(
       for (let k = 0; k < 2; k++) {
         const v = (slots * 2 + k) * 3;
         // The tail behind, the head ahead, a little clear of the body so it never hides them.
-        const along = k === 0 ? tail.z - LIGHT_CLEAR : LIGHT_CLEAR - tail.z;
+        const along = k === 0 ? tail.z - LIGHT_CLEAR : head.z + LIGHT_CLEAR;
         p[v] = t.x[i] + tail.x * cos + along * sin;
         p[v + 1] = t.y[i] + tail.y;
         p[v + 2] = t.z[i] - tail.x * sin + along * cos;
@@ -88,4 +89,9 @@ export function carLights(
       (points.material as { dispose(): void }).dispose();
     },
   };
+}
+
+/** The head light of a car whose tail light is at `tail`: as far ahead of its middle as that is behind. */
+export function headOf(tail: Vector3): Vector3 {
+  return new Vector3(tail.x, tail.y, -tail.z);
 }

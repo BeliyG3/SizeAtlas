@@ -105,6 +105,17 @@ describe("trailMesh", () => {
     trails.dispose();
   });
 
+  it("glows in the colour of its light: a head light's trail in the head light's", () => {
+    const heads = trailMesh(4, new Vector3(0, 0.6, 2), LOOK.wire);
+    drive(heads, traffic([0]), 22, 1);
+    const c = heads.mesh.geometry.getAttribute("color");
+    const wire = new Color(LOOK.wire).multiplyScalar(TRAIL_GLOW);
+    expect([c.getX(0), c.getY(0), c.getZ(0)].map((v) => +v.toFixed(5))).toEqual(
+      [wire.r, wire.g, wire.b].map((v) => +v.toFixed(5)),
+    );
+    heads.dispose();
+  });
+
   it("draws no trail for a car farther than the middle distance", () => {
     const trails = trailMesh(4, tail);
     const t = traffic([0, 0]);

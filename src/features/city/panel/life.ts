@@ -8,10 +8,11 @@ import { createResidents, type Residents } from "../actors/residents";
 import { createTraffic, type Traffic } from "../actors/traffic";
 import { loadAssets } from "../render/assets";
 import { carInstances } from "../render/cars";
-import { carLights } from "../render/carLights";
+import { carLights, headOf } from "../render/carLights";
 import { crowdMesh, type Crowd } from "../render/crowd";
 import { peopleInstances } from "../render/people";
 import { trailMesh } from "../render/trails";
+import { LOOK } from "../look";
 import type { RoadGraph } from "../world/roads";
 import { buildRoutes } from "../world/routes";
 
@@ -66,6 +67,7 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
     cars: ReturnType<typeof carInstances>;
     people: ReturnType<typeof peopleInstances>;
     trails: ReturnType<typeof trailMesh>;
+    heads: ReturnType<typeof trailMesh>;
     lights: ReturnType<typeof carLights>;
   } | null = null;
   let pools: { traffic: Traffic; residents: Residents } | null = null;
@@ -76,7 +78,8 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
     for (const c of crowd) c.group.visible = visible;
     if (!models) return;
     models.cars.group.visible = models.people.group.visible = visible;
-    models.trails.mesh.visible = models.lights.points.visible = visible;
+    models.trails.mesh.visible = models.heads.mesh.visible = visible;
+    models.lights.points.visible = visible;
   };
 
   loadAssets().then(
@@ -87,10 +90,18 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
         cars,
         people: peopleInstances(assets.walker, PEOPLE),
         trails: trailMesh(CARS, cars.tail),
+        // The head lights trail too, as long and as far as the tail lights.
+        heads: trailMesh(CARS, headOf(cars.tail), LOOK.wire),
         lights: carLights(CARS, cars.tail),
       };
       show(false);
-      parent.add(models.cars.group, models.people.group, models.trails.mesh, models.lights.points);
+      parent.add(
+        models.cars.group,
+        models.people.group,
+        models.trails.mesh,
+        models.heads.mesh,
+        models.lights.points,
+      );
       onReady();
     },
     // ponytail: without its models the island stays still; the next panel tries again.
@@ -124,6 +135,7 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
       pools.residents.update(dt, around);
       models.cars.update(pools.traffic, eye);
       models.trails.update(pools.traffic, eye, dt);
+      models.heads.update(pools.traffic, eye, dt);
       models.lights.update(pools.traffic);
       models.people.update(pools.residents, eye);
       for (const c of crowd) c.update(dt, eye);
@@ -137,10 +149,12 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
         models.cars.group,
         models.people.group,
         models.trails.mesh,
+        models.heads.mesh,
         models.lights.points,
       );
       models.cars.dispose();
       models.trails.dispose();
+      models.heads.dispose();
       models.lights.dispose();
       models.people.dispose();
       models = null;
