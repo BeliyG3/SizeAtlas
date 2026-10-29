@@ -16,24 +16,22 @@ const ROOM: f32 = 300.0;
 const OPEN: f32 = CLEAR + 2.0 * WORLD_CELL;
 /// A way sets out where a gate's straight first lies this far from every outline, metres.
 const OUT: f32 = CLEAR + 3.0 * WORLD_CELL;
-/// A gate's straight runs out at most this far before its way, metres.
-const REACH: f32 = 1000.0;
-/// No way is searched on a raster of more states (cells · headings) than this.
-const MAX_STATES: usize = 2000 * 2000 * 8;
-/// `back` of a state with none before it; the high bit marks a state done.
+/// A gate's straight runs out at most this far before its way, metres: the empty shore of an
+/// island with the most free space may run a kilometre on in front of a gate.
+const REACH: f32 = 1500.0;
+/// The heading before of a state with none before it; the high bit marks a state done.
 pub(crate) const START: u8 = 8;
 pub(crate) const DONE: u8 = 0x80;
 
 /// A gate: its island, its node and its outward direction, world metres.
 pub(crate) type End = (usize, [f32; 2], [f32; 2]);
 
-/// The world raster, its open sea, and the search's tables by state `cell · 8 + heading`: the
-/// cheapest cost found and the heading of the state before (`START`, `DONE`), left reset.
+/// The world raster, its open sea, and the states the search has seen (see [`search::Seen`]),
+/// left empty.
 pub(crate) struct Sea {
     world: World,
     open: Vec<bool>,
-    best: Vec<f32>,
-    back: Vec<u8>,
+    seen: search::Seen,
     /// Cells an earlier bridge runs over: a way along them costs `JOIN` of a step.
     used: Vec<bool>,
 }
@@ -43,15 +41,9 @@ impl Sea {
         let world = World::new(shapes, ROOM);
         let (dist, _) = distance(&world.land);
         let open: Vec<bool> = dist.data.iter().map(|&d| d * WORLD_CELL >= OPEN).collect();
-        let states = if open.len() * 8 <= MAX_STATES {
-            open.len() * 8
-        } else {
-            0
-        };
         Self {
             world,
-            best: vec![f32::INFINITY; states],
-            back: vec![START; states],
+            seen: search::Seen::default(),
             used: vec![false; open.len()],
             open,
         }

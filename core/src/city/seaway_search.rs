@@ -5,8 +5,9 @@ use crate::city::bends::BEND;
 use crate::city::chart::WORLD_CELL;
 use crate::city::path::simplify;
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 use std::f32::consts::SQRT_2;
+use std::hash::{BuildHasherDefault, Hasher};
 
 /// A turn costs as much as this many cells of way, per 45°.
 const TURN: f32 = BEND / WORLD_CELL;
@@ -26,6 +27,35 @@ const MOVES: [(isize, isize); 8] = [
     (1, -1),
 ];
 
+/// The states seen by a search, by `cell · 8 + heading`: the cheapest cost found and the
+/// heading of the state before (`START`; `DONE` marks it done). Only the states a search
+/// reaches take room (some 15 MB for the largest archipelago, where tables of every state took
+/// 200 MB), so a raster of any size is searched.
+pub(super) type Seen = HashMap<usize, (f32, u8), BuildHasherDefault<StateHash>>;
+
+/// A state's hash: its index times an odd constant (Fibonacci hashing), cheaper than the
+/// default hasher on the search's millions of lookups.
+#[derive(Default)]
+pub(super) struct StateHash(u64);
+
+const FIBONACCI: u64 = 0x9E37_79B9_7F4A_7C15;
+
+impl Hasher for StateHash {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 = (self.0 ^ u64::from(b)).wrapping_mul(FIBONACCI);
+        }
+    }
+
+    fn write_usize(&mut self, n: usize) {
+        self.0 = (n as u64).wrapping_mul(FIBONACCI);
+    }
+}
+
 impl Sea {
     /// The corners of the cheapest way (A*) over the open sea from cell `from`, heading `dir`
     /// (an index of `DIRS`), to cell `to`, there heading `goal`: a step costs its length in
@@ -40,9 +70,6 @@ impl Sea {
         goal: usize,
         bound: f32,
     ) -> Option<Vec<[f32; 2]>> {
-        if self.best.is_empty() {
-            return None;
-        }
         let (w, h) = (self.world.land.w as isize, self.world.land.h as isize);
         let xy = |c: usize| (c as isize % w, c as isize / w);
         let (tx, ty) = xy(to);
@@ -52,25 +79,29 @@ impl Sea {
             let (dx, dy) = ((x - tx).abs() as f32, (y - ty).abs() as f32);
             dx.max(dy) + (SQRT_2 - 1.0) * dx.min(dy) + TURN * turn(d, goal) as f32
         };
-        let mut touched = vec![from * 8 + dir];
         let mut heap = BinaryHeap::new();
-        self.best[from * 8 + dir] = 0.0;
+        self.seen.insert(from * 8 + dir, (0.0, START));
         heap.push(Reverse((guess(from, dir).to_bits(), from * 8 + dir)));
         let mut found = None;
         for _ in 0..MAX_POPS {
             let Some(Reverse((_, s))) = heap.pop() else {
                 break;
             };
-            if self.back[s] & DONE != 0 {
+            let state = self
+                .seen
+                .get_mut(&s)
+                .expect("a state is seen before it is queued");
+            if state.1 & DONE != 0 {
                 continue;
             }
-            self.back[s] |= DONE;
+            state.1 |= DONE;
+            let g = state.0;
             let (c, d) = (s / 8, s % 8);
             if c == to && d == goal {
                 found = Some(s);
                 break;
             }
-            let (g, (x, y)) = (self.best[s], xy(c));
+            let (x, y) = xy(c);
             for (k, (mx, my)) in MOVES.into_iter().enumerate() {
                 let turn = turn(d, k);
                 let (nx, ny) = (x + mx, y + my);
@@ -88,28 +119,28 @@ impl Sea {
                 let cost = g + step + TURN * turn as f32;
                 let next = n * 8 + k;
                 let reach = cost + guess(n, k);
-                if reach <= bound && cost < self.best[next] && self.back[next] & DONE == 0 {
-                    self.best[next] = cost;
-                    self.back[next] = d as u8;
-                    touched.push(next);
+                if reach > bound {
+                    continue;
+                }
+                let state = self.seen.entry(next).or_insert((f32::INFINITY, START));
+                if cost < state.0 && state.1 & DONE == 0 {
+                    *state = (cost, d as u8);
                     heap.push(Reverse((reach.to_bits(), next)));
                 }
             }
         }
         let way = found.map(|mut s| {
             let mut cells = vec![s / 8];
-            while self.back[s] & !DONE != START {
+            while self.seen[&s].1 & !DONE != START {
                 let (mx, my) = MOVES[s % 8];
                 let (x, y) = xy(s / 8);
                 let prev = ((y - my) * w + x - mx) as usize;
-                s = prev * 8 + usize::from(self.back[s] & !DONE);
+                s = prev * 8 + usize::from(self.seen[&s].1 & !DONE);
                 cells.push(prev);
             }
             simplify(cells.iter().rev().map(|&c| self.world.centre(c)).collect())
         });
-        for s in touched {
-            (self.best[s], self.back[s]) = (f32::INFINITY, START);
-        }
+        self.seen.clear();
         way
     }
 }

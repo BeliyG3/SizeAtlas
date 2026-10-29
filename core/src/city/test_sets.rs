@@ -13,6 +13,8 @@ use std::sync::OnceLock;
 const GIB: u64 = 1 << 30;
 /// Free space over used space, island by island (cycled).
 const RATIOS: [f64; 5] = [0.5, 1.5, 0.2, 3.0, 0.8];
+/// The most free space over used space an island shows (see `empty_ratio`).
+const MOST_FREE: [f64; 1] = [3.0];
 
 /// A root of `used` bytes (give or take rounding): 8 folders of 2 to 8 subfolders, which weigh
 /// `u^-1.5` for a uniform `u` (a power law).
@@ -58,13 +60,15 @@ const FIVE: [u64; 5] = [16 * GIB, 8 * GIB, 4 * GIB, 2 * GIB, GIB];
 /// Islands of about `used` bytes each, biggest first, the gates of the `i`-th facing
 /// `aim(sizes, i)` (`(used, free)` of every island); built side by side.
 fn build(used: &[u64], aim: impl Fn(&[(u64, u64)], usize) -> Vec<f32>) -> Vec<Island> {
-    build_from(0, used, aim)
+    build_from(0, used, &RATIOS, aim)
 }
 
-/// [`build`] with the roots and the islands seeded from `base` on.
+/// [`build`] with the roots and the islands seeded from `base` on, the free space by `ratios`
+/// (cycled).
 fn build_from(
     base: u64,
     used: &[u64],
+    ratios: &[f64],
     aim: impl Fn(&[(u64, u64)], usize) -> Vec<f32>,
 ) -> Vec<Island> {
     let roots: Vec<Folder> = (used.iter().enumerate())
@@ -72,7 +76,7 @@ fn build_from(
         .collect();
     assert!(roots.windows(2).all(|w| w[0].size > w[1].size));
     let sizes: Vec<(u64, u64)> = (roots.iter().enumerate())
-        .map(|(i, r)| (r.size, (r.size as f64 * RATIOS[i % RATIOS.len()]) as u64))
+        .map(|(i, r)| (r.size, (r.size as f64 * ratios[i % ratios.len()]) as u64))
         .collect();
     std::thread::scope(|s| {
         let builds: Vec<_> = (roots.iter().enumerate())
@@ -177,5 +181,19 @@ pub(crate) fn random(seed: u64) -> Vec<Island> {
     }
     sizes.sort_unstable_by(|a, b| b.cmp(a));
     let used: Vec<u64> = sizes.iter().map(|k| k * GIB).collect();
-    build_from(seed * 16, &used, directions)
+    build_from(seed * 16, &used, &RATIOS, directions)
+}
+
+/// The largest archipelago: eight islands of 4000 GiB down to 1900 GiB, each as big as an
+/// island gets (see `built_area`) with three times as much free space, built a second time
+/// facing where `place_on_rays` put them, as the app does.
+pub(crate) fn largest() -> &'static [Island] {
+    static SET: OnceLock<Vec<Island>> = OnceLock::new();
+    SET.get_or_init(|| {
+        let used: Vec<u64> = (0..8).map(|i| (4000 - 300 * i) * GIB).collect();
+        let first = build_from(0, &used, &MOST_FREE, directions);
+        let refs: Vec<&Island> = first.iter().collect();
+        let aims = bearings(&refs, &place_on_rays(&refs));
+        build_from(0, &used, &MOST_FREE, |_, i| aims[i].clone())
+    })
 }

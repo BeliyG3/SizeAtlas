@@ -3,8 +3,9 @@ use crate::city::archipelago::bearings;
 use crate::city::archipelago::tests::{
     add, gate, inside, len, outline, point_segment, probes, refs, sides, sub,
 };
+use crate::city::chart::bounds;
 use crate::city::test_sets::{
-    eight, five, five_real, four, four_real, four_turned, six, three, three_real,
+    eight, five, five_real, four, four_real, four_turned, largest, six, three, three_real,
 };
 use crate::city::{Island, place, place_on_rays};
 use std::f32::consts::{FRAC_PI_4, PI, TAU};
@@ -180,8 +181,22 @@ fn turns(p: &[[f32; 2]]) -> Vec<f32> {
         .collect()
 }
 
-/// No corner of a bridge turns more than 45°, nor where it goes on from the straights of its
-/// gates' highways.
+/// No corner of a bridge of `all` (of `set`) turns more than 45°, nor where it goes on from the
+/// straights of its gates' highways.
+fn assert_no_sharp_corners(set: &[Island], all: &[Bridge]) {
+    for b in all {
+        let (da, db) = (gate(&set[b.a.0], b.a.1).dir, gate(&set[b.b.0], b.b.1).dir);
+        let (p, n) = (&b.points, b.points.len());
+        let back = |q: [f32; 2], d: [f32; 2]| [q[0] - 10.0 * d[0], q[1] - 10.0 * d[1]];
+        let mut line = vec![back(p[0], da)];
+        line.extend_from_slice(p);
+        line.push(back(p[n - 1], db));
+        for t in turns(&line) {
+            assert!(t <= FRAC_PI_4 + 1e-3, "{}°: {b:?}", t.to_degrees());
+        }
+    }
+}
+
 #[test]
 fn no_sharp_corners() {
     let sets = [
@@ -195,18 +210,36 @@ fn no_sharp_corners() {
         eight(),
     ];
     for set in sets {
-        for b in laid(set).2 {
-            let (da, db) = (gate(&set[b.a.0], b.a.1).dir, gate(&set[b.b.0], b.b.1).dir);
-            let (p, n) = (&b.points, b.points.len());
-            let back = |q: [f32; 2], d: [f32; 2]| [q[0] - 10.0 * d[0], q[1] - 10.0 * d[1]];
-            let mut line = vec![back(p[0], da)];
-            line.extend_from_slice(p);
-            line.push(back(p[n - 1], db));
-            for t in turns(&line) {
-                assert!(t <= FRAC_PI_4 + 1e-3, "{}°: {b:?}", t.to_degrees());
-            }
-        }
+        assert_no_sharp_corners(set, &laid(set).2);
     }
+}
+
+/// The largest archipelago, over 4 million cells of the world raster (where the search over the
+/// sea once stopped), has a bridge for every pair, none turning more than 45°, placed and
+/// bridged within 3 s. Slow to build in a debug build: run with `--release -- --ignored`.
+#[test]
+#[ignore = "timing, run in release: cargo test -p sizeatlas-core --release -- --ignored"]
+fn the_largest_archipelago_is_bridged_in_time() {
+    let set = largest();
+    let start = Instant::now();
+    let at = place(&refs(set));
+    let all = bridges(&refs(set), &at);
+    let took = start.elapsed();
+    eprintln!("8 largest islands: placed and bridged in {took:?}");
+    let far = |(s, a): (&Island, &[f32; 2])| [a[0] + s.width, a[1] + s.height];
+    let (lo, _) = bounds(&at);
+    let (_, hi) = bounds(&set.iter().zip(&at).map(far).collect::<Vec<_>>());
+    // The world raster: 6 m cells over the islands and 300 m of sea round.
+    let cells = (hi[0] - lo[0] + 600.0) * (hi[1] - lo[1] + 600.0) / 36.0;
+    assert!(cells > 4.0e6, "{cells} cells");
+    let mut pairs: Vec<_> = all.iter().map(|b| (b.a.0, b.b.0)).collect();
+    pairs.sort_unstable();
+    let want: Vec<_> = (0..8)
+        .flat_map(|i| (i + 1..8).map(move |j| (i, j)))
+        .collect();
+    assert_eq!(pairs, want);
+    assert_no_sharp_corners(set, &all);
+    assert!(took.as_secs_f32() <= 3.0, "{took:?}");
 }
 
 /// The most any gate of `set` (placed by `place`) turns off the octant of the islands it faces:
