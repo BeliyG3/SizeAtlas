@@ -68,7 +68,7 @@ export function flyStep(c: Car, a: Actions, dt: number, s: Solids): void {
   if (c.landing && s.isWater(c.x, c.z, c.y)) {
     c.landing = false;
     c.cantLand = true;
-  }
+  } else if (c.cantLand && !s.isWater(c.x, c.z, c.y)) c.cantLand = false; // over land again: it may land
   const g = supportOf(c, s);
   const climb = (a.up || c.lift > 0 ? 1 : 0) - (a.down ? 1 : 0);
   const target = c.landing ? -Math.min(8, (c.y - g) * 1.2 + 0.6) : climb * CLIMB_SPEED;

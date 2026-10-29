@@ -97,8 +97,8 @@ describe("the game", () => {
     tick(16);
     expect(onHud).not.toHaveBeenCalled();
     hud.near = true;
-    tick(32);
-    tick(48);
+    // The HUD is looked at every HUD_EVERY (50 ms), not every frame.
+    for (let t = 32; t <= 112; t += 16) tick(t);
     expect(onHud).toHaveBeenCalledTimes(1);
     expect(onHud.mock.calls[0][0]).toMatchObject({ near: true, paused: false });
     dom.doc.focused = false;

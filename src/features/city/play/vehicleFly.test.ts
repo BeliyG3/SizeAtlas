@@ -182,8 +182,10 @@ describe("flyStep", () => {
     fly(c, makeActions(), solids, 3);
     expect(c.flying).toBe(true);
     expect(c.y).toBeCloseTo(HOVER);
-    // The next F, over land, lands.
+    // Flown back over land, the hint goes; the next F lands.
     c.x = 60;
+    fly(c, makeActions(), solids, 0.1);
+    expect(c.cantLand).toBe(false);
     toggleFlight(c, solids);
     expect(c.cantLand).toBe(false);
     fly(c, makeActions(), solids, 3);

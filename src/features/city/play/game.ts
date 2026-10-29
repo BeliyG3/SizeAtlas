@@ -11,6 +11,9 @@ import { FIXED } from "./loop";
 import { createPlayScene, type PlayScene } from "./playScene";
 import { createSession } from "./session";
 
+/** Seconds between two looks at what the HUD should say. */
+const HUD_EVERY = 0.05;
+
 const away = () => document.hidden || !document.hasFocus();
 
 async function setFullscreen(on: boolean) {
@@ -48,6 +51,7 @@ export function startGame(
 
   // The HUD hears of a change only, not of every frame.
   const shown = makeHud();
+  let hudWait = 0;
   const publish = () => {
     const now = scene.hud();
     now.paused = session.state === "paused";
@@ -67,7 +71,12 @@ export function startGame(
     scene.frame(actions);
     for (let i = 0; i < steps; i++) scene.step(actions, FIXED);
     scene.draw(alpha, dt);
-    publish();
+    // The hints need no more than ~20 looks a second; a pause or a resume still shows at once.
+    hudWait -= dt;
+    if (hudWait <= 0) {
+      hudWait = HUD_EVERY;
+      publish();
+    }
   };
   const run = () => {
     if (!frame && !stopped) frame = requestAnimationFrame(tick);
