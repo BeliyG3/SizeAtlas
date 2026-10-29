@@ -4,11 +4,9 @@
 
 use std::panic::resume_unwind;
 use std::path::Path;
-use std::sync::Arc;
 use std::thread;
 
 use sizeatlas_core::city::{self, Island};
-use sizeatlas_core::tree::Tree;
 
 use super::AppState;
 use super::island::{Kept, Member, free_space, members_of, step, survey};
@@ -36,12 +34,11 @@ impl AppState {
         disks: &[(String, u64)],
     ) -> Result<ArchipelagoDto, CmdError> {
         let root = self.with_live(selected, 0, |tree| tree.name(0).to_owned())?;
-        let trees = self.open_trees();
-        let list = members_of(&trees, mounts, disks);
-        let open: Vec<u64> = trees.iter().map(|(g, _)| *g).collect();
+        let (list, revs) = self.open_members(mounts, disks);
+        let open: Vec<u64> = revs.iter().map(|(g, _)| *g).collect();
         // `(generation, root)` in the order of the members; a root that is no member is alone.
         let (roots, kept, offsets) = if list.iter().any(|m| m.generation == selected) {
-            let (kept, offsets) = self.settle(&list, &trees, true)?;
+            let (kept, offsets) = self.settle(&list, &revs, true)?;
             let roots = list.into_iter().map(|m| (m.generation, m.root)).collect();
             (roots, kept, offsets)
         } else {
@@ -93,14 +90,28 @@ impl AppState {
         mounts: &[String],
         disks: &[(String, u64)],
     ) -> Result<Vec<u8>, CmdError> {
-        let trees = self.open_trees();
-        let list = members_of(&trees, mounts, disks);
-        let open: Vec<u64> = trees.iter().map(|(g, _)| *g).collect();
+        let (list, revs) = self.open_members(mounts, disks);
+        let open: Vec<u64> = revs.iter().map(|(g, _)| *g).collect();
         let (_, _, bytes) = match list.iter().position(|m| m.generation == generation) {
-            Some(me) => self.settle(&list, &trees, false)?.0.swap_remove(me),
+            Some(me) => self.settle(&list, &revs, false)?.0.swap_remove(me),
             None => self.alone(generation, disks, &open)?,
         };
         Ok(bytes)
+    }
+
+    /// The members among the open roots and the `(generation, rev)` of every open root. The
+    /// trees are let go before it returns: a change of a tree waits, holding the write lock,
+    /// until no copy of it is left, so a copy held while the islands are built (each of them
+    /// takes the read lock) would hold both forever.
+    pub(super) fn open_members(
+        &self,
+        mounts: &[String],
+        disks: &[(String, u64)],
+    ) -> (Vec<Member>, Vec<(u64, u64)>) {
+        let trees = self.open_trees();
+        let list = members_of(&trees, mounts, disks);
+        let revs = trees.iter().map(|(g, t)| (*g, t.rev)).collect();
+        (list, revs)
     }
 
     /// The island of a root that is no drive: no gates, the free space of its disk.
@@ -116,20 +127,20 @@ impl AppState {
         self.island_in(generation, free, &[], open)
     }
 
-    /// The islands of the members `list` (of the open `trees`, in its order) and where they
+    /// The islands of the members `list` (of the open roots `revs`, in its order) and where they
     /// stand, built facing the places [`city::directions`] foresees (see
     /// [`AppState::settle_with`]).
     fn settle(
         &self,
         list: &[Member],
-        trees: &[(u64, Arc<Tree>)],
+        revs: &[(u64, u64)],
         fresh: bool,
     ) -> Result<(Vec<Kept>, Vec<[f32; 2]>), CmdError> {
         let sizes: Vec<(u64, u64)> = list.iter().map(|m| (m.used, m.free)).collect();
         let foreseen: Vec<Vec<f32>> = (0..list.len())
             .map(|me| city::directions(&sizes, me))
             .collect();
-        self.settle_with(list, trees, &foreseen, fresh)
+        self.settle_with(list, revs, &foreseen, fresh)
     }
 
     /// The islands of the members `list` and where they stand. Unless `fresh`, the world last
@@ -141,11 +152,11 @@ impl AppState {
     pub(super) fn settle_with(
         &self,
         list: &[Member],
-        trees: &[(u64, Arc<Tree>)],
+        revs: &[(u64, u64)],
         foreseen: &[Vec<f32>],
         fresh: bool,
     ) -> Result<(Vec<Kept>, Vec<[f32; 2]>), CmdError> {
-        let rev = |g: u64| trees.iter().find(|(t, _)| *t == g).map(|(_, t)| t.rev);
+        let rev = |g: u64| revs.iter().find(|(t, _)| *t == g).map(|&(_, r)| r);
         let key: Vec<(u64, u64, u64)> = (list.iter())
             .map(|m| (m.generation, rev(m.generation).unwrap_or(0), m.used))
             .collect();
@@ -156,7 +167,7 @@ impl AppState {
         {
             return Ok((kept.clone(), at.clone()));
         }
-        let open: Vec<u64> = trees.iter().map(|(g, _)| *g).collect();
+        let open: Vec<u64> = revs.iter().map(|(g, _)| *g).collect();
         let (kept, at) = self.lay_out(list, foreseen, &open)?;
         *world = Some((key, kept.clone(), at.clone()));
         Ok((kept, at))

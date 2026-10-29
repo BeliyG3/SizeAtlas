@@ -150,8 +150,7 @@ fn get_city_matches_archipelago() {
     let dirs: Vec<_> = (0..4).map(|_| tempfile::tempdir().unwrap()).collect();
     let state = AppState::default();
     let (_, mounts) = four_drives(&state, &dirs);
-    let trees = state.open_trees();
-    let list = members_of(&trees, &mounts, &[]);
+    let (list, revs) = state.open_members(&mounts, &[]);
     let sizes: Vec<(u64, u64)> = list.iter().map(|m| (m.used, m.free)).collect();
     let turned: Vec<Vec<f32>> = (0..list.len())
         .map(|i| {
@@ -159,7 +158,7 @@ fn get_city_matches_archipelago() {
             ahead.map(|a| a + std::f32::consts::FRAC_PI_2).collect()
         })
         .collect();
-    let (kept, at) = state.settle_with(&list, &trees, &turned, true).unwrap();
+    let (kept, at) = state.settle_with(&list, &revs, &turned, true).unwrap();
     assert_eq!(builds(&state), 2 * list.len());
     let bridges = city::bridges(&kept.iter().map(|k| &*k.1).collect::<Vec<_>>(), &at);
     for (k, (member, (rev, island, _))) in list.iter().zip(&kept).enumerate() {
@@ -268,4 +267,50 @@ fn second_pass_skipped_when_close() {
     state.install_tree(tree_in(dirs[1].path(), 10_000));
     state.archipelago_in(first, &mounts, &[]).unwrap();
     assert_eq!(builds(&state), 3);
+}
+
+/// A scan that changes a member's tree while the archipelago is laid out gets the tree: the
+/// layout holds no copy of a tree while it waits for the data lock (a change waits for every
+/// copy to go, holding the write lock).
+#[test]
+fn a_change_meanwhile_does_not_deadlock() {
+    let dirs: Vec<_> = (0..3).map(|_| tempfile::tempdir().unwrap()).collect();
+    let state = AppState::default();
+    let generations: Vec<u64> = (dirs.iter().zip([10_000, 20_000, 40_000]))
+        .map(|(d, bytes)| state.install_tree(tree_in(d.path(), bytes)))
+        .collect();
+    let mounts: Vec<String> = dirs.iter().map(path_of).collect();
+    let (done, finished) = std::sync::mpsc::channel();
+    let state = std::sync::Arc::new(state);
+    let worker = {
+        let (state, mounts, done) = (state.clone(), mounts.clone(), done.clone());
+        let selected = generations[0];
+        std::thread::spawn(move || {
+            for _ in 0..20 {
+                state.archipelago_in(selected, &mounts, &[]).unwrap();
+            }
+            done.send(()).unwrap();
+        })
+    };
+    let changer = {
+        let (state, changed) = (state.clone(), generations[1]);
+        std::thread::spawn(move || {
+            for _ in 0..200 {
+                // A new rev, so every layout builds this island again.
+                state.change_tree(changed, |tree| {
+                    tree.rev += 1;
+                    Some(())
+                });
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            done.send(()).unwrap();
+        })
+    };
+    for _ in 0..2 {
+        finished
+            .recv_timeout(std::time::Duration::from_secs(60))
+            .expect("the layout and a change of a tree wait for each other");
+    }
+    worker.join().unwrap();
+    changer.join().unwrap();
 }
