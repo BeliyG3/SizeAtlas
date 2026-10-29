@@ -11,6 +11,10 @@ pub struct ArchipelagoIslandDto {
     /// The `rev` of the tree this island was built from: the one in the header of the island's
     /// `get_city` bytes. Offsets and gate nodes fit those bytes only while the two are equal.
     pub rev: u64,
+    /// The id of this build of the island, in the header of its `get_city` bytes too: a rebuild
+    /// for other neighbours has other gates under the same `rev`, so the bytes and the bridges
+    /// fit each other only while the `build` is the same.
+    pub build: u32,
     pub root: String,
     pub x: f32,
     pub z: f32,

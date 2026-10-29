@@ -112,6 +112,7 @@ fn archipelago_serializes_for_the_ui() {
         islands: vec![ArchipelagoIslandDto {
             generation: 3,
             rev: 9,
+            build: 4,
             root: "C:\\".into(),
             x: 1.5,
             z: -2.0,
@@ -126,7 +127,7 @@ fn archipelago_serializes_for_the_ui() {
     assert_eq!(
         serde_json::to_value(world).unwrap(),
         serde_json::json!({
-            "islands": [{"generation": 3, "rev": 9, "root": "C:\\", "x": 1.5, "z": -2.0}],
+            "islands": [{"generation": 3, "rev": 9, "build": 4, "root": "C:\\", "x": 1.5, "z": -2.0}],
             "bridges": [{"a": [0, 4], "b": [1, 7], "points": [[0.0, 1.0], [2.0, 3.0]], "level": 1}],
         })
     );
@@ -161,11 +162,11 @@ fn get_city_matches_archipelago() {
     let (kept, at) = state.settle_with(&list, &revs, &turned, true).unwrap();
     assert_eq!(builds(&state), 2 * list.len());
     let bridges = city::bridges(&kept.iter().map(|k| &*k.1).collect::<Vec<_>>(), &at);
-    for (k, (member, (rev, island, _))) in list.iter().zip(&kept).enumerate() {
+    for (k, (member, (rev, island, _, build))) in list.iter().zip(&kept).enumerate() {
         let bytes = state.city_in(member.generation, &mounts, &[]).unwrap();
         let tree = state.tree(member.generation).unwrap();
         assert_eq!(*rev, tree.rev);
-        let want = city::encode_city(member.generation, *rev, tree.approximate, island);
+        let want = city::encode_city(member.generation, *rev, *build, tree.approximate, island);
         assert!(
             bytes == want,
             "island {k}: get_city bytes are another island"

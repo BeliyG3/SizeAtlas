@@ -65,7 +65,7 @@ fn offsets_follow_the_format() {
             water: 0.0,
         },
     };
-    let b = encode_city(7, 8, true, &island);
+    let b = encode_city(7, 8, 9, true, &island);
     assert_eq!(b.len(), 56 + 24 * 2 + 8 * 7 + 8 * 3 + 12 * 2 + 16);
     // The shared header, then the city's.
     assert_eq!(u64::from_le_bytes(b[0..8].try_into().unwrap()), 7);
@@ -75,7 +75,7 @@ fn offsets_follow_the_format() {
     assert_eq!(u32_at(&b, 24), CITY_FORMAT);
     assert_eq!(xy_at(&b, 28), (300.5, 200.25));
     let counts: Vec<u32> = (36..56).step_by(4).map(|at| u32_at(&b, at)).collect();
-    assert_eq!(counts, [7, 3, 2, 1, 0]);
+    assert_eq!(counts, [7, 3, 2, 1, 9]);
     // Polygons.
     let p = CITY_HEADER_LEN;
     assert_eq!(b[p..p + 4], [0, 0, 3, 0]);
@@ -183,7 +183,7 @@ fn golden() -> Island {
 /// output for `golden()`, in hex, 32 bytes a line. `UPDATE_GOLDEN=1` writes it anew.
 #[test]
 fn the_frontend_fixture_is_what_the_encoder_writes() {
-    let bytes = encode_city(42, 7, true, &golden());
+    let bytes = encode_city(42, 7, 0, true, &golden());
     let hex: String = bytes
         .chunks(32)
         .map(|line| line.iter().map(|b| format!("{b:02x}")).collect::<String>() + "\n")

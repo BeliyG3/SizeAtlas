@@ -2,7 +2,9 @@
  * The island map (city format 3) as the frontend reads it; pure, no three.js. All little-endian;
  * the layout must match core/src/city/encode.rs: the 24-byte header shared with the treemap
  * (`count` = number of polygons), then `u32 format | f32 width | f32 height | u32 points |
- * u32 nodes | u32 edges | u32 gates | u32 0` (56 bytes in all); the polygons, 24 bytes each:
+ * u32 nodes | u32 edges | u32 gates | u32 build` (56 bytes in all; `build` is the id the app gave
+ * this build of the island: a rebuild with other gates keeps the rev, so the archipelago names the
+ * build too); the polygons, 24 bytes each:
  * `u8 kind | u8 0 | u16 points | u32 id | u32 parent | u32 0 | u64 size`; all their points in
  * polygon order, 8 bytes each: `f32 x, y`; the nodes, 8 bytes each; the edges, 12 bytes each:
  * `u32 a | u32 b | u8 class | u8 bridge | u16 0`; the gates, 16 bytes each:
@@ -81,6 +83,8 @@ export interface Gate {
 export interface CityMap {
   generation: number;
   rev: number;
+  /** The id of this build of the island (0 on a merged map, which has none of its own). */
+  build: number;
   approximate: boolean;
   width: number;
   height: number;
@@ -162,6 +166,7 @@ export function parseCity(buffer: ArrayBuffer): CityMap {
     // BigInt to number: generations and revisions stay far below 2^53.
     generation: Number(view.getBigUint64(0, true)),
     rev: Number(view.getBigUint64(8, true)),
+    build: view.getUint32(52, true),
     approximate: view.getUint8(20) !== 0,
     width: view.getFloat32(28, true),
     height: view.getFloat32(32, true),

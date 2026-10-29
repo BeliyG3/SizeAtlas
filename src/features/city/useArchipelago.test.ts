@@ -16,8 +16,12 @@ vi.mock("../../api/client", () => ({
   api: { getArchipelago: vi.fn(), getCity: vi.fn(), getCrumbs: vi.fn() },
 }));
 
-/** An island: district 1 with blocks 10 and 20, and in each block one house (11 and 21). */
-function city(generation: number, rev: number): ArrayBuffer {
+/**
+ * An island: district 1 with blocks 10 and 20, and in each block one house (11 and 21); a build
+ * after the first has one house more (100 + build), as it has other gates in the real thing.
+ */
+function city(generation: number, rev: number, build = builds.get(generation) ?? 0): ArrayBuffer {
+  const extra = build > 0 ? [square(POLY.house, 100 + build, 10, 100, 30, 10, 10)] : [];
   return encodeCity(
     mapOf(
       [
@@ -25,15 +29,18 @@ function city(generation: number, rev: number): ArrayBuffer {
         square(POLY.block, 10, 1, 150, 0, 0, 50),
         square(POLY.block, 20, 1, 150, 50, 0, 50),
         square(POLY.house, 11, 10, 100, 10, 10, 20),
+        ...extra,
         square(POLY.house, 21, 20, 100, 60, 10, 20),
       ],
-      { generation, rev },
+      { generation, rev, build },
     ),
   );
 }
 
 /** The revision each open root is at, as the backend has it; the tests move it. */
 const revs = new Map<number, number>();
+/** The build each island is at, as the backend has it: an island rebuilt for new neighbours. */
+const builds = new Map<number, number>();
 /** The open roots that are no drive: the archipelago has no island for them. */
 const folders = new Set<number>();
 
@@ -44,12 +51,19 @@ function archipelago(selected: number): Archipelago {
       .map((generation, i) => ({
         generation,
         rev: revs.get(generation)!,
+        build: builds.get(generation) ?? 0,
         root: `/r${generation}`,
         x: i * 300,
         z: 0,
       })),
     bridges: [],
   };
+}
+
+/** A new rev of an island's tree: the backend builds the island again, under a new build. */
+function rebuild(generation: number, rev: number) {
+  revs.set(generation, rev);
+  builds.set(generation, (builds.get(generation) ?? 0) + 1);
 }
 
 const crumbs = (ids: number[]): Crumb[] =>
@@ -92,6 +106,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   revs.clear();
+  builds.clear();
   folders.clear();
   revs.set(1, 1).set(2, 1);
   vi.mocked(api.getArchipelago).mockImplementation((g) => Promise.resolve(archipelago(g)));
@@ -145,10 +160,10 @@ describe("useArchipelago", () => {
   it("asks for a new revision at most once per pause, and only for the island that changed", async () => {
     render();
     await settle();
-    revs.set(2, 2);
+    rebuild(2, 2);
     render();
     await vi.advanceTimersByTimeAsync(1000);
-    revs.set(2, 3);
+    rebuild(2, 3);
     render();
     await vi.advanceTimersByTimeAsync(REFRESH_MS - 1001);
     render();
@@ -170,7 +185,7 @@ describe("useArchipelago", () => {
     render();
     await settle();
     await vi.advanceTimersByTimeAsync(6000);
-    revs.set(1, 2);
+    rebuild(1, 2);
     render();
     await vi.advanceTimersByTimeAsync(0);
     render();
@@ -181,7 +196,7 @@ describe("useArchipelago", () => {
     const old = deferred<ArrayBuffer>();
     vi.mocked(api.getCity).mockReturnValueOnce(old.promise);
     render();
-    revs.set(1, 2);
+    rebuild(1, 2);
     render();
     await vi.advanceTimersByTimeAsync(REFRESH_MS);
     render();
@@ -313,12 +328,55 @@ describe("useArchipelago", () => {
     expect(onFail).not.toHaveBeenCalled();
   });
 
+  it("reads an island again that was rebuilt under the same rev, and merges the new map", async () => {
+    render();
+    await settle();
+    expect(vi.mocked(api.getCity).mock.calls.map(([g]) => g)).toEqual([1, 2]);
+    // A third drive opens: island 1 is built again for its new neighbours, its tree unchanged.
+    revs.set(3, 1);
+    builds.set(1, 2);
+    render();
+    await settle();
+    expect(vi.mocked(api.getCity).mock.calls.map(([g]) => g)).toEqual([1, 2, 1, 3]);
+    expect(houses()).toContainEqual([0, 102]);
+    expect(shown.islands.map((i) => i.build)).toEqual([2, 0, 0]);
+    expect(onFail).not.toHaveBeenCalled();
+  });
+
+  it("asks the archipelago again when the bytes are of another build than it named", async () => {
+    // The archipelago names build 0 of island 2, which is rebuilt before its bytes are read.
+    vi.mocked(api.getArchipelago).mockImplementationOnce((g) => {
+      const named = archipelago(g);
+      builds.set(2, 2);
+      return Promise.resolve(named);
+    });
+    render();
+    await settle();
+    expect(api.getArchipelago).toHaveBeenCalledTimes(2);
+    expect(shown.islands.map((i) => i.build)).toEqual([0, 2]);
+    expect(houses()).toContainEqual([1, 102]);
+    expect(onFail).not.toHaveBeenCalled();
+  });
+
+  it("keeps the old picture, without an error, when the bytes keep another build", async () => {
+    render();
+    await settle();
+    const before = shown.world;
+    vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, revs.get(g)!, 99)));
+    revs.set(3, 1);
+    render();
+    await settle();
+    expect(api.getArchipelago).toHaveBeenCalledTimes(1 + 3);
+    expect(onFail).not.toHaveBeenCalled();
+    expect(shown.world).toBe(before);
+  });
+
   it("keeps the old picture, without an error, when an island keeps changing", async () => {
     render();
     await settle();
     const before = shown.world;
     vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, 99)));
-    revs.set(2, 2);
+    rebuild(2, 2);
     render();
     await vi.advanceTimersByTimeAsync(REFRESH_MS);
     render();
@@ -328,7 +386,7 @@ describe("useArchipelago", () => {
     expect(shown.world).toBe(before);
     // The next revision asks again, and gets through.
     vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, revs.get(g)!)));
-    revs.set(2, 3);
+    rebuild(2, 3);
     render();
     await vi.advanceTimersByTimeAsync(REFRESH_MS);
     render();

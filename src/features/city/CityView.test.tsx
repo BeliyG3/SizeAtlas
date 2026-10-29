@@ -31,8 +31,8 @@ const roots = [
 const props = { roots, generation: 1, selectedId: 0, onSelect: vi.fn(), onFail: vi.fn() };
 /** Two islands, the drives of generations 1 and 2. */
 const islands = [
-  { generation: 1, rev: 1, root: "/a", x: 0, z: 0 },
-  { generation: 2, rev: 4, root: "/b", x: 300, z: 0 },
+  { generation: 1, rev: 1, build: 1, root: "/a", x: 0, z: 0 },
+  { generation: 2, rev: 4, build: 2, root: "/b", x: 300, z: 0 },
 ];
 let tree: ReactElement;
 

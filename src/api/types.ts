@@ -302,6 +302,8 @@ export interface ArchipelagoIsland {
   generation: number;
   /** The `rev` of the island in the header of its `getCity` bytes: the offsets and gate nodes fit them only while the two are equal. */
   rev: number;
+  /** The `build` of the island in the header of its `getCity` bytes: a rebuild for other neighbours has other gates under the same `rev`, so the bytes fit the bridges only while the two are equal. */
+  build: number;
   root: string;
   x: number;
   z: number;

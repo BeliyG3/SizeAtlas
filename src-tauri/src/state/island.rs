@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::Path;
 #[cfg(test)]
 use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use sizeatlas_core::cache::fnv1a64;
@@ -102,12 +103,13 @@ struct CityKey {
     neighbours: Vec<i32>,
 }
 
-/// A built island map: its key, the island and the encoded bytes.
-type Built = (CityKey, Arc<city::Island>, Vec<u8>);
+/// A built island map: its key, the island, the encoded bytes and the id of the build.
+type Built = (CityKey, Arc<city::Island>, Vec<u8>, u32);
 
 /// An island as the archipelago takes it: the rev of the tree it was built from (the one its
-/// encoded map carries), the island and its encoded map.
-pub(super) type Kept = (u64, Arc<city::Island>, Vec<u8>);
+/// encoded map carries), the island, its encoded map and the id of the build (in the map's
+/// header too).
+pub(super) type Kept = (u64, Arc<city::Island>, Vec<u8>, u32);
 
 /// The archipelago last laid out: its members' `(generation, rev, used)`, then their islands
 /// (in member order) and where they stand.
@@ -119,22 +121,25 @@ pub struct CityCache {
     kept: Mutex<HashMap<u64, Vec<Built>>>,
     /// Held while an archipelago is laid out, so that callers at once wait for it.
     pub(super) world: Mutex<Option<World>>,
+    /// The id of the last island built; each build gets the next, from 1.
+    last_build: AtomicU32,
     /// How many maps were built, for the tests.
     #[cfg(test)]
     pub builds: AtomicUsize,
 }
 
 impl CityCache {
-    /// The island kept for `generation` under `key`, else what `build()` gives, stored; of a
-    /// generation the last `KEEP` asked for are kept. Entries of generations not in `open` are
-    /// dropped. Building takes no lock, so two calls with a new key may both build.
+    /// The island kept for `generation` under `key`, else what `build(id)` gives, stored with
+    /// the new `id` of the build (a hit keeps its own); of a generation the last `KEEP` asked
+    /// for are kept. Entries of generations not in `open` are dropped. Building takes no lock,
+    /// so two calls with a new key may both build.
     fn get_or_build(
         &self,
         generation: u64,
         key: CityKey,
         open: &[u64],
-        build: impl FnOnce() -> (Arc<city::Island>, Vec<u8>),
-    ) -> (Arc<city::Island>, Vec<u8>) {
+        build: impl FnOnce(u32) -> (Arc<city::Island>, Vec<u8>),
+    ) -> (Arc<city::Island>, Vec<u8>, u32) {
         let lock = || self.kept.lock().unwrap_or_else(|e| e.into_inner());
         {
             let mut kept = lock();
@@ -143,7 +148,7 @@ impl CityCache {
                 && let Some(at) = list.iter().position(|(have, ..)| *have == key)
             {
                 let hit = list.remove(at);
-                let out = (hit.1.clone(), hit.2.clone());
+                let out = (hit.1.clone(), hit.2.clone(), hit.3);
                 list.push(hit);
                 return out;
             }
@@ -151,15 +156,16 @@ impl CityCache {
         #[cfg(test)]
         self.builds
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let (island, bytes) = build();
+        let id = self.last_build.fetch_add(1, Ordering::Relaxed) + 1;
+        let (island, bytes) = build(id);
         let mut kept = lock();
         let list = kept.entry(generation).or_default();
         list.retain(|(have, ..)| *have != key);
-        list.push((key, island.clone(), bytes.clone()));
+        list.push((key, island.clone(), bytes.clone(), id));
         if list.len() > KEEP {
             list.remove(0);
         }
-        (island, bytes)
+        (island, bytes, id)
     }
 
     /// The island last asked for of `generation`, if it is still open, with the `rev` of the
@@ -167,7 +173,7 @@ impl CityCache {
     #[cfg(test)]
     pub fn island(&self, generation: u64) -> Option<(u64, Arc<city::Island>)> {
         let kept = self.kept.lock().unwrap_or_else(|e| e.into_inner());
-        (kept.get(&generation)?.last()).map(|(key, island, _)| (key.rev, island.clone()))
+        (kept.get(&generation)?.last()).map(|(key, island, ..)| (key.rev, island.clone()))
     }
 }
 
@@ -224,7 +230,7 @@ impl AppState {
                 free,
                 neighbours: tenths.clone(),
             };
-            let (island, bytes) = self.0.city.get_or_build(generation, key, open, || {
+            let (island, bytes, build) = self.0.city.get_or_build(generation, key, open, |id| {
                 let input = city::IslandInput {
                     root: city::island_summary(tree, 0),
                     free,
@@ -235,10 +241,10 @@ impl AppState {
                     seed: fnv1a64(root.as_bytes()),
                 };
                 let island = city::island(&input);
-                let bytes = city::encode_city(generation, tree.rev, tree.approximate, &island);
+                let bytes = city::encode_city(generation, tree.rev, id, tree.approximate, &island);
                 (Arc::new(island), bytes)
             });
-            (tree.rev, island, bytes)
+            (tree.rev, island, bytes, build)
         })
     }
 }

@@ -95,6 +95,7 @@ export function mergeIslands(parts: IslandPart[], allBridges: ArchipelagoBridge[
   return {
     generation: parts[0].generation,
     rev: parts[0].map.rev,
+    build: 0,
     approximate: parts.some((p) => p.map.approximate),
     width: hi[0] - ox,
     height: hi[1] - oz,

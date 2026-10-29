@@ -15,6 +15,7 @@ function bytesOf(hex: string): ArrayBuffer {
 const map: CityMap = {
   generation: 7,
   rev: 8,
+  build: 9,
   approximate: true,
   width: 300.5,
   height: 200.25,
@@ -60,7 +61,7 @@ describe("parseCity", () => {
 
   it("reads what the Rust encoder writes", () => {
     const city = parseCity(bytesOf(golden));
-    expect([city.generation, city.rev, city.approximate]).toEqual([42, 7, true]);
+    expect([city.generation, city.rev, city.build, city.approximate]).toEqual([42, 7, 0, true]);
     expect([city.width, city.height]).toEqual([120.5, 96.75]);
     // Every kind, in the encoder's order; odd ones are quads.
     expect(city.polys.map((p) => p.kind)).toEqual([

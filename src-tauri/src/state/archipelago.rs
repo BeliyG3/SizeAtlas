@@ -14,7 +14,7 @@ use crate::dto::{ArchipelagoBridgeDto, ArchipelagoDto, ArchipelagoIslandDto};
 use crate::error::CmdError;
 
 fn refs(kept: &[Kept]) -> Vec<&Island> {
-    kept.iter().map(|(_, island, _)| &**island).collect()
+    kept.iter().map(|(_, island, ..)| &**island).collect()
 }
 
 impl AppState {
@@ -57,9 +57,10 @@ impl AppState {
         Ok(ArchipelagoDto {
             islands: (roots.into_iter().zip(&offsets).zip(&kept))
                 .map(
-                    |(((generation, root), at), (rev, ..))| ArchipelagoIslandDto {
+                    |(((generation, root), at), (rev, _, _, build))| ArchipelagoIslandDto {
                         generation,
                         rev: *rev,
+                        build: *build,
                         root,
                         x: at[0],
                         z: at[1],
@@ -92,7 +93,7 @@ impl AppState {
     ) -> Result<Vec<u8>, CmdError> {
         let (list, revs) = self.open_members(mounts, disks);
         let open: Vec<u64> = revs.iter().map(|(g, _)| *g).collect();
-        let (_, _, bytes) = match list.iter().position(|m| m.generation == generation) {
+        let (_, _, bytes, _) = match list.iter().position(|m| m.generation == generation) {
             Some(me) => self.settle(&list, &revs, false)?.0.swap_remove(me),
             None => self.alone(generation, disks, &open)?,
         };

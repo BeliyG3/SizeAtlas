@@ -231,3 +231,52 @@ fn city_notices_free_space_of_a_folder() {
     }
     assert_eq!(state.0.city.builds.load(Ordering::Relaxed), 2);
 }
+
+/// The build id in the header of an island's bytes (the last word of its 56 bytes).
+fn build_in(bytes: &[u8]) -> u32 {
+    u32::from_le_bytes(bytes[52..56].try_into().unwrap())
+}
+
+/// Another set of neighbours builds the island again: a new build, though the tree (its rev)
+/// did not change. The archipelago and the island's bytes name the same build.
+#[test]
+fn a_new_layout_gives_an_island_a_new_build_while_its_rev_stays() {
+    let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let state = AppState::default();
+    let ga = state.install_tree(tree_in(a.path()));
+    let mounts = vec![path_of(&a), path_of(&b)];
+    let alone = state.archipelago_in(ga, &mounts, &[]).unwrap();
+    state.install_tree(tree_in(b.path()));
+    let two = state.archipelago_in(ga, &mounts, &[]).unwrap();
+    let (before, after) = (
+        &alone.islands[0],
+        two.islands.iter().find(|i| i.generation == ga).unwrap(),
+    );
+    assert_eq!(
+        (before.generation, before.rev),
+        (after.generation, after.rev)
+    );
+    assert_ne!(before.build, after.build);
+    assert_ne!(two.islands[0].build, two.islands[1].build);
+    for island in &two.islands {
+        let bytes = state.city_in(island.generation, &mounts, &[]).unwrap();
+        assert_eq!(build_in(&bytes), island.build);
+    }
+}
+
+/// An island from memory keeps its build: the same picture, the same id.
+#[test]
+fn a_cache_hit_keeps_its_build() {
+    let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let state = AppState::default();
+    let ga = state.install_tree(tree_in(a.path()));
+    state.install_tree(tree_in(b.path()));
+    let mounts = vec![path_of(&a), path_of(&b)];
+    let first = state.archipelago_in(ga, &mounts, &[]).unwrap();
+    let built = state.0.city.builds.load(Ordering::Relaxed);
+    let second = state.archipelago_in(ga, &mounts, &[]).unwrap();
+    assert_eq!(state.0.city.builds.load(Ordering::Relaxed), built);
+    let ids =
+        |w: &crate::dto::ArchipelagoDto| w.islands.iter().map(|i| i.build).collect::<Vec<_>>();
+    assert_eq!(ids(&first), ids(&second));
+}

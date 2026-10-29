@@ -2,8 +2,10 @@
 //!
 //! All little-endian (offsets are repeated in the frontend's reader): the 24-byte header shared
 //! with the treemap (`count` = number of polygons), then `u32 format | f32 width | f32 height |
-//! u32 points | u32 nodes | u32 edges | u32 gates | u32 0` (56 bytes in all); the polygons, 24
-//! bytes each: `u8 kind | u8 0 | u16 points | u32 id | u32 parent | u32 0 | u64 size`; all their
+//! u32 points | u32 nodes | u32 edges | u32 gates | u32 build` (56 bytes in all; `build` is the
+//! id the app gave this build of the island: a rebuild with other gates keeps the rev, so the
+//! archipelago names the build too); the polygons, 24 bytes each: `u8 kind | u8 0 | u16 points |
+//! u32 id | u32 parent | u32 0 | u64 size`; all their
 //! points in polygon order, 8 bytes each: `f32 x, y`; the nodes, 8 bytes each: `f32 x, y`; the
 //! edges, 12 bytes each: `u32 a | u32 b | u8 class | u8 bridge | u16 0`; the gates, 16 bytes
 //! each: `u32 node | f32 dx | f32 dy | u32 first neighbour` (`u32::MAX` for none).
@@ -18,9 +20,15 @@ pub const POINT_LEN: usize = 8;
 pub const EDGE_LEN: usize = 12;
 pub const GATE_LEN: usize = 16;
 
-/// Serializes `island` in city format 3 (see the module docs). Polygons have at most
-/// `u16::MAX` points (the island never makes more).
-pub fn encode_city(generation: u64, rev: u64, approximate: bool, island: &Island) -> Vec<u8> {
+/// Serializes `island` in city format 3 (see the module docs), stamped with `build`. Polygons
+/// have at most `u16::MAX` points (the island never makes more).
+pub fn encode_city(
+    generation: u64,
+    rev: u64,
+    build: u32,
+    approximate: bool,
+    island: &Island,
+) -> Vec<u8> {
     let points: usize = island.polys.iter().map(|p| p.points.len()).sum();
     let len = CITY_HEADER_LEN
         + POLY_LEN * island.polys.len()
@@ -44,7 +52,7 @@ pub fn encode_city(generation: u64, rev: u64, approximate: bool, island: &Island
         island.gates.len(),
     ];
     u32s(&mut out, &counts.map(|c| c as u32));
-    u32s(&mut out, &[0]);
+    u32s(&mut out, &[build]);
     for p in &island.polys {
         out.extend_from_slice(&[p.kind as u8, 0]);
         out.extend_from_slice(&(p.points.len() as u16).to_le_bytes());

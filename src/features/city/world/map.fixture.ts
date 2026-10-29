@@ -33,6 +33,7 @@ export function encodeCity(map: CityMap): ArrayBuffer {
   view.setUint32(40, nodeCount, true);
   view.setUint32(44, map.edges.length, true);
   view.setUint32(48, map.gates.length, true);
+  view.setUint32(52, map.build, true);
   let at = CITY_HEADER_LEN;
   for (const p of map.polys) {
     view.setUint8(at, p.kind);
@@ -83,6 +84,7 @@ export function mapOf(polys: Poly[], extra: Partial<CityMap> = {}): CityMap {
   return {
     generation: 1,
     rev: 1,
+    build: 0,
     approximate: false,
     width: 100,
     height: 100,
