@@ -101,13 +101,13 @@ export function peopleInstances(
 
   function put(r: Residents, i: number, mesh: InstancedMesh, slot: number) {
     turn.setFromAxisAngle(up, r.heading[i]);
-    mesh.setMatrixAt(slot, matrix.compose(at.set(r.x[i], 0, r.z[i]), turn, one));
+    mesh.setMatrixAt(slot, matrix.compose(at.set(r.x[i], r.y[i], r.z[i]), turn, one));
     mesh.setColorAt(slot, roles[r.role[i]] ?? roles[0]);
   }
 
   function update(r: Residents, camera: Vector3) {
     const n = Math.min(r.count, max);
-    const got = splitNear(r.x, r.z, n, camera.x, camera.z, NEAR, split);
+    const got = splitNear(r, n, camera, NEAR, split);
     counts.fill(0);
     for (let k = 0; k < got.near; k++) {
       const i = split.near[k];

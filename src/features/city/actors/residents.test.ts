@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ROAD, type RoadKind } from "../world/map";
 import { mapOf } from "../world/map.fixture";
-import { buildRoads } from "../world/roads";
+import { BRIDGE_RISE, buildRoads } from "../world/roads";
 import { rng } from "./nav";
 import {
   NEAR,
@@ -82,6 +82,30 @@ describe("residents", () => {
     expect(r.role.every((v) => v === ROLE.resident)).toBe(true);
   });
 
+  it("walk on the deck of a bridge", () => {
+    // A street east to x = 1000, then a street on a bridge to x = 2000.
+    const bridged = buildRoads(
+      mapOf([], {
+        nodes: new Float32Array([0, 0, 1000, 0, 2000, 0]),
+        edges: [
+          { a: 0, b: 1, cls: ROAD.street, bridge: false },
+          { a: 1, b: 2, cls: ROAD.street, bridge: true },
+        ],
+      }),
+    );
+    const r = createResidents(bridged, 60, 5);
+    let on = 0;
+    for (let step = 0; step < 100; step++) {
+      r.update(0.5);
+      for (let i = 0; i < r.count; i++) {
+        if (Math.abs(r.x[i] - 1000) < 6) continue; // at the node
+        expect(r.y[i]).toBe(r.x[i] > 1000 ? BRIDGE_RISE : 0);
+        if (r.x[i] > 1000) on++;
+      }
+    }
+    expect(on).toBeGreaterThan(0);
+  });
+
   it("are none where no road is walkable", () => {
     const r = createResidents(graphOf([0, 0, 100, 0], [[0, 1, ROAD.highway]]), 10, 1);
     expect(r.count).toBe(0);
@@ -93,18 +117,19 @@ describe("splitNear", () => {
     const rand = rng(3);
     const count = 200;
     const x = Float32Array.from({ length: count }, () => rand() * 400 - 200);
+    const y = Float32Array.from({ length: count }, () => rand() * 2);
     const z = Float32Array.from({ length: count }, () => rand() * 400 - 200);
     const out = { near: new Int32Array(count), far: new Int32Array(count) };
-    const n = splitNear(x, z, count, 10, -20, NEAR, out);
+    const n = splitNear({ x, y, z }, count, { x: 10, y: 50, z: -20 }, NEAR, out);
+    // In 3D: the camera's height counts.
+    const dist = (i: number) => Math.hypot(x[i] - 10, y[i] - 50, z[i] + 20);
     expect(n.near + n.far).toBe(count);
     const seen = [...out.near.subarray(0, n.near), ...out.far.subarray(0, n.far)].sort(
       (a, b) => a - b,
     );
     expect(seen).toEqual(Array.from({ length: count }, (_, i) => i));
-    for (const i of out.near.subarray(0, n.near))
-      expect(Math.hypot(x[i] - 10, z[i] + 20)).toBeLessThanOrEqual(NEAR);
-    for (const i of out.far.subarray(0, n.far))
-      expect(Math.hypot(x[i] - 10, z[i] + 20)).toBeGreaterThan(NEAR);
+    for (const i of out.near.subarray(0, n.near)) expect(dist(i)).toBeLessThanOrEqual(NEAR);
+    for (const i of out.far.subarray(0, n.far)) expect(dist(i)).toBeGreaterThan(NEAR);
     expect(n.near).toBeGreaterThan(0);
     expect(n.far).toBeGreaterThan(0);
   });

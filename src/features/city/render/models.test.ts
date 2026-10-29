@@ -17,6 +17,7 @@ async function load(url: string): Promise<GLTF> {
 const residents = (xs: number[], phases: number[]): Residents => ({
   count: xs.length,
   x: Float32Array.from(xs),
+  y: new Float32Array(xs.length),
   z: new Float32Array(xs.length),
   heading: new Float32Array(xs.length),
   phase: Float32Array.from(phases),
@@ -47,13 +48,17 @@ describe("peopleInstances", () => {
 
   it("near figures take the pose of their phase, far ones the column", async () => {
     const people = peopleInstances(await load(walkerUrl), 10);
-    people.update(residents([0, 5, 500, 10], [0, 0.99, 0.5, 0.13]), new Vector3(0, 300, 0));
+    const four = residents([0, 5, 500, 10], [0, 0.99, 0.5, 0.13]);
+    people.update(four, new Vector3(0, 30, 0));
     const meshes = people.group.children as InstancedMesh[];
     expect(meshes.length).toBe(POSES + 1);
     expect(meshes.map((m) => m.count)).toEqual([1, 1, 0, 0, 0, 0, 0, 1, 1]);
     const m = new Matrix4();
     meshes[POSES].getMatrixAt(0, m);
     expect(new Vector3().setFromMatrixPosition(m).x).toBe(500);
+    // From high above, the figures under the camera are far too.
+    people.update(four, new Vector3(0, 300, 0));
+    expect(meshes[POSES].count).toBe(4);
     people.dispose();
   });
 });

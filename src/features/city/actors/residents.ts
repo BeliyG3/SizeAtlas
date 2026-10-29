@@ -1,6 +1,6 @@
 /** Residents walking the sidewalks of streets and the lanes between blocks; pure, no three.js. */
 import { ROAD, type RoadKind } from "../world/map";
-import { pointOn, roadHalf, type RoadEdge, type RoadGraph } from "../world/roads";
+import { BRIDGE_RISE, pointOn, roadHalf, type RoadEdge, type RoadGraph } from "../world/roads";
 import { advance, place, rng, type Track } from "./nav";
 
 /** What a figure is; stage 1 has only residents. */
@@ -26,6 +26,8 @@ export function walkOffset(cls: RoadKind): number {
 export interface Residents {
   count: number;
   x: Float32Array;
+  /** Height of the feet: a bridge's deck, else the ground. */
+  y: Float32Array;
   z: Float32Array;
   heading: Float32Array;
   /** Walk cycle, `0…1`. */
@@ -49,6 +51,7 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
   const out: Residents = {
     count: n,
     x: new Float32Array(n),
+    y: new Float32Array(n),
     z: new Float32Array(n),
     heading: new Float32Array(n),
     phase: new Float32Array(n),
@@ -61,9 +64,10 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
   };
 
   function put(i: number) {
-    const off = side[i] * walkOffset(g.edges[t.edge[i]].cls);
-    const p = pointOn(g, t.edge[i], t.s[i], t.forward[i] === 1, off);
+    const e = g.edges[t.edge[i]];
+    const p = pointOn(g, t.edge[i], t.s[i], t.forward[i] === 1, side[i] * walkOffset(e.cls));
     out.x[i] = p.x;
+    out.y[i] = e.bridge ? BRIDGE_RISE : 0; // on the deck of a bridge, as the cars
     out.z[i] = p.z;
     out.heading[i] = p.heading;
   }
@@ -93,15 +97,13 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
 }
 
 /**
- * Splits the first `count` figures into those within `near` metres of (`cx`, `cz`) and the rest,
- * writing their indices to `out.near` and `out.far`; returns how many went into each.
+ * Splits the first `count` figures into those within `near` metres of the camera `c` and the
+ * rest, writing their indices to `out.near` and `out.far`; returns how many went into each.
  */
 export function splitNear(
-  x: ArrayLike<number>,
-  z: ArrayLike<number>,
+  r: { x: ArrayLike<number>; y: ArrayLike<number>; z: ArrayLike<number> },
   count: number,
-  cx: number,
-  cz: number,
+  c: { x: number; y: number; z: number },
   near: number,
   out: { near: Int32Array; far: Int32Array },
 ): { near: number; far: number } {
@@ -109,9 +111,10 @@ export function splitNear(
   let f = 0;
   const r2 = near * near;
   for (let i = 0; i < count; i++) {
-    const dx = x[i] - cx;
-    const dz = z[i] - cz;
-    if (dx * dx + dz * dz <= r2) out.near[n++] = i;
+    const dx = r.x[i] - c.x;
+    const dy = r.y[i] - c.y;
+    const dz = r.z[i] - c.z;
+    if (dx * dx + dy * dy + dz * dz <= r2) out.near[n++] = i;
     else out.far[f++] = i;
   }
   return { near: n, far: f };
