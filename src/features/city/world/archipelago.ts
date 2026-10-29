@@ -28,8 +28,10 @@ export interface IslandPart {
  * `generation` and `rev` are those of `parts[0]` (the caller orders the parts; the first one
  * is the one whose revision the view follows), `approximate` holds if any part is.
  */
-export function mergeIslands(parts: IslandPart[], bridges: ArchipelagoBridge[]): CityMap {
+export function mergeIslands(parts: IslandPart[], allBridges: ArchipelagoBridge[]): CityMap {
   if (parts.length === 0) throw new Error("an archipelago needs an island");
+  // A bridge of fewer than two points goes nowhere: it is no bridge, and its gates keep their stubs.
+  const bridges = allBridges.filter((b) => b.points.length >= 2);
   const lo = [Infinity, Infinity];
   const hi = [-Infinity, -Infinity];
   const reach = (x: number, z: number) => {
@@ -57,6 +59,9 @@ export function mergeIslands(parts: IslandPart[], bridges: ArchipelagoBridge[]):
     const [from, to] = [b.a, b.b].map(([island, node]) => {
       if (!(island >= 0 && island < parts.length)) {
         throw new Error(`no island ${island} for a bridge`);
+      }
+      if (!(node >= 0 && node < parts[island].map.nodes.length / 2)) {
+        throw new Error(`no node ${node} on island ${island} for a bridge`);
       }
       const gate = base[island] + node;
       bridged.add(gate);

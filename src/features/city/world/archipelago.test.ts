@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ArchipelagoBridge } from "../../../api/types";
 import { buildWorld, focusIn } from "./buildings";
-import { deckLift, mergeIslands, type IslandPart } from "./archipelago";
+import { mergeIslands, type IslandPart } from "./archipelago";
 import { BRIDGE_RISE, POLY, ROAD, type CityMap } from "./map";
 import { mapOf, square } from "./map.fixture";
 import { buildRoads, pointOn, stubGates } from "./roads";
@@ -61,13 +61,6 @@ function connected(map: CityMap, from: number, to: number): boolean {
   }
   return seen.has(to);
 }
-
-describe("deckLift", () => {
-  it("is 8 m on the first level and 5 m higher on each next", () => {
-    expect(deckLift(0)).toBe(8);
-    expect(deckLift(2)).toBe(18);
-  });
-});
 
 describe("mergeIslands", () => {
   it("leaves a single island as it is", () => {
@@ -137,29 +130,6 @@ describe("mergeIslands", () => {
     ]);
   });
 
-  it("lifts a higher level to its deck, and lets a bridge of one segment rise and fall", () => {
-    const merged = mergeIslands(
-      [part(1, 0, 0), part(2, 1000, 0)],
-      [
-        bridge(
-          [0, 1],
-          [1, 1],
-          [
-            [50, 0],
-            [1050, 0],
-          ],
-          1,
-        ),
-      ],
-    );
-    const deck = merged.edges.filter((e) => e.bridge);
-    expect(deck.map((e) => [e.liftA, e.liftB])).toEqual([
-      [BRIDGE_RISE, deckLift(1)],
-      [deckLift(1), BRIDGE_RISE],
-    ]);
-    expect(Array.from(merged.nodes.slice(8, 10))).toEqual([550, 0]);
-  });
-
   it("leaves a gate without a bridge to its stub", () => {
     const merged = mergeIslands(
       [part(1, 0, 0), part(2, 1000, 0), part(3, 0, 1000)],
@@ -177,87 +147,6 @@ describe("mergeIslands", () => {
     );
     expect(merged.gates.map((g) => !!g.bridged)).toEqual([true, true, false]);
     expect(stubGates(merged).map((g) => g.node)).toEqual([5]);
-  });
-
-  it("makes bridges that leave a gate the same way one run up to the fork", () => {
-    // Both leave (50, 0) east to (300, 0); then one goes on east, the other south to island 2.
-    const parts = [part(1, 0, 0), part(2, 1000, 0), part(3, 0, 1000)];
-    const merged = mergeIslands(parts, [
-      bridge(
-        [0, 1],
-        [1, 1],
-        [
-          [50, 0],
-          [300, 0],
-          [1000, 0],
-          [1050, 0],
-        ],
-        0,
-      ),
-      bridge(
-        [0, 1],
-        [2, 1],
-        [
-          [50, 0],
-          [300, 0],
-          [300, 1000],
-          [50, 1000],
-        ],
-        1,
-      ),
-    ]);
-    // Three islands of 2 nodes, and three new ones: the fork (300, 0), (1000, 0), (300, 1000).
-    expect(merged.nodes.length / 2).toBe(9);
-    const at = (x: number, z: number) =>
-      Array.from({ length: 9 }, (_, i) => i).filter(
-        (i) => merged.nodes[i * 2] === x && merged.nodes[i * 2 + 1] === z,
-      );
-    expect(at(300, 0)).toHaveLength(1);
-    const fork = at(300, 0)[0];
-    const deck = merged.edges.filter((e) => e.bridge);
-    expect(deck).toHaveLength(5);
-    // One edge leaves the gate; the shared run ramps to the lower deck (level 0).
-    const out = deck.filter((e) => e.a === 1 || e.b === 1);
-    expect(out).toHaveLength(1);
-    expect([out[0].liftA, out[0].liftB]).toEqual([BRIDGE_RISE, deckLift(0)]);
-    // After the fork each branch rises to its own deck, then falls to its gate.
-    const branch = deck.filter((e) => e.a === fork);
-    expect(branch.map((e) => [e.liftA, e.liftB]).sort((p, q) => p[1] - q[1])).toEqual([
-      [deckLift(0), deckLift(0)],
-      [deckLift(0), deckLift(1)],
-    ]);
-    expect(connected(merged, 1, 3)).toBe(true);
-    expect(connected(merged, 1, 5)).toBe(true);
-  });
-
-  it("makes bridges that arrive at a gate the same way one run too", () => {
-    const parts = [part(1, 0, 0), part(2, 1000, 0), part(3, 0, 1000)];
-    const merged = mergeIslands(parts, [
-      bridge(
-        [1, 1],
-        [0, 1],
-        [
-          [1050, 0],
-          [900, 0],
-          [300, 0],
-          [50, 0],
-        ],
-      ),
-      bridge(
-        [2, 1],
-        [0, 1],
-        [
-          [50, 1000],
-          [300, 1000],
-          [300, 0],
-          [50, 0],
-        ],
-      ),
-    ]);
-    const deck = merged.edges.filter((e) => e.bridge);
-    expect(deck).toHaveLength(5);
-    // One edge arrives at the gate.
-    expect(deck.filter((e) => e.a === 1 || e.b === 1)).toHaveLength(1);
   });
 
   it("gives houses of the same folder id on two islands their own island", () => {
@@ -308,22 +197,56 @@ describe("mergeIslands", () => {
     expect(pointOn(g, ramp, 0, false, 0).y).toBe(8);
   });
 
-  it("refuses an empty archipelago and a bridge to a missing island", () => {
+  it("shifts the points of a bridge that leaves the islands by the origin too", () => {
+    // Gate node 1 is at (0, -50) on the first island and at (350, -50) on the second; the sea
+    // route runs along z = -400, outside both squares.
+    const merged = mergeIslands(
+      [part(1, -50, -50), part(2, 300, -50)],
+      [
+        bridge(
+          [0, 1],
+          [1, 1],
+          [
+            [0, -50],
+            [0, -400],
+            [350, -400],
+            [350, -50],
+          ],
+        ),
+      ],
+    );
+    expect(merged.origin).toEqual([-50, -400]);
+    expect([merged.width, merged.height]).toEqual([450, 450]);
+    // The islands' nodes, then the bridge's: both on the route's line (z = 0 now).
+    expect(Array.from(merged.nodes)).toEqual([0, 350, 50, 350, 350, 350, 400, 350, 50, 0, 400, 0]);
+    // The chain starts at the first gate and ends at the second, each at the bridge's own point.
+    expect(merged.edges.filter((e) => e.bridge).map((e) => [e.a, e.b])).toEqual([
+      [1, 4],
+      [4, 5],
+      [5, 3],
+    ]);
+  });
+
+  it("refuses an empty archipelago, a bridge to a missing island or to a missing gate node", () => {
     expect(() => mergeIslands([], [])).toThrow();
+    const line: [number, number][] = [
+      [50, 0],
+      [90, 0],
+    ];
+    expect(() => mergeIslands([part(1, 0, 0)], [bridge([0, 1], [3, 1], line)])).toThrow();
+    // The island has nodes 0 and 1 only.
     expect(() =>
-      mergeIslands(
-        [part(1, 0, 0)],
-        [
-          bridge(
-            [0, 1],
-            [3, 1],
-            [
-              [50, 0],
-              [90, 0],
-            ],
-          ),
-        ],
-      ),
+      mergeIslands([part(1, 0, 0), part(2, 0, 0)], [bridge([0, 1], [1, 2], line)]),
     ).toThrow();
+  });
+
+  it("ignores a bridge of fewer than two points, and its gates keep their stubs", () => {
+    const merged = mergeIslands(
+      [part(1, 0, 0), part(2, 1000, 0)],
+      [bridge([0, 1], [1, 1], [[50, 0]])],
+    );
+    expect(merged.edges.some((e) => e.bridge)).toBe(false);
+    expect(merged.nodes.length).toBe(8);
+    expect(stubGates(merged)).toHaveLength(2);
   });
 });
