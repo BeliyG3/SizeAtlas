@@ -39,7 +39,7 @@ pub use encode::{
 pub use graph::Edge;
 pub use island::island;
 pub use map::{Gate, Island, Poly, PolyKind, Stats};
-pub use plan::{Folder, IslandInput, built_area, empty_ratio, summary};
+pub use plan::{Folder, IslandInput, built_area, empty_ratio, island_summary, summary};
 pub use road::{RoadClass, road_width};
 pub use world::directions;
 

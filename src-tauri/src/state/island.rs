@@ -167,7 +167,7 @@ impl AppState {
             };
             self.0.city.get_or_build(key, || {
                 let input = city::IslandInput {
-                    root: city::summary(tree, 0, 3),
+                    root: city::island_summary(tree, 0),
                     free,
                     neighbours,
                     seed: fnv1a64(root.as_bytes()),

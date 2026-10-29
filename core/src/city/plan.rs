@@ -32,12 +32,40 @@ pub struct IslandInput {
 
 /// The folders down to `depth` levels below `root` (the root is level 0).
 pub fn summary(tree: &Tree, root: u32, depth: u8) -> Folder {
+    summary_past(tree, root, depth, &[])
+}
+
+/// What an island is built from: [`summary`] with two levels below every folder that may
+/// become a district, and the folders [`districts`] replaces by their subfolders opened, so the
+/// blocks of every district have their houses. Its size is that of a depth-3 summary plus at
+/// most `MAX_OPEN` opened folders.
+pub fn island_summary(tree: &Tree, root: u32) -> Folder {
+    let top = summary(tree, root, 2);
+    let mut opened = Vec::new();
+    let mut loose = 0;
+    // The same choice as `districts` makes on the result: each folder knows its subfolders.
+    expand(top.children, &mut loose, |f| {
+        opened.push(f.id);
+        f.children.iter().map(|c| summary(tree, c.id, 1)).collect()
+    });
+    summary_past(tree, root, 3, &opened)
+}
+
+/// [`summary`] where the folders in `opened` do not count as a level.
+fn summary_past(tree: &Tree, root: u32, depth: u8, opened: &[u32]) -> Folder {
     let mut children: Vec<Folder> = if depth == 0 {
         Vec::new()
     } else {
         tree.children(root)
             .filter(|&c| tree.node(c).is_dir() && tree.node(c).size > 0)
-            .map(|c| summary(tree, c, depth - 1))
+            .map(|c| {
+                let below = if opened.contains(&c) {
+                    depth
+                } else {
+                    depth - 1
+                };
+                summary_past(tree, c, below, opened)
+            })
             .collect()
     };
     // Stable: equal sizes keep the tree's name order.
@@ -81,6 +109,9 @@ const WANT_BIG: usize = 8;
 /// Folders with a share above this become districts, at most `MAX_DISTRICTS` of them.
 const SMALL: f64 = 0.004;
 const MAX_DISTRICTS: usize = 14;
+/// Replace at most this many folders: past that the folders are alike, and opening more of them
+/// makes no big district, only time.
+const MAX_OPEN: usize = 32;
 
 fn weight(f: &Folder) -> f64 {
     (f.size.max(1) as f64).sqrt()
@@ -91,12 +122,17 @@ fn big_count(folders: &[Folder]) -> usize {
     folders.iter().filter(|f| weight(f) / total > BIG).count()
 }
 
-/// The districts of `root`, biggest (the core) first. The folders left over and every loose file
-/// go to one last district with `id = root.id`.
-pub(crate) fn districts(root: &Folder) -> Vec<District> {
-    let mut folders = root.children.clone();
-    let mut loose = root.files();
-    while big_count(&folders) < WANT_BIG {
+/// `folders` with the biggest that has subfolders replaced by them (`open`) while fewer than
+/// `WANT_BIG` are big, at most `MAX_OPEN` times; the files of the replaced ones go to `loose`.
+fn expand(
+    mut folders: Vec<Folder>,
+    loose: &mut u64,
+    mut open: impl FnMut(Folder) -> Vec<Folder>,
+) -> Vec<Folder> {
+    for _ in 0..MAX_OPEN {
+        if big_count(&folders) >= WANT_BIG {
+            break;
+        }
         let top = folders
             .iter()
             .enumerate()
@@ -105,9 +141,17 @@ pub(crate) fn districts(root: &Folder) -> Vec<District> {
             .map(|(i, _)| i);
         let Some(top) = top else { break };
         let top = folders.remove(top);
-        loose += top.files();
-        folders.extend(top.children);
+        *loose += top.files();
+        folders.extend(open(top));
     }
+    folders
+}
+
+/// The districts of `root`, biggest (the core) first. The folders left over and every loose file
+/// go to one last district with `id = root.id`.
+pub(crate) fn districts(root: &Folder) -> Vec<District> {
+    let mut loose = root.files();
+    let mut folders = expand(root.children.clone(), &mut loose, |f| f.children);
     folders.sort_by(|a, b| b.size.cmp(&a.size));
     let total: f64 = folders.iter().map(weight).sum();
     let picked = folders
@@ -140,3 +184,7 @@ pub(crate) fn districts(root: &Folder) -> Vec<District> {
 #[cfg(test)]
 #[path = "plan_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "plan_island_tests.rs"]
+mod island_tests;
