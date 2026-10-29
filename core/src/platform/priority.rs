@@ -28,6 +28,7 @@ pub(crate) fn lower_this_thread() {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(any(windows, target_os = "linux"))]
     use super::lower_this_thread;
 
     /// The priority of the calling thread.

@@ -20,8 +20,14 @@ fn tree_in(dir: &Path, bytes: usize) -> Tree {
     tree
 }
 
+/// The directory as the scan names its root: canonical, so a temp path in 8.3 short form (as on
+/// CI runners) still matches.
 fn path_of(dir: &tempfile::TempDir) -> String {
-    dir.path().to_str().unwrap().to_owned()
+    dunce::canonicalize(dir.path())
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned()
 }
 
 fn builds(state: &AppState) -> usize {
