@@ -155,22 +155,18 @@ fn city_keeps_stale_id_for_another_generation() {
 
 #[test]
 fn city_neighbours_are_open_drives() {
-    use sizeatlas_core::cache;
     let (a, b, c) = (
         tempfile::tempdir().unwrap(),
         tempfile::tempdir().unwrap(),
         tempfile::tempdir().unwrap(),
     );
-    let cache_dir = tempfile::tempdir().unwrap();
     let state = AppState::default();
     let ga = state.install_tree(tree_in(a.path()));
     let gb = state.install_tree(tree_in(b.path()));
     let mounts = vec![path_of(&a), path_of(&b), path_of(&c)];
     state.city_in(ga, &mounts, &[]).unwrap();
     assert_eq!(gates_of(&state, ga), [vec![0]]);
-    // A saved scan of a third drive and an open folder add no gate.
-    let saved = tree_in(c.path());
-    cache::save(&saved, &cache::cache_path(cache_dir.path(), c.path())).unwrap();
+    // Saved scans are not read at all (`city_in` has no cache dir); an open folder adds no gate.
     let folder = state.install_tree(tree_in(&a.path().join("sub")));
     state.city_in(ga, &mounts, &[]).unwrap();
     assert_eq!(gates_of(&state, ga), [vec![0]]);
@@ -220,4 +216,16 @@ fn cache_drops_closed_roots() {
     state.city_in(gb, &mounts, &[]).unwrap();
     assert!(state.0.city.island(ga).is_none());
     assert!(state.0.city.island(gb).is_some());
+}
+
+#[test]
+fn city_notices_free_space_of_a_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = AppState::default();
+    let generation = state.install_tree(tree_in(dir.path()));
+    for free in [10 * GIB, 20 * GIB, 20 * GIB] {
+        let disks = [(path_of(&dir), free)];
+        state.city_in(generation, &[], &disks).unwrap();
+    }
+    assert_eq!(state.0.city.builds.load(Ordering::Relaxed), 2);
 }

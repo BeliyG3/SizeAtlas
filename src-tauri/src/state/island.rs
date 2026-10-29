@@ -94,6 +94,8 @@ pub fn free_space(root: &str, disks: &[(String, u64)], cached: Option<VolumeUsag
 #[derive(PartialEq)]
 struct CityKey {
     rev: u64,
+    /// Free bytes of this island's own disk (rounded).
+    free: u64,
     /// `(used, free)` of every member: the directions to the other islands come from them.
     islands: Vec<(u64, u64)>,
 }
@@ -193,6 +195,8 @@ impl AppState {
     /// Encoded island map of the whole root `generation` (see `sizeatlas_core::city`). Its
     /// neighbours are the other open drives; a root that is not a drive has none.
     pub fn city(&self, generation: u64, cache_dir: &Path) -> Result<Vec<u8>, CmdError> {
+        // A stale generation answers before the disks are listed.
+        self.with_live(generation, 0, |_| ())?;
         let (mounts, disks) = survey(cache_dir);
         self.city_in(generation, &mounts, &disks)
     }
@@ -208,8 +212,12 @@ impl AppState {
             let trees = self.open_trees();
             let list = members_of(&trees, mounts, disks);
             let root = tree.name(0);
-            let free = step(free_space(root, disks, tree.volume));
-            let (islands, neighbours) = match list.iter().position(|m| m.generation == generation) {
+            let me = list.iter().position(|m| m.generation == generation);
+            let free = match me {
+                Some(me) => list[me].free,
+                None => step(free_space(root, disks, tree.volume)),
+            };
+            let (islands, neighbours) = match me {
                 Some(me) => {
                     let islands: Vec<(u64, u64)> = list.iter().map(|m| (m.used, m.free)).collect();
                     let neighbours = city::directions(&islands, me);
@@ -220,6 +228,7 @@ impl AppState {
             let open: Vec<u64> = trees.iter().map(|(g, _)| *g).collect();
             let key = CityKey {
                 rev: tree.rev,
+                free,
                 islands,
             };
             self.0.city.get_or_build(generation, key, &open, || {
