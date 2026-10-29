@@ -3,9 +3,9 @@
  * models have loaded (the island shows without them until then), and beyond them the far crowd.
  */
 import type { Object3D, Vector3 } from "three";
-import { localRadius } from "../actors/locals";
+import { localRadius, type Circle } from "../actors/locals";
 import { createResidents, type Residents } from "../actors/residents";
-import { createTraffic, type Traffic } from "../actors/traffic";
+import { createTraffic, type Obstacles, type Traffic } from "../actors/traffic";
 import { loadAssets } from "../render/assets";
 import { carInstances } from "../render/cars";
 import { carLights, headOf } from "../render/carLights";
@@ -15,6 +15,7 @@ import { trailMesh } from "../render/trails";
 import { LOOK } from "../look";
 import type { RoadGraph } from "../world/roads";
 import { buildRoutes } from "../world/routes";
+import { createBetween } from "./between";
 
 /** The panel's limits: cars (flying ones included) and residents, however many islands. */
 export const CARS = 400;
@@ -42,7 +43,9 @@ export interface Limits {
   people: number;
 }
 
-const PANEL: Limits = { cars: CARS, people: PEOPLE };
+export const PANEL_LIMITS: Limits = { cars: CARS, people: PEOPLE };
+/** The game's: the life near the player. */
+export const GAME_LIMITS: Limits = { cars: 150, people: 400 };
 
 /** Cars for an archipelago of `islands`: 100 an island, up to `CARS`. */
 export function carsFor(islands: number): number {
@@ -66,13 +69,20 @@ export interface Life {
    * models. They keep near `target`, the closer the camera the tighter.
    */
   step: (dt: number, eye: Vector3, target: Vector3) => void;
+  /**
+   * The game's fixed step: `step` without the drawing; the traffic stops short of `obstacles`
+   * on its lanes.
+   */
+  move: (dt: number, eye: Vector3, target: Vector3, obstacles: Obstacles | null) => void;
+  /** The game's frame: everyone drawn `alpha` of the way past the last `move`. */
+  draw: (alpha: number, dt: number, eye: Vector3, target: Vector3) => void;
   /** The traffic and the residents of the last `populate`, null before it or with no roads. */
   actors: () => { traffic: Traffic; residents: Residents } | null;
   dispose: () => void;
 }
 
 /** `onReady` runs once the models are in `parent`; the limits are the panel's unless given. */
-export function createLife(parent: Object3D, onReady: () => void, limits = PANEL): Life {
+export function createLife(parent: Object3D, onReady: () => void, limits = PANEL_LIMITS): Life {
   let models: {
     cars: ReturnType<typeof carInstances>;
     people: ReturnType<typeof peopleInstances>;
@@ -81,6 +91,11 @@ export function createLife(parent: Object3D, onReady: () => void, limits = PANEL
     lights: ReturnType<typeof carLights>;
   } | null = null;
   let pools: { traffic: Traffic; residents: Residents } | null = null;
+  // The game draws them between its steps.
+  let eased: {
+    traffic: ReturnType<typeof createBetween<Traffic>>;
+    residents: ReturnType<typeof createBetween<Residents>>;
+  } | null = null;
   let crowd: Crowd[] = [];
   let disposed = false;
   // Hidden from a new island until its first step, so no car of the last one shows on it.
@@ -118,6 +133,25 @@ export function createLife(parent: Object3D, onReady: () => void, limits = PANEL
     () => {},
   );
 
+  const around: Circle = { x: 0, z: 0, r: 0 };
+  const circle = (eye: Vector3, target: Vector3) => {
+    around.x = target.x;
+    around.z = target.z;
+    around.r = localRadius(eye.distanceTo(target));
+    return around;
+  };
+  /** Everyone drawn where `traffic` and `residents` say; the far crowd moves on by `dt`. */
+  const drawn = (dt: number, eye: Vector3, c: Circle, traffic: Traffic, residents: Residents) => {
+    if (!models) return;
+    models.cars.update(traffic, eye);
+    models.trails.update(traffic, eye, dt);
+    models.heads.update(traffic, eye, dt);
+    models.lights.update(traffic);
+    models.people.update(residents, eye);
+    for (const k of crowd) k.update(dt, c);
+    show(true);
+  };
+
   const dropCrowd = () => {
     for (const c of crowd) {
       parent.remove(c.group);
@@ -134,6 +168,10 @@ export function createLife(parent: Object3D, onReady: () => void, limits = PANEL
         traffic: createTraffic(g, Math.min(carsFor(islands), limits.cars), seed),
         residents: createResidents(g, Math.min(peopleFor(islands), limits.people), seed),
       };
+      eased = pools && {
+        traffic: createBetween(pools.traffic),
+        residents: createBetween(pools.residents),
+      };
       dropCrowd();
       crowd = g ? crowdOn(g, seed) : [];
       for (const c of crowd) parent.add(c.group);
@@ -141,16 +179,22 @@ export function createLife(parent: Object3D, onReady: () => void, limits = PANEL
     },
     step(dt, eye, target) {
       if (!models || !pools) return;
-      const around = { x: target.x, z: target.z, r: localRadius(eye.distanceTo(target)) };
-      pools.traffic.update(dt, around);
-      pools.residents.update(dt, around);
-      models.cars.update(pools.traffic, eye);
-      models.trails.update(pools.traffic, eye, dt);
-      models.heads.update(pools.traffic, eye, dt);
-      models.lights.update(pools.traffic);
-      models.people.update(pools.residents, eye);
-      for (const c of crowd) c.update(dt, around);
-      show(true);
+      const c = circle(eye, target);
+      pools.traffic.update(dt, c);
+      pools.residents.update(dt, c);
+      drawn(dt, eye, c, pools.traffic, pools.residents);
+    },
+    move(dt, eye, target, obstacles) {
+      if (!models || !pools || !eased) return;
+      const c = circle(eye, target);
+      eased.traffic.keep();
+      eased.residents.keep();
+      pools.traffic.update(dt, c, obstacles);
+      pools.residents.update(dt, c);
+    },
+    draw(alpha, dt, eye, target) {
+      if (!eased) return;
+      drawn(dt, eye, circle(eye, target), eased.traffic.at(alpha), eased.residents.at(alpha));
     },
     dispose() {
       disposed = true;

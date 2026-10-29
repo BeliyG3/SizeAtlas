@@ -3,11 +3,11 @@ import { ROAD, type RoadKind } from "../world/map";
 import { pointOn, type RoadGraph } from "../world/roads";
 import { CAR_SPACING, createPlacement, drives, flies, type CarStart } from "./carPlace";
 import { createPoses } from "./carPose";
-import { createJunctions, laneOffset, lanes, MIN_GAP } from "./junctions";
+import { createJunctions, laneOffset, lanes, MIN_GAP, type Obstacles } from "./junctions";
 import { createLocals, localIds, type Circle } from "./locals";
 import { advance, nextEdge, rng, type Track } from "./nav";
 
-export { CAR_SPACING, drives, type CarStart };
+export { CAR_SPACING, drives, type CarStart, type Obstacles };
 
 /** Speeds in m/s. */
 export const SPEED = { highway: 22, street: 12, air: 30 };
@@ -45,9 +45,10 @@ export interface Traffic {
   live: Uint8Array;
   /**
    * Drives on `dt` seconds; the cars keep to `around` (see `createLocals`), no more ground cars
-   * on its roads than one per `CAR_SPACING` of their lanes.
+   * on its roads than one per `CAR_SPACING` of their lanes. Ground cars stop short of `obstacles`
+   * on their lanes as they do of each other, and none is put down near one.
    */
-  update(dt: number, around?: Circle | null): void;
+  update(dt: number, around?: Circle | null, obstacles?: Obstacles | null): void;
 }
 
 const speedOn = (cls: RoadKind) => (cls === ROAD.street ? SPEED.street : SPEED.highway);
@@ -104,19 +105,20 @@ export function createTraffic(
   };
   out.air.fill(1, ground);
 
-  const { crowded, cutsIn, endNode, gapAhead, takeTurns, turnOf } = createJunctions({
-    g,
-    t,
-    lane,
-    leaving,
-    nextE,
-    nextF,
-    nextL,
-    since,
-    turn,
-    live: locals.live,
-    ground,
-  });
+  const { crowded, cutsIn, endNode, gapAhead, nearObstacle, sees, takeTurns, turnOf } =
+    createJunctions({
+      g,
+      t,
+      lane,
+      leaving,
+      nextE,
+      nextF,
+      nextL,
+      since,
+      turn,
+      live: locals.live,
+      ground,
+    });
   const live = locals.live;
   const poses = createPoses(g, t, lane, nextE, nextF);
   const spot = { x: 0, y: 0, z: 0, heading: 0 };
@@ -149,6 +151,7 @@ export function createTraffic(
     rand,
     ground,
     crowded,
+    nearObstacle,
     putNew,
   });
 
@@ -247,7 +250,8 @@ export function createTraffic(
     return dist;
   }
 
-  function update(dt: number, around: Circle | null = null) {
+  function update(dt: number, around: Circle | null = null, obstacles: Obstacles | null = null) {
+    sees(obstacles);
     const h = Math.min(dt, MAX_DT);
     clock += h;
     for (let i = 0; i < ground; i++) {

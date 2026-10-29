@@ -42,12 +42,15 @@ export interface Placing {
   /** Cars `0 … ground - 1` drive, the others fly. */
   ground: number;
   crowded: ReturnType<typeof createJunctions>["crowded"];
+  /** Is an obstacle (see `Obstacles`) within this many metres of a spot? */
+  nearObstacle: ReturnType<typeof createJunctions>["nearObstacle"];
   /** Draws car `i` where its track says, on its lane, off any curve. */
   putNew: (i: number) => void;
 }
 
 export function createPlacement(p: Placing) {
-  const { g, t, lane, want, nextE, held, live, out, rand, ground, crowded, putNew } = p;
+  const { g, t, lane, want, nextE, held, live, out, rand, ground, crowded, nearObstacle, putNew } =
+    p;
   const n = lane.length;
   const laneAt = (i: number, edge: number) => Math.min(want[i], lanes(g.edges[edge].cls) - 1);
 
@@ -70,8 +73,8 @@ export function createPlacement(p: Placing) {
   }
 
   /**
-   * Moves car `i` to one of the locals' spots, with no car within `CAR_SPACING` on its lane and
-   * none beside it; false if there is no such spot.
+   * Moves car `i` to one of the locals' spots, with no car within `CAR_SPACING` on its lane, none
+   * beside it, and a ground car no obstacle within `CAR_SPACING`; false if there is no such spot.
    */
   function relocate(i: number, spots: (allow: Allow) => Spots): boolean {
     const isAir = i >= ground;
@@ -90,7 +93,9 @@ export function createPlacement(p: Placing) {
       putNew(i);
       if (
         isAir ||
-        (!crowded(t.edge[i], t.forward[i], lane[i], t.s[i], i, CAR_SPACING) && !tooClose(i, ground))
+        (!crowded(t.edge[i], t.forward[i], lane[i], t.s[i], i, CAR_SPACING) &&
+          !tooClose(i, ground) &&
+          !nearObstacle(out.x[i], out.z[i], CAR_SPACING))
       ) {
         held[i] = 0;
         return true;

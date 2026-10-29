@@ -5,7 +5,7 @@
  */
 import type { Residents } from "../actors/residents";
 import type { Traffic } from "../actors/traffic";
-import { CAR_CLIMB, CAR_SLOPE, collideBodies, collideStatic } from "../physics/bodies";
+import { CAR_CLIMB, CAR_SLOPE, collideBodies, collideStatic, type Body } from "../physics/bodies";
 import type { Solids } from "../physics/solids";
 import { CLIP, exitSpot, fromCar, nearestDoor, toCar, type Spot } from "./boarding";
 import {
@@ -18,6 +18,7 @@ import {
   type Script,
 } from "./boardingScript";
 import type { Actions } from "./input";
+import { trafficBodies } from "./obstacles";
 import { createCar, setOwner, type Car } from "./vehicle";
 import { carStep, toggleFlight } from "./vehicleFly";
 import { createWalker, JUMP_BUFFER, STEP, stepWalk, type Walker } from "./walk";
@@ -74,6 +75,7 @@ export function createPlayer(start: { x: number; z: number; yaw: number }, s: So
 }
 
 const local = { x: 0, z: 0 };
+const NONE: readonly Body[] = [];
 const pose = makeScriptPose();
 
 /** The player's way in from where they stand by `car`; `open`: its door is open already. */
@@ -176,7 +178,9 @@ export function stepPlayer(p: Player, a: Actions, dt: number, w: PlayWorld): voi
     stepWalk(p.walker, a, p.look, dt, s);
     // Pushed off the cars, then out of any wall or water that push put it into.
     for (const c of w.cars) collideBodies(b, c);
-    if (w.cars.length) collideStatic(b, s, STEP, dt);
+    const traffic = w.traffic ? trafficBodies(w.traffic, b) : NONE;
+    for (const c of traffic) collideBodies(b, c);
+    if (w.cars.length || traffic.length) collideStatic(b, s, STEP, dt);
     return;
   }
   if (p.state === "drive" || p.state === "fly") {
@@ -187,6 +191,7 @@ export function stepPlayer(p: Player, a: Actions, dt: number, w: PlayWorld): voi
     const x = car.x;
     const z = car.z;
     for (const c of w.cars) if (c !== car) collideBodies(car, c);
+    if (w.traffic) for (const c of trafficBodies(w.traffic, car)) collideBodies(car, c);
     if (car.x !== x || car.z !== z) collideStatic(car, s, CAR_CLIMB, dt, CAR_SLOPE);
     p.state = car.flying ? "fly" : "drive";
     return;

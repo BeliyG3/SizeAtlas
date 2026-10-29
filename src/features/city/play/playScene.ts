@@ -4,7 +4,7 @@
  */
 import { PerspectiveCamera, Scene, WebGLRenderer } from "three";
 import { LOOK } from "../look";
-import { createLife, type Limits } from "../panel/life";
+import { createLife, GAME_LIMITS } from "../panel/life";
 import { createSolids } from "../physics/solids";
 import { islandMeshes } from "../render/island";
 import { addLights } from "../render/lighting";
@@ -13,8 +13,6 @@ import { CAM } from "./camera";
 import type { Actions } from "./input";
 import { createPlayerView } from "./playerView";
 
-/** The game's limits: cars (flying ones included) and residents near the player. */
-const GAME: Limits = { cars: 150, people: 400 };
 const NEAR = 0.3;
 /** The far plane, in archipelago sizes past its widest side. */
 const REACH = 2;
@@ -24,7 +22,7 @@ export interface PlayScene {
   frame: (actions: Actions) => void;
   /** One fixed physics step of `dt` seconds. */
   step: (actions: Actions, dt: number) => void;
-  /** Draws `alpha` of the way past the last step; life moves on by the frame's `dt`. */
+  /** Draws `alpha` of the way past the last step; the far crowd moves on by the frame's `dt`. */
   draw: (alpha: number, dt: number) => void;
   dispose: () => void;
 }
@@ -64,7 +62,7 @@ function setUp(
 
   const island = islandMeshes(city.world, city.graph);
   scene.add(island.group);
-  const life = createLife(scene, () => {}, GAME);
+  const life = createLife(scene, () => {}, GAME_LIMITS);
   life.populate(city.graph, city.seed, city.islands);
 
   // One physics world for all that moves in it.
@@ -101,12 +99,15 @@ function setUp(
 
   return {
     frame: (actions) => player.frame(actions),
-    step: (actions, dt) => player.step(actions, dt),
+    step(actions, dt) {
+      // The traffic moves first, stopping for the player as the last step left them; the player
+      // then runs into it where it is now.
+      life.move(dt, camera.position, player.at, player.obstacles());
+      player.step(actions, dt);
+    },
     draw(alpha, dt) {
       player.draw(camera, alpha, dt);
-      // ponytail: life moves once per drawn frame, as in the panel; it joins the fixed steps when
-      // the player meets it (Task 8).
-      life.step(dt, camera.position, player.at);
+      life.draw(alpha, dt, camera.position, player.at);
       render();
     },
     dispose() {

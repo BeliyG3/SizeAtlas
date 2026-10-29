@@ -2,12 +2,30 @@
  * The right of way of the cars: the lanes of the roads, the gap to the car in front on a lane
  * and across the node ahead, and who goes first there; pure, no three.js.
  */
+import { HEADROOM } from "../physics/bodies";
 import { ROAD, type RoadKind } from "../world/map";
 import type { RoadGraph } from "../world/roads";
 import type { Track } from "./nav";
 
 /** Least centre-to-centre distance to the car ahead, metres. */
 export const MIN_GAP = 8;
+
+/**
+ * What the ground cars stop short of on their lanes, besides each other (the player and its
+ * cars): the first `count` points, each at its feet's height `y`, `r` metres wide.
+ */
+export interface Obstacles {
+  count: number;
+  x: Float64Array;
+  y: Float64Array;
+  z: Float64Array;
+  r: Float64Array;
+}
+
+/** Half a car's width: an obstacle this much plus its radius off a lane's centre is in it, metres. */
+const HALF_WIDE = 0.9;
+/** An obstacle this far behind a car's centre is under its body: it holds the car too, metres. */
+const HALF_LONG = 2.1;
 
 /** Lanes per direction. */
 export function lanes(cls: RoadKind): number {
@@ -101,6 +119,55 @@ export function createJunctions(s: Lanes) {
   const endNode = (edge: number, forward: number) =>
     forward === 1 ? g.edges[edge].b : g.edges[edge].a;
 
+  let seen: Obstacles | null = null;
+  /** The obstacles the cars see from now on; null: none. */
+  const sees = (o: Obstacles | null) => {
+    seen = o;
+  };
+
+  /**
+   * How far along `edge` (travelled `forward`) from its start the nearest obstacle in lane `ln` is,
+   * no nearer than `from`, near the height `y`; Infinity for none.
+   */
+  function obstacleOn(edge: number, forward: number, ln: number, y: number, from: number) {
+    const o = seen!;
+    const e = g.edges[edge];
+    const start = forward === 1 ? e.a : e.b;
+    const ux = dir(edge, forward, 0);
+    const uz = dir(edge, forward, 1);
+    const off = laneOffset(e.cls, ln);
+    let best = Infinity;
+    for (let k = 0; k < o.count; k++) {
+      if (Math.abs(o.y[k] - y) >= HEADROOM) continue;
+      const wx = o.x[k] - g.nodes[start * 2];
+      const wz = o.z[k] - g.nodes[start * 2 + 1];
+      const along = wx * ux + wz * uz;
+      if (along < from || along > e.len || along >= best) continue;
+      // To the right of the travel, as `laneOffset` measures.
+      if (Math.abs(wz * ux - wx * uz - off) < HALF_WIDE + o.r[k]) best = along;
+    }
+    return best;
+  }
+
+  /** The nearest obstacle ahead of car `i` on its lane, and past its node on the lane it chose. */
+  function obstacleAhead(i: number): number {
+    const e = g.edges[t.edge[i]];
+    const s = t.s[i];
+    const k = s / (e.len || 1);
+    const y =
+      t.forward[i] === 1 ? e.liftA + (e.liftB - e.liftA) * k : e.liftB + (e.liftA - e.liftB) * k;
+    const gap = obstacleOn(t.edge[i], t.forward[i], lane[i], y, s - HALF_LONG) - s;
+    if (nextE[i] < 0) return gap;
+    return Math.min(gap, e.len - s + obstacleOn(nextE[i], nextF[i], nextL[i], y, 0));
+  }
+
+  /** Is an obstacle within `d` metres of (x, z)? */
+  function nearObstacle(x: number, z: number, d: number): boolean {
+    const o = seen;
+    for (let k = 0; o && k < o.count; k++) if (Math.hypot(o.x[k] - x, o.z[k] - z) < d) return true;
+    return false;
+  }
+
   /**
    * Distance along the way from car `i` to car `j`, if `j` is in front of `i` at the node `i` is
    * coming to, else Infinity. In front: just past the node on the line `i` comes in on (even if `i`
@@ -140,7 +207,8 @@ export function createJunctions(s: Lanes) {
 
   /**
    * Centre-to-centre distance along the way to the nearest car ahead of `i`: on its own lane and
-   * across the node it is coming to (see `crossing`).
+   * across the node it is coming to (see `crossing`); or to an obstacle on its lane, here or past
+   * the node (below zero for one under its body).
    */
   // ponytail: every car looks at every other (n² ≤ 150² a frame); sort per lane if it ever shows.
   function gapAhead(i: number): number {
@@ -155,7 +223,7 @@ export function createJunctions(s: Lanes) {
       }
       if (nextE[i] >= 0) gap = Math.min(gap, crossing(i, j, node));
     }
-    return gap;
+    return seen?.count ? Math.min(gap, obstacleAhead(i)) : gap;
   }
 
   /**
@@ -195,5 +263,5 @@ export function createJunctions(s: Lanes) {
     return false;
   }
 
-  return { crowded, cutsIn, endNode, gapAhead, takeTurns, turnOf };
+  return { crowded, cutsIn, endNode, gapAhead, nearObstacle, sees, takeTurns, turnOf };
 }

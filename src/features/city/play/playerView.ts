@@ -4,6 +4,7 @@
  * had; and the camera over its shoulder or behind the car.
  */
 import { Group, Vector3, type PerspectiveCamera, type Scene } from "three";
+import type { Obstacles } from "../actors/traffic";
 import type { Life } from "../panel/life";
 import type { Solids } from "../physics/solids";
 import { loadAssets, type Assets } from "../render/assets";
@@ -14,7 +15,8 @@ import { createCam, followCar, followWalker, turnCam, wrap, type CarView } from 
 import { holdYoke } from "./carRig";
 import { createCharacter, type Character } from "./character";
 import type { Actions } from "./input";
-import { createPlayer, pressPlayer, stepPlayer, type PlayWorld } from "./player";
+import { createObstacles, fillObstacles } from "./obstacles";
+import { createPlayer, MAX_CARS, pressPlayer, stepPlayer, type PlayWorld } from "./player";
 import { createPlayerCars } from "./playerCars";
 import { spawnPoint } from "./spawn";
 import { createCar, type Car } from "./vehicle";
@@ -28,6 +30,8 @@ export interface PlayerView {
   draw(camera: PerspectiveCamera, alpha: number, dt: number): void;
   /** The feet (or the car) as last drawn. */
   readonly at: Vector3;
+  /** The player on foot and its cars as the traffic sees them now: the same object every call. */
+  obstacles(): Obstacles;
   dispose(): void;
 }
 
@@ -82,6 +86,8 @@ export function createPlayerView(
   };
   const pose = makeScriptPose();
   let ahead = false;
+  // One car over the cap: the one just taken, before the farthest goes.
+  const seen = createObstacles(MAX_CARS + 1);
 
   let assets: Assets | null = null;
   let me: Seated | null = null;
@@ -123,6 +129,11 @@ export function createPlayerView(
 
   return {
     at,
+    obstacles() {
+      // Getting in, the figure by the door is in the way too; getting out, it is not out yet.
+      const onFoot = p.state === "walk" || p.state === "enter" ? p.walker.body : null;
+      return fillObstacles(seen, w.cars, onFoot);
+    },
     frame(a) {
       turnCam(cam, a.look);
       p.look = cam.heading.x;
