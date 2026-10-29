@@ -13,12 +13,10 @@ import {
   Vector2,
   type Material,
 } from "three";
-import { laneOffset } from "../actors/junctions";
 import type { Circle } from "../actors/locals";
 import { rng } from "../actors/nav";
-import { ROLE, walkOffset } from "../actors/residents";
+import { ROLE } from "../actors/residents";
 import { ROLE_COLOR } from "../look";
-import { ROAD } from "../world/map";
 import { ROUTE_POINTS, ROUTE_STEP, type Routes } from "../world/routes";
 import { carBody, carBox } from "./cars";
 import { disposeAll } from "./dispose";
@@ -28,10 +26,6 @@ import { columnBox } from "./people";
 export const CROWD_SPEED = { drive: [10, 22], walk: [1.1, 1.7] } as const;
 /** A particle grows in from the circle's radius out to this many radii. */
 export const CROWD_FADE = 1.15;
-// ponytail: one offset a particle for every road it takes. A car keeps 2 m right: a highway's
-// inner lane, inside a street's lane too; a walker the middle of a street's sidewalk, either side.
-const CAR_SIDE = laneOffset(ROAD.highway, 0);
-const WALK_SIDE = walkOffset(ROAD.street);
 
 export interface Crowd {
   mesh: InstancedMesh;
@@ -60,7 +54,8 @@ export function crowdMesh(
     len[i] = routes.length[route[i]];
     s0[i] = rand() * len[i];
     speed[i] = slow + rand() * (fast - slow);
-    side[i] = kind === "drive" ? CAR_SIDE : (rand() < 0.5 ? 1 : -1) * WALK_SIDE;
+    // Cars keep right; walkers take either sidewalk.
+    side[i] = kind === "drive" || rand() < 0.5 ? 1 : -1;
   }
   const geometry = kind === "drive" ? carBox() : columnBox();
   const add = (name: string, values: Float32Array) =>
@@ -108,8 +103,9 @@ export function crowdMesh(
 }
 
 /**
- * Where particle `s0`, `speed`, `side` of `route` is at time `t`, and the way it heads (`dx`,
- * `dz`, a unit vector). The TS twin of `CROWD_GLSL`'s `crowdPlace`: keep the two the same.
+ * Where particle `s0`, `speed` of `route` is at time `t`, and the way it heads (`dx`, `dz`, a
+ * unit vector). It keeps the route's `side` offset to the right of the way (`side` 1) or to the
+ * left (-1). The TS twin of `CROWD_GLSL`'s `crowdPlace`: keep the two the same.
  */
 export function crowdAt(
   routes: Routes,
@@ -122,7 +118,7 @@ export function crowdAt(
   const len = routes.length[route];
   const x = s0 + speed * t;
   const s = x - len * Math.floor(x / len); // GLSL mod
-  const i = Math.min(Math.floor(s / ROUTE_STEP), len / ROUTE_STEP - 1);
+  const i = Math.min(Math.max(Math.floor(s / ROUTE_STEP), 0), len / ROUTE_STEP - 1);
   const f = s / ROUTE_STEP - i;
   const a = (route * ROUTE_POINTS + i) * 4;
   const b = a + 4;
@@ -133,7 +129,8 @@ export function crowdAt(
   const d = Math.hypot(dx, dz);
   [dx, dz] = d > 1e-4 ? [dx / d, dz / d] : [0, 1];
   // Right of the way is (-dz, dx), as in `pointOn`.
-  return { x: mix(0) - dz * side, y: mix(1), z: mix(2) + dx * side, dx, dz };
+  const off = mix(3) * side;
+  return { x: mix(0) - dz * off, y: mix(1), z: mix(2) + dx * off, dx, dz };
 }
 
 /**
@@ -162,14 +159,15 @@ float crowdScale;
 void crowdPlace() {
 	float stride = float( ${ROUTE_STEP} );
 	float s = mod( crowdS0 + crowdSpeed * uTime, crowdLen );
-	float i = min( floor( s / stride ), crowdLen / stride - 1.0 );
+	// A float mod can come out a hair below 0: no column -1.
+	float i = clamp( floor( s / stride ), 0.0, crowdLen / stride - 1.0 );
 	ivec2 at = ivec2( int( i ), int( crowdRoute ) );
-	vec3 a = texelFetch( uRoutes, at, 0 ).xyz;
-	vec3 b = texelFetch( uRoutes, at + ivec2( 1, 0 ), 0 ).xyz;
-	vec3 p = mix( a, b, s / stride - i );
+	vec4 a = texelFetch( uRoutes, at, 0 );
+	vec4 b = texelFetch( uRoutes, at + ivec2( 1, 0 ), 0 );
+	vec4 p = mix( a, b, s / stride - i );
 	vec2 d = b.xz - a.xz;
 	crowdDir = length( d ) > 1e-4 ? normalize( d ) : vec2( 0.0, 1.0 );
-	crowdPos = p + vec3( -crowdDir.y, 0.0, crowdDir.x ) * crowdSide;
+	crowdPos = p.xyz + vec3( -crowdDir.y, 0.0, crowdDir.x ) * p.w * crowdSide;
 	crowdScale = smoothstep( uRadius, float( ${CROWD_FADE} ) * uRadius, distance( crowdPos.xz, uCenter ) );
 }
 // Turned from facing +z to the way it heads.

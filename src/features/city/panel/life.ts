@@ -27,7 +27,7 @@ export const CROWD_ROUTES = 128;
 export function crowdOn(g: RoadGraph, seed: number): Crowd[] {
   return [
     crowdMesh(buildRoutes(g, "drive", CROWD_ROUTES, seed), "drive", CROWD_CARS, seed),
-    crowdMesh(buildRoutes(g, "walk", CROWD_ROUTES, seed), "walk", CROWD_PEOPLE, seed),
+    crowdMesh(buildRoutes(g, "walk", CROWD_ROUTES, seed + 1), "walk", CROWD_PEOPLE, seed),
   ];
 }
 

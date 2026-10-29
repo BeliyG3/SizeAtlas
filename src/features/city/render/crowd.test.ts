@@ -7,13 +7,13 @@ import { buildRoads } from "../world/roads";
 import { ROUTE_POINTS, ROUTE_STEP, type Routes } from "../world/routes";
 import { CROWD_FADE, crowdAt, crowdMesh, crowdShow, type Crowd } from "./crowd";
 
-/** One route east along z = 0 from x = 0 to 200 m, 1 m up, and back: 400 m. */
+/** One route east along z = 0 from x = 0 to 200 m, 1 m up, 3 m to the side, and back: 400 m. */
 function line(): Routes {
   const steps = 200 / ROUTE_STEP;
   const points = new Float32Array(ROUTE_POINTS * 4);
   for (let k = 0; k <= 2 * steps; k++) {
     const x = (k <= steps ? k : 2 * steps - k) * ROUTE_STEP;
-    points.set([x, 1, 0, 1], k * 4);
+    points.set([x, 1, 0, 3], k * 4);
   }
   return { count: 1, points, length: new Float32Array([400]) };
 }
@@ -48,18 +48,19 @@ describe("crowdAt", () => {
     expect([a.dx, a.dz]).toEqual([1, 0]);
   });
 
-  it("keeps `side` metres right of the way, there and back", () => {
+  it("keeps the route's offset right of the way (side 1) or left (-1), there and back", () => {
     // Going east the right is +z; coming back west, -z.
-    expect(crowdAt(r, 0, 50, 1, 3, 0)).toMatchObject({ x: 50, z: 3 });
-    const back = crowdAt(r, 0, 350, 1, 3, 0);
+    expect(crowdAt(r, 0, 50, 1, 1, 0)).toMatchObject({ x: 50, z: 3 });
+    expect(crowdAt(r, 0, 50, 1, -1, 0)).toMatchObject({ x: 50, z: -3 });
+    const back = crowdAt(r, 0, 350, 1, 1, 0);
     expect(back.x).toBeCloseTo(50);
     expect(back.z).toBe(-3);
     expect(back.dx).toBe(-1);
   });
 
   it("comes back to where it was after the route's length", () => {
-    const a = crowdAt(r, 0, 37, 1.3, 2, 11);
-    const b = crowdAt(r, 0, 37, 1.3, 2, 11 + 400 / 1.3);
+    const a = crowdAt(r, 0, 37, 1.3, -1, 11);
+    const b = crowdAt(r, 0, 37, 1.3, -1, 11 + 400 / 1.3);
     expect(b.x).toBeCloseTo(a.x, 3);
     expect(b.z).toBeCloseTo(a.z, 3);
   });

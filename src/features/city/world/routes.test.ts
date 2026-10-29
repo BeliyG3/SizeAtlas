@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { walks } from "../actors/residents";
+import { laneOffset } from "../actors/junctions";
+import { walkOffset, walks } from "../actors/residents";
 import { drives } from "../actors/traffic";
 import type { Allow } from "../actors/nav";
 import { mergeIslands } from "./archipelago";
@@ -59,15 +60,18 @@ function nearest(g: RoadGraph, e: number, x: number, z: number) {
   return { d, y: liftA + (liftB - liftA) * t };
 }
 
-/** Is every point of every route on an edge `allow` lets in, at the road's height there? */
-function onEdges(g: RoadGraph, r: Routes, allow: Allow): boolean {
+/**
+ * Is every point of every route on an edge `allow` lets in, at the road's height there, with the
+ * side offset `side` gives for that edge's class?
+ */
+function onEdges(g: RoadGraph, r: Routes, allow: Allow, side: (cls: RoadKind) => number) {
   for (let route = 0; route < r.count; route++) {
     for (let k = 0; k <= steps(r, route); k++) {
-      const [x, y, z] = point(r, route, k);
+      const [x, y, z, w] = point(r, route, k);
       const hits = g.edges
-        .map((e, i) => ({ ok: allow(e), ...nearest(g, i, x, z) }))
+        .map((e, i) => ({ ok: allow(e), w: side(e.cls), ...nearest(g, i, x, z) }))
         .filter((h) => h.ok && h.d < 1e-3);
-      if (!hits.some((h) => Math.abs(h.y - y) < 1e-3)) return false;
+      if (!hits.some((h) => Math.abs(h.y - y) < 1e-3 && Math.abs(h.w - w) < 1e-6)) return false;
     }
   }
   return true;
@@ -88,7 +92,7 @@ describe("buildRoutes", () => {
         for (let k = 0; k < n; k++) {
           const [x0, , z0, w] = point(r, route, k);
           const [x1, , z1] = point(r, route, k + 1);
-          expect(w).toBe(1);
+          expect(w).toBeGreaterThan(0);
           // In the plan, as the roads measure; a step that turns at a node is shorter in a line.
           const d = Math.hypot(x1 - x0, z1 - z0);
           expect(d).toBeLessThanOrEqual(ROUTE_STEP + 1e-3);
@@ -119,9 +123,9 @@ describe("buildRoutes", () => {
     }
   });
 
-  it("keeps cars and walkers to their own edges, at the deck's height on a bridge", () => {
-    expect(onEdges(archipelago, cars, drives)).toBe(true);
-    expect(onEdges(archipelago, walkers, walks)).toBe(true);
+  it("keeps cars and walkers to their own edges and sides, at the deck's height on a bridge", () => {
+    expect(onEdges(archipelago, cars, drives, (cls) => laneOffset(cls, 0))).toBe(true);
+    expect(onEdges(archipelago, walkers, walks, walkOffset)).toBe(true);
     // Cars cross the bridge, up off the ground.
     const high = Array.from({ length: cars.count }, (_, route) =>
       Array.from({ length: steps(cars, route) }, (_, k) => point(cars, route, k)[1]),
@@ -150,6 +154,23 @@ describe("buildRoutes", () => {
       }),
     );
     expect(buildRoutes(lanesOnly, "drive", 8, 1).count).toBe(0);
-    expect(buildRoutes(lanesOnly, "walk", 8, 1).count).toBe(8);
+    const walkers = buildRoutes(lanesOnly, "walk", 8, 1);
+    expect(walkers.count).toBe(8);
+    // On a lane a walker keeps to the lane's side, not to a street's sidewalk.
+    expect(point(walkers, 0, 1)[3]).toBeCloseTo(walkOffset(ROAD.lane), 6);
+  });
+
+  it("leaves out a route shorter than a step", () => {
+    const dot = (len: number) =>
+      buildRoads(
+        mapOf([], {
+          nodes: new Float32Array([0, 0, len, 0]),
+          edges: [{ a: 0, b: 1, cls: ROAD.street, bridge: false, liftA: 0, liftB: 0 }],
+        }),
+      );
+    expect(buildRoutes(dot(0), "drive", 8, 1).count).toBe(0);
+    // A walk of a ten-thousandth of a metre an edge ends (at its cap of edges) within a step.
+    const tiny = buildRoutes(dot(1e-4), "drive", 8, 1);
+    expect([tiny.count, tiny.points.length, tiny.length.length]).toEqual([0, 0, 0]);
   });
 });
