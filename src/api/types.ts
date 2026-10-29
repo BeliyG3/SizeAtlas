@@ -300,6 +300,8 @@ export interface TrashProgress {
 /** An island of the archipelago, moved by `(x, z)` metres. */
 export interface ArchipelagoIsland {
   generation: number;
+  /** The `rev` of the island in the header of its `getCity` bytes: the offsets and gate nodes fit them only while the two are equal. */
+  rev: number;
   root: string;
   x: number;
   z: number;

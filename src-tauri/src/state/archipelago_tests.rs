@@ -49,6 +49,12 @@ fn archipelago_lists_members_in_order() {
     assert_eq!(listed, [generations[2], generations[1], generations[0]]);
     assert_eq!(world.islands[0].root, mounts[2]);
     assert_eq!(world.bridges.len(), 3);
+    // Each island carries the rev of the tree behind its `get_city` bytes.
+    for island in &world.islands {
+        let rev = state.tree(island.generation).unwrap().rev;
+        assert_eq!(island.rev, rev);
+        assert_eq!(state.0.city.island(island.generation).unwrap().0, rev);
+    }
     // Every member sees the same world, whichever is selected.
     let other = state.archipelago_in(generations[2], &mounts, &[]).unwrap();
     assert_eq!(offsets(&world), offsets(&other));
@@ -65,6 +71,12 @@ fn archipelago_selected_folder_is_alone() {
     let world = state.archipelago_in(folder, &mounts, &[]).unwrap();
     assert_eq!(world.islands.len(), 1);
     assert_eq!(world.islands[0].generation, folder);
+    // Alone, its land box is centred on the origin.
+    let (_, built) = state.0.city.island(folder).unwrap();
+    let at = city::place(&[&*built])[0];
+    let island = &world.islands[0];
+    assert!(island.x.is_finite() && island.z.is_finite());
+    assert_eq!([island.x, island.z], at);
     assert!(world.bridges.is_empty());
 }
 
@@ -99,6 +111,7 @@ fn archipelago_serializes_for_the_ui() {
     let world = ArchipelagoDto {
         islands: vec![ArchipelagoIslandDto {
             generation: 3,
+            rev: 9,
             root: "C:\\".into(),
             x: 1.5,
             z: -2.0,
@@ -113,7 +126,7 @@ fn archipelago_serializes_for_the_ui() {
     assert_eq!(
         serde_json::to_value(world).unwrap(),
         serde_json::json!({
-            "islands": [{"generation": 3, "root": "C:\\", "x": 1.5, "z": -2.0}],
+            "islands": [{"generation": 3, "rev": 9, "root": "C:\\", "x": 1.5, "z": -2.0}],
             "bridges": [{"a": [0, 4], "b": [1, 7], "points": [[0.0, 1.0], [2.0, 3.0]], "level": 1}],
         })
     );

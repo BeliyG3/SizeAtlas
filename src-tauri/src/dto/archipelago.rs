@@ -8,6 +8,9 @@ use sizeatlas_core::city::Bridge;
 #[serde(rename_all = "camelCase")]
 pub struct ArchipelagoIslandDto {
     pub generation: u64,
+    /// The `rev` of the tree this island was built from: the one in the header of the island's
+    /// `get_city` bytes. Offsets and gate nodes fit those bytes only while the two are equal.
+    pub rev: u64,
     pub root: String,
     pub x: f32,
     pub z: f32,

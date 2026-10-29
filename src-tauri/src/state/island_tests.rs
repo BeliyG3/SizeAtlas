@@ -118,7 +118,7 @@ fn path_of(dir: &tempfile::TempDir) -> String {
 
 /// The `neighbours` of every gate of the island `generation`, as the cache holds it.
 fn gates_of(state: &AppState, generation: u64) -> Vec<Vec<u32>> {
-    let island = state.0.city.island(generation).unwrap();
+    let (_, island) = state.0.city.island(generation).unwrap();
     island.gates.iter().map(|g| g.neighbours.clone()).collect()
 }
 

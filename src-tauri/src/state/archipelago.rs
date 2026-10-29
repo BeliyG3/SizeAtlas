@@ -48,20 +48,30 @@ impl AppState {
                 .collect()
         });
         built.into_iter().try_for_each(|r| r.map(drop))?;
-        let islands = (roots.iter())
+        let kept = (roots.iter())
             .map(|(generation, _)| self.0.city.island(*generation).ok_or(CmdError::StaleId))
             .collect::<Result<Vec<_>, _>>()?;
-        let refs: Vec<&Island> = islands.iter().map(|island| &**island).collect();
+        let refs: Vec<&Island> = kept.iter().map(|(_, island)| &**island).collect();
         let offsets = city::place(&refs);
         let bridges = city::bridges(&refs, &offsets);
+        // serde_json writes a number that is not finite as `null`.
+        debug_assert!(offsets.iter().flatten().all(|v| v.is_finite()));
+        debug_assert!(
+            (bridges.iter().flat_map(|b| &b.points))
+                .flatten()
+                .all(|v| v.is_finite())
+        );
         Ok(ArchipelagoDto {
-            islands: (roots.into_iter().zip(&offsets))
-                .map(|((generation, root), at)| ArchipelagoIslandDto {
-                    generation,
-                    root,
-                    x: at[0],
-                    z: at[1],
-                })
+            islands: (roots.into_iter().zip(&offsets).zip(&kept))
+                .map(
+                    |(((generation, root), at), (rev, _))| ArchipelagoIslandDto {
+                        generation,
+                        rev: *rev,
+                        root,
+                        x: at[0],
+                        z: at[1],
+                    },
+                )
                 .collect(),
             bridges: bridges
                 .into_iter()

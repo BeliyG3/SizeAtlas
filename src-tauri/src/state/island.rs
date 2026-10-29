@@ -141,10 +141,11 @@ impl CityCache {
         bytes
     }
 
-    /// The island last built for `generation`, if it is still open.
-    pub fn island(&self, generation: u64) -> Option<Arc<city::Island>> {
+    /// The island last built for `generation`, if it is still open, with the `rev` of the tree
+    /// it was built from (the one its encoded map carries).
+    pub fn island(&self, generation: u64) -> Option<(u64, Arc<city::Island>)> {
         let kept = self.kept.lock().unwrap_or_else(|e| e.into_inner());
-        kept.get(&generation).map(|(_, island, _)| island.clone())
+        (kept.get(&generation)).map(|(key, island, _)| (key.rev, island.clone()))
     }
 }
 
