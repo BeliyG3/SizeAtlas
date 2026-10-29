@@ -4,18 +4,15 @@ import { api } from "../../api/client";
 import { rt } from "../lists/hookRuntime";
 import { CityView } from "./CityView";
 import { createScene, type Hover } from "./scene";
+import { useArchipelago } from "./useArchipelago";
 import type { Building } from "./world/buildings";
 
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
   ...(await import("../lists/hookRuntime")).rt.hooks,
 }));
-vi.mock("../../api/client", () => ({
-  api: {
-    getCity: vi.fn(() => new Promise(() => {})),
-    getCrumbs: vi.fn(() => new Promise(() => {})),
-  },
-}));
+vi.mock("../../api/client", () => ({ api: { getCrumbs: vi.fn(() => new Promise(() => {})) } }));
+vi.mock("./useArchipelago", () => ({ useArchipelago: vi.fn() }));
 vi.mock("../../i18n/react", () => ({ useT: () => ({ t: (key: string) => key, lang: "en" }) }));
 vi.mock("../../settings/react", async () => {
   const { PALETTES } = await import("../../palette");
@@ -27,7 +24,16 @@ vi.mock("../../settings/react", async () => {
 });
 vi.mock("./scene", () => ({ createScene: vi.fn() }));
 
-const props = { generation: 1, rev: 1, selectedId: 0, onSelect: vi.fn(), onFail: vi.fn() };
+const roots = [
+  { generation: 1, rev: 1 },
+  { generation: 2, rev: 4 },
+];
+const props = { roots, generation: 1, selectedId: 0, onSelect: vi.fn(), onFail: vi.fn() };
+/** Two islands, the drives of generations 1 and 2. */
+const islands = [
+  { generation: 1, rev: 1, root: "/a", x: 0, z: 0 },
+  { generation: 2, rev: 4, root: "/b", x: 300, z: 0 },
+];
 let tree: ReactElement;
 
 function render() {
@@ -53,9 +59,14 @@ const texts = () => elements(tree).flatMap((el) => [el.props.children].flat());
 const canvas = () => elements(tree).find((el) => el.type === "canvas");
 
 beforeEach(() => {
-  props.generation = 1;
   rt.state.slots = [];
   vi.clearAllMocks();
+  vi.mocked(useArchipelago).mockReturnValue({
+    world: null,
+    islands,
+    selectedIsland: 0,
+    finish: null,
+  });
   vi.stubGlobal("document", { documentElement: {} });
   vi.stubGlobal("getComputedStyle", () => ({ getPropertyValue: () => "#181818" }));
 });
@@ -70,7 +81,7 @@ describe("CityView", () => {
       throw new Error("Error creating WebGL context.");
     });
     render();
-    expect(api.getCity).toHaveBeenCalledWith(1);
+    expect(useArchipelago).toHaveBeenCalledWith(roots, { generation: 1, id: 0 }, props.onFail);
     (canvas()!.props.ref as (el: unknown) => void)({});
     render();
     await vi.dynamicImportSettled();
@@ -101,8 +112,8 @@ describe("CityView", () => {
   });
 
   describe("the tooltip", () => {
-    const house = { id: 5, parent: 4, kind: "folder", size: 10 } as Building;
-    const filler = { id: 7, parent: 6, kind: "filler", size: 30 } as Building;
+    const house = { island: 0, id: 5, parent: 4, kind: "folder", size: 10 } as Building;
+    const filler = { island: 0, id: 7, parent: 6, kind: "filler", size: 30 } as Building;
     const events = () => vi.mocked(createScene).mock.calls[0][2];
     const hover = (x: number, y: number, building = house) =>
       events().onHover({ building, x, y, w: 250, h: 300 } as Hover);
@@ -143,11 +154,32 @@ describe("CityView", () => {
       await vi.advanceTimersByTimeAsync(200);
       render();
       expect(texts()).toContain("root1");
-      props.generation = 2;
+      // The island the building stands on is another root's now.
+      vi.mocked(useArchipelago).mockReturnValue({
+        world: null,
+        islands: [islands[1]],
+        selectedIsland: 0,
+        finish: null,
+      });
       render();
       hover(20, 20);
       render();
       expect(texts()).not.toContain("root1");
+      vi.useRealTimers();
+    });
+
+    it("names a house of the second island with that root's crumbs", async () => {
+      vi.mocked(api.getCrumbs).mockImplementation((generation, id) =>
+        Promise.resolve([{ id, name: `g${generation}n${id}`, size: 1, rank: 0 }]),
+      );
+      await start();
+      vi.useFakeTimers();
+      hover(20, 20, { ...house, island: 1 } as Building);
+      render();
+      await vi.advanceTimersByTimeAsync(200);
+      render();
+      expect(api.getCrumbs).toHaveBeenLastCalledWith(2, 5);
+      expect(texts()).toContain("g2n5");
       vi.useRealTimers();
     });
 
@@ -184,9 +216,26 @@ describe("CityView", () => {
     await vi.dynamicImportSettled();
     render();
     const { onPick } = vi.mocked(createScene).mock.calls[0][2];
-    onPick({ id: 5, parent: 4, kind: "folder" } as Building);
-    expect(props.onSelect).toHaveBeenLastCalledWith(5, true);
-    onPick({ id: 7, parent: 6, kind: "filler" } as Building);
-    expect(props.onSelect).toHaveBeenLastCalledWith(6, true);
+    onPick({ island: 0, id: 5, parent: 4, kind: "folder" } as Building);
+    expect(props.onSelect).toHaveBeenLastCalledWith(1, 5);
+    onPick({ island: 0, id: 7, parent: 6, kind: "filler" } as Building);
+    expect(props.onSelect).toHaveBeenLastCalledWith(1, 6);
+  });
+
+  it("a click on a house of the second island selects that root's folder", async () => {
+    const scene = { setCity: vi.fn(), setTheme: vi.fn(), reset: vi.fn(), dispose: vi.fn() };
+    vi.mocked(createScene).mockReturnValue(scene);
+    render();
+    (canvas()!.props.ref as (el: unknown) => void)({});
+    render();
+    await vi.dynamicImportSettled();
+    render();
+    const { onPick } = vi.mocked(createScene).mock.calls[0][2];
+    onPick({ island: 1, id: 5, parent: 4, kind: "folder" } as Building);
+    expect(props.onSelect).toHaveBeenLastCalledWith(2, 5);
+    // An island the view no longer has selects nothing.
+    props.onSelect.mockClear();
+    onPick({ island: 7, id: 5, parent: 4, kind: "folder" } as Building);
+    expect(props.onSelect).not.toHaveBeenCalled();
   });
 });

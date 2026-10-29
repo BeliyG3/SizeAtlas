@@ -65,19 +65,27 @@ function cityFor(selection: Parameters<typeof Browser>[0]["selection"]) {
 beforeEach(() => vi.clearAllMocks());
 
 describe("Browser and the 3D city", () => {
-  it("gives the city the selected root's tree and the selected node", () => {
+  it("gives the city every open tree and the selected node", () => {
     const selection = { root: "/b", generation: 2, id: 7, folder: 7 };
     const city = cityFor(selection);
-    expect(city.summary).toBe(entries[1].summary);
+    // The root still waiting for its first scan is no island.
+    expect(city.roots).toEqual([
+      { generation: 1, rev: 5 },
+      { generation: 2, rev: 5 },
+    ]);
     expect(city.selection).toBe(selection);
-    expect(city.onSelect).toBe(onSelectNode);
     expect(city.onFail).toBe(onFail);
+  });
+
+  it("selects a folder picked in the city as a folder of that tree", () => {
+    cityFor({ root: "/b", generation: 2, id: 7, folder: 7 }).onSelect(1, 9);
+    expect(onSelectNode).toHaveBeenCalledWith(1, 9, true);
   });
 
   it.each([
     ["no root is selected", null],
     ["the selected root has no tree yet", { root: "/c", generation: null, id: 0, folder: 0 }],
   ])("gives it no tree when %s", (_, selection) => {
-    expect(cityFor(selection).summary).toBeNull();
+    expect(cityFor(selection).selection).toBeNull();
   });
 });

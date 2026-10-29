@@ -146,6 +146,18 @@ export function Browser({
       })),
     [entries, sources],
   );
+  /** Every open tree is an island of the city, whichever root is selected. */
+  const cityRoots = useMemo(
+    () =>
+      entries.flatMap((e) =>
+        e.summary ? [{ generation: e.summary.generation, rev: e.summary.rev }] : [],
+      ),
+    [entries],
+  );
+  const selectInCity = useCallback(
+    (generation: number, id: number) => onSelectNode(generation, id, true),
+    [onSelectNode],
+  );
   const treeTarget = useMemo<TreeTarget | null>(
     () =>
       selection && { root: selection.root, generation: selection.generation, id: selection.folder },
@@ -268,9 +280,9 @@ export function Browser({
         content={content}
         city={
           <CityPane
-            summary={summary}
-            selection={selection}
-            onSelect={onSelectNode}
+            roots={cityRoots}
+            selection={summary ? selection : null}
+            onSelect={selectInCity}
             onFail={onFail}
           />
         }

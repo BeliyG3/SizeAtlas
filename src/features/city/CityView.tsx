@@ -5,7 +5,7 @@ import type { Palette } from "../../palette";
 import { usePalette, useSettings, useSize } from "../../settings/react";
 import { placePopup } from "../duplicates/viewer/hover";
 import type { CityScene, CityTheme, Hover } from "./scene";
-import { useCityData } from "./useCityData";
+import { useArchipelago } from "./useArchipelago";
 import type { Building } from "./world/buildings";
 import "./city.css";
 
@@ -14,12 +14,13 @@ const TOOLTIP_DELAY_MS = 150;
 const TIP_GAP = 14;
 
 interface Props {
-  /** The root shown: a change reloads the city and resets the camera. */
+  /** Every open root with a tree, at its revision: a change reloads the city. */
+  roots: readonly { generation: number; rev: number }[];
+  /** The selected root: a change resets the camera. */
   generation: number;
-  /** Revision of the tree (throttled by the caller during a scan): a change reloads the city. */
-  rev: number;
   selectedId: number;
-  onSelect: (id: number, isDir: boolean) => void;
+  /** A folder of the tree with `generation`, picked on a house. */
+  onSelect: (generation: number, id: number) => void;
   onFail: (e: unknown) => void;
 }
 
@@ -33,15 +34,15 @@ const readTheme = (palette: Palette): CityTheme => ({
 });
 
 /**
- * The whole root as a living 3D island, lit around the selection; the folder tree is its keyboard
- * counterpart.
+ * The open drives as a living 3D archipelago, lit around the selection; the folder tree is its
+ * keyboard counterpart.
  */
-export function CityView({ generation, rev, selectedId, onSelect, onFail }: Props) {
+export function CityView({ roots, generation, selectedId, onSelect, onFail }: Props) {
   const { t } = useT();
   const sizeText = useSize();
   const palette = usePalette();
   const { resolved } = useSettings();
-  const { world, finish } = useCityData(generation, rev, selectedId, onFail);
+  const { world, islands, finish } = useArchipelago(roots, { generation, id: selectedId }, onFail);
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [scene, setScene] = useState<CityScene | null>(null);
   const [status, setStatus] = useState<"ready" | "failed" | "lost">("ready");
@@ -54,9 +55,9 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
   } | null>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   // The scene outlives renders: its callbacks read the current props through this.
-  const latest = useRef({ onSelect, palette });
+  const latest = useRef({ onSelect, palette, islands });
   useEffect(() => {
-    latest.current = { onSelect, palette };
+    latest.current = { onSelect, palette, islands };
   });
 
   // three loads with the scene, only once the panel shows. A renderer that cannot start (no
@@ -70,7 +71,10 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
         if (cancelled) return;
         made = createScene(canvas, readTheme(latest.current.palette), {
           onHover: setHover,
-          onPick: (building) => latest.current.onSelect(folderOf(building), true),
+          onPick: (building) => {
+            const picked = latest.current.islands[building.island];
+            if (picked) latest.current.onSelect(picked.generation, folderOf(building));
+          },
           onLost: (lost) => setStatus(lost ? "lost" : "ready"),
         });
         setScene(made);
@@ -99,16 +103,17 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
 
   // The name and path once the pointer rests on a building: one request per folder.
   const hoverId = hover ? folderOf(hover.building) : null;
+  const hoverGeneration = hover ? (islands[hover.building.island]?.generation ?? null) : null;
   useEffect(() => {
-    if (hoverId === null) return;
+    if (hoverId === null || hoverGeneration === null) return;
     let live = true;
     const timer = setTimeout(() => {
-      api.getCrumbs(generation, hoverId).then(
+      api.getCrumbs(hoverGeneration, hoverId).then(
         (crumbs) => {
           if (!live) return;
           const names = crumbs.map((c) => c.name);
           const name = names.pop() ?? "";
-          setTip({ generation, id: hoverId, name, path: names.join(" › ") });
+          setTip({ generation: hoverGeneration, id: hoverId, name, path: names.join(" › ") });
         },
         (e: unknown) => live && onFail(e),
       );
@@ -117,7 +122,7 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
       live = false;
       clearTimeout(timer);
     };
-  }, [hoverId, generation, onFail]);
+  }, [hoverId, hoverGeneration, onFail]);
 
   // Beside the pointer, flipped and clamped so the whole tip stays inside the panel. Measured at
   // the corner first, where the panel edge does not narrow it.
@@ -139,7 +144,7 @@ export function CityView({ generation, rev, selectedId, onSelect, onFail }: Prop
     );
   }
 
-  const named = tip?.id === hoverId && tip.generation === generation ? tip : null;
+  const named = tip?.id === hoverId && tip.generation === hoverGeneration ? tip : null;
 
   return (
     <div className="city">
