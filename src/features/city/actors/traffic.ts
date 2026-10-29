@@ -250,11 +250,16 @@ export function createTraffic(
   function update(dt: number, around: Circle | null = null) {
     const h = Math.min(dt, MAX_DT);
     clock += h;
-    for (let i = 0; i < ground; i++) if (live[i]) plan(i);
+    for (let i = 0; i < ground; i++) {
+      if (!live[i]) continue;
+      plan(i);
+      poses.turnTo(i);
+    }
     takeTurns();
     for (let i = 0; i < ground; i++) {
       if (!live[i]) continue;
-      const free = Math.max(0, (gapAhead(i) - MIN_GAP) / HEADWAY);
+      // A car drawn swinging round to a new way out stands till it is round.
+      const free = poses.swinging(i) ? 0 : Math.max(0, (gapAhead(i) - MIN_GAP) / HEADWAY);
       const moved = drive(i, Math.min(speedOn(g.edges[t.edge[i]].cls), free) * h);
       if (poses.ease(i, h, moved) <= ACROSS) leaving[i] = NaN;
       held[i] = nextE[i] >= 0 && moved === 0 ? held[i] + h : 0;

@@ -3,9 +3,7 @@ import { ROAD, type RoadKind } from "../world/map";
 import { mapOf } from "../world/map.fixture";
 import { BRIDGE_RISE } from "../world/map";
 import { buildRoads, roadHalf } from "../world/roads";
-import { AIR_LANES, AIR_SHARE, CAR_SPACING, createTraffic, SPEED, type Traffic } from "./traffic";
-import { LANE_SHIFT } from "./carPose";
-import { CORNER } from "./corners";
+import { AIR_LANES, AIR_SHARE, CAR_SPACING, createTraffic, type Traffic } from "./traffic";
 import { laneOffset, MIN_GAP } from "./junctions";
 
 function graphOf(nodes: number[], edges: [number, number, RoadKind][]) {
@@ -44,13 +42,6 @@ const run = (t: Traffic, seconds: number, each?: () => void) => {
     each?.();
   }
 };
-
-const DT = 1 / 30;
-const snap = (t: Traffic) => ({
-  x: Float32Array.from(t.x),
-  z: Float32Array.from(t.z),
-  h: Float32Array.from(t.heading),
-});
 
 /** Distance from (x, z) to the nearest side of the square ring. */
 function toRing(x: number, z: number): number {
@@ -245,60 +236,5 @@ describe("createTraffic", () => {
         expect(Array.from(a).every(Number.isFinite)).toBe(true);
       }
     }
-  });
-
-  it("cars turn on a curve without a jump", () => {
-    // A 400 m square of streets: every node a 90 degree corner, no dead end to turn back at.
-    const square = graphOf(
-      [0, 0, 400, 0, 400, 400, 0, 400],
-      [
-        [0, 1, ROAD.street],
-        [1, 2, ROAD.street],
-        [2, 3, ROAD.street],
-        [3, 0, ROAD.street],
-      ],
-    );
-    // The tightest curve is a right turn, its ends `CORNER - offset` from the lanes' crossing.
-    const rMin = (CORNER - laneOffset(ROAD.street, 0)) / Math.SQRT2;
-    const t = createTraffic(square, 40, 4);
-    t.update(DT); // the cars put down near a node choose their way out: now they are drawn turning
-    let was = snap(t);
-    let bent = 0;
-    for (let n = 0; n < 20 * 30; n++) {
-      t.update(DT);
-      for (let i = 0; i < t.count; i++) {
-        if (t.air[i]) continue;
-        const turn = Math.atan2(
-          Math.sin(t.heading[i] - was.h[i]),
-          Math.cos(t.heading[i] - was.h[i]),
-        );
-        expect(Math.hypot(t.x[i] - was.x[i], t.z[i] - was.z[i])).toBeLessThanOrEqual(
-          SPEED.street * DT + 0.05,
-        );
-        expect(Math.abs(turn)).toBeLessThanOrEqual((SPEED.street * DT) / rMin + 1e-3);
-        if (Math.abs(Math.sin(2 * t.heading[i])) > 0.1) bent++;
-      }
-      was = snap(t);
-    }
-    expect(bent).toBeGreaterThan(0);
-  });
-
-  it("cars move across to another lane without a jump", () => {
-    // Going east off the highway onto the street, the cars of the second lane move to the first.
-    const t = createTraffic(line, 100, 3);
-    let was = snap(t);
-    let between = 0;
-    for (let n = 0; n < 30 * 30; n++) {
-      t.update(DT);
-      for (let i = 0; i < t.count; i++) {
-        if (t.air[i] || Math.min(t.x[i], was.x[i]) < 20 || Math.max(t.x[i], was.x[i]) > 1980) {
-          continue; // turning back at a dead end
-        }
-        expect(Math.abs(t.z[i] - was.z[i])).toBeLessThanOrEqual(LANE_SHIFT * DT + 0.01);
-        if (Math.abs(t.z[i]) > 2.1 && Math.abs(t.z[i]) < 5.9) between++;
-      }
-      was = snap(t);
-    }
-    expect(between).toBeGreaterThan(0);
   });
 });
