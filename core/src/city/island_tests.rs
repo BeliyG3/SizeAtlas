@@ -64,7 +64,7 @@ fn town() -> &'static (Island, Trace) {
 
 /// The town, one island for each of the free space ratios `RATIOS` (no canal on them), and
 /// one whose canal runs at 45° to nearly all of its streets.
-fn all() -> &'static [(Island, Trace)] {
+pub(super) fn all() -> &'static [(Island, Trace)] {
     static ALL: OnceLock<Vec<(Island, Trace)>> = OnceLock::new();
     ALL.get_or_init(|| {
         let town = assemble(&input(15, 2 * GIB, 0.6));

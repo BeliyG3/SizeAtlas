@@ -1,5 +1,6 @@
 use super::*;
 use crate::city::CELL;
+use crate::city::chamfer::TARGET;
 use crate::city::gates::GATE;
 use crate::city::grid::distance;
 use crate::city::land::{land, seeds};
@@ -134,6 +135,23 @@ fn highways_are_octilinear() {
 }
 
 #[test]
+fn highways_turn_by_45_at_most() {
+    for neighbours in [&[][..], &[1.0, 2.5, -2.0, 0.2][..], &ALL_ROUND[..]] {
+        let hw = build(neighbours);
+        for line in hw.lines.iter().chain(&hw.ring).chain(&hw.ramps) {
+            let mut pts = line.clone();
+            if pts.first() == pts.last() {
+                pts.push(pts[1]);
+            }
+            for w in pts.windows(3) {
+                let cos = cos_between(sub(w[1], w[0]), sub(w[2], w[1]));
+                assert!(cos >= FRAC_PI_4.cos() - 1e-3, "{w:?} in {line:?}");
+            }
+        }
+    }
+}
+
+#[test]
 fn a_neighbour_gets_a_gate_facing_it() {
     let i = island();
     let hw = build(&[1.0]);
@@ -225,8 +243,9 @@ fn a_gate_runs_straight_for_90_m() {
     for (g, out, _) in &hw.gates {
         let (shore, junction) = (hw.lines[*g][0], hw.lines[*g][1]);
         let straight = sub(shore, junction);
+        // Less the cut of a sharp turn at the junction.
         assert!(
-            (len(straight) - GATE).abs() < 1e-2,
+            len(straight) <= GATE + 1e-2 && len(straight) >= GATE - TARGET,
             "{g}: {}",
             len(straight)
         );

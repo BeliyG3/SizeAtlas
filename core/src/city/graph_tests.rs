@@ -188,3 +188,25 @@ fn snapping_keeps_shared_stretches_and_directions() {
     let p = Line { f: 1, c: 16 }.cross(Line { f: 3, c: 48 });
     assert_eq!(p, Some([32, 16]));
 }
+
+#[test]
+fn overpasses_side_by_side_join_at_45() {
+    let (nodes, edges) = build(
+        vec![
+            seg([0.0, 0.0], [100.0, 0.0], RoadClass::Highway),
+            // A ramp 6 m off the highway, running on past both of its ends.
+            seg([-50.0, 6.0], [150.0, 6.0], RoadClass::Ramp),
+        ],
+        &dry(),
+        &[],
+    );
+    assert_octilinear(&nodes, &edges);
+    for e in edges.iter().filter(|e| e.class == RoadClass::Ramp) {
+        let (a, b) = (nodes[e.a as usize], nodes[e.b as usize]);
+        assert!(a[0] != b[0], "a connector at 90°: {a:?} {b:?}");
+    }
+    // The ramp leaves the highway 6 m inside each of its ends.
+    for x in [6.0, 94.0] {
+        assert_eq!(degree(&edges, node(&nodes, [x, 0.0])), 3);
+    }
+}

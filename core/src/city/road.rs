@@ -12,6 +12,13 @@ pub enum RoadClass {
     Lane = 4,
 }
 
+impl RoadClass {
+    /// A highway, the ring or a ramp: the roads that turn by 45° at most.
+    pub fn overpass(self) -> bool {
+        matches!(self, Self::Highway | Self::Ring | Self::Ramp)
+    }
+}
+
 /// Full width of a road of class `c`, metres.
 pub fn road_width(c: RoadClass) -> f32 {
     match c {

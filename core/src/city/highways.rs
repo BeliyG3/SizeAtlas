@@ -1,6 +1,7 @@
 //! Highways from the shore to the core, the ring round the core, and the gates towards the
 //! neighbouring islands with the ramps of their junctions.
 
+use super::chamfer::chamfer;
 use super::gates::{gate, ramps};
 use super::grid::Grid;
 use super::net::{Line, Net};
@@ -62,12 +63,14 @@ pub(crate) fn highways(
         starts.push((start, net.cell(start).unwrap_or_default()));
     }
     for (route, shore) in net.routes(&starts, core).into_iter().zip(shores) {
-        out.lines.push(shore.into_iter().chain(route).collect());
+        let line: Line = shore.into_iter().chain(route).collect();
+        out.lines.push(chamfer(&line));
     }
     for (g, ..) in &out.gates {
-        out.ramps.extend(ramps(land, &net, &out.lines, *g));
+        let more = ramps(land, &net, &out.lines, *g);
+        out.ramps.extend(more.iter().map(|r| chamfer(r)));
     }
-    out.ring.extend(ring(dist, core));
+    out.ring.extend(ring(dist, core).map(|r| chamfer(&r)));
     out
 }
 

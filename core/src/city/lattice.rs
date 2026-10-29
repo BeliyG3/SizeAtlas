@@ -10,7 +10,7 @@ pub(crate) type P = [i64; 2];
 pub(crate) const UNIT: f32 = 64.0;
 /// Lines are snapped to pass through points of this lattice, units (0.25 m: the middles of the
 /// cells and of the lanes lie on it, so they do not move).
-const SNAP: i64 = 16;
+pub(crate) const SNAP: i64 = 16;
 
 /// The 8 directions, `k · 45°` with `y` down.
 const DIRS: [P; 8] = [
@@ -49,7 +49,7 @@ pub(crate) fn step(k: usize) -> P {
 }
 
 /// The direction (index) nearest to the vector `d`.
-fn nearest_dir(d: [f32; 2]) -> usize {
+pub(crate) fn nearest_dir(d: [f32; 2]) -> usize {
     let k = (d[1].atan2(d[0]) / std::f32::consts::FRAC_PI_4).round() as i64;
     k.rem_euclid(8) as usize
 }

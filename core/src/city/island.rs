@@ -7,7 +7,7 @@ use super::graph::{Edge, along, build, keep_connected, length};
 use super::grid::Grid;
 use super::highways::{Highways, highways};
 use super::land::{land, seeds};
-use super::lattice::{metres, snap_line};
+use super::lattice::{metres, nearest_dir, snap_line};
 use super::map::{Gate, Island, Poly, PolyKind, Stats, frame};
 use super::outline::outline;
 use super::path::apart;
@@ -16,6 +16,7 @@ use super::rehome::{Rehomed, lot_polys};
 use super::rng::Rng;
 use super::road::RoadClass;
 use super::shore::{face, shore};
+use super::smooth::smooth;
 use super::streets::streets;
 use super::trim::clear_roads;
 use super::vector::{Fit, area, outlines, trace};
@@ -77,6 +78,16 @@ pub(super) fn assemble(input: &IslandInput) -> (Island, Trace) {
 
     let (nodes, edges) = build(segments(&blocks, &ways), &wet, &axis);
     let total: f32 = edges.iter().map(|e| length(&nodes, e)).sum();
+    let gate_ends: Vec<([f32; 2], usize)> = (shore_ends(&ways).into_iter())
+        .flat_map(|(s, k)| {
+            let near = nodes
+                .iter()
+                .copied()
+                .filter(move |&p| apart(p, s) <= GATE_NODE);
+            near.map(move |p| (p, k))
+        })
+        .collect();
+    let (nodes, edges) = smooth(nodes, edges, &gate_ends);
     let (nodes, edges, dropped) = keep_connected(nodes, edges, core);
     let mut lot = blocks.lot.clone();
     clear_roads(&mut lot, &nodes, &edges);
@@ -237,6 +248,17 @@ fn segments(blocks: &Blocks, ways: &Highways) -> Vec<([f32; 2], [f32; 2], RoadCl
     out
 }
 
+/// The shore ends of the gates' highways (metres) and their outward directions (indices of
+/// the eight), gate by gate.
+fn shore_ends(ways: &Highways) -> Vec<([f32; 2], usize)> {
+    (ways.gates.iter())
+        .filter_map(|(line, dir, _)| {
+            let shore = metres(*snap_line(&ways.lines[*line]).first()?);
+            Some((shore, nearest_dir(*dir)))
+        })
+        .collect()
+}
+
 /// The gates whose highway still reaches the shore in the graph: each at the highway node
 /// nearest to its line's shore end.
 fn gates(ways: &Highways, nodes: &[[f32; 2]], edges: &[Edge]) -> Vec<Gate> {
@@ -265,3 +287,6 @@ fn gates(ways: &Highways, nodes: &[[f32; 2]], edges: &[Edge]) -> Vec<Gate> {
 #[cfg(test)]
 #[path = "island_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "island_turns_tests.rs"]
+mod turns_tests;

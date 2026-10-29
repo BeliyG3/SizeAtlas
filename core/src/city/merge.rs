@@ -1,8 +1,9 @@
 //! Roads that run side by side become one: where a lesser road runs parallel to a greater one
 //! closer than half their widths together, its stretch is dropped, and where it goes on, a short
-//! connector at 0 or 90 degrees joins it to the greater road.
+//! connector joins it to the greater road: at 0 or 90 degrees, at 45° for an overpass so it
+//! does not turn sharper than that.
 
-use super::lattice::{Line, UNIT};
+use super::lattice::{Line, UNIT, dir};
 use super::road::{RoadClass, Seg, road_width};
 use std::collections::BTreeMap;
 
@@ -34,9 +35,13 @@ pub(crate) fn absorb(mut segs: Vec<Seg>) -> Vec<Seg> {
         }
         covers.sort_by_key(|c| (c.0, c.1));
         for (from, to, before, after) in gaps(lo, hi, &covers) {
-            for (t, other) in [(from, before), (to, after)] {
+            for (t, other, into) in [(from, before, -1), (to, after, 1)] {
                 if let Some(other) = other {
-                    let (p, q) = (line.at(t), other.at(t));
+                    let p = line.at(t);
+                    let q = (s.class.overpass())
+                        .then(|| slant(line, other, t, into, &kept, &by_line))
+                        .flatten()
+                        .unwrap_or(other.at(t));
                     if p != q {
                         links.push(Seg {
                             a: p,
@@ -81,12 +86,51 @@ fn covers(s: &Seg, kept: &[Seg], by_line: &BTreeMap<Line, Vec<usize>>) -> Vec<(i
             }
             let (a, b) = k.span();
             let (a, b) = (a.max(lo), b.min(hi));
-            if a < b {
+            // An overpass keeps its stretch where the cover is too short for 45° connectors.
+            let sides = i64::from(a > lo) + i64::from(b < hi);
+            let room = if s.class.overpass() {
+                sides * (other.c - line.c).abs()
+            } else {
+                0
+            };
+            if a + room < b {
                 out.push((a, b, other));
             }
         }
     }
     out
+}
+
+/// Where an overpass on `line`, cut at position `t` with the greater road on `other` running
+/// on towards `into` (-1: lower positions, 1: higher), joins `other` at 45° ahead of the cut:
+/// the point of a kept piece of `other` the connector reaches.
+fn slant(
+    line: Line,
+    other: Line,
+    t: i64,
+    into: i64,
+    kept: &[Seg],
+    by_line: &BTreeMap<Line, Vec<usize>>,
+) -> Option<[i64; 2]> {
+    let p = line.at(t);
+    // Along `line` towards higher positions runs direction `f`; the way on is `f` or `f + 4`.
+    let ahead = if into > 0 {
+        line.f as usize
+    } else {
+        line.f as usize + 4
+    };
+    let off = other.c - line.c;
+    let pieces = by_line.get(&other)?;
+    [t, t + off, t - off].into_iter().find_map(|u| {
+        let q = other.at(u);
+        let (k, _) = dir(p, q)?;
+        let slanted = matches!((k + 8 - ahead) % 8, 1 | 7);
+        let on = pieces.iter().any(|&i| {
+            let (lo, hi) = kept[i].span();
+            (lo..=hi).contains(&u)
+        });
+        (slanted && on).then_some(q)
+    })
 }
 
 fn half_sum(a: RoadClass, b: RoadClass) -> f32 {
