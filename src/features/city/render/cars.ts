@@ -149,6 +149,7 @@ export function carInstances(
   function update(t: Traffic, camera: Vector3) {
     const counts = [0, 0, 0];
     for (let i = 0; i < Math.min(t.count, max); i++) {
+      if (!t.live[i]) continue; // off the roads
       const d2 = (t.x[i] - camera.x) ** 2 + (t.y[i] - camera.y) ** 2 + (t.z[i] - camera.z) ** 2;
       const band = d2 <= near2 ? 0 : d2 <= mid2 ? 1 : 2;
       put(t, i, bands[band].array as Float32Array, counts[band]++);

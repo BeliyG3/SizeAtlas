@@ -2,7 +2,15 @@
 import { ROAD, type RoadKind } from "../world/map";
 import { pointOn, type RoadEdge, type RoadGraph } from "../world/roads";
 import { createJunctions, lanes, laneOffset, MIN_GAP } from "./junctions";
-import { createLocals, localIds, placeOn, type Circle, type Spots } from "./locals";
+import {
+  createLocals,
+  drifted,
+  localIds,
+  placeOn,
+  ringSpots,
+  type Circle,
+  type Spots,
+} from "./locals";
 import { advance, nextEdge, place, rng, type Allow, type Track } from "./nav";
 
 /** Speeds in m/s. */
@@ -22,7 +30,7 @@ const LOOK = MIN_GAP + SPEED.highway * HEADWAY;
 const MAX_DT = 0.25;
 // ponytail: after this many tries a car is put down where it is, even if it is too close.
 const PLACE_TRIES = 40;
-/** Seconds a car waits at a node for the lane it wants before it gives the wish up. */
+/** Seconds a car stands at a node, whatever holds it, before it looks for another way out. */
 export const STUCK = 1;
 
 /** Where a ground car starts, instead of a random spot: `lane` it is in, `want` it prefers. */
@@ -45,7 +53,12 @@ export interface Traffic {
   air: Uint8Array;
   /** How far a car has grown in after it was moved near the camera, `0…1`. */
   appear: Float32Array;
-  /** Drives on `dt` seconds; the cars keep to `around` (see `createLocals`). */
+  /** 0 for a car off the roads: more than the roads near the camera hold. Not drawn. */
+  live: Uint8Array;
+  /**
+   * Drives on `dt` seconds; the cars keep to `around` (see `createLocals`), no more ground cars
+   * on its roads than one per `CAR_SPACING` of their lanes.
+   */
   update(dt: number, around?: Circle | null): void;
 }
 
@@ -77,16 +90,18 @@ export function createTraffic(
   const nextE = new Int32Array(n).fill(-1);
   const nextF = new Uint8Array(n);
   const nextL = new Uint8Array(n);
-  const held = new Float32Array(n); // seconds standing at the node, the lane it wants not free
+  const held = new Float32Array(n); // seconds standing at the node ahead
   // When each car chose its way at the node ahead, on the traffic's clock, and its turn there.
   const since = new Float64Array(n);
   const turn = new Float64Array(n);
   let clock = 0;
+  const drivers = localIds(0, ground);
   const locals = createLocals(
     g,
     n,
-    [...localIds(0, ground), ...localIds(ground, n - ground)],
+    [...drivers, ...localIds(ground, n - ground)],
     rand,
+    drivers.length,
   );
   const out: Traffic = {
     count: n,
@@ -96,12 +111,13 @@ export function createTraffic(
     heading: new Float32Array(n),
     air: new Uint8Array(n),
     appear: locals.appear,
+    live: locals.live,
     update,
   };
   out.air.fill(1, ground);
 
   const laneAt = (i: number, edge: number) => Math.min(want[i], lanes(g.edges[edge].cls) - 1);
-  const { crowded, endNode, gapAhead, takeTurns } = createJunctions({
+  const { crowded, cutsIn, endNode, gapAhead, takeTurns, turnOf } = createJunctions({
     g,
     t,
     lane,
@@ -110,8 +126,10 @@ export function createTraffic(
     nextL,
     since,
     turn,
+    live: locals.live,
     ground,
   });
+  const live = locals.live;
 
   function put(i: number) {
     const e = g.edges[t.edge[i]];
@@ -129,7 +147,7 @@ export function createTraffic(
    * Chooses where car `i` goes at the end of its road, once, as it comes within `LOOK` of it, and
    * keeps the choice until it crosses the node, so the cars behind can see where it will be. It also
    * moves to the lane it will need there (the road ahead may be narrower), as soon as that lane is
-   * clear beside it; until then it waits at the node.
+   * clear beside it; until then it waits at the node, at most `STUCK` seconds (see `rethink`).
    */
   function plan(i: number) {
     const e = g.edges[t.edge[i]];
@@ -142,33 +160,57 @@ export function createTraffic(
       since[i] = clock;
       nextL[i] = Math.min(want[i], lanes(e.cls) - 1, lanes(g.edges[next].cls) - 1);
     }
-    if (held[i] > STUCK) giveUp(i);
+    if (held[i] > STUCK) rethink(i);
     if (lane[i] === nextL[i] || crowded(t.edge[i], t.forward[i], nextL[i], t.s[i], i)) {
       return;
     }
-    // Beside it the lane is clear; the cars ahead, across the node too, must be as far.
-    const was = lane[i];
-    lane[i] = nextL[i];
-    if (gapAhead(i) < MIN_GAP) lane[i] = was;
+    // Beside it the lane is clear; the cars ahead, across the node too, must be as far. It comes
+    // to the node anew in that lane, last in the turns but for the cars queued behind it there.
+    const was = [lane[i], since[i], turn[i]];
+    [lane[i], since[i]] = [nextL[i], clock];
+    turn[i] = turnOf(i);
+    if (gapAhead(i) < MIN_GAP || cutsIn(i)) [lane[i], since[i], turn[i]] = was;
   }
 
   /**
-   * Car `i` has stood at its node too long for the lane it wants, whose cars wait for its own
-   * lane as often as not: it keeps to its lane, out of the node by another road if the one it
-   * chose has no such lane. With no such road it waits on.
+   * Car `i` has stood at its node longer than `STUCK`, whatever held it: the lane it wants taken
+   * beside it, no room past the node, a car it lets go first. It takes a way out that is free now,
+   * in the lane it is in, at random among them; with none it waits and looks again. A ring of
+   * full roads that waits for itself would need far more cars than the cap lets onto them.
    */
-  function giveUp(i: number) {
+  function rethink(i: number) {
     held[i] = 0;
-    if (lane[i] < lanes(g.edges[nextE[i]].cls)) {
-      nextL[i] = lane[i];
-      return;
-    }
     const node = endNode(t.edge[i], t.forward[i]);
-    const other = nextEdge(g, node, t.edge[i], rand, (e) => lanes(e.cls) > lane[i]);
-    if (other === t.edge[i]) return; // only the way back
-    nextE[i] = other;
-    nextF[i] = g.edges[other].a === node ? 1 : 0;
-    nextL[i] = lane[i];
+    const was = [nextE[i], nextF[i], nextL[i]];
+    const choose = (e: number) => {
+      [nextE[i], nextF[i], nextL[i]] = [e, g.edges[e].a === node ? 1 : 0, lane[i]];
+    };
+    const exits = g.links[node];
+    const free = exits.filter((e) => {
+      if ((e === t.edge[i] && exits.length > 1) || lanes(g.edges[e].cls) <= lane[i]) return false;
+      choose(e);
+      return gapAhead(i) >= MIN_GAP;
+    });
+    if (free.length) choose(free[Math.floor(rand() * free.length)]);
+    else [nextE[i], nextF[i], nextL[i]] = was;
+  }
+
+  // How many ground cars the roads of the locals' circle hold, one per `CAR_SPACING` of their
+  // lanes; worked out again as the circle drifts.
+  let roomOf: Circle | null = null;
+  let roomFor = Infinity;
+  function capOf(c: Circle | null): number {
+    if (!c) return Infinity;
+    if (drifted(roomOf, c)) {
+      roomOf = { ...c };
+      const disc = ringSpots(g, c, drives, 0, c.r);
+      let metres = 0;
+      disc.edge.forEach((e, k) => {
+        metres += (disc.s1[k] - disc.s0[k]) * 2 * lanes(g.edges[e].cls);
+      });
+      roomFor = Math.floor(metres / CAR_SPACING);
+    }
+    return roomFor;
   }
 
   /** Drives car `i` on by `dist`, into the lane it planned when it passes the node. */
@@ -189,20 +231,24 @@ export function createTraffic(
   function update(dt: number, around: Circle | null = null) {
     const h = Math.min(dt, MAX_DT);
     clock += h;
-    for (let i = 0; i < ground; i++) plan(i);
+    for (let i = 0; i < ground; i++) if (live[i]) plan(i);
     takeTurns();
     for (let i = 0; i < ground; i++) {
+      if (!live[i]) continue;
       const free = Math.max(0, (gapAhead(i) - MIN_GAP) / HEADWAY);
       drive(i, Math.min(speedOn(g.edges[t.edge[i]].cls), free) * h);
       const atNode = t.s[i] >= g.edges[t.edge[i]].len && nextE[i] >= 0;
-      held[i] = atNode && lane[i] !== nextL[i] ? held[i] + h : 0;
+      held[i] = atNode ? held[i] + h : 0;
     }
     for (let i = ground; i < n; i++) advance(g, t, i, SPEED.air * h, rand, flies);
-    for (let i = 0; i < n; i++) put(i);
-    locals.update(dt, around, out, relocate);
+    for (let i = 0; i < n; i++) if (live[i]) put(i);
+    locals.update(dt, around, out, relocate, capOf(around));
   }
 
-  /** Moves car `i` to a spot of the locals' ring, clear of the others; false if none is. */
+  /**
+   * Moves car `i` to one of the locals' spots, with no car within `CAR_SPACING` on its lane and
+   * none beside it; false if there is no such spot.
+   */
   function relocate(i: number, spots: (allow: Allow) => Spots): boolean {
     const isAir = i >= ground;
     const ring = spots(isAir ? flies : drives);
@@ -213,9 +259,10 @@ export function createTraffic(
       put(i);
       if (
         isAir ||
-        (!crowded(t.edge[i], t.forward[i], lane[i], t.s[i], i) && !tooClose(i, ground))
+        (!crowded(t.edge[i], t.forward[i], lane[i], t.s[i], i, CAR_SPACING) && !tooClose(i, ground))
       ) {
         nextE[i] = -1;
+        held[i] = 0;
         return true;
       }
     }
@@ -230,7 +277,7 @@ export function createTraffic(
   /** Is a car of the first `upTo` going the way `i` goes, side by side within 2 m, nearer than `MIN_GAP`? */
   function tooClose(i: number, upTo: number): boolean {
     for (let j = 0; j < upTo; j++) {
-      if (j === i) continue;
+      if (j === i || !live[j]) continue;
       const dx = out.x[j] - out.x[i];
       const dz = out.z[j] - out.z[i];
       if (Math.cos(out.heading[j] - out.heading[i]) < 0.99 || Math.hypot(dx, dz) >= MIN_GAP)

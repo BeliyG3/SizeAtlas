@@ -34,24 +34,33 @@ export interface Lanes {
   since: Float64Array;
   /** Its turn there: see `takeTurns`. */
   turn: Float64Array;
+  /** 0 for a car off the roads: it holds no place on them. */
+  live: Uint8Array;
   /** Cars `0 … ground - 1` drive; the others fly and take no part. */
   ground: number;
 }
 
 export function createJunctions(s: Lanes) {
-  const { g, t, lane, nextE, nextF, nextL, since, turn, ground } = s;
+  const { g, t, lane, nextE, nextF, nextL, since, turn, live, ground } = s;
 
   /**
-   * Is a car (but `skip`) within `MIN_GAP` of this spot of this lane, counting the cars that are
+   * Is a car (but `skip`) within `gap` of this spot of this lane, counting the cars that are
    * about to enter the lane as standing before its start?
    */
-  function crowded(edge: number, forward: number, ln: number, at: number, skip: number) {
+  function crowded(
+    edge: number,
+    forward: number,
+    ln: number,
+    at: number,
+    skip: number,
+    gap = MIN_GAP,
+  ) {
     for (let j = 0; j < ground; j++) {
-      if (j === skip) continue;
+      if (j === skip || !live[j]) continue;
       if (t.edge[j] === edge && t.forward[j] === forward && lane[j] === ln) {
-        if (Math.abs(t.s[j] - at) < MIN_GAP) return true;
+        if (Math.abs(t.s[j] - at) < gap) return true;
       } else if (nextE[j] === edge && nextF[j] === forward && nextL[j] === ln) {
-        if (at + g.edges[t.edge[j]].len - t.s[j] < MIN_GAP) return true;
+        if (at + g.edges[t.edge[j]].len - t.s[j] < gap) return true;
       }
     }
     return false;
@@ -82,12 +91,13 @@ export function createJunctions(s: Lanes) {
   /**
    * Distance along the way from car `i` to car `j`, if `j` is in front of `i` at the node `i` is
    * coming to, else Infinity. In front: just past the node on the line `i` comes in on (even if `i`
-   * turns off) or on the lane `i` goes out on; or coming to the node too, having chosen its way
-   * there first (its `turn`; at the same turn the nearer one), when its line meets the one of `i`
-   * (the same lane out, or one continuing the other). Then the distance is how much nearer to the
-   * node `j` is, below zero if it is farther: `i` waits until `j` is through. First come, first
-   * served: a car that stopped as it came near the node keeps its turn, where "the nearer goes
-   * first" let every newcomer pass it for ever.
+   * turns off) or on the lane `i` goes out on; or coming to the node too, in the lane it leaves
+   * by, having chosen its way there first (its `turn`; at the same turn the nearer one), when its
+   * line meets the one of `i` (the same lane out, or one continuing the other). Then the distance
+   * is how much nearer to the node `j` is, below zero if it is farther: `i` waits until `j` is
+   * through. First come, first served: a car that stopped as it came near the node keeps its
+   * turn, where "the nearer goes first" let every newcomer pass it for ever. A car still to
+   * change lanes cannot go yet: waiting for it could close a ring through the car beside it.
    */
   function crossing(i: number, j: number, node: number): number {
     if (t.edge[j] === t.edge[i] && t.forward[j] === t.forward[i]) return Infinity;
@@ -100,6 +110,7 @@ export function createJunctions(s: Lanes) {
     }
     if (nextE[j] < 0 || endNode(t.edge[j], t.forward[j]) !== node) return Infinity;
     // j is coming to the node too
+    if (lane[j] !== nextL[j]) return Infinity;
     const d = left - (ej.len - t.s[j]);
     if (turn[j] > turn[i] || (turn[j] === turn[i] && (d < 0 || (d === 0 && j < i)))) {
       return Infinity;
@@ -120,7 +131,7 @@ export function createJunctions(s: Lanes) {
     let gap = Infinity;
     const node = endNode(t.edge[i], t.forward[i]);
     for (let j = 0; j < ground; j++) {
-      if (j === i) continue;
+      if (j === i || !live[j]) continue;
       if (t.edge[j] === t.edge[i] && t.forward[j] === t.forward[i] && lane[j] === lane[i]) {
         const d = t.s[j] - t.s[i];
         if (d < gap && (d > 0 || (d === 0 && j > i))) gap = d;
@@ -132,21 +143,40 @@ export function createJunctions(s: Lanes) {
 
   /**
    * The turn of each car at its node: the earliest choice of its lane from it back, so a car
-   * never has the turn over one queued in front of it. Every wait at a node is then for a car
-   * earlier in one order (turn, then nearness), and no ring of cars can wait on each other.
+   * never has the turn over one queued in front of it. A wait for a car coming to the node is
+   * then for one earlier in one order (turn, then nearness), never round a ring; the waits for
+   * room past the node are the traffic's to break (`STUCK`).
    */
   function takeTurns() {
-    for (let i = 0; i < ground; i++) turn[i] = nextE[i] >= 0 ? since[i] : Infinity;
-    for (let i = 0; i < ground; i++) {
-      if (nextE[i] < 0) continue;
-      for (let j = 0; j < ground; j++) {
-        const behind = t.s[j] < t.s[i] || (t.s[j] === t.s[i] && j < i);
-        const queue =
-          t.edge[j] === t.edge[i] && t.forward[j] === t.forward[i] && lane[j] === lane[i];
-        if (queue && behind && nextE[j] >= 0) turn[i] = Math.min(turn[i], since[j]);
-      }
-    }
+    for (let i = 0; i < ground; i++) turn[i] = turnOf(i);
   }
 
-  return { crowded, endNode, gapAhead, takeTurns };
+  /** The turn of car `i` as it stands now (see `takeTurns`). */
+  function turnOf(i: number): number {
+    if (nextE[i] < 0 || !live[i]) return Infinity;
+    let first = since[i];
+    for (let j = 0; j < ground; j++) {
+      const behind = t.s[j] < t.s[i] || (t.s[j] === t.s[i] && j < i);
+      const queue = t.edge[j] === t.edge[i] && t.forward[j] === t.forward[i] && lane[j] === lane[i];
+      if (queue && behind && nextE[j] >= 0 && live[j]) first = Math.min(first, since[j]);
+    }
+    return first;
+  }
+
+  /**
+   * Would a car coming to the node of `j` have to wait for `j`, as it stands now, nearer than
+   * `MIN_GAP`? A car that has just changed lanes must not cut in like that: while it waited to
+   * change, nobody waited for it.
+   */
+  function cutsIn(j: number): boolean {
+    const node = endNode(t.edge[j], t.forward[j]);
+    for (let i = 0; i < ground; i++) {
+      if (i === j || !live[i] || nextE[i] < 0 || endNode(t.edge[i], t.forward[i]) !== node)
+        continue;
+      if (crossing(i, j, node) < MIN_GAP) return true;
+    }
+    return false;
+  }
+
+  return { crowded, cutsIn, endNode, gapAhead, takeTurns, turnOf };
 }

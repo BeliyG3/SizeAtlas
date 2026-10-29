@@ -31,6 +31,15 @@ export interface Circle {
   r: number;
 }
 
+/** Has the circle moved or resized by more than `RING_MOVE` of `from` (null: none yet)? */
+export function drifted(from: Circle | null, to: Circle): boolean {
+  if (!from) return true;
+  const off = RING_MOVE * from.r;
+  return (
+    Math.abs(to.x - from.x) > off || Math.abs(to.z - from.z) > off || Math.abs(to.r - from.r) > off
+  );
+}
+
 /** The locals' radius for a camera `distance` metres from its target: nearer, smaller and denser. */
 export function localRadius(distance: number): number {
   return Math.min(2000, Math.max(150, 0.8 * distance));
@@ -137,9 +146,20 @@ type Task = (typeof TASK)[keyof typeof TASK];
  * full at once; and as the circle grows `ZOOM_OUT` times, each local goes, at a chance of the
  * new area's share, to the rim the old circle leaves, so the life thins out evenly. A moved one
  * grows in: its `appear` goes from 0 to 1 over `APPEAR` seconds.
+ *
+ * The first `capped` of `ids` are no more than the `cap` an update gives: those past it leave the
+ * roads (`live` 0) as they are looked at, and come back, put down in the circle, when the cap
+ * lets them.
  */
-export function createLocals(g: RoadGraph, n: number, ids: number[], rand: () => number) {
+export function createLocals(
+  g: RoadGraph,
+  n: number,
+  ids: number[],
+  rand: () => number,
+  capped = 0,
+) {
   const appear = new Float32Array(n).fill(1);
+  const live = new Uint8Array(n).fill(1);
   const task = new Uint8Array(n).fill(TASK.disc);
   let next = 0;
   let due = 0;
@@ -181,31 +201,36 @@ export function createLocals(g: RoadGraph, n: number, ids: number[], rand: () =>
 
   return {
     appear,
+    live,
     update(
       dt: number,
       c: Circle | null,
       at: { x: ArrayLike<number>; z: ArrayLike<number> },
       move: (i: number, spots: (allow: Allow) => Spots) => boolean,
+      cap = Infinity,
     ) {
       for (let i = 0; i < n; i++) {
         if (appear[i] < 1) appear[i] = Math.min(1, appear[i] + dt / APPEAR);
       }
       if (!c || !ids.length) return;
       follow(c);
-      const off = spotsOf && RING_MOVE * spotsOf.r;
-      if (
-        !spotsOf ||
-        Math.abs(c.x - spotsOf.x) > off! ||
-        Math.abs(c.z - spotsOf.z) > off! ||
-        Math.abs(c.r - spotsOf.r) > off!
-      ) {
+      if (drifted(spotsOf, c)) {
         spotsOf = { ...c };
         found = new Map();
       }
       due = Math.min(ids.length, due + (ids.length * dt) / RECHECK);
       for (; due >= 1; due--) {
-        const i = ids[next];
+        const k = next;
+        const i = ids[k];
         next = (next + 1) % ids.length;
+        if (k < capped && k >= cap) {
+          live[i] = 0;
+          continue;
+        }
+        if (!live[i]) {
+          if (move(i, spots[TASK.disc])) [live[i], appear[i]] = [1, 0];
+          continue;
+        }
         const kind = task[i] as Task;
         task[i] = TASK.ring;
         const stray = Math.hypot(at.x[i] - c.x, at.z[i] - c.z) > c.r;

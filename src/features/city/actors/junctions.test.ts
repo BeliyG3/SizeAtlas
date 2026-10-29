@@ -39,6 +39,7 @@ function junctionsOf(g: RoadGraph, cars: Car[]) {
     nextL: Uint8Array.from(cars, (c) => c.next?.[2] ?? 0),
     since: Float64Array.from(cars, (c) => c.since ?? 0),
     turn: new Float64Array(n),
+    live: new Uint8Array(n).fill(1),
     ground: n,
   };
   const j = createJunctions(s);
@@ -89,6 +90,40 @@ describe("createJunctions", () => {
     ]);
     expect(j.gapAhead(0)).toBe(5 - 20); // it waits until the other is through
     expect(j.gapAhead(1)).toBe(Infinity);
+  });
+
+  it("holds no one up for a car that still has to change lanes", () => {
+    // The end of a highway, every way out a street: one lane. Car 0 stands at the node in lane 1
+    // and has the first turn; car 2 beside it in lane 0 keeps it from moving over. Car 1, coming
+    // from the south the way car 0 goes, waiting for car 0 closed a ring: 2 waits for 1 (its lane
+    // out runs on from car 2's), 1 for 0, 0 for 2.
+    const end = graphOf(
+      [0, 0, -100, 0, 0, -100, 100, 0, 0, 100],
+      [
+        [1, 0, ROAD.highway],
+        [2, 0, ROAD.street],
+        [0, 3, ROAD.street],
+        [0, 4, ROAD.street],
+      ],
+    );
+    const j = junctionsOf(end, [
+      { edge: 0, s: 100, lane: 1, next: [2, true, 0], since: 1 },
+      { edge: 1, s: 92, next: [2, true, 0], since: 2 },
+      { edge: 0, s: 100, lane: 0, next: [3, true, 0], since: 3 },
+    ]);
+    expect(j.crowded(0, 1, 0, 100, 0)).toBe(true); // car 0 cannot move over
+    expect(j.gapAhead(2)).toBeLessThan(MIN_GAP); // car 2 waits for car 1
+    expect(j.gapAhead(1)).toBe(Infinity); // but car 1 does not wait for car 0
+  });
+
+  it("lets a car that changed lanes not cut in on one close to the node", () => {
+    const cars = (s: number) =>
+      junctionsOf(cross, [
+        { edge: 0, s: 100, next: [2, true, 0], since: 1 },
+        { edge: 1, s, next: [2, true, 0], since: 2 },
+      ]);
+    expect(cars(95).cutsIn(0)).toBe(true);
+    expect(cars(80).cutsIn(0)).toBe(false);
   });
 
   it("gives a car the turn of the earliest car queued behind it", () => {

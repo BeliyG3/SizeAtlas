@@ -145,6 +145,10 @@ export function trailMesh(
     const mid2 = CAR_MID * CAR_MID;
     let slots = 0;
     for (let i = 0; i < Math.min(t.count, max); i++) {
+      if (!t.live[i]) {
+        len[i] = 0; // off the roads: its trail starts afresh when it is back
+        continue;
+      }
       // The light: the tail point turned by the heading, as the model is.
       const sin = Math.sin(t.heading[i]);
       const cos = Math.cos(t.heading[i]);

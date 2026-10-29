@@ -16,6 +16,7 @@ const traffic = (xs: number[]): Traffic => ({
   heading: new Float32Array(xs.length),
   air: new Uint8Array(xs.length),
   appear: new Float32Array(xs.length).fill(1),
+  live: new Uint8Array(xs.length).fill(1),
   update: () => {},
 });
 
