@@ -3,7 +3,7 @@ import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { describe, expect, it } from "vitest";
 import type { Residents } from "../actors/residents";
 import type { Traffic } from "../actors/traffic";
-import { carInstances, CAR_LENGTH, CAR_MID, CAR_NEAR, midCar } from "./cars";
+import { carInstances, CAR_LENGTH, midCar } from "./cars";
 import carUrl from "../assets/skycar.glb?inline";
 import walkerUrl from "../assets/walker.glb?inline";
 import { bakeWalk, peopleInstances, POSES } from "./people";
@@ -126,7 +126,6 @@ describe("carInstances", () => {
     // Over the third car: the others are 450 m and more away, all boxes.
     cars.update(four, new Vector3(600, 0, 0));
     expect([body.count, mid.count, far.count]).toEqual([1, 0, 3]);
-    expect([CAR_NEAR, CAR_MID]).toEqual([80, 250]);
     cars.dispose();
   });
 

@@ -4,6 +4,9 @@ import { mapOf } from "../world/map.fixture";
 import { buildRoads, pointOn } from "../world/roads";
 import {
   advance,
+  createLocals,
+  type Allow,
+  type Spots,
   APPEAR,
   LOCAL_SHARE,
   localRadius,
@@ -141,7 +144,7 @@ describe("localRadius", () => {
 describe("ringSpots", () => {
   // A road through the centre of the circle, one that only grazes its ring and one far off.
   const g = graphOf(
-    [-1000, 0, 1000, 0, -1000, 90, 1000, 90, -1000, 500, 1000, 500],
+    [-1000, 0, 1000, 0, -1000, 80, 1000, 80, -1000, 500, 1000, 500],
     [
       [0, 1, ROAD.street],
       [2, 3, ROAD.street],
@@ -154,13 +157,13 @@ describe("ringSpots", () => {
     got.forEach((v, k) => expect(v).toBeCloseTo(want[k], 3));
   };
 
-  it("are the stretches 0.6 r … r from the centre", () => {
+  it("are the stretches 0.6 r … 0.9 r from the centre", () => {
     const spots = ringSpots(g, c);
-    const half = Math.sqrt(100 ** 2 - 90 ** 2);
+    const half = Math.sqrt(90 ** 2 - 80 ** 2);
     expect(spots.edge).toEqual([0, 0, 1]);
-    near(spots.s0, [900, 1060, 1000 - half]);
-    near(spots.s1, [940, 1100, 1000 + half]);
-    near(spots.end, [40, 80, 80 + 2 * half]);
+    near(spots.s0, [910, 1060, 1000 - half]);
+    near(spots.s1, [940, 1090, 1000 + half]);
+    near(spots.end, [30, 60, 60 + 2 * half]);
   });
 
   it("put a mover in the ring, either way, or leave it where there are none", () => {
@@ -173,7 +176,7 @@ describe("ringSpots", () => {
       const p = pointOn(g, t.edge[0], t.s[0], t.forward[0] === 1, 0);
       const d = Math.hypot(p.x, p.z);
       expect(d).toBeGreaterThanOrEqual(60 - 1e-3);
-      expect(d).toBeLessThanOrEqual(100 + 1e-3);
+      expect(d).toBeLessThanOrEqual(90 + 1e-3);
       ways.add(t.forward[0]);
     }
     expect(ways.size).toBe(2);
@@ -181,6 +184,31 @@ describe("ringSpots", () => {
     const kept = trackAt(2, 7, true);
     expect(placeOn(g, kept, 0, none, rand)).toBe(false);
     expect([kept.edge[0], kept.s[0]]).toEqual([2, 7]);
+  });
+});
+
+describe("createLocals", () => {
+  it("scans the edges for a ring only when its circle moves", () => {
+    const g = graphOf([0, 0, 5000, 0], [[0, 1, ROAD.street]]);
+    let scanned = 0;
+    const counting = () => (scanned++, true);
+    const locals = createLocals(g, 4, [0, 1, 2, 3]);
+    const at = { x: [4000, 4000, 4000, 4000], z: [0, 0, 0, 0] };
+    // Nowhere to go: the strays stay strays and ask for the ring at every look.
+    const move = (_: number, spots: (allow: Allow) => Spots) => {
+      spots(counting);
+      return false;
+    };
+    const step = (x: number, r = 1000) => {
+      scanned = 0;
+      locals.update(RECHECK, { x, z: 50_000, r }, at, move);
+      return scanned;
+    };
+    expect(step(0)).toBe(1); // one edge, once
+    expect(step(0)).toBe(0);
+    expect(step(40)).toBe(0); // within 5 % of r
+    expect(step(60)).toBe(1);
+    expect(step(60, 1100)).toBe(1);
   });
 });
 
@@ -212,7 +240,8 @@ describe("the locals", () => {
         }
       }
     }
-    expect(nearest).toBeGreaterThanOrEqual(MIN_GAP - 0.5);
+    // Exact but for the float32 positions, some 5 km from the origin.
+    expect(nearest).toBeGreaterThanOrEqual(MIN_GAP - 0.01);
     // A local strays for at most one look, `RECHECK` seconds, before it is moved back.
     for (let i = 0; i < locals(cars.count); i++) {
       expect(dist(cars, i)).toBeLessThanOrEqual(around.r + SPEED.street * RECHECK + 2);

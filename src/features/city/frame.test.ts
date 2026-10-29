@@ -46,22 +46,28 @@ describe("frame", () => {
 });
 
 describe("cameraMove", () => {
-  const on = (generation: number, island: number) => ({ generation, island });
+  const on = (generation: number, islands: number[]) => ({ generation, islands });
 
   it("jumps onto the root's island the first time a world shows", () => {
-    expect(cameraMove(null, on(4, 2))).toBe("jump");
+    expect(cameraMove(null, on(4, [3, 4]))).toBe("jump");
   });
 
-  it("flies to the island of another selected root", () => {
-    expect(cameraMove(on(4, 2), on(5, 0))).toBe("fly");
+  it("flies to the island of another selected root that was shown", () => {
+    expect(cameraMove(on(4, [3, 4, 5]), on(5, [3, 4, 5]))).toBe("fly");
   });
 
-  it("stays put while the same root is rebuilt, even if its island moved in the list", () => {
-    expect(cameraMove(on(4, 2), on(4, 2))).toBe("stay");
-    expect(cameraMove(on(4, 2), on(4, 3))).toBe("stay");
+  it("stays put while the same root is rebuilt, even if the islands changed", () => {
+    expect(cameraMove(on(4, [3, 4]), on(4, [3, 4]))).toBe("stay");
+    expect(cameraMove(on(4, [3, 4]), on(4, [2, 3, 4]))).toBe("stay");
   });
 
-  it("resets the view for another root that is no island", () => {
-    expect(cameraMove(on(4, 2), on(6, -1))).toBe("jump");
+  it("jumps for another root that is no island", () => {
+    expect(cameraMove(on(4, [3, 4]), on(6, [3, 4]))).toBe("jump");
+  });
+
+  it("jumps to a root whose island was not shown: the map is another", () => {
+    // From the drives to a folder of its own, and back.
+    expect(cameraMove(on(4, [3, 4]), on(9, [9]))).toBe("jump");
+    expect(cameraMove(on(9, [9]), on(4, [3, 4]))).toBe("jump");
   });
 });

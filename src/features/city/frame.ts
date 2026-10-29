@@ -51,19 +51,21 @@ export function frame(
   return { target, distance: Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, distance)) };
 }
 
-/** The selected root on screen and the index of its island (-1: it is no island shown). */
+/** The selected root on screen and the generations of the islands shown, in their order. */
 export interface Aim {
   generation: number;
-  island: number;
+  islands: readonly number[];
 }
 
 /**
  * What the camera does as the panel shows `next` after `shown` (null: no world on screen yet):
- * jumps onto it the first time, flies to the island of another selected root and stays put
- * while the same root is rebuilt. Another root that is no island resets the view, as before.
+ * stays put while the same root is rebuilt and flies to the island of another selected root that
+ * was shown already. Anything else jumps: the first look, a root that is no island, or one whose
+ * island is new, as the whole map is (a folder after the drives, the drives after a folder).
  */
 export function cameraMove(shown: Aim | null, next: Aim): "jump" | "fly" | "stay" {
   if (!shown) return "jump";
   if (next.generation === shown.generation) return "stay";
-  return next.island >= 0 ? "fly" : "jump";
+  const known = (a: Aim) => a.islands.includes(next.generation);
+  return known(next) && known(shown) ? "fly" : "jump";
 }

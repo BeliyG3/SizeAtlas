@@ -86,8 +86,15 @@ export const LOCAL_SHARE = 0.5;
 export const RECHECK = 0.5;
 /** A moved local grows in over this many seconds. */
 export const APPEAR = 0.5;
-/** A stray local is put back this share of the circle's radius from its centre, or farther. */
+/** A stray local is put back this share of the circle's radius from its centre, or farther... */
 export const RING_INNER = 0.6;
+/** ...and kept this far from the circle's edge, in its radius. */
+export const RING_MOVE = 0.05;
+/**
+ * ...but no farther than this share: a ring is kept while its circle moves or resizes by up to
+ * `RING_MOVE` of it, and its spots stay inside the circle all the while.
+ */
+export const RING_OUTER = 1 - 2 * RING_MOVE;
 
 /** The circle the locals keep to: around the camera's target, `r` metres wide. */
 export interface Circle {
@@ -112,7 +119,7 @@ export interface Spots {
   end: number[];
 }
 
-/** The stretches of allowed edges that lie `RING_INNER·r … r` from the circle's centre. */
+/** The stretches of allowed edges that lie `RING_INNER·r … RING_OUTER·r` from the circle's centre. */
 export function ringSpots(g: RoadGraph, c: Circle, allow?: Allow): Spots {
   const out: Spots = { edge: [], s0: [], s1: [], end: [] };
   let total = 0;
@@ -139,7 +146,7 @@ export function ringSpots(g: RoadGraph, c: Circle, allow?: Allow): Spots {
       out.s1.push(hi);
       out.end.push(total);
     };
-    const outer = cut(c.r);
+    const outer = cut(RING_OUTER * c.r);
     if (!outer) return;
     const inner = cut(RING_INNER * c.r);
     if (!inner) return add(outer[0], outer[1]);
@@ -160,8 +167,13 @@ export function placeOn(
   const total = spots.end.at(-1) ?? 0;
   if (!(total > 0)) return false;
   const u = rand() * total;
+  // The first stretch that ends past `u`.
   let k = 0;
-  while (k < spots.end.length - 1 && spots.end[k] <= u) k++;
+  for (let hi = spots.end.length - 1; k < hi;) {
+    const mid = (k + hi) >> 1;
+    if (spots.end[mid] <= u) k = mid + 1;
+    else hi = mid;
+  }
   const s = Math.min(spots.s1[k], Math.max(spots.s0[k], spots.s1[k] - (spots.end[k] - u)));
   const forward = rand() < 0.5;
   t.edge[i] = spots.edge[k];
@@ -186,6 +198,15 @@ export function createLocals(g: RoadGraph, n: number, ids: number[]) {
   const appear = new Float32Array(n).fill(1);
   let next = 0;
   let due = 0;
+  // The rings of the circle they were worked out for, each the first time a stray needed it;
+  // kept until the circle moves or resizes by more than `RING_MOVE` of it.
+  let ringOf: Circle | null = null;
+  let rings = new Map<Allow, Spots>();
+  const spots = (allow: Allow) => {
+    let s = rings.get(allow);
+    if (!s) rings.set(allow, (s = ringSpots(g, ringOf!, allow)));
+    return s;
+  };
   return {
     appear,
     update(
@@ -198,13 +219,16 @@ export function createLocals(g: RoadGraph, n: number, ids: number[]) {
         if (appear[i] < 1) appear[i] = Math.min(1, appear[i] + dt / APPEAR);
       }
       if (!c || !ids.length) return;
-      // The ring is worked out once a frame, the first time a stray needs it.
-      const rings = new Map<Allow, Spots>();
-      const spots = (allow: Allow) => {
-        let s = rings.get(allow);
-        if (!s) rings.set(allow, (s = ringSpots(g, c, allow)));
-        return s;
-      };
+      const off = ringOf && RING_MOVE * ringOf.r;
+      if (
+        !ringOf ||
+        Math.abs(c.x - ringOf.x) > off! ||
+        Math.abs(c.z - ringOf.z) > off! ||
+        Math.abs(c.r - ringOf.r) > off!
+      ) {
+        ringOf = { x: c.x, z: c.z, r: c.r };
+        rings = new Map();
+      }
       due = Math.min(ids.length, due + (ids.length * dt) / RECHECK);
       for (; due >= 1; due--) {
         const i = ids[next];

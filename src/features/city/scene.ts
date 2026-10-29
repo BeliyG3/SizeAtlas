@@ -55,14 +55,18 @@ export interface SceneEvents {
 
 export interface CityScene {
   /**
-   * Shows `world` (null: nothing) with the selected root `generation`, which is the world's
-   * island `island` (-1: none). The camera starts on that island, flies to the island of a newly
-   * selected root and is left alone while the same root is rebuilt; a new root that is no island
-   * resets it to the whole world. A world of the shown `map` (only the focus moved) is repainted
+   * Shows `world` (null: nothing) of the roots `islands` (an island each, in order) with the
+   * selected root `generation`. The camera starts on its island, flies to the island of another
+   * selected root of the islands shown and is left alone while the same root is rebuilt; it
+   * jumps to a root that is no island or whose island is new (see `cameraMove`). A world of the shown `map` (only the focus moved) is repainted
    * in place, keeping the meshes, the traffic and the hover; another map is built anew and the
    * old one freed.
    */
-  setCity: (world: World | null, generation: number, island: number) => void;
+  setCity: (
+    world: World | null,
+    generation: number,
+    islands: readonly { generation: number }[],
+  ) => void;
   setTheme: (theme: CityTheme) => void;
   /** Shows the whole archipelago. */
   reset: () => void;
@@ -162,11 +166,12 @@ export function createScene(
     shown = aim;
     if (move === "stay") return;
     scheduler.stopFly();
-    const box = aim.island >= 0 ? islandBox(on, aim.island) : null;
+    const island = aim.islands.indexOf(aim.generation);
+    const box = island >= 0 ? islandBox(on, island) : null;
     if (move === "fly" && !needsReset && box && flyToBox(box, ISLAND_FLY_MS)) return;
     // The first look, a root that is no island, a camera not placed yet or no canvas to fly in:
     // straight there.
-    resetTo = aim.island;
+    resetTo = island;
     needsReset = true;
   };
 
@@ -200,7 +205,7 @@ export function createScene(
   };
 
   return {
-    setCity(next, generation, at) {
+    setCity(next, generation, islands) {
       const sameMap = next !== null && next.map === world?.map;
       world = next;
       if (world && sameMap && island) {
@@ -214,14 +219,13 @@ export function createScene(
           const { width, height } = world.map;
           stage.setReach(REACH * Math.max(width, height, 1));
         }
-        const islands = world ? new Set(world.map.polys.map((p) => p.island)).size : 1;
-        life.populate(g, generation, islands);
+        life.populate(g, generation, islands.length);
         animate();
         events.onHover(null);
       }
       placeOutline(world?.focusBox ?? null);
       // Without a world the camera waits: the root's island has not come yet.
-      if (world) aimAt(world, { generation, island: at });
+      if (world) aimAt(world, { generation, islands: islands.map((i) => i.generation) });
       scheduler.invalidate();
     },
     setTheme(next) {

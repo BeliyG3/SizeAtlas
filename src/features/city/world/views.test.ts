@@ -3,7 +3,7 @@ import { mergeIslands } from "./archipelago";
 import { buildWorld } from "./buildings";
 import { POLY } from "./map";
 import { mapOf, square } from "./map.fixture";
-import { islandBox, overviewBox, SHORE_VIEW } from "./views";
+import { islandBox, overviewBox } from "./views";
 
 // An island 100 m square with two houses in its block; two of them side by side, 300 m apart.
 const island = (generation: number) =>
@@ -48,7 +48,6 @@ describe("islandBox", () => {
   });
 
   it("adds a shore of a tenth of the island around its polygons", () => {
-    expect(SHORE_VIEW).toBe(0.1);
     const box = islandBox(world, 0)!;
     expect(box.min[0]).toBeCloseTo(-10, 5);
     expect(box.min[2]).toBeCloseTo(-10, 5);

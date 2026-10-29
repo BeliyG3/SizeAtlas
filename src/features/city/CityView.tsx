@@ -42,11 +42,7 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
   const sizeText = useSize();
   const palette = usePalette();
   const { resolved } = useSettings();
-  const { world, islands, selectedIsland, finish } = useArchipelago(
-    roots,
-    { generation, id: selectedId },
-    onFail,
-  );
+  const { world, islands, finish } = useArchipelago(roots, { generation, id: selectedId }, onFail);
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [scene, setScene] = useState<CityScene | null>(null);
   const [status, setStatus] = useState<"ready" | "failed" | "lost">("ready");
@@ -101,9 +97,9 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
 
   useEffect(() => {
     if (!scene) return;
-    scene.setCity(world, generation, selectedIsland);
+    scene.setCity(world, generation, islands);
     finish?.();
-  }, [scene, world, generation, selectedIsland, finish]);
+  }, [scene, world, generation, islands, finish]);
 
   // The name and path once the pointer rests on a building: one request per folder.
   const hoverId = hover ? folderOf(hover.building) : null;

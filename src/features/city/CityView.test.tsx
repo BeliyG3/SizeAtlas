@@ -104,7 +104,7 @@ describe("CityView", () => {
     expect(texts()).toContain("city.reset");
     // No island yet: the map is still being worked out.
     expect(texts()).toContain("city.building");
-    expect(scene.setCity).toHaveBeenCalledWith(null, 1, 0);
+    expect(scene.setCity).toHaveBeenCalledWith(null, 1, islands);
     expect(scene.setTheme).toHaveBeenCalledWith({
       palette: expect.objectContaining({ dirFill: "#20232b" }),
       background: "#181818",
