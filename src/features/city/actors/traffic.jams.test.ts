@@ -228,8 +228,8 @@ describe("waiting at a node", () => {
       ...queue(1, 15, 1 + 14 * MIN_GAP, MIN_GAP),
     ];
     let held = 0;
-    for (let seed = 1; seed <= 6; seed++) {
-      const t = createTraffic(g, withGround(start.length), seed, start);
+    for (let seed = 1; seed <= 10; seed++) {
+      const t = createTraffic(g, start.length, seed, start); // no highway: none fly
       const stood = standsBefore(t, 0, 20, 30);
       if (stood > STUCK / 2) held++;
       expect(stood, `seed ${seed}`).toBeLessThan(STUCK + 0.5);
