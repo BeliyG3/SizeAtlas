@@ -2,14 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useT } from "../../../i18n/react";
 import type { CitySnapshot } from "../scene";
 
-export interface PlayStart {
-  city: CitySnapshot;
-  /** The sky: the page background when the game started. */
-  background: string;
-}
-
 interface Props {
-  start: PlayStart;
+  /** The world as the panel showed it when the game started. */
+  city: CitySnapshot;
   /** The game is over and the window is back from full screen. */
   onExit: () => void;
 }
@@ -18,10 +13,11 @@ interface Props {
  * The game over the whole window: a modal dialog in the top layer, so the app under it takes no
  * keys or clicks and its own shortcuts stand aside. three loads with the game, on entry.
  */
-export function PlayView({ start, onExit }: Props) {
+export function PlayView({ city, onExit }: Props) {
   const { t } = useT();
   const [dialog, setDialog] = useState<HTMLDialogElement | null>(null);
   const latest = useRef(onExit);
+  const stopGame = useRef<(() => Promise<void>) | null>(null);
   useEffect(() => {
     latest.current = onExit;
   });
@@ -31,24 +27,33 @@ export function PlayView({ start, onExit }: Props) {
     if (!dialog || !canvas) return;
     dialog.showModal();
     let cancelled = false;
-    let stop: (() => void) | null = null;
     const exit = () => latest.current();
     import("./game").then(
       ({ startGame }) => {
-        if (!cancelled) stop = startGame(canvas, start.city, start.background, exit);
+        if (!cancelled) stopGame.current = startGame(canvas, city, exit);
       },
       () => !cancelled && exit(),
     );
     return () => {
       cancelled = true;
-      stop?.();
+      void stopGame.current?.();
+      stopGame.current = null;
       dialog.close();
     };
-  }, [dialog, start]);
+  }, [dialog, city]);
+
+  // The browser may still close the dialog itself (a repeated Esc): that leaves the game too. A
+  // close this view made is queued and finds the dialog shown again, or the view gone.
+  const onClose = (e: { currentTarget: HTMLDialogElement }) => {
+    if (e.currentTarget.open) return;
+    const stop = stopGame.current;
+    stopGame.current = null;
+    void (stop ? stop() : Promise.resolve()).then(() => latest.current());
+  };
 
   return (
     // Esc is the game's: it leaves full screen first, then closes this.
-    <dialog ref={setDialog} className="play" onCancel={(e) => e.preventDefault()}>
+    <dialog ref={setDialog} className="play" onCancel={(e) => e.preventDefault()} onClose={onClose}>
       <canvas aria-label={t("city.label")} />
       <p className="play-hint">{t("play.exitHint")}</p>
     </dialog>

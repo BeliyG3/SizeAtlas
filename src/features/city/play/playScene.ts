@@ -3,9 +3,10 @@
  * from the snapshot taken on entry, and for now a free camera, drawn between physics steps.
  */
 import { PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
+import { LOOK } from "../look";
 import { createLife, type Limits } from "../panel/life";
-import { addLights } from "../panel/stage";
 import { islandMeshes } from "../render/island";
+import { addLights } from "../render/lighting";
 import type { CitySnapshot } from "../scene";
 import { overviewBox } from "../world/views";
 import { lerpFly, startFly, stepFly, turnFly } from "./flyCamera";
@@ -29,11 +30,7 @@ export interface PlayScene {
 }
 
 /** Throws when WebGL 2 is not available. */
-export function createPlayScene(
-  canvas: HTMLCanvasElement,
-  city: CitySnapshot,
-  background: string,
-): PlayScene {
+export function createPlayScene(canvas: HTMLCanvasElement, city: CitySnapshot): PlayScene {
   const renderer = new WebGLRenderer({ canvas, antialias: true });
   const release = () => {
     renderer.dispose();
@@ -41,7 +38,7 @@ export function createPlayScene(
     renderer.forceContextLoss();
   };
   try {
-    return setUp(renderer, canvas, city, background, release);
+    return setUp(renderer, canvas, city, release);
   } catch (e) {
     release();
     throw e;
@@ -52,10 +49,9 @@ function setUp(
   renderer: WebGLRenderer,
   canvas: HTMLCanvasElement,
   city: CitySnapshot,
-  background: string,
   release: () => void,
 ): PlayScene {
-  renderer.setClearColor(background);
+  renderer.setClearColor(LOOK.sky);
   const scene = new Scene();
   addLights(scene);
   const { width, height } = city.world.map;
@@ -90,6 +86,16 @@ function setUp(
   // A resize redraws at once, so a paused game is never left blank.
   const resized = new ResizeObserver(render);
   resized.observe(canvas);
+  // Moving the window to a monitor with another scale changes the ratio but not the size.
+  let ratioQuery: MediaQueryList | null = null;
+  const onRatio = () => {
+    ratioQuery?.removeEventListener("change", onRatio);
+    ratioQuery = matchMedia(`(resolution: ${devicePixelRatio}dppx)`);
+    ratioQuery.addEventListener("change", onRatio);
+    applied = { w: 0, h: 0 };
+    render();
+  };
+  onRatio();
 
   return {
     look(look) {
@@ -111,6 +117,7 @@ function setUp(
     },
     dispose() {
       resized.disconnect();
+      ratioQuery?.removeEventListener("change", onRatio);
       life.dispose();
       scene.remove(island.group);
       island.dispose();

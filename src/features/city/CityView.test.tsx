@@ -60,7 +60,6 @@ const fakeScene = () => ({
   setCity: vi.fn(),
   setTheme: vi.fn(),
   reset: vi.fn(),
-  snapshot: vi.fn((): CitySnapshot | null => null),
   setCovered: vi.fn(),
   dispose: vi.fn(),
 });
@@ -127,9 +126,11 @@ describe("CityView", () => {
     const world = { map: {} } as unknown as World;
     const city = { world, graph: {}, seed: 1, islands: 2 } as unknown as CitySnapshot;
 
-    async function start() {
+    async function start(shown: CitySnapshot | null = null) {
       const scene = fakeScene();
       vi.mocked(createScene).mockReturnValue(scene);
+      // As the scene does: what can be played on, after each city.
+      scene.setCity.mockImplementation(() => vi.mocked(createScene).mock.calls[0][2].onCity(shown));
       render();
       (canvas()!.props.ref as (el: unknown) => void)({});
       render();
@@ -145,6 +146,17 @@ describe("CityView", () => {
       expect(button()!.props.disabled).toBe(true);
     });
 
+    it("is off while the scene has nothing to play on (a world without roads)", async () => {
+      vi.mocked(useArchipelago).mockReturnValue({
+        world,
+        islands,
+        selectedIsland: 0,
+        finish: null,
+      });
+      await start(null);
+      expect(button()!.props.disabled).toBe(true);
+    });
+
     it("starts the game on the shown world and covers the panel until it is over", async () => {
       vi.mocked(useArchipelago).mockReturnValue({
         world,
@@ -152,14 +164,13 @@ describe("CityView", () => {
         selectedIsland: 0,
         finish: null,
       });
-      const scene = await start();
-      scene.snapshot.mockReturnValue(city);
+      const scene = await start(city);
       expect(button()!.props.disabled).toBe(false);
       expect(scene.setCovered).toHaveBeenLastCalledWith(false);
       (button()!.props.onClick as () => void)();
       render();
       const play = elements(tree).find((el) => el.type === PlayView)!;
-      expect(play.props.start).toEqual({ city, background: "#181818" });
+      expect(play.props.city).toBe(city);
       expect(scene.setCovered).toHaveBeenLastCalledWith(true);
       (play.props.onExit as () => void)();
       render();

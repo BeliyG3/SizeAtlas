@@ -48,6 +48,8 @@ export interface SceneEvents {
   onPick: (building: Building) => void;
   /** The WebGL context was lost (true) or restored (false). */
   onLost: (lost: boolean) => void;
+  /** The world the game can start on now, after each `setCity`; null without one. */
+  onCity: (city: CitySnapshot | null) => void;
 }
 
 export interface CityScene {
@@ -67,8 +69,6 @@ export interface CityScene {
   setTheme: (theme: CityTheme) => void;
   /** Shows the whole archipelago. */
   reset: () => void;
-  /** The world shown now, null without one. */
-  snapshot: () => CitySnapshot | null;
   /** The game covers the panel: no frames are drawn until it is uncovered. */
   setCovered: (covered: boolean) => void;
   dispose: () => void;
@@ -230,6 +230,7 @@ export function createScene(
         events.onHover(null);
       }
       if (city && world) city = { ...city, world };
+      events.onCity(city);
       placeOutline(world?.focusBox ?? null);
       // Without a world the camera waits: the root's island has not come yet.
       if (world) aimAt(world, { generation, islands: islands.map((i) => i.generation) });
@@ -246,7 +247,6 @@ export function createScene(
       needsReset = true;
       scheduler.invalidate();
     },
-    snapshot: () => city,
     setCovered(covered) {
       stage.setCovered(covered);
     },

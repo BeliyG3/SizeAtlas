@@ -2,17 +2,10 @@
  * The panel's stage: renderer, camera, orbit controls and lights, kept to the canvas size and
  * pixel ratio, with the WebGL context loss and drawing only while the canvas can be seen.
  */
-import {
-  AmbientLight,
-  DirectionalLight,
-  MOUSE,
-  PerspectiveCamera,
-  Scene,
-  Vector3,
-  WebGLRenderer,
-} from "three";
+import { MOUSE, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { frame, MAX_DISTANCE, MIN_DISTANCE, type Box } from "../frame";
+import { addLights } from "../render/lighting";
 import { createScheduler, type Scheduler } from "../scheduler";
 
 const FOV = 45;
@@ -45,14 +38,6 @@ export interface StageEvents {
   onLost: (lost: boolean) => void;
   /** After a restore: three rebuilt its GL state, so the clear colour is set again. */
   onRestored: () => void;
-}
-
-/** The city's light: a soft fill and one sun. The game lights its scene the same way. */
-export function addLights(scene: Scene) {
-  scene.add(new AmbientLight(0xffffff, 0.6 * Math.PI));
-  const sun = new DirectionalLight(0xffffff, 0.5 * Math.PI);
-  sun.position.set(40, 100, 25);
-  scene.add(sun);
 }
 
 /** Throws when WebGL 2 is not available. */

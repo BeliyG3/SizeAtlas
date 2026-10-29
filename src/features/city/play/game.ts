@@ -5,34 +5,42 @@
  */
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { CitySnapshot } from "../scene";
-import { createInput, type Input } from "./input";
+import { createInput } from "./input";
 import { FIXED } from "./loop";
 import { createPlayScene, type PlayScene } from "./playScene";
 import { createSession } from "./session";
 
 const away = () => document.hidden || !document.hasFocus();
 
+async function setFullscreen(on: boolean) {
+  try {
+    await getCurrentWindow().setFullscreen(on);
+  } catch (e) {
+    // A window left in full screen is worth a trace; the session carries on either way.
+    if (!on) console.warn("Could not leave full screen", e);
+    throw e;
+  }
+}
+
 /**
  * Starts the game on `canvas`. `onExit` runs once the window is back from full screen: after Esc,
- * or when the game could not start. Returns the stop function, for an unmount.
+ * or when the game could not start. Returns the stop function, for an unmount or a closed layer:
+ * it leaves full screen and resolves once the window is back. `onExit` is not called by it.
  */
 export function startGame(
   canvas: HTMLCanvasElement,
   city: CitySnapshot,
-  background: string,
   onExit: () => void,
-): () => void {
-  const session = createSession({
-    setFullscreen: async (on) => getCurrentWindow().setFullscreen(on),
-  });
+): () => Promise<void> {
+  const session = createSession({ setFullscreen });
   let scene: PlayScene;
   try {
-    scene = createPlayScene(canvas, city, background);
+    scene = createPlayScene(canvas, city);
   } catch {
     queueMicrotask(onExit);
-    return () => {};
+    return () => Promise.resolve();
   }
-  const input: Input = createInput(canvas);
+  const input = createInput(canvas);
   let frame = 0;
   let stopped = false;
 
@@ -68,8 +76,14 @@ export function startGame(
     run();
   };
   const onVisibility = () => (document.hidden ? pause() : resume());
+  // A reload or a closed window: put it back now, there is no later.
+  const onPageHide = () => {
+    stop();
+    void setFullscreen(false).catch(() => undefined);
+  };
   window.addEventListener("blur", pause);
   window.addEventListener("focus", resume);
+  window.addEventListener("pagehide", onPageHide);
   document.addEventListener("visibilitychange", onVisibility);
 
   const stop = () => {
@@ -78,6 +92,7 @@ export function startGame(
     halt();
     window.removeEventListener("blur", pause);
     window.removeEventListener("focus", resume);
+    window.removeEventListener("pagehide", onPageHide);
     document.removeEventListener("visibilitychange", onVisibility);
     input.dispose();
     scene.dispose();
@@ -100,6 +115,6 @@ export function startGame(
 
   return () => {
     stop();
-    void session.leave();
+    return session.leave();
   };
 }

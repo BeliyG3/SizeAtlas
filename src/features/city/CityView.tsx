@@ -4,8 +4,8 @@ import { useT } from "../../i18n/react";
 import type { Palette } from "../../palette";
 import { usePalette, useSettings, useSize } from "../../settings/react";
 import { placePopup } from "../duplicates/viewer/hover";
-import { PlayView, type PlayStart } from "./play/PlayView";
-import type { CityScene, CityTheme, Hover } from "./scene";
+import { PlayView } from "./play/PlayView";
+import type { CityScene, CitySnapshot, CityTheme, Hover } from "./scene";
 import { useArchipelago } from "./useArchipelago";
 import type { Building } from "./world/buildings";
 import "./city.css";
@@ -48,7 +48,9 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
   const [scene, setScene] = useState<CityScene | null>(null);
   const [status, setStatus] = useState<"ready" | "failed" | "lost">("ready");
   const [hover, setHover] = useState<Hover | null>(null);
-  const [play, setPlay] = useState<PlayStart | null>(null);
+  // The world with roads the scene shows, to play on, and the one the game is playing.
+  const [shown, setShown] = useState<CitySnapshot | null>(null);
+  const [play, setPlay] = useState<CitySnapshot | null>(null);
   const [tip, setTip] = useState<{
     generation: number;
     id: number;
@@ -78,6 +80,7 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
             if (picked) latest.current.onSelect(picked.generation, folderOf(building));
           },
           onLost: (lost) => setStatus(lost ? "lost" : "ready"),
+          onCity: setShown,
         });
         setScene(made);
       })
@@ -88,6 +91,7 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
       cancelled = true;
       made?.dispose();
       setScene(null);
+      setShown(null);
       setHover(null);
     };
   }, [canvas]);
@@ -163,13 +167,7 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
       />
       <div className="city-buttons">
         {scene && (
-          <button
-            disabled={!world}
-            onClick={() => {
-              const city = scene.snapshot();
-              if (city) setPlay({ city, background: readTheme(palette).background });
-            }}
-          >
+          <button disabled={!shown} onClick={() => setPlay(shown)}>
             {t("city.play")}
           </button>
         )}
@@ -193,7 +191,7 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
           </div>
         </div>
       )}
-      {play && <PlayView start={play} onExit={() => setPlay(null)} />}
+      {play && <PlayView city={play} onExit={() => setPlay(null)} />}
     </div>
   );
 }

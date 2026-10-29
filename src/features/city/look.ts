@@ -1,5 +1,7 @@
 /** The look of city v2: the night palette ("variant A") and the drawing order of its flat layers. */
 export const LOOK = {
+  /** The game's sky: the city is always at night. */
+  sky: "#03060c",
   ground: "#03060c",
   body: "#0a121e",
   wire: "#eaf4ff",
