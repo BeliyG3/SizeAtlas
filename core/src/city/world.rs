@@ -5,9 +5,9 @@ use std::cmp::Reverse;
 use std::f32::consts::PI;
 
 /// Island `i` (by size) stands on the ray `i · SPIRAL` from the biggest, radians (137.5°).
-const SPIRAL: f32 = 137.5 * PI / 180.0;
+pub(crate) const SPIRAL: f32 = 137.5 * PI / 180.0;
 /// The strait between the biggest island and each other one, metres.
-const STRAIT: f32 = 110.0;
+pub(crate) const STRAIT: f32 = 110.0;
 
 /// Radius of the circle as big as the island's land and empty space, metres.
 fn radius((used, free): (u64, u64)) -> f32 {
