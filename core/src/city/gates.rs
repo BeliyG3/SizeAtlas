@@ -2,13 +2,18 @@
 //! from its junction onto the other highways.
 
 use super::CELL;
+use super::chamfer::TARGET;
 use super::grid::Grid;
-use super::net::{Line, Net};
+use super::net::{Line, Net, STEP};
 use super::path::{apart, corners, point_line, point_segment};
 use std::f32::consts::FRAC_PI_4;
 
 /// Length of a gate's straight, metres.
 pub(crate) const GATE: f32 = 90.0;
+/// A gate's straight is searched this much longer, metres, so that it still runs `GATE` after
+/// the cut of a sharp turn at its junction (`TARGET / √2`) and a route that starts back within
+/// its cell of the grid; its junction is then pinned at `GATE` (see [`super::highways`]).
+const SPARE: f32 = TARGET * std::f32::consts::FRAC_1_SQRT_2 + STEP;
 /// A junction ramps onto this share of the other highways, rounded up.
 const RAMP_SHARE: f32 = 0.5;
 /// A ramp ends at least this far from its own highway, metres (a highway's width).
@@ -19,10 +24,10 @@ const GATE_GAP: f32 = 32.0;
 const ON: f32 = 1e-2;
 
 /// The gate facing `a` (radians): its shore end, its junction and its outward direction, the
-/// multiple of 45° nearest to `a`. The straight lies on the land for `GATE` metres back from the
-/// land edge (less only where the land has no such run), the core reaches its junction, it keeps
-/// `GATE_GAP` from the straights `taken` (shore end, junction), and of all such straights its
-/// shore end lies the farthest along `a` from `core`.
+/// multiple of 45° nearest to `a`. The straight lies on the land for `GATE + SPARE` metres back
+/// from the land edge (less only where the land has no such run), the core reaches its
+/// junction, it keeps `GATE_GAP` from the straights `taken` (shore end, junction), and of all
+/// such straights its shore end lies the farthest along `a` from `core`.
 pub(crate) fn gate(
     land: &Grid<bool>,
     net: &Net,
@@ -37,7 +42,7 @@ pub(crate) fn gate(
     let out = [step[0] / size, step[1] / size];
     let d = [a.cos(), a.sin()];
     // Land cells a straight needs behind its last one.
-    let need = (GATE / size + 0.5).ceil() as isize;
+    let need = ((GATE + SPARE) / size + 0.5).ceil() as isize;
     let (w, h) = (land.w as isize, land.h as isize);
     let dry =
         |x: isize, y: isize| x >= 0 && y >= 0 && x < w && y < h && land.data[(y * w + x) as usize];
@@ -56,7 +61,7 @@ pub(crate) fn gate(
             (x as f32 + 0.5) * CELL + 0.5 * step[0],
             (y as f32 + 0.5) * CELL + 0.5 * step[1],
         ];
-        let straight = ((n - 0.5) * size).min(GATE);
+        let straight = ((n - 0.5) * size).min(GATE + SPARE);
         let key = (
             straight,
             (shore[0] - core[0]) * d[0] + (shore[1] - core[1]) * d[1],

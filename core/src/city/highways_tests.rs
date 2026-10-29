@@ -1,6 +1,5 @@
 use super::*;
 use crate::city::CELL;
-use crate::city::chamfer::TARGET;
 use crate::city::gates::GATE;
 use crate::city::grid::distance;
 use crate::city::land::{land, seeds};
@@ -243,9 +242,8 @@ fn a_gate_runs_straight_for_90_m() {
     for (g, out, _) in &hw.gates {
         let (shore, junction) = (hw.lines[*g][0], hw.lines[*g][1]);
         let straight = sub(shore, junction);
-        // Less the cut of a sharp turn at the junction.
         assert!(
-            len(straight) <= GATE + 1e-2 && len(straight) >= GATE - TARGET,
+            (len(straight) - GATE).abs() < 1e-2,
             "{g}: {}",
             len(straight)
         );

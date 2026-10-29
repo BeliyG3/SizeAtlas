@@ -1,10 +1,11 @@
 //! The overpasses of the test islands (highways, the ring, ramps) turn at most 45°.
 
-use super::island;
 use super::tests::all;
+use super::{island, loose_ends};
 use crate::city::graph::Edge;
 use crate::city::lattice::UNIT;
 use crate::city::map::Island;
+use crate::city::path::apart;
 use crate::city::plan::{Folder, IslandInput};
 use crate::city::runs::SPECK;
 use crate::city::test_sets::{eight, five, five_real, four, four_real, three, three_real};
@@ -87,6 +88,17 @@ fn highways_turn_at_most_45() {
                 "set {s} island {k}: sharp turns at {sharp:?}"
             );
         }
+    }
+}
+
+#[test]
+fn smoothing_leaves_no_street_dead_end() {
+    for (k, (island, trace)) in all().iter().enumerate() {
+        let near = |p: [f32; 2]| trace.loose.iter().any(|q| apart(p, *q) < 1e-3);
+        let new: Vec<_> = (loose_ends(&island.nodes, &island.edges).into_iter())
+            .filter(|&p| !near(p))
+            .collect();
+        assert!(new.is_empty(), "island {k}: new dead ends at {new:?}");
     }
 }
 

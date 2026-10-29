@@ -2,9 +2,10 @@
 //! neighbouring islands with the ramps of their junctions.
 
 use super::chamfer::chamfer;
-use super::gates::{gate, ramps};
+use super::gates::{GATE, gate, ramps};
 use super::grid::Grid;
 use super::net::{Line, Net};
+use super::path::apart;
 use super::ring::ring;
 use std::f32::consts::{PI, TAU};
 
@@ -64,7 +65,9 @@ pub(crate) fn highways(
     }
     for (route, shore) in net.routes(&starts, core).into_iter().zip(shores) {
         let line: Line = shore.into_iter().chain(route).collect();
-        out.lines.push(chamfer(&line));
+        let line = chamfer(&line);
+        out.lines
+            .push(if shore.is_some() { pin(line) } else { line });
     }
     for (g, ..) in &out.gates {
         let more = ramps(land, &net, &out.lines, *g);
@@ -72,6 +75,22 @@ pub(crate) fn highways(
     }
     out.ring.extend(ring(dist, core).map(|r| chamfer(&r)));
     out
+}
+
+/// A gate's `line` with its junction `GATE` along the straight from the shore, where the
+/// straight runs on past that.
+fn pin(mut line: Line) -> Line {
+    let (shore, end) = (line[0], line[1]);
+    let len = apart(shore, end);
+    if len > GATE + 1e-3 {
+        let t = GATE / len;
+        let at = [
+            shore[0] + t * (end[0] - shore[0]),
+            shore[1] + t * (end[1] - shore[1]),
+        ];
+        line.insert(1, at);
+    }
+    line
 }
 
 /// The six highway directions (radians) and the neighbours each faces: every neighbour turns

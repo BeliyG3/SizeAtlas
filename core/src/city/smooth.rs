@@ -6,7 +6,7 @@ use super::chamfer::{MIN, TARGET};
 use super::graph::Edge;
 use super::lattice::{P, SNAP, dir, metres, step, units};
 use super::road::RoadClass;
-use super::runs::unit;
+use super::runs::{View, unit};
 use super::smooth_graph::Graph;
 use std::collections::{HashMap, HashSet};
 
@@ -45,10 +45,11 @@ pub(crate) fn smooth(
     let mut failed = HashSet::new();
     let first = g.view().sharp(&failed).len();
     for _ in 0..ROUNDS * first {
-        let Some(&(u, k)) = g.view().sharp(&failed).first() else {
+        let view = g.view();
+        let Some(&(u, k)) = view.sharp(&failed).first() else {
             break;
         };
-        if !g.cut(u, k) {
+        if !g.cut(&view, u, k) {
             failed.insert((u, k));
         }
     }
@@ -75,9 +76,9 @@ pub(crate) fn smooth(
 /// An edge a sharp turn may bend into: the node it leaves from, its direction, its run.
 type Partner = (u32, usize, Vec<(usize, i64)>);
 
-/// A straight run of overpass edges from a node: the node, the direction, its edges (see
-/// [`super::runs::View::run`]).
-type Run<'a> = (u32, usize, &'a [(usize, i64)]);
+/// A straight run of overpass edges from a node: the node, the direction, and the steps a cut
+/// may take along it.
+type Run = (u32, usize, i64);
 
 /// How far a cut may take back along a straight run of `len` metres.
 fn room(len: f32) -> f32 {
@@ -93,9 +94,9 @@ fn cross(u: P, v: P) -> i64 {
 }
 
 impl Graph {
-    /// Cuts the turn of the edge leaving node `u` along `k`; `false` when there is no room.
-    fn cut(&mut self, u: u32, k: usize) -> bool {
-        let view = self.view();
+    /// Cuts the turn of the edge leaving node `u` along `k` (as `view` sees the graph);
+    /// `false` when there is no room.
+    fn cut(&mut self, view: &View, u: u32, k: usize) -> bool {
         let g = view.group[u as usize];
         let leaving = &view.leaving[&g];
         let turn = |j: usize| {
@@ -117,22 +118,37 @@ impl Graph {
         if run_e.is_empty() || gate(u, &run_e) {
             return false;
         }
-        // Keeping `MIN` of each run first, then up to the far ends of the runs.
-        let found = [true, false].into_iter().find_map(|keep| {
-            partners.iter().find_map(|(w, j, run_f)| {
-                let (s, s2, a, b) = self.fit((u, k, &run_e), (*w, *j, run_f), keep)?;
-                (!self.reaches_held(u, &run_e, s)).then(|| (*w, run_f.clone(), s, s2, a, b))
-            })
-        });
-        let Some((w, run_f, s, s2, a, b)) = found else {
-            return self.drop_short(u, &run_e);
-        };
-        let class = self.edges[run_e[0].0].map_or(RoadClass::Ramp, |e| e.class);
         let members: Vec<u32> = (0..self.pts.len() as u32)
             .filter(|&m| view.group[m as usize] == g)
             .collect();
         let held = members.iter().any(|&m| self.is_held(m));
         let corner = leaving.len() == 2 && !held && self.only_overpasses(&members);
+        // How far each run may go: all of `e`'s run to the cut goes, and `f`'s at a corner.
+        let free_e = view.free(&self.edges, u, &run_e);
+        let free = |w: u32, r: &[(usize, i64)]| {
+            let dry = (r.iter())
+                .take_while(|x| self.edges[x.0].is_some_and(|e| !e.bridge))
+                .last();
+            if corner {
+                view.free(&self.edges, w, r)
+            } else {
+                dry.map_or(0, |x| x.1)
+            }
+        };
+        // Keeping `MIN` of each run first, then up to the far ends of the runs.
+        let found = [true, false].into_iter().find_map(|keep| {
+            partners.iter().find_map(|(w, j, run_f)| {
+                let e = (u, k, free_e);
+                let (s, s2, a, b) = self.fit(e, (*w, *j, free(*w, run_f)), keep)?;
+                let held =
+                    self.reaches_held(u, &run_e, s) || (corner && self.reaches_held(*w, run_f, s2));
+                (!held).then(|| (*w, run_f.clone(), s, s2, a, b))
+            })
+        });
+        let Some((w, run_f, s, s2, a, b)) = found else {
+            return self.drop_short(view, u, &run_e);
+        };
+        let class = self.edges[run_e[0].0].map_or(RoadClass::Ramp, |e| e.class);
         let a = self.take(u, &run_e, s, a, true);
         let b = self.take(w, &run_f, s2, b, corner);
         if corner {
@@ -155,16 +171,13 @@ impl Graph {
     /// Where the run `e` leaving node `u` along `k` and the run `f` leaving `w` along `j` are
     /// cut, steps back along each, and the ends of the cut: `a = u + s·vk`, `b = w + s'·vj`,
     /// with `b - a = t·(vj - vk)` at 45° to both. From `w - u = α·vj + β·vk`, `s = t + β` and
-    /// `s' = t - α` (all doubled to stay whole). A cut stays off the bridges of a run; with
-    /// `keep`, it leaves [`room`] of the run before them, else it may reach them. `None`
-    /// without room.
+    /// `s' = t - α` (all doubled to stay whole). Each run gives the steps the cut may take
+    /// along it (see [`View::free`]); with `keep`, the cut leaves [`room`] of them, else it may
+    /// take them all. `None` without room.
     fn fit(&self, e: Run, f: Run, keep: bool) -> Option<(i64, i64, P, P)> {
-        let ((u, k, run_e), (w, j, run_f)) = (e, f);
-        let len = |r: &[(usize, i64)], k: usize| {
-            let dry = (r.iter())
-                .take_while(|x| self.edges[x.0].is_some_and(|e| !e.bridge))
-                .last();
-            let len = dry.map_or(0, |x| x.1) as f32 * unit(k);
+        let ((u, k, free_e), (w, j, free_f)) = (e, f);
+        let len = |free: i64, k: usize| {
+            let len = free as f32 * unit(k);
             if keep { room(len) } else { len }
         };
         let (vk, vj) = (step(k), step(j));
@@ -179,8 +192,8 @@ impl Graph {
         let want = (std::f32::consts::SQRT_2 * TARGET / unit(k)) as i64;
         let lo = 1.max(-b2).max(a2);
         let hi = want
-            .min((2.0 * len(run_e, k) / unit(k)) as i64 - b2)
-            .min((2.0 * len(run_f, j) / unit(j)) as i64 + a2);
+            .min((2.0 * len(free_e, k) / unit(k)) as i64 - b2)
+            .min((2.0 * len(free_f, j) / unit(j)) as i64 + a2);
         let ends = |t2: i64| {
             let (s, s2) = ((t2 + b2) / 2, (t2 - a2) / 2);
             let a = [pu[0] + s * vk[0], pu[1] + s * vk[1]];
@@ -199,7 +212,7 @@ impl Graph {
 
     /// Takes away the run `r` from `u` when it is too short to bend and lies under another
     /// overpass's deck (under `DECK`), its two ends still joined without it; `false` otherwise.
-    fn drop_short(&mut self, u: u32, r: &[(usize, i64)]) -> bool {
+    fn drop_short(&mut self, view: &View, u: u32, r: &[(usize, i64)]) -> bool {
         // The far end of the run and the run's direction.
         let mut end = u;
         for &(i, _) in r {
@@ -213,8 +226,13 @@ impl Graph {
         let Some((k, steps)) = dir(pu, pe) else {
             return false;
         };
-        let bridged = r.iter().any(|x| self.edges[x.0].is_some_and(|e| e.bridge));
-        if steps as f32 * unit(k) >= DECK || bridged {
+        // Bridges, and the streets ending on the run or at its end, stay.
+        let whole = r
+            .last()
+            .is_some_and(|x| view.free(&self.edges, u, r) == x.1);
+
+        let loose = view.others[end as usize] == 1 && view.around[end as usize].len() == 1;
+        if steps as f32 * unit(k) >= DECK || !whole || loose {
             return false;
         }
         let kept: Vec<(usize, Option<Edge>)> = r.iter().map(|x| (x.0, self.edges[x.0])).collect();

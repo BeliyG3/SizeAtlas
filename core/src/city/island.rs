@@ -45,6 +45,9 @@ pub(super) struct Trace {
     /// The lots as the blocks made them, and as the map keeps them.
     pub placed: Vec<LotInfo>,
     pub kept: Rehomed,
+    /// The loose ends of the streets and lanes before the overpasses were smoothed, in the
+    /// map's frame.
+    pub loose: Vec<[f32; 2]>,
 }
 
 /// [`island`], and what the tests check it against.
@@ -87,6 +90,7 @@ pub(super) fn assemble(input: &IslandInput) -> (Island, Trace) {
             near.map(move |p| (p, k))
         })
         .collect();
+    let loose = loose_ends(&nodes, &edges);
     let (nodes, edges) = smooth(nodes, edges, &gate_ends);
     let (nodes, edges, dropped) = keep_connected(nodes, edges, core);
     let mut lot = blocks.lot.clone();
@@ -191,8 +195,26 @@ pub(super) fn assemble(input: &IslandInput) -> (Island, Trace) {
             .collect(),
         placed: blocks.lots,
         kept,
+        loose: (loose.iter())
+            .map(|p| [p[0] - shift[0], p[1] - shift[1]])
+            .collect(),
     };
     (out, trace)
+}
+
+/// The nodes where a street or a lane ends with no other road.
+pub(super) fn loose_ends(nodes: &[[f32; 2]], edges: &[Edge]) -> Vec<[f32; 2]> {
+    let mut deg = vec![(0, false); nodes.len()];
+    for e in edges {
+        for n in [e.a as usize, e.b as usize] {
+            deg[n].0 += 1;
+            deg[n].1 |= e.class.overpass();
+        }
+    }
+    (deg.iter().zip(nodes))
+        .filter(|((d, over), _)| *d == 1 && !over)
+        .map(|(_, &p)| p)
+        .collect()
 }
 
 fn poly(kind: PolyKind, id: u32, parent: u32, size: u64, points: Vec<[f32; 2]>) -> Poly {

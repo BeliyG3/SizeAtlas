@@ -18,6 +18,8 @@ pub(crate) struct View {
     pub group: Vec<usize>,
     /// Per group: the overpass edges that leave it, as (node, direction).
     pub leaving: HashMap<usize, Vec<(u32, usize)>>,
+    /// Per node: its other roads (streets and lanes).
+    pub others: Vec<u32>,
 }
 
 /// Metres per unit step of direction `k`.
@@ -38,14 +40,38 @@ fn root(up: &mut [usize], mut i: usize) -> usize {
 }
 
 impl View {
+    /// The steps along the run `r` from `n` a cut may take it away for: up to its first bridge,
+    /// and up to the first node a street or lane ends at (it would be left loose).
+    pub fn free(&self, edges: &[Option<Edge>], n: u32, r: &[(usize, i64)]) -> i64 {
+        let mut at = n;
+        let mut out = 0;
+        for &(i, upto) in r {
+            let e = edges[i].unwrap_or_else(|| unreachable!());
+            if e.bridge {
+                break;
+            }
+            out = upto;
+            at = if e.a == at { e.b } else { e.a };
+            if self.others[at as usize] == 1 {
+                break;
+            }
+        }
+        out
+    }
+
     /// The overpasses among `edges` between the points `pts` (lattice units), and the ways
     /// `out` of the graph (a node and a direction) that leave as an overpass would.
     pub fn new(pts: &[P], edges: &[Option<Edge>], out: &[(u32, usize)]) -> Self {
         let n = pts.len();
         let mut around = vec![Vec::new(); n];
         let mut up: Vec<usize> = (0..n).collect();
+        let mut others = vec![0; n];
         for (i, e) in edges.iter().enumerate() {
             let Some(e) = e.filter(|e| e.class.overpass()) else {
+                if let Some(e) = e {
+                    others[e.a as usize] += 1;
+                    others[e.b as usize] += 1;
+                }
                 continue;
             };
             let (a, b) = (e.a as usize, e.b as usize);
@@ -76,6 +102,7 @@ impl View {
             around,
             group,
             leaving,
+            others,
         }
     }
 
