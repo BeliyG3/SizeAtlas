@@ -23,7 +23,10 @@ export const CROWD_CARS = 3000;
 export const CROWD_PEOPLE = 4000;
 export const CROWD_ROUTES = 128;
 
-/** The far crowd on `g`: one mesh of cars and one of walkers, the same for the same `seed`. */
+/**
+ * The far crowd on `g`: cars and walkers, a mesh of bodies and a set of lights each, the same for
+ * the same `seed`.
+ */
 export function crowdOn(g: RoadGraph, seed: number): Crowd[] {
   return [
     crowdMesh(buildRoutes(g, "drive", CROWD_ROUTES, seed), "drive", CROWD_CARS, seed),
@@ -68,7 +71,7 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
   let disposed = false;
   // Hidden from a new island until its first step, so no car of the last one shows on it.
   const show = (visible: boolean) => {
-    for (const c of crowd) c.mesh.visible = visible;
+    for (const c of crowd) c.group.visible = visible;
     if (!models) return;
     models.cars.group.visible = models.people.group.visible = visible;
     models.trails.mesh.visible = visible;
@@ -93,7 +96,7 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
 
   const dropCrowd = () => {
     for (const c of crowd) {
-      parent.remove(c.mesh);
+      parent.remove(c.group);
       c.dispose();
     }
     crowd = [];
@@ -108,7 +111,7 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
       };
       dropCrowd();
       crowd = g ? crowdOn(g, seed) : [];
-      for (const c of crowd) parent.add(c.mesh);
+      for (const c of crowd) parent.add(c.group);
       show(false);
     },
     step(dt, eye, target) {
