@@ -103,10 +103,17 @@ describe("cars near the camera", () => {
   it("are no more than the roads of the circle hold; the rest wait off the roads", () => {
     const t = createTraffic(road, 40, 4);
     expect(t.air.every((a) => a === 0)).toBe(true);
-    // 300 m of street in the circle, two lanes: room for 20 cars at CAR_SPACING.
+    // 300 m of street in the circle, two lanes: room for 20 cars at CAR_SPACING. Put down one by
+    // one at random, a quarter of that room is in gaps too short for a car: those off the roads
+    // wait (as random spots fill a line, they leave it at most 0.75 full).
     const near = { x: 2500, z: 0, r: 150 };
+    const cap = (2 * 300) / CAR_SPACING;
     for (let n = 0; n < 60; n++) t.update(1 / 30, near);
-    expect(onRoads(t)).toBe((2 * 300) / CAR_SPACING);
+    expect(onRoads(t)).toBeLessThanOrEqual(cap);
+    expect(onRoads(t)).toBeGreaterThanOrEqual(0.7 * cap);
+    for (let i = 0; i < t.count; i++) {
+      if (t.live[i]) expect(Math.abs(t.x[i] - near.x)).toBeLessThanOrEqual(near.r + 10);
+    }
     // Put down a car's length and more apart on a lane.
     const lanesOf = new Map<number, number[]>();
     for (let i = 0; i < t.count; i++) {
@@ -147,7 +154,9 @@ describe("cars leaving the roads", () => {
       }
     }
     expect(left).toBeGreaterThan(0);
-    expect(t.live.reduce((n, v) => n + v, 0)).toBe(Math.floor((2 * 400) / CAR_SPACING));
+    const cap = Math.floor((2 * 400) / CAR_SPACING);
+    expect(t.live.reduce((n, v) => n + v, 0)).toBeLessThanOrEqual(cap);
+    expect(t.live.reduce((n, v) => n + v, 0)).toBeGreaterThanOrEqual(0.7 * cap);
   });
 });
 

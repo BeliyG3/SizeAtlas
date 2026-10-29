@@ -146,16 +146,17 @@ const GOING = { no: 0, move: 1, off: 2 } as const;
  * looked at once per `RECHECK` seconds; one that has strayed farther than `r` (horizontally) from
  * the centre shrinks away (`appear` to 0 over `FADE` seconds) and then goes to `move`, which puts
  * it on one of the spots it asks for (for the edges it may use) and says whether it could; if it
- * could not, it grows back where it is. The spots are the ring of the circle, where the circle creeps
- * on; after a jump of more than `r` (the first look too) the whole circle, so the new place is
- * full at once; and as the circle grows `ZOOM_OUT` times, each local goes, at a chance of the
- * new area's share, to the rim the old circle leaves, so the life thins out evenly: it shrinks
- * away first (`appear` 1 to 0 over `FADE` seconds), as its place is still in view. A moved one
- * grows in: its `appear` goes from 0 to 1 over `APPEAR` seconds.
+ * could not, it leaves the roads (`live` 0, `appear` kept at 0) till a look finds it a place.
+ * The spots are the ring of the circle, where the circle creeps on; after a jump of more than
+ * `r` (the first look too) the whole circle, so the new place is full at once; and as the circle
+ * grows `ZOOM_OUT` times, each local goes, at a chance of the new area's share, to the rim the
+ * old circle leaves, so the life thins out evenly: it shrinks away first (`appear` 1 to 0 over
+ * `FADE` seconds), as its place is still in view. A moved one grows in: its `appear` goes from 0
+ * to 1 over `APPEAR` seconds.
  *
  * The first `capped` of `ids` are no more than the `cap` an update gives: those past it shrink
- * away as they are looked at and then leave the roads (`live` 0), and come back, put down in the
- * circle, when the cap lets them.
+ * away as they are looked at and then leave the roads (`live` 0). One off the roads comes back,
+ * put down in the circle and growing in, when the cap lets it and there is room.
  */
 export function createLocals(
   g: RoadGraph,
@@ -220,7 +221,7 @@ export function createLocals(
     ) {
       for (let i = 0; i < n; i++) {
         if (going[i]) appear[i] = Math.max(0, appear[i] - dt / FADE);
-        else if (appear[i] < 1) appear[i] = Math.min(1, appear[i] + dt / APPEAR);
+        else if (live[i] && appear[i] < 1) appear[i] = Math.min(1, appear[i] + dt / APPEAR);
       }
       if (!c || !ids.length) return;
       follow(c);
@@ -228,12 +229,11 @@ export function createLocals(
         spotsOf = { ...c };
         found = new Map();
       }
-      // Gone from sight: now it leaves the roads, or moves and grows in where it is put (or back
-      // where it was).
+      // Gone from sight: now it leaves the roads, or moves and grows in where it is put; with
+      // no place to go it leaves too, not to grow back where it was.
       for (const i of ids) {
         if (!going[i] || appear[i] > 0) continue;
-        if (going[i] === GOING.off) live[i] = 0;
-        else if (live[i]) move(i, spots[dest[i]]);
+        if (going[i] === GOING.off || (live[i] && !move(i, spots[dest[i]]))) live[i] = 0;
         going[i] = GOING.no;
       }
       due = Math.min(ids.length, due + (ids.length * dt) / RECHECK);

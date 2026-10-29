@@ -99,7 +99,7 @@ describe("createLocals", () => {
     const counting = () => (scanned++, true);
     const locals = createLocals(g, 4, [0, 1, 2, 3], rng(1));
     const at = { x: [4000, 4000, 4000, 4000], z: [0, 0, 0, 0] };
-    // Nowhere to go: the strays stay strays and ask for spots at every look.
+    // Nowhere to go: the strays leave the roads and ask for spots at every look.
     const move = (_: number, spots: (allow: Allow) => Spots) => {
       spots(counting);
       return false;
@@ -111,11 +111,32 @@ describe("createLocals", () => {
     };
     expect(step(0)).toBe(0); // the first look: the strays shrink away
     expect(step(0)).toBe(1); // gone, they ask for the whole circle: one edge once
-    expect(step(0)).toBe(1); // then the ring
+    expect(step(0)).toBe(0); // off the roads, they ask for the circle again: kept
     expect(step(0)).toBe(0);
     expect(step(40)).toBe(0); // within 5 % of r
     expect(step(60)).toBe(1);
     expect(step(60, 1100)).toBe(1);
+  });
+
+  it("puts a stray with nowhere to go off the roads till there is room for it", () => {
+    const g = graphOf([0, 0, 5000, 0], [[0, 1, ROAD.street]]);
+    const locals = createLocals(g, 1, [0], rng(1));
+    const at = { x: [4000], z: [0] }; // far out of the circle
+    let room = false;
+    const move = () => room;
+    const look = (seconds: number) => {
+      for (let n = 0; n < seconds * 30; n++)
+        locals.update(1 / 30, { x: 0, z: 0, r: 1000 }, at, move);
+    };
+    look(RECHECK + FADE + 0.1); // looked at, shrunk away, nowhere to go
+    expect([locals.live[0], locals.appear[0]]).toEqual([0, 0]);
+    look(2); // it does not grow back where it was
+    expect([locals.live[0], locals.appear[0]]).toEqual([0, 0]);
+    room = true;
+    look(RECHECK + 0.1);
+    expect(locals.live[0]).toBe(1);
+    expect(locals.appear[0]).toBeGreaterThan(0);
+    expect(locals.appear[0]).toBeLessThan(1); // growing in where it is put
   });
 });
 
