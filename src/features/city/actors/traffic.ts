@@ -2,7 +2,7 @@
 import { ROAD, type RoadKind } from "../world/map";
 import { pointOn, type RoadEdge, type RoadGraph } from "../world/roads";
 import { createPoses } from "./carPose";
-import { createJunctions, lanes, MIN_GAP } from "./junctions";
+import { createJunctions, laneOffset, lanes, MIN_GAP } from "./junctions";
 import {
   createLocals,
   drifted,
@@ -29,6 +29,8 @@ export const AIR_SHARE = 0.3;
 const LOOK = MIN_GAP + SPEED.highway * HEADWAY;
 // ponytail: a longer frame is cut to this, so a car never covers more than the gap it measured.
 const MAX_DT = 0.25;
+// A car moving across to another lane holds the one it left until it is drawn this near the new one, metres.
+const ACROSS = 0.5;
 // ponytail: after this many tries a car is put down where it is, even if it is too close.
 const PLACE_TRIES = 40;
 /** Seconds a car stands at a node, whatever holds it, before it looks for another way out. */
@@ -88,6 +90,8 @@ export function createTraffic(
   };
   const want = new Uint8Array(n); // the lane a driver prefers; a narrower road squeezes it
   const lane = new Uint8Array(n); // the lane it is in now
+  // The offset of the lane a car is moving across from, while it is drawn in it too; else NaN.
+  const leaving = new Float32Array(n).fill(NaN);
   // Where each car goes at the end of its road once it is near it; -1 until chosen.
   const nextE = new Int32Array(n).fill(-1);
   const nextF = new Uint8Array(n);
@@ -123,6 +127,7 @@ export function createTraffic(
     g,
     t,
     lane,
+    leaving,
     nextE,
     nextF,
     nextL,
@@ -146,6 +151,7 @@ export function createTraffic(
 
   /** Puts car `i` down where its track says, drawn on its lane. */
   function putNew(i: number) {
+    leaving[i] = NaN;
     poses.reset(i);
     put(i);
   }
@@ -155,6 +161,7 @@ export function createTraffic(
    * keeps the choice until it crosses the node, so the cars behind can see where it will be. It also
    * moves to the lane it will need there (the road ahead may be narrower), as soon as that lane is
    * clear beside it; until then it waits at the node, at most `STUCK` seconds (see `rethink`).
+   * Until it is drawn across, it holds the lane it left too (see `ACROSS`).
    */
   function plan(i: number) {
     const e = g.edges[t.edge[i]];
@@ -177,6 +184,7 @@ export function createTraffic(
     [lane[i], since[i]] = [nextL[i], clock];
     turn[i] = turnOf(i);
     if (gapAhead(i) < MIN_GAP || cutsIn(i)) [lane[i], since[i], turn[i]] = was;
+    else leaving[i] = laneOffset(e.cls, was[0]);
   }
 
   /**
@@ -220,7 +228,10 @@ export function createTraffic(
     return roomFor;
   }
 
-  /** Drives car `i` on by `dist`, into the lane it planned when it passes the node; the metres it moved. */
+  /**
+   * Drives car `i` on by `dist`, into the lane it planned when it passes the node; the metres it
+   * moved. A car still moving across holds the lane it left on the road past the node too.
+   */
   function drive(i: number, dist: number): number {
     const len = g.edges[t.edge[i]].len;
     const s = t.s[i] + dist;
@@ -246,7 +257,8 @@ export function createTraffic(
     for (let i = 0; i < ground; i++) {
       if (!live[i]) continue;
       const free = Math.max(0, (gapAhead(i) - MIN_GAP) / HEADWAY);
-      poses.ease(i, h, drive(i, Math.min(speedOn(g.edges[t.edge[i]].cls), free) * h));
+      const moved = drive(i, Math.min(speedOn(g.edges[t.edge[i]].cls), free) * h);
+      if (poses.ease(i, h, moved) <= ACROSS) leaving[i] = NaN;
       const atNode = t.s[i] >= g.edges[t.edge[i]].len && nextE[i] >= 0;
       held[i] = atNode ? held[i] + h : 0;
     }

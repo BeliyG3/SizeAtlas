@@ -26,6 +26,11 @@ export interface Lanes {
   t: Track;
   /** The lane each car is in. */
   lane: Uint8Array;
+  /**
+   * The offset (see `laneOffset`) of the lane a car is moving across from, NaN once it is over:
+   * till then it holds that lane too, past a node as well, so no car drives through it.
+   */
+  leaving: Float32Array;
   /** Where each car goes at the end of its road once it is near it; -1 until chosen. */
   nextE: Int32Array;
   nextF: Uint8Array;
@@ -41,7 +46,10 @@ export interface Lanes {
 }
 
 export function createJunctions(s: Lanes) {
-  const { g, t, lane, nextE, nextF, nextL, since, turn, live, ground } = s;
+  const { g, t, lane, leaving, nextE, nextF, nextL, since, turn, live, ground } = s;
+  /** Does car `j` hold lane `ln` of a road of class `cls`: is it in it, or moving out of it? */
+  const holds = (j: number, cls: RoadKind, ln: number) =>
+    lane[j] === ln || Math.abs(leaving[j] - laneOffset(cls, ln)) < 1e-3;
 
   /**
    * Is a car (but `skip`) within `gap` of this spot of this lane, counting the cars that are
@@ -57,7 +65,7 @@ export function createJunctions(s: Lanes) {
   ) {
     for (let j = 0; j < ground; j++) {
       if (j === skip || !live[j]) continue;
-      if (t.edge[j] === edge && t.forward[j] === forward && lane[j] === ln) {
+      if (t.edge[j] === edge && t.forward[j] === forward && holds(j, g.edges[edge].cls, ln)) {
         if (Math.abs(t.s[j] - at) < gap) return true;
       } else if (nextE[j] === edge && nextF[j] === forward && nextL[j] === ln) {
         if (at + g.edges[t.edge[j]].len - t.s[j] < gap) return true;
@@ -67,7 +75,9 @@ export function createJunctions(s: Lanes) {
   }
 
   const inNext = (j: number, i: number) =>
-    t.edge[j] === nextE[i] && t.forward[j] === nextF[i] && lane[j] === nextL[i];
+    t.edge[j] === nextE[i] &&
+    t.forward[j] === nextF[i] &&
+    holds(j, g.edges[nextE[i]].cls, nextL[i]);
 
   /** Component `k` (0: x, 1: z) of the unit vector of travel along an edge. */
   function dir(edge: number, forward: number, k: number): number {
@@ -79,9 +89,12 @@ export function createJunctions(s: Lanes) {
 
   /** Do two lanes of two edges lie on one line: the same heading, less than 2 m apart sideways? */
   function aligned(e1: number, f1: number, l1: number, e2: number, f2: number, l2: number) {
-    const o1 = laneOffset(g.edges[e1].cls, l1);
-    const o2 = laneOffset(g.edges[e2].cls, l2);
-    if (Math.abs(o1 - o2) >= 2) return false;
+    return lined(e1, f1, laneOffset(g.edges[e1].cls, l1), e2, f2, laneOffset(g.edges[e2].cls, l2));
+  }
+
+  /** `aligned`, for the lanes at offsets `o1` and `o2` (see `laneOffset`). */
+  function lined(e1: number, f1: number, o1: number, e2: number, f2: number, o2: number) {
+    if (!(Math.abs(o1 - o2) < 2)) return false;
     return dir(e1, f1, 0) * dir(e2, f2, 0) + dir(e1, f1, 1) * dir(e2, f2, 1) > 0.99;
   }
 
@@ -105,7 +118,10 @@ export function createJunctions(s: Lanes) {
     const ej = g.edges[t.edge[j]];
     if ((t.forward[j] === 1 ? ej.a : ej.b) === node) {
       // j has just left the node
-      const onMyLine = aligned(t.edge[i], t.forward[i], lane[i], t.edge[j], t.forward[j], lane[j]);
+      const mine = laneOffset(g.edges[t.edge[i]].cls, lane[i]);
+      const onMyLine =
+        aligned(t.edge[i], t.forward[i], lane[i], t.edge[j], t.forward[j], lane[j]) ||
+        lined(t.edge[i], t.forward[i], mine, t.edge[j], t.forward[j], leaving[j]);
       return onMyLine || inNext(j, i) ? left + t.s[j] : Infinity;
     }
     if (nextE[j] < 0 || endNode(t.edge[j], t.forward[j]) !== node) return Infinity;
@@ -132,7 +148,8 @@ export function createJunctions(s: Lanes) {
     const node = endNode(t.edge[i], t.forward[i]);
     for (let j = 0; j < ground; j++) {
       if (j === i || !live[j]) continue;
-      if (t.edge[j] === t.edge[i] && t.forward[j] === t.forward[i] && lane[j] === lane[i]) {
+      const sameWay = t.edge[j] === t.edge[i] && t.forward[j] === t.forward[i];
+      if (sameWay && holds(j, g.edges[t.edge[i]].cls, lane[i])) {
         const d = t.s[j] - t.s[i];
         if (d < gap && (d > 0 || (d === 0 && j > i))) gap = d;
       }

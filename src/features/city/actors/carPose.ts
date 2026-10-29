@@ -1,6 +1,7 @@
 /**
  * Where a ground car is drawn: on its lane, on a curve through the node it turns at, easing
- * across to another lane; display only, the driving never reads it. Pure, no three.js.
+ * across to another lane; the driving reads only how far a car is still drawn off its lane.
+ * Pure, no three.js.
  */
 import { pointOn, type RoadGraph } from "../world/roads";
 import { cornerAt, reach } from "./corners";
@@ -54,12 +55,16 @@ export function createPoses(
       fromOff[i] = shown[i];
     },
 
-    /** Car `i` drove `moved` metres in `h` seconds: it is drawn that much nearer its lane. */
-    ease(i: number, h: number, moved: number) {
+    /**
+     * Car `i` drove `moved` metres in `h` seconds: it is drawn that much nearer its lane. The
+     * metres it is still drawn off it.
+     */
+    ease(i: number, h: number, moved: number): number {
       const step = Math.max(-LANE_SHIFT * h, Math.min(LANE_SHIFT * h, target(i) - shown[i]));
       shown[i] += step;
       const tilt = step === 0 ? 0 : Math.atan2(step, moved);
       lean[i] = Math.max(-MAX_LEAN, Math.min(MAX_LEAN, tilt));
+      return Math.abs(target(i) - shown[i]);
     },
 
     /** Writes where car `i` is drawn into `out`. */

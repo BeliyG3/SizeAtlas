@@ -21,6 +21,8 @@ interface Car {
   lane?: number;
   next?: [edge: number, forward: boolean, lane: number];
   since?: number;
+  /** The offset of the lane it is moving across from. */
+  old?: number;
 }
 
 /** The junctions over `cars` on `g`, their turns taken. */
@@ -34,6 +36,7 @@ function junctionsOf(g: RoadGraph, cars: Car[]) {
       forward: Uint8Array.from(cars, (c) => (c.forward === false ? 0 : 1)),
     },
     lane: Uint8Array.from(cars, (c) => c.lane ?? 0),
+    leaving: Float32Array.from(cars, (c) => c.old ?? NaN),
     nextE: Int32Array.from(cars, (c) => c.next?.[0] ?? -1),
     nextF: Uint8Array.from(cars, (c) => (c.next?.[1] === false ? 0 : 1)),
     nextL: Uint8Array.from(cars, (c) => c.next?.[2] ?? 0),
@@ -80,6 +83,37 @@ describe("createJunctions", () => {
     expect(j.gapAhead(1)).toBe(Infinity);
     expect(j.crowded(0, 1, 0, 30, -1)).toBe(true);
     expect(j.crowded(0, 1, 0, 30 + MIN_GAP, -1)).toBe(false);
+  });
+
+  it("counts a car moving across to another lane in both lanes", () => {
+    // A highway 100 m east to a node, on to a street east.
+    const road = graphOf(
+      [0, 0, 100, 0, 200, 0],
+      [
+        [0, 1, ROAD.highway],
+        [1, 2, ROAD.street],
+      ],
+    );
+    const j = junctionsOf(road, [
+      { edge: 0, s: 10, lane: 1 },
+      { edge: 0, s: 25, lane: 0, old: laneOffset(ROAD.highway, 1) },
+      { edge: 0, s: 10, lane: 0 },
+    ]);
+    expect(j.gapAhead(0)).toBe(15); // the lane it left is not free yet
+    expect(j.gapAhead(2)).toBe(15);
+    expect(j.crowded(0, 1, 1, 30, -1)).toBe(true);
+    expect(j.gapAhead(1)).toBe(Infinity); // it looks ahead in its new lane only
+    // Past the node it still holds the lane it left, for a car in that lane turning off there.
+    const past = junctionsOf(road, [
+      { edge: 0, s: 97, lane: 1, next: [0, false, 1] },
+      { edge: 1, s: 2, lane: 0, old: laneOffset(ROAD.highway, 1) },
+    ]);
+    expect(past.gapAhead(0)).toBe(5);
+    const over = junctionsOf(road, [
+      { edge: 0, s: 97, lane: 1, next: [0, false, 1] },
+      { edge: 1, s: 2, lane: 0 },
+    ]);
+    expect(over.gapAhead(0)).toBe(Infinity);
   });
 
   it("lets the car that chose its way first go first at the node", () => {

@@ -88,11 +88,14 @@ describe("createTraffic", () => {
   });
 
   it("cars keep their distance across junctions", () => {
-    // The true distance of every two ground cars going the same way, side by side within 2 m,
-    // both on their lanes: a car drawn moving across to another lane, or on the curve through a
-    // node, is not (its heading is off the roads', which here run along the axes). The lane it
-    // left is free at once, so the car behind may come up while it is drawn halfway over.
+    // The true distance of every two ground cars going the same way, side by side within 2 m.
+    // Two cars on their lanes (here the roads run along the axes) keep the gap of the rules. A car
+    // drawn on the curve through a node cuts the corner: it can pass beside a car standing at the
+    // node in the next lane, half a lane apart rather than one behind the other, or across the
+    // lane of one going straight on, which the rules do not space it from. Those two only keep
+    // their bodies apart (a car is 1.8 m wide and 4.2 m long, see `render/cars.ts`).
     const onLane = (h: number) => Math.abs(Math.sin(2 * h)) < 1e-3;
+    const [WIDE, LONG] = [1.8, 4.2];
     for (const [g, seed] of [
       [line, 3],
       [line, 8],
@@ -101,23 +104,30 @@ describe("createTraffic", () => {
     ] as const) {
       const t = createTraffic(g, 200, seed);
       let nearest = Infinity;
+      let touching = 0;
       let moved = 0;
       run(t, 30, () => {
         for (let i = 0; i < t.count; i++) {
-          if (t.air[i] || !onLane(t.heading[i])) continue;
+          if (t.air[i]) continue;
           for (let j = i + 1; j < t.count; j++) {
-            if (t.air[j] || !onLane(t.heading[j]) || Math.cos(t.heading[i] - t.heading[j]) < 0.99)
-              continue;
+            if (t.air[j] || Math.cos(t.heading[i] - t.heading[j]) < 0.99) continue;
             const dx = t.x[j] - t.x[i];
             const dz = t.z[j] - t.z[i];
             const side = dx * Math.cos(t.heading[i]) - dz * Math.sin(t.heading[i]);
-            if (Math.abs(side) < 2) nearest = Math.min(nearest, Math.hypot(dx, dz));
+            if (Math.abs(side) >= 2) continue;
+            if (onLane(t.heading[i]) && onLane(t.heading[j])) {
+              nearest = Math.min(nearest, Math.hypot(dx, dz));
+            } else {
+              const along = dx * Math.sin(t.heading[i]) + dz * Math.cos(t.heading[i]);
+              if (Math.abs(side) < WIDE && Math.abs(along) < LONG) touching++;
+            }
           }
         }
       });
       for (let i = 0; i < t.count; i++) moved += Math.abs(t.x[i]) + Math.abs(t.z[i]);
       expect(moved).toBeGreaterThan(0);
       expect(nearest).toBeGreaterThanOrEqual(MIN_GAP - 0.5);
+      expect(touching).toBe(0);
     }
   }, 20_000);
 
