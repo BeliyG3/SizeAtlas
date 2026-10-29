@@ -204,7 +204,7 @@ fn straighten(points: &[[f32; 2]], tol: f32, inside: bool) -> Vec<[f32; 2]> {
 
 /// Drops repeated points (keeping the later one, so the end stays exact) and the middle point of
 /// two collinear, same-direction segments.
-fn simplify(line: Vec<[f32; 2]>) -> Vec<[f32; 2]> {
+pub(crate) fn simplify(line: Vec<[f32; 2]>) -> Vec<[f32; 2]> {
     let mut out: Vec<[f32; 2]> = Vec::with_capacity(line.len());
     for p in line {
         if let Some(&last) = out.last() {
