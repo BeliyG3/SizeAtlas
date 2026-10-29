@@ -23,16 +23,22 @@ function run(w: Walker, a: Actions, seconds: number, solids: Solids, jump = fals
   return peak;
 }
 
-/** A 200 × 100 m island with a street's deck `lift` metres over its land, along z at x = 60. */
-function deckWorld(lift: number): Solids {
-  const map = mapOf([rect(POLY.island, 1, 0, 0, 200, 100)], {
+/**
+ * A 200 × 100 m island with a street's deck `lift` metres over its land, along z at x = 60, and
+ * `houses` standing on it.
+ */
+function deckWorld(lift: number, houses: House[] = []): Solids {
+  const lots = houses.map((h, i) => rect(POLY.house, 10 + i, h.x, h.z, h.w, h.d));
+  const map = mapOf([rect(POLY.island, 1, 0, 0, 200, 100), ...lots], {
     width: 200,
     height: 100,
     nodes: new Float32Array([60, 20, 60, 80]),
     edges: [{ a: 0, b: 1, cls: ROAD.street, bridge: true, liftA: lift, liftB: lift }],
   });
   const g = buildRoads(map);
-  return createSolids(buildWorld(map, null), g);
+  const world = buildWorld(map, null);
+  world.buildings.forEach((b, i) => (b.h = houses[i].h));
+  return createSolids(world, g);
 }
 
 const forward = (sprint = false) => {
@@ -129,6 +135,15 @@ describe("stepWalk", () => {
     run(w, forward(), 6, solids);
     expect(w.body.x).toBeLessThan(65);
     expect(w.body.y).toBe(3.5);
+  });
+
+  it("does not drop from a deck onto a roof just below it: roofs are reached by car", () => {
+    const solids = deckWorld(12, [{ x: 66, z: 30, w: 20, d: 40, h: 10 }]);
+    const w = createWalker({ x: 60, z: 50 }, solids);
+    expect(w.body.y).toBe(12);
+    run(w, forward(), 6, solids);
+    expect(w.body.y).toBe(12);
+    expect(w.body.x).toBeLessThan(66);
   });
 
   it("does not leave a 12 m roof for a 10 m one beside it: roofs are left by car", () => {

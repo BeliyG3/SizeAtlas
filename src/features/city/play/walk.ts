@@ -114,7 +114,10 @@ function paceOf(a: Actions, tilt: number): number {
 
 /** Whether (x, z) lies past an edge too deep to go down (see `LEDGE`) from where the walker last stood. */
 function overEdge(w: Walker, s: Solids, x: number, z: number): boolean {
-  return s.heightAt(x, z, w.body.y + STEP) < w.support - (w.roof ? STEP : LEDGE);
+  const below = s.heightAt(x, z, w.body.y + STEP);
+  // Roofs are left and reached from above only by car: no drop onto one, as none off one.
+  const ontoRoof = s.roofAt(x, z) !== null && below < w.support - STEP;
+  return ontoRoof || below < w.support - (w.roof ? STEP : LEDGE);
 }
 
 /**
