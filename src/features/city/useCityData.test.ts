@@ -165,6 +165,14 @@ describe("useCityData", () => {
     expect(onFail).toHaveBeenCalledWith(new Error("gone"));
   });
 
+  it("passes a response that does not parse on", async () => {
+    vi.mocked(api.getCity).mockResolvedValue(new ArrayBuffer(3));
+    render(1, 1, 0);
+    await settle(1, 1, 0);
+    expect(onFail).toHaveBeenCalledWith(new Error("city response is too short"));
+    expect(shown.world).toBeNull();
+  });
+
   it("finds the focus once per city and selection, not on every render", async () => {
     render(1, 1, 0);
     await settle(1, 1, 0);

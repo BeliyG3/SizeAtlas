@@ -41,13 +41,16 @@ export function useCityData(
     let live = true;
     askedAt.current = Date.now();
     const finish = beginRefresh("city");
-    api.getCity(generation).then(
-      (buffer) => {
-        const map = parseCity(buffer);
-        if (live && map.generation === generation) setLoaded({ map, finish });
-      },
-      (e: unknown) => live && onFail(e),
-    );
+    // A response that does not parse fails like a request that does.
+    api
+      .getCity(generation)
+      .then(parseCity)
+      .then(
+        (map) => {
+          if (live && map.generation === generation) setLoaded({ map, finish });
+        },
+        (e: unknown) => live && onFail(e),
+      );
     return () => {
       live = false;
     };
