@@ -45,10 +45,17 @@ function drive(trails: ReturnType<typeof trailMesh>, t: Traffic, speed: number, 
 }
 
 describe("trailMesh", () => {
-  it("is one mesh drawing every trail", () => {
+  it("is one mesh drawing every trail, each in its slot of one geometry", () => {
     const trails = trailMesh(10, tail);
+    const t = traffic([0, 10, 20]);
+    for (let n = 0; n < 30; n++) {
+      for (let i = 0; i < 3; i++) t.z[i] += 0.5;
+      trails.update(t, new Vector3(10, 20, t.z[0]), 1 / 30);
+    }
     expect(trails.mesh).toBeInstanceOf(Mesh);
-    expect(trails.mesh.children.length).toBe(0);
+    expect(trails.mesh.geometry.drawRange.count).toBe(3 * TRAIL_POINTS * 6);
+    // Every car's ribbon starts at its own light.
+    for (let slot = 0; slot < 3; slot++) expect(line(trails, slot)[0].x).toBeCloseTo(slot * 10, 4);
     trails.dispose();
   });
 

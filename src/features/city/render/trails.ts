@@ -116,23 +116,27 @@ export function trailMesh(
   function ribbon(slot: number, m: number, heading: number) {
     const p = position.array as Float32Array;
     const c = color.array as Float32Array;
+    const w = TRAIL_WIDTH / 2;
     for (let k = 0; k < POINTS; k++) {
       const j = Math.min(k, m - 1);
       // Across the way the trail runs here; along the car where it has no length.
       const a = Math.max(0, Math.min(j, m - 2));
-      let dx = px[a + 1] - px[a];
-      let dz = pz[a + 1] - pz[a];
+      let dx = m < 2 ? 0 : px[a + 1] - px[a];
+      let dz = m < 2 ? 0 : pz[a + 1] - pz[a];
       const d = Math.hypot(dx, dz);
-      if (m < 2 || d < 1e-6) [dx, dz] = [Math.sin(heading), Math.cos(heading)];
-      else [dx, dz] = [dx / d, dz / d];
-      const w = TRAIL_WIDTH / 2;
+      dx = d < 1e-6 ? Math.sin(heading) : dx / d;
+      dz = d < 1e-6 ? Math.cos(heading) : dz / d;
+      // The two edges of the ribbon, left and right of the way.
       const v = (slot * POINTS + k) * 6;
-      p.set([px[j] - dz * w, py[j], pz[j] + dx * w, px[j] + dz * w, py[j], pz[j] - dx * w], v);
+      p[v] = px[j] - dz * w;
+      p[v + 1] = p[v + 4] = py[j];
+      p[v + 2] = pz[j] + dx * w;
+      p[v + 3] = px[j] + dz * w;
+      p[v + 5] = pz[j] - dx * w;
       const glow = k < m ? TRAIL_GLOW * Math.max(0, 1 - age[j] / TRAIL_SECONDS) : 0;
-      c.set(
-        [red.r * glow, red.g * glow, red.b * glow, red.r * glow, red.g * glow, red.b * glow],
-        v,
-      );
+      c[v] = c[v + 3] = red.r * glow;
+      c[v + 1] = c[v + 4] = red.g * glow;
+      c[v + 2] = c[v + 5] = red.b * glow;
     }
   }
 
@@ -157,11 +161,16 @@ export function trailMesh(
       const z = t.z[i] - tail.x * sin + tail.z * cos;
       const moved = Math.hypot(x - last[i * 3], y - last[i * 3 + 1], z - last[i * 3 + 2]);
       if (t.appear[i] < 1 || moved > TRAIL_JUMP) len[i] = 0;
-      last.set([x, y, z], i * 3);
+      last[i * 3] = x;
+      last[i * 3 + 1] = y;
+      last[i * 3 + 2] = z;
       if (!len[i] || now - st[i * TRAIL_POINTS + head[i]] >= SAMPLE) {
         head[i] = (head[i] + 1) % TRAIL_POINTS;
         const s = i * TRAIL_POINTS + head[i];
-        [sx[s], sy[s], sz[s], st[s]] = [x, y, z, now];
+        sx[s] = x;
+        sy[s] = y;
+        sz[s] = z;
+        st[s] = now;
         len[i] = Math.min(len[i] + 1, TRAIL_POINTS);
       }
       const d2 = (t.x[i] - camera.x) ** 2 + (t.y[i] - camera.y) ** 2 + (t.z[i] - camera.z) ** 2;

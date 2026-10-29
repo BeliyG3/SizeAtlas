@@ -10,8 +10,10 @@ import type { Allow, Track } from "./nav";
 export const LOCAL_SHARE = 1;
 /** A local is looked at once per this many seconds. */
 export const RECHECK = 0.5;
-/** A moved local grows in over this many seconds. */
+/** A moved local grows in over this many seconds... */
 export const APPEAR = 0.5;
+/** ...and one that leaves a place still in view shrinks away over this many first. */
+export const FADE = 0.3;
 /** A stray local is put back this share of the circle's radius from its centre, or farther... */
 export const RING_INNER = 0.6;
 /** ...and kept this far from the circle's edge, in its radius. */
@@ -144,7 +146,8 @@ type Task = (typeof TASK)[keyof typeof TASK];
  * use) and says whether it could. The spots are the ring of the circle, where the circle creeps
  * on; after a jump of more than `r` (the first look too) the whole circle, so the new place is
  * full at once; and as the circle grows `ZOOM_OUT` times, each local goes, at a chance of the
- * new area's share, to the rim the old circle leaves, so the life thins out evenly. A moved one
+ * new area's share, to the rim the old circle leaves, so the life thins out evenly: it shrinks
+ * away first (`appear` 1 to 0 over `FADE` seconds), as its place is still in view. A moved one
  * grows in: its `appear` goes from 0 to 1 over `APPEAR` seconds.
  *
  * The first `capped` of `ids` are no more than the `cap` an update gives: those past it leave the
@@ -161,6 +164,7 @@ export function createLocals(
   const appear = new Float32Array(n).fill(1);
   const live = new Uint8Array(n).fill(1);
   const task = new Uint8Array(n).fill(TASK.disc);
+  const going = new Uint8Array(n); // 1 while it shrinks away to the rim
   let next = 0;
   let due = 0;
   // The circle as the locals last moved all together, its radius the least since.
@@ -210,13 +214,20 @@ export function createLocals(
       cap = Infinity,
     ) {
       for (let i = 0; i < n; i++) {
-        if (appear[i] < 1) appear[i] = Math.min(1, appear[i] + dt / APPEAR);
+        if (going[i]) appear[i] = Math.max(0, appear[i] - dt / FADE);
+        else if (appear[i] < 1) appear[i] = Math.min(1, appear[i] + dt / APPEAR);
       }
       if (!c || !ids.length) return;
       follow(c);
       if (drifted(spotsOf, c)) {
         spotsOf = { ...c };
         found = new Map();
+      }
+      // Gone from sight: now it moves, and grows in where it is put (or back where it was).
+      for (const i of ids) {
+        if (!going[i] || appear[i] > 0) continue;
+        going[i] = 0;
+        if (live[i]) move(i, spots[TASK.rim]);
       }
       due = Math.min(ids.length, due + (ids.length * dt) / RECHECK);
       for (; due >= 1; due--) {
@@ -234,7 +245,8 @@ export function createLocals(
         const kind = task[i] as Task;
         task[i] = TASK.ring;
         const stray = Math.hypot(at.x[i] - c.x, at.z[i] - c.z) > c.r;
-        if ((stray || kind === TASK.rim) && move(i, spots[kind])) appear[i] = 0;
+        if (kind === TASK.rim && !stray) going[i] = 1;
+        else if (stray && move(i, spots[kind])) appear[i] = 0;
       }
     },
   };

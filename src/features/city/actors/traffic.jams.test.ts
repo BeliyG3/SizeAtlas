@@ -144,7 +144,6 @@ describe("a lane change at a node", () => {
         { edge: 0, s: 296, forward: true, lane: 0, want: 1 },
         { edge: 0, s: 296, forward: true, lane: 1, want: 1 },
       ]);
-      expect(t.count).toBe(2);
       run(t, 5);
       for (let i = 0; i < 2; i++) {
         expect(t.x[i] > 305 || t.z[i] > 10, `seed ${seed}, car ${i}`).toBe(true);

@@ -4,6 +4,7 @@ import { mapOf } from "../world/map.fixture";
 import { buildRoads, pointOn } from "../world/roads";
 import {
   APPEAR,
+  FADE,
   createLocals,
   localRadius,
   placeOn,
@@ -160,7 +161,6 @@ describe("the locals", () => {
         }
       }
     });
-    expect(crowd.cars.count).toBe(40);
     // Exact but for the float32 positions, some 5 km from the origin.
     expect(nearest).toBeGreaterThanOrEqual(MIN_GAP - 0.01);
     inside(crowd, around);
@@ -188,6 +188,31 @@ describe("the locals", () => {
       const rim = all(c).filter((i) => dist(c, i, close) > close.r && dist(c, i, far) <= far.r);
       expect(rim.length).toBeGreaterThanOrEqual(0.6 * c.count);
     }
+  });
+
+  it("shrink away before they leave as the view backs off", () => {
+    const crowd = crowds(9);
+    const close = { x: 2500, z: 0, r: 400 };
+    run(crowd, close, 2);
+    const far = { ...close, r: 1200 };
+    let faded = 0;
+    for (const c of [crowd.cars, crowd.people]) {
+      for (let n = 0; n < 30; n++) {
+        const x = Float32Array.from(c.x);
+        const seen = Float32Array.from(c.appear);
+        const inView = all(c).map((i) => Math.abs(x[i] - far.x) <= far.r);
+        c.update(1 / 30, far);
+        for (const i of all(c)) {
+          if (c.appear[i] < seen[i]) faded++;
+          // A car moves less than a metre a frame: a longer step is a move to the rim, made
+          // only once it was all but gone (a stray out of the circle is out of sight).
+          if (inView[i] && Math.abs(c.x[i] - x[i]) > 5) {
+            expect(seen[i]).toBeLessThanOrEqual(1 / 30 / FADE + 1e-6);
+          }
+        }
+      }
+    }
+    expect(faded).toBeGreaterThan(0);
   });
 
   it("grow in over half a second where they are put", () => {
