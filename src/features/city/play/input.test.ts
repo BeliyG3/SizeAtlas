@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { actionsFrom, createInput, PAD_A, type PadState } from "./input";
+import { fakeDom, gp } from "./input.fixture";
 
 const NONE = new Set<string>();
 const still = { dx: 0, dy: 0 };
@@ -88,46 +89,6 @@ describe("actionsFrom", () => {
   });
 });
 
-/** A document, window, navigator and canvas that exist only as event targets. */
-function fakeDom() {
-  const doc = Object.assign(new EventTarget(), {
-    pointerLockElement: null as unknown,
-    exitPointerLock: vi.fn(),
-  });
-  const win = new EventTarget();
-  const gamepads: unknown[] = [];
-  const nav = { getGamepads: () => gamepads };
-  const canvas = Object.assign(new EventTarget(), {
-    requestPointerLock: vi.fn(() => {
-      doc.pointerLockElement = canvas;
-      doc.dispatchEvent(new Event("pointerlockchange"));
-    }),
-  });
-  vi.stubGlobal("document", doc);
-  vi.stubGlobal("window", win);
-  vi.stubGlobal("navigator", nav);
-  const key = (type: "keydown" | "keyup", code: string) =>
-    doc.dispatchEvent(Object.assign(new Event(type), { code, preventDefault: () => undefined }));
-  /** The browser drops the lock by itself (its own Esc). */
-  const browserUnlock = () => {
-    doc.pointerLockElement = null;
-    doc.dispatchEvent(new Event("pointerlockchange"));
-  };
-  const press = () => canvas.dispatchEvent(Object.assign(new Event("pointerdown"), { button: 0 }));
-  const move = (movementX: number, movementY: number) =>
-    doc.dispatchEvent(Object.assign(new Event("mousemove"), { movementX, movementY }));
-  return {
-    canvas: canvas as unknown as HTMLElement,
-    doc,
-    win,
-    gamepads,
-    key,
-    browserUnlock,
-    press,
-    move,
-  };
-}
-
 describe("createInput", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -183,9 +144,9 @@ describe("createInput", () => {
   it("an unplugged pad zeroes the actions and does not leave A held", () => {
     const d = fakeDom();
     const input = createInput(d.canvas);
-    const buttons = Array.from({ length: 17 }, () => ({ pressed: false, value: 0 }));
-    buttons[0] = { pressed: true, value: 1 };
-    d.gamepads.push({ connected: true, axes: [1, 0, 0, 0], buttons });
+    d.gamepads.push(gp({}));
+    input.read(1 / 60);
+    d.gamepads[0] = gp({ axes: [1, 0, 0, 0], held: [0] });
     const a = input.read(1 / 60);
     expect(a.steer).toBe(1);
     expect(a.jump).toBe(true);
@@ -193,6 +154,9 @@ describe("createInput", () => {
     const b = input.read(1 / 60);
     expect(b.steer).toBe(0);
     expect(b.jump).toBe(false);
+    // Plugged back in with A still down: not a new press.
+    d.gamepads.push(gp({ held: [0] }));
+    expect(input.read(1 / 60).jump).toBe(false);
     input.dispose();
   });
 
@@ -205,5 +169,105 @@ describe("createInput", () => {
     input.dispose();
     d.key("keydown", "KeyW");
     expect(input.read(1 / 60).throttle).toBe(0);
+  });
+
+  it("a read between our Esc release and the browser unlock does not exit twice", () => {
+    const d = fakeDom();
+    const input = createInput(d.canvas);
+    d.press();
+    d.key("keydown", "Escape");
+    expect(input.read(1 / 60).exit).toBe(true);
+    d.browserUnlock();
+    expect(input.read(1 / 60).exit).toBe(false);
+    input.dispose();
+  });
+
+  it("Esc exits while unlocked too, and a lost keyup does not block the next one", () => {
+    const d = fakeDom();
+    const input = createInput(d.canvas);
+    d.key("keydown", "Escape");
+    expect(input.read(1 / 60).exit).toBe(true);
+    d.key("keydown", "Escape"); // the keyup never came
+    expect(input.read(1 / 60).exit).toBe(true);
+    input.dispose();
+  });
+
+  it("a tap that starts and ends inside one frame counts once", () => {
+    const d = fakeDom();
+    const input = createInput(d.canvas);
+    d.key("keydown", "KeyF");
+    d.key("keyup", "KeyF");
+    d.key("keydown", "KeyF");
+    d.key("keyup", "KeyF");
+    expect(input.read(1 / 60).fly).toBe(true);
+    expect(input.read(1 / 60).fly).toBe(false);
+    input.dispose();
+  });
+
+  it("Alt+Tab under lock pauses instead of exiting", () => {
+    const d = fakeDom();
+    const input = createInput(d.canvas);
+    d.press();
+    d.win.dispatchEvent(new Event("blur"));
+    d.browserUnlock();
+    expect(input.read(1 / 60).exit).toBe(false);
+    // Back in the window: a later lock loss is an Esc again.
+    d.win.dispatchEvent(new Event("focus"));
+    d.press();
+    d.browserUnlock();
+    expect(input.read(1 / 60).exit).toBe(true);
+    input.dispose();
+  });
+
+  it("a lock lost while the window has no focus or is hidden is not an exit", () => {
+    for (const lose of ["focused", "hidden"] as const) {
+      const d = fakeDom();
+      const input = createInput(d.canvas);
+      d.press();
+      if (lose === "focused") d.doc.focused = false;
+      else d.doc.hidden = true;
+      d.browserUnlock();
+      expect(input.read(1 / 60).exit).toBe(false);
+      input.dispose();
+    }
+  });
+
+  it("reset drops presses and mouse moves gathered while nothing was read", () => {
+    const d = fakeDom();
+    const input = createInput(d.canvas);
+    d.press();
+    d.key("keydown", "KeyE");
+    d.move(50, 50);
+    input.reset();
+    const a = input.read(1 / 60);
+    expect(a.use).toBe(false);
+    expect(a.look).toEqual({ x: 0, y: 0 });
+    input.dispose();
+  });
+
+  it("blur clears what piled up, and pointercancel ends a drag", () => {
+    const d = fakeDom();
+    (d.canvas as unknown as { requestPointerLock: () => void }).requestPointerLock = () => {
+      throw new Error("unsupported");
+    };
+    const input = createInput(d.canvas);
+    d.press();
+    d.key("keydown", "KeyE");
+    d.win.dispatchEvent(new Event("blur"));
+    expect(input.read(1 / 60).use).toBe(false);
+    d.press();
+    d.win.dispatchEvent(new Event("pointercancel"));
+    d.move(10, 0);
+    expect(input.read(1 / 60).look.x).toBe(0);
+    input.dispose();
+  });
+
+  it("is not locked after dispose", () => {
+    const d = fakeDom();
+    const input = createInput(d.canvas);
+    d.press();
+    expect(input.locked).toBe(true);
+    input.dispose();
+    expect(input.locked).toBe(false);
   });
 });

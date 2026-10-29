@@ -1,4 +1,7 @@
 /** Play-mode input: keys, mouse and gamepad folded into one set of actions per frame. */
+import { createPadReader, PAD_A, PAD_B, PAD_START, type PadState } from "./pad";
+
+export { PAD_A, PAD_B, PAD_START, type PadState };
 
 /** What the player wants this frame. Axes are in -1..1; look is in radians for this frame. */
 export interface Actions {
@@ -24,40 +27,29 @@ export interface Actions {
   sprint: boolean;
 }
 
-/** A connected pad in the standard layout: sticks (y down is positive), triggers 0..1, held buttons. */
-export interface PadState {
-  lx: number;
-  ly: number;
-  rx: number;
-  ry: number;
-  rt: number;
-  lt: number;
-  rb: boolean;
-  lb: boolean;
-  /** Left stick click. */
-  l3: boolean;
-}
-
 export interface Input {
   /** Actions since the previous read; edges are consumed. The same object is reused. */
   read(dt: number): Actions;
+  /**
+   * Forgets presses, mouse moves and held pad buttons gathered so far. Already called on focus
+   * loss; the session calls it when it resumes from a pause, since nothing is read while paused.
+   */
+  reset(): void;
   dispose(): void;
+  /** Pointer lock is held. False after focus loss or dispose: the player clicks to look again. */
   readonly locked: boolean;
 }
 
 /** Radial stick dead zone. */
 const DEAD = 0.15;
+/** Trigger travel below this is noise. */
+const TRIGGER_DEAD = 0.05;
 /** Mouse look, radians per pixel. */
 const MOUSE_X = 0.0035;
 const MOUSE_Y = 0.003;
 /** Pad look at full stick, radians per second. */
 const PAD_LOOK_X = 2.8;
 const PAD_LOOK_Y = 1.6;
-
-/** Names the pad's edges take in the `pressed` set. */
-export const PAD_A = "PadA";
-export const PAD_B = "PadB";
-export const PAD_START = "PadStart";
 
 export function makeActions(): Actions {
   return {
@@ -77,6 +69,8 @@ export function makeActions(): Actions {
 }
 
 const clamp = (v: number) => (v < -1 ? -1 : v > 1 ? 1 : v);
+const held = (keys: ReadonlySet<string>, a: string, b: string) =>
+  keys.has(a) || keys.has(b) ? 1 : 0;
 
 /** Dead zone on the stick's length, rescaled so full tilt still gives 1. */
 function dead(v: number, w: number): number {
@@ -87,7 +81,8 @@ function dead(v: number, w: number): number {
 /**
  * The pure core. `keys` are held `KeyboardEvent.code`s; `pressed` are the codes (and Pad* names)
  * that went down since the last frame. `mouse` is the pixel move since the last frame. A null pad
- * (never connected or just unplugged) contributes nothing. Writes into `out` and returns it.
+ * (never connected or just unplugged) contributes nothing. Writes into `out` and returns it;
+ * with no `out` it makes a fresh object.
  */
 export function actionsFrom(
   keys: ReadonlySet<string>,
@@ -97,9 +92,8 @@ export function actionsFrom(
   dt = 1 / 60,
   out: Actions = makeActions(),
 ): Actions {
-  const held = (a: string, b: string) => (keys.has(a) || keys.has(b) ? 1 : 0);
-  const right = held("KeyD", "ArrowRight") - held("KeyA", "ArrowLeft");
-  const fwd = held("KeyW", "ArrowUp") - held("KeyS", "ArrowDown");
+  const right = held(keys, "KeyD", "ArrowRight") - held(keys, "KeyA", "ArrowLeft");
+  const fwd = held(keys, "KeyW", "ArrowUp") - held(keys, "KeyS", "ArrowDown");
 
   let px = 0;
   let py = 0;
@@ -112,8 +106,8 @@ export function actionsFrom(
     py = dead(pad.ly, pad.lx);
     lookX += dead(pad.rx, pad.ry) * PAD_LOOK_X * dt;
     lookY += dead(pad.ry, pad.rx) * PAD_LOOK_Y * dt;
-    rt = pad.rt;
-    lt = pad.lt;
+    rt = pad.rt < TRIGGER_DEAD ? 0 : pad.rt;
+    lt = pad.lt < TRIGGER_DEAD ? 0 : pad.lt;
   }
 
   let mx = clamp(right + px);
@@ -127,8 +121,8 @@ export function actionsFrom(
   out.move.y = my;
   out.look.x = lookX;
   out.look.y = lookY;
-  out.throttle = Math.max(held("KeyW", "ArrowUp"), rt);
-  out.brake = Math.max(held("KeyS", "ArrowDown"), lt);
+  out.throttle = Math.max(held(keys, "KeyW", "ArrowUp"), rt);
+  out.brake = Math.max(held(keys, "KeyS", "ArrowDown"), lt);
   out.steer = clamp(right + px);
   out.up = keys.has("Space") || !!pad?.rb;
   out.down = keys.has("ShiftLeft") || keys.has("ShiftRight") || !!pad?.lb;
@@ -143,41 +137,11 @@ export function actionsFrom(
 /** Keys the page must not scroll or act on while playing. */
 const GAME_KEYS = new Set(["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
-interface Face {
-  a: boolean;
-  b: boolean;
-  start: boolean;
-}
-
-/** Reads the first connected pad into `out` and `face`, or returns null. Standard layout indices. */
-function readPad(out: PadState, face: Face): PadState | null {
-  const pads = navigator.getGamepads?.();
-  if (!pads) return null;
-  for (let i = 0; i < pads.length; i++) {
-    const p = pads[i];
-    if (!p || !p.connected) continue;
-    const b = p.buttons;
-    out.lx = p.axes[0] ?? 0;
-    out.ly = p.axes[1] ?? 0;
-    out.rx = p.axes[2] ?? 0;
-    out.ry = p.axes[3] ?? 0;
-    out.lt = b[6]?.value ?? 0;
-    out.rt = b[7]?.value ?? 0;
-    out.lb = !!b[4]?.pressed;
-    out.rb = !!b[5]?.pressed;
-    out.l3 = !!b[10]?.pressed;
-    face.a = !!b[0]?.pressed;
-    face.b = !!b[1]?.pressed;
-    face.start = !!b[9]?.pressed;
-    return out;
-  }
-  return null;
-}
-
 /**
  * Listens on `target` (the game canvas) and the document. Esc is handled here: under pointer lock
  * the browser may swallow it and just drop the lock, so a lock lost without our own release also
- * counts as Esc. Without pointer lock the mouse looks around while a button is dragged.
+ * counts as Esc, unless the window lost focus (Alt+Tab drops the lock too, and that is a pause).
+ * Without pointer lock the mouse looks around while a button is dragged.
  * Nothing allocates per frame except the browser's own `getGamepads()`.
  */
 export function createInput(target: HTMLElement): Input {
@@ -195,16 +159,24 @@ export function createInput(target: HTMLElement): Input {
     lb: false,
     l3: false,
   };
-  const face: Face = { a: false, b: false, start: false };
-  const prev: Face = { a: false, b: false, start: false };
+  const pads = createPadReader();
   const out = makeActions();
   let locked = false;
   let dragging = false;
   let releasing = false;
+  let blurred = false;
 
+  const reset = () => {
+    pressed.clear();
+    mouse.dx = 0;
+    mouse.dy = 0;
+    pads.reset();
+  };
   const onKeyDown = (e: KeyboardEvent) => {
     if (GAME_KEYS.has(e.code)) e.preventDefault();
-    if (!keys.has(e.code)) pressed.add(e.code);
+    blurred = false;
+    // Esc always counts: a lost keyup must not block the next one.
+    if (e.code === "Escape" || !keys.has(e.code)) pressed.add(e.code);
     keys.add(e.code);
     if (e.code === "Escape" && locked) {
       // Our own release, so the lock change below is not counted as a second exit.
@@ -214,8 +186,16 @@ export function createInput(target: HTMLElement): Input {
   };
   const onKeyUp = (e: KeyboardEvent) => void keys.delete(e.code);
   const onBlur = () => {
+    blurred = true;
     keys.clear();
     dragging = false;
+    reset();
+  };
+  const onFocus = () => {
+    blurred = false;
+  };
+  const onHidden = () => {
+    if (document.hidden) onBlur();
   };
   const onMouseMove = (e: MouseEvent) => {
     if (!locked && !dragging) return;
@@ -237,48 +217,48 @@ export function createInput(target: HTMLElement): Input {
   };
   const onLockChange = () => {
     const now = document.pointerLockElement === target;
-    if (locked && !now && !releasing) pressed.add("Escape");
+    const away = blurred || document.hidden || document.hasFocus?.() === false;
+    if (locked && !now && !releasing && !away) pressed.add("Escape");
     releasing = false;
     locked = now;
   };
 
-  document.addEventListener("keydown", onKeyDown);
-  document.addEventListener("keyup", onKeyUp);
-  document.addEventListener("mousemove", onMouseMove);
-  document.addEventListener("pointerlockchange", onLockChange);
-  target.addEventListener("pointerdown", onDown);
-  window.addEventListener("pointerup", onUp);
-  window.addEventListener("blur", onBlur);
+  const docEvents: [string, EventListener][] = [
+    ["keydown", onKeyDown as EventListener],
+    ["keyup", onKeyUp as EventListener],
+    ["mousemove", onMouseMove as EventListener],
+    ["pointerlockchange", onLockChange],
+    ["visibilitychange", onHidden],
+  ];
+  const winEvents: [string, EventListener][] = [
+    ["pointerup", onUp],
+    ["pointercancel", onUp],
+    ["blur", onBlur],
+    ["focus", onFocus],
+  ];
+  for (const [t, f] of docEvents) document.addEventListener(t, f);
+  for (const [t, f] of winEvents) window.addEventListener(t, f);
+  target.addEventListener("pointerdown", onDown as EventListener);
+  target.addEventListener("lostpointercapture", onUp);
 
   return {
     read(dt) {
-      const p = readPad(pad, face);
-      if (p) {
-        if (face.a && !prev.a) pressed.add(PAD_A);
-        if (face.b && !prev.b) pressed.add(PAD_B);
-        if (face.start && !prev.start) pressed.add(PAD_START);
-        prev.a = face.a;
-        prev.b = face.b;
-        prev.start = face.start;
-      } else {
-        // Unplugged mid-game: nothing stays held.
-        prev.a = prev.b = prev.start = false;
-      }
+      const p = pads.read(pad, pressed);
       actionsFrom(keys, pressed, mouse, p, dt, out);
       pressed.clear();
       mouse.dx = 0;
       mouse.dy = 0;
       return out;
     },
+    reset,
     dispose() {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("keyup", onKeyUp);
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("pointerlockchange", onLockChange);
-      target.removeEventListener("pointerdown", onDown);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("blur", onBlur);
+      for (const [t, f] of docEvents) document.removeEventListener(t, f);
+      for (const [t, f] of winEvents) window.removeEventListener(t, f);
+      target.removeEventListener("pointerdown", onDown as EventListener);
+      target.removeEventListener("lostpointercapture", onUp);
       if (locked) document.exitPointerLock?.();
+      locked = false;
+      dragging = false;
     },
     get locked() {
       return locked;
