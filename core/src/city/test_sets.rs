@@ -58,8 +58,17 @@ const FIVE: [u64; 5] = [16 * GIB, 8 * GIB, 4 * GIB, 2 * GIB, GIB];
 /// Islands of about `used` bytes each, biggest first, the gates of the `i`-th facing
 /// `aim(sizes, i)` (`(used, free)` of every island); built side by side.
 fn build(used: &[u64], aim: impl Fn(&[(u64, u64)], usize) -> Vec<f32>) -> Vec<Island> {
+    build_from(0, used, aim)
+}
+
+/// [`build`] with the roots and the islands seeded from `base` on.
+fn build_from(
+    base: u64,
+    used: &[u64],
+    aim: impl Fn(&[(u64, u64)], usize) -> Vec<f32>,
+) -> Vec<Island> {
     let roots: Vec<Folder> = (used.iter().enumerate())
-        .map(|(i, &u)| root(i as u64 + 1, u))
+        .map(|(i, &u)| root(base + i as u64 + 1, u))
         .collect();
     assert!(roots.windows(2).all(|w| w[0].size > w[1].size));
     let sizes: Vec<(u64, u64)> = (roots.iter().enumerate())
@@ -72,7 +81,7 @@ fn build(used: &[u64], aim: impl Fn(&[(u64, u64)], usize) -> Vec<f32>) -> Vec<Is
                     root: r.clone(),
                     free: sizes[i].1,
                     neighbours: aim(&sizes, i),
-                    seed: i as u64 + 1,
+                    seed: base + i as u64 + 1,
                 };
                 s.spawn(move || island(&input))
             })
@@ -152,4 +161,21 @@ pub(crate) fn four_turned() -> &'static [Island] {
         };
         build(&FOUR, turned)
     })
+}
+
+/// An archipelago drawn from `seed`: 4 to 8 islands of 1 to 48 GiB each, all different, by the
+/// first pass.
+pub(crate) fn random(seed: u64) -> Vec<Island> {
+    let mut rng = Rng::new(seed);
+    let n = 4 + (rng.unit() * 5.0) as usize;
+    let mut sizes: Vec<u64> = Vec::new();
+    while sizes.len() < n.min(8) {
+        let k = 1 + (rng.unit() * 48.0) as u64;
+        if !sizes.contains(&k) {
+            sizes.push(k);
+        }
+    }
+    sizes.sort_unstable_by(|a, b| b.cmp(a));
+    let used: Vec<u64> = sizes.iter().map(|k| k * GIB).collect();
+    build_from(seed * 16, &used, directions)
 }

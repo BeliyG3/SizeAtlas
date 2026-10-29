@@ -17,7 +17,7 @@ const OPEN: f32 = CLEAR + 2.0 * WORLD_CELL;
 /// A way sets out where a gate's straight first lies this far from every outline, metres.
 const OUT: f32 = CLEAR + 3.0 * WORLD_CELL;
 /// A gate's straight runs out at most this far before its way, metres.
-const REACH: f32 = 600.0;
+const REACH: f32 = 1000.0;
 /// No way is searched on a raster of more states (cells · headings) than this.
 const MAX_STATES: usize = 2000 * 2000 * 8;
 /// `back` of a state with none before it; the high bit marks a state done.
