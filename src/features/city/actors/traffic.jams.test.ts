@@ -4,7 +4,7 @@ import { mapOf } from "../world/map.fixture";
 import { buildRoads } from "../world/roads";
 import { MIN_GAP } from "./junctions";
 import { FADE, type Circle } from "./locals";
-import { CAR_SPACING, createTraffic, type Traffic } from "./traffic";
+import { AIR_SHARE, CAR_SPACING, createTraffic, STUCK, type Traffic } from "./traffic";
 
 function graphOf(nodes: number[], edges: [number, number, RoadKind][]) {
   return buildRoads(
@@ -148,6 +148,93 @@ describe("cars leaving the roads", () => {
     }
     expect(left).toBeGreaterThan(0);
     expect(t.live.reduce((n, v) => n + v, 0)).toBe(Math.floor((2 * 400) / CAR_SPACING));
+  });
+});
+
+/** The count for `createTraffic` that has `ground` cars driving: the rest fly. */
+function withGround(ground: number): number {
+  let n = ground;
+  while (n - Math.floor(n * AIR_SHARE) < ground) n++;
+  return n;
+}
+
+/**
+ * Seconds car `i` stood still in all till it is through the node at (0, 0): `away` metres past
+ * it, its axis behind it (or `limit` seconds are up).
+ */
+function standsBefore(t: Traffic, i: number, away: number, limit: number): number {
+  let [x, z, stood] = [t.x[i], t.z[i], 0];
+  const past = () => t.x[i] * Math.sin(t.heading[i]) + t.z[i] * Math.cos(t.heading[i]);
+  for (let n = 0; n < limit * 30 && !(past() > away && Math.hypot(t.x[i], t.z[i]) > away); n++) {
+    t.update(1 / 30);
+    if (Math.hypot(t.x[i] - x, t.z[i] - z) < 1e-3) stood += 1 / 30;
+    [x, z] = [t.x[i], t.z[i]];
+  }
+  return stood;
+}
+
+/** `count` cars in the first lane of `edge`, going forward, from `s = from` back every `step` metres. */
+const queue = (edge: number, count: number, from: number, step: number) =>
+  Array.from({ length: count }, (_, k) => ({
+    edge,
+    s: from - step * k,
+    forward: true,
+    lane: 0,
+    want: 0,
+  }));
+
+describe("waiting at a node", () => {
+  it("a car moving across to the lane it needs keeps its turn in a steady stream", () => {
+    // A highway east ends at a street north to south; a stream of cars comes down the street
+    // from either side, one every 20 m. A car in the second lane of the highway must move to the
+    // first to turn into the stream, but a queue there keeps it out till it is at the end of
+    // the highway, where the stream never thins out for all the way it can see.
+    const g = graphOf(
+      [-300, 0, 0, 0, 0, 600, 0, -600],
+      [
+        [0, 1, ROAD.highway],
+        [2, 1, ROAD.street],
+        [3, 1, ROAD.street],
+      ],
+    );
+    const start = [
+      { edge: 0, s: 250, forward: true, lane: 1, want: 1 },
+      ...queue(0, 5, 295, 10),
+      ...queue(1, 25, 590, 20),
+      ...queue(2, 25, 590, 20),
+    ];
+    for (let seed = 1; seed <= 6; seed++) {
+      const t = createTraffic(g, withGround(start.length), seed, start);
+      expect(t.air.indexOf(1)).toBe(start.length);
+      // A few seconds; last in the turns at each try, it waited for the whole stream, 20 s and more.
+      expect(standsBefore(t, 0, 20, 60), `seed ${seed}`).toBeLessThan(6);
+    }
+  });
+
+  it("a car held short of its node looks for another way out", () => {
+    // A street north to a node, on from it a street east and one north. A queue stands just past
+    // the node on the street east: a car that chose to go there stands 6 m short of the node
+    // till the queue moves on.
+    const g = graphOf(
+      [0, -300, 0, 0, 300, 0, 0, 300],
+      [
+        [0, 1, ROAD.street],
+        [1, 2, ROAD.street],
+        [1, 3, ROAD.street],
+      ],
+    );
+    const start = [
+      { edge: 0, s: 294, forward: true, lane: 0, want: 0 },
+      ...queue(1, 15, 1 + 14 * MIN_GAP, MIN_GAP),
+    ];
+    let held = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const t = createTraffic(g, withGround(start.length), seed, start);
+      const stood = standsBefore(t, 0, 20, 30);
+      if (stood > STUCK / 2) held++;
+      expect(stood, `seed ${seed}`).toBeLessThan(STUCK + 0.5);
+    }
+    expect(held).toBeGreaterThan(0); // some chose the way east first
   });
 });
 

@@ -24,7 +24,10 @@ const LOOK = MIN_GAP + SPEED.highway * HEADWAY;
 const MAX_DT = 0.25;
 // A car moving across to another lane holds the one it left until it is drawn this near the new one, metres.
 const ACROSS = 0.5;
-/** Seconds a car stands at a node, whatever holds it, before it looks for another way out. */
+/**
+ * Seconds a car stands with its way out of the node ahead chosen, at the node or short of it,
+ * whatever holds it, before it looks for another way out.
+ */
 export const STUCK = 1;
 
 export interface Traffic {
@@ -75,7 +78,7 @@ export function createTraffic(
   const nextE = new Int32Array(n).fill(-1);
   const nextF = new Uint8Array(n);
   const nextL = new Uint8Array(n);
-  const held = new Float32Array(n); // seconds standing at the node ahead
+  const held = new Float32Array(n); // seconds standing still with its way out chosen
   // When each car chose its way at the node ahead, on the traffic's clock, and its turn there.
   const since = new Float64Array(n);
   const turn = new Float64Array(n);
@@ -153,7 +156,7 @@ export function createTraffic(
    * Chooses where car `i` goes at the end of its road, once, as it comes within `LOOK` of it, and
    * keeps the choice until it crosses the node, so the cars behind can see where it will be. It also
    * moves to the lane it will need there (the road ahead may be narrower), as soon as that lane is
-   * clear beside it; until then it waits at the node, at most `STUCK` seconds (see `rethink`).
+   * clear beside it; until then it waits, at most `STUCK` seconds once it stands (see `rethink`).
    * Until it is drawn across, it holds the lane it left too (see `ACROSS`).
    */
   function plan(i: number) {
@@ -171,36 +174,56 @@ export function createTraffic(
     if (lane[i] === nextL[i] || crowded(t.edge[i], t.forward[i], nextL[i], t.s[i], i)) {
       return;
     }
-    // Beside it the lane is clear; the cars ahead, across the node too, must be as far. It comes
-    // to the node anew in that lane, last in the turns but for the cars queued behind it there.
-    const was = [lane[i], since[i], turn[i]];
-    [lane[i], since[i]] = [nextL[i], clock];
+    // Beside it the lane is clear; the cars ahead, across the node too, must be as far. It keeps
+    // its turn there, as it chose its way when it came near; `cutsIn` keeps it from taking that
+    // turn under the nose of a car coming to the node.
+    const wasLane = lane[i];
+    const wasTurn = turn[i];
+    lane[i] = nextL[i];
     turn[i] = turnOf(i);
-    if (gapAhead(i) < MIN_GAP || cutsIn(i)) [lane[i], since[i], turn[i]] = was;
-    else leaving[i] = laneOffset(e.cls, was[0]);
+    if (gapAhead(i) < MIN_GAP || cutsIn(i)) {
+      lane[i] = wasLane;
+      turn[i] = wasTurn;
+    } else leaving[i] = laneOffset(e.cls, wasLane);
+  }
+
+  // The free ways out `rethink` finds, as many as a node has at most.
+  const freeExits = new Int32Array(g.links.reduce((most, l) => Math.max(most, l.length), 0));
+
+  /** Car `i` is to leave its node by `e`, in the lane it is in. */
+  function choose(i: number, node: number, e: number) {
+    nextE[i] = e;
+    nextF[i] = g.edges[e].a === node ? 1 : 0;
+    nextL[i] = lane[i];
   }
 
   /**
-   * Car `i` has stood at its node longer than `STUCK`, whatever held it: the lane it wants taken
-   * beside it, no room past the node, a car it lets go first. It takes a way out that is free now,
-   * in the lane it is in, at random among them; with none it waits and looks again. A ring of
-   * full roads that waits for itself would need far more cars than the cap lets onto them.
+   * Car `i` has stood longer than `STUCK` with its way out chosen, at its node or short of it,
+   * whatever held it: the lane it wants taken beside it, no room past the node, a car it lets go
+   * first. It takes a way out that is free now, in the lane it is in, at random among them; with
+   * none it waits and looks again. A ring of full roads that waits for itself would need far more
+   * cars than the cap lets onto them.
    */
   function rethink(i: number) {
     held[i] = 0;
     const node = endNode(t.edge[i], t.forward[i]);
-    const was = [nextE[i], nextF[i], nextL[i]];
-    const choose = (e: number) => {
-      [nextE[i], nextF[i], nextL[i]] = [e, g.edges[e].a === node ? 1 : 0, lane[i]];
-    };
+    const wasE = nextE[i];
+    const wasF = nextF[i];
+    const wasL = nextL[i];
     const exits = g.links[node];
-    const free = exits.filter((e) => {
-      if ((e === t.edge[i] && exits.length > 1) || lanes(g.edges[e].cls) <= lane[i]) return false;
-      choose(e);
-      return gapAhead(i) >= MIN_GAP;
-    });
-    if (free.length) choose(free[Math.floor(rand() * free.length)]);
-    else [nextE[i], nextF[i], nextL[i]] = was;
+    let free = 0;
+    for (let k = 0; k < exits.length; k++) {
+      const e = exits[k];
+      if ((e === t.edge[i] && exits.length > 1) || lanes(g.edges[e].cls) <= lane[i]) continue;
+      choose(i, node, e);
+      if (gapAhead(i) >= MIN_GAP) freeExits[free++] = e;
+    }
+    if (free) choose(i, node, freeExits[Math.floor(rand() * free)]);
+    else {
+      nextE[i] = wasE;
+      nextF[i] = wasF;
+      nextL[i] = wasL;
+    }
   }
 
   /**
@@ -234,8 +257,7 @@ export function createTraffic(
       const free = Math.max(0, (gapAhead(i) - MIN_GAP) / HEADWAY);
       const moved = drive(i, Math.min(speedOn(g.edges[t.edge[i]].cls), free) * h);
       if (poses.ease(i, h, moved) <= ACROSS) leaving[i] = NaN;
-      const atNode = t.s[i] >= g.edges[t.edge[i]].len && nextE[i] >= 0;
-      held[i] = atNode ? held[i] + h : 0;
+      held[i] = nextE[i] >= 0 && moved === 0 ? held[i] + h : 0;
     }
     for (let i = ground; i < n; i++) advance(g, t, i, SPEED.air * h, rand, flies);
     for (let i = 0; i < n; i++) if (live[i]) put(i);
