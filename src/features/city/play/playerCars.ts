@@ -1,16 +1,15 @@
 /**
  * The cars the player has had, drawn: the one it is in between the physics steps, the others
- * standing where they were left; each a rigged model (see `carRig`).
+ * standing where they were left; each a rigged model (see `carRig`), dropped with its car.
  */
 import type { Scene } from "three";
 import type { Assets } from "../render/assets";
 import { carModel } from "../render/cars";
-import type { CarView } from "./camera";
+import { wrap, type CarView } from "./camera";
 import { rigCar, type CarRig } from "./carRig";
 import type { Car } from "./vehicle";
 import { hoverBob } from "./vehicleFly";
 
-const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** The pose of a car as drawn. */
@@ -33,26 +32,39 @@ const keep = (k: CarPose, c: Car) => {
   k.pitch = c.pitch;
 };
 
+type Model = ReturnType<typeof carModel> & { car: Car; rig: CarRig };
+
 export function createPlayerCars(scene: Scene, cars: readonly Car[]) {
-  const models: (ReturnType<typeof carModel> & { rig: CarRig })[] = [];
-  // The car the player is in, before and after the last step.
+  const models: Model[] = [];
+  // The car the player is in, before and after the last step, and as drawn.
   const before = makePose();
   const now = makePose();
   const shown = makePose();
+  const rigOf = (car: Car): CarRig | null => {
+    for (const m of models) if (m.car === car) return m.rig;
+    return null;
+  };
+  const drop = (i: number) => {
+    scene.remove(models[i].group);
+    models[i].dispose();
+    models.splice(i, 1);
+  };
 
   return {
-    /** A model for each car that has none yet. */
+    /** A model for each car that has none yet; those of cars gone are dropped. */
     models(assets: Assets) {
-      while (models.length < cars.length) {
+      for (let i = models.length - 1; i >= 0; i--) if (!cars.includes(models[i].car)) drop(i);
+      for (const car of cars) {
+        if (rigOf(car)) continue;
         const m = carModel(assets.car);
         // Yaw, then pitch, then the roll about the nose.
         m.group.rotation.order = "YXZ";
         scene.add(m.group);
-        models.push({ ...m, rig: rigCar(m.group.children[0]) });
+        models.push({ ...m, car, rig: rigCar(m.group.children[0]) });
       }
     },
-    /** The rig of car `i`, null until its model is in. */
-    rig: (i: number): CarRig | null => models[i]?.rig ?? null,
+    /** The rig of `car`, null until its model is in. */
+    rig: rigOf,
     /** The player is getting into `car`: it is drawn from where it stands. */
     boarded(car: Car) {
       keep(before, car);
@@ -66,37 +78,32 @@ export function createPlayerCars(scene: Scene, cars: readonly Car[]) {
     },
     /** Draws each car, `active` `alpha` of the way past the last step, written to `view` too. */
     draw(active: Car | null, alpha: number, view: CarView) {
-      for (let i = 0; i < models.length; i++) {
-        const c = cars[i];
-        const g = models[i].group;
-        if (c === active) {
-          shown.x = lerp(before.x, now.x, alpha);
-          shown.y = lerp(before.y, now.y, alpha) + hoverBob(c);
-          shown.z = lerp(before.z, now.z, alpha);
-          shown.yaw = before.yaw + wrap(now.yaw - before.yaw) * alpha;
-          shown.pitch = lerp(before.pitch, now.pitch, alpha);
-          shown.roll = lerp(before.roll, now.roll, alpha);
-          models[i].rig.steer(c.steer);
-        } else keep(shown, c);
-        g.position.set(shown.x, shown.y, shown.z);
-        g.rotation.set(shown.pitch, shown.yaw, shown.roll);
+      if (active) {
+        shown.x = lerp(before.x, now.x, alpha);
+        shown.y = lerp(before.y, now.y, alpha) + hoverBob(active);
+        shown.z = lerp(before.z, now.z, alpha);
+        shown.yaw = before.yaw + wrap(now.yaw - before.yaw) * alpha;
+        shown.pitch = lerp(before.pitch, now.pitch, alpha);
+        shown.roll = lerp(before.roll, now.roll, alpha);
+        view.x = shown.x;
+        view.y = shown.y;
+        view.z = shown.z;
+        view.yaw = shown.yaw;
+        view.vx = active.vx;
+        view.vz = active.vz;
+        view.steer = active.steer;
+        view.flying = active.flying;
+        view.flyT = active.flyT;
       }
-      if (!active) return;
-      view.x = lerp(before.x, now.x, alpha);
-      view.y = lerp(before.y, now.y, alpha) + hoverBob(active);
-      view.z = lerp(before.z, now.z, alpha);
-      view.yaw = before.yaw + wrap(now.yaw - before.yaw) * alpha;
-      view.vx = active.vx;
-      view.vz = active.vz;
-      view.steer = active.steer;
-      view.flying = active.flying;
-      view.flyT = active.flyT;
+      for (const m of models) {
+        const p = m.car === active ? shown : m.car;
+        m.group.position.set(p.x, p.y, p.z);
+        m.group.rotation.set(p.pitch, p.yaw, p.roll);
+        if (m.car === active) m.rig.steer(m.car.steer);
+      }
     },
     dispose() {
-      for (const m of models) {
-        scene.remove(m.group);
-        m.dispose();
-      }
+      for (let i = models.length - 1; i >= 0; i--) drop(i);
     },
   };
 }

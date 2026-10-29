@@ -88,7 +88,8 @@ export function createCam(yaw: number): Cam {
 }
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
-const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+/** An angle in -π..π. */
+export const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** Turns the view by this frame's look (radians, x right, y down); a turn puts off the re-centring. */
 export function turnCam(c: Cam, look: { x: number; y: number }) {

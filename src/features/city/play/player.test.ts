@@ -1,29 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { createResidents, type Residents } from "../actors/residents";
-import type { Traffic } from "../actors/traffic";
+import { standingCars } from "../actors/traffic.fixture";
 import { canalWorld } from "../physics/world.fixture";
 import { CLIP, doorOf } from "./boarding";
+import { driverOut } from "./boardingScript";
 import { makeActions, type Actions } from "./input";
-import { createPlayer, pressPlayer, stepPlayer, type Player, type PlayWorld } from "./player";
+import {
+  createPlayer,
+  MAX_CARS,
+  pressPlayer,
+  stepPlayer,
+  type Player,
+  type PlayWorld,
+} from "./player";
+import { spawnPoint } from "./spawn";
 import { createCar } from "./vehicle";
 
 const DT = 1 / 60;
 const EAST = Math.PI / 2;
 /** A 40 m house at x 20…40, z 20…40. */
 const TOWER = { x: 20, z: 20, w: 20, d: 20, h: 40 };
-
-/** One ground car of the traffic at (x, z), heading +z. */
-const oneCar = (x: number, z: number): Traffic => ({
-  count: 1,
-  x: Float32Array.of(x),
-  y: Float32Array.of(0),
-  z: Float32Array.of(z),
-  heading: Float32Array.of(0),
-  air: Uint8Array.of(0),
-  appear: Float32Array.of(1),
-  live: Uint8Array.of(1),
-  update: () => {},
-});
 
 function press(p: Player, w: PlayWorld, o: Partial<Actions>) {
   pressPlayer(p, Object.assign(makeActions(), o), w);
@@ -60,7 +56,7 @@ describe("getting in", () => {
     expect(p.state).toBe("enter");
     expect(p.car).toBe(car);
     expect(car.owner).toBe("player");
-    const len = p.script!.length;
+    const len = p.script!.ready;
     // The clip, and the steps to the door before it.
     expect(len).toBeGreaterThan(CLIP.enter.length + 2 / 1.25);
     run(p, w, len - 0.1);
@@ -81,7 +77,7 @@ describe("getting in", () => {
 
   it("into a traffic car: it leaves the traffic, its driver gets out and walks off as a resident", () => {
     const { solids, roads } = canalWorld();
-    const traffic = oneCar(40, 30);
+    const traffic = standingCars([[40, 30]]);
     const residents = createResidents(roads, 20, 1);
     const w: PlayWorld = { solids, cars: [], traffic, residents };
     const door = doorOf(40, 30, 0, { x: 0, z: 0 });
@@ -93,10 +89,10 @@ describe("getting in", () => {
     expect(w.cars).toHaveLength(1);
     const car = w.cars[0];
     expect([car.x, car.z, car.yaw, car.owner]).toEqual([40, 30, 0, "player"]);
-    // The driver first: Exit_Car, then the door shuts.
-    run(p, w, CLIP.exit.length);
+    // The driver first: Exit_Car, the door left open.
+    run(p, w, CLIP.exit.length - 0.1);
     expect(p.driver).not.toBeNull();
-    run(p, w, 2);
+    run(p, w, 0.2);
     expect(p.driver).toBeNull();
     expect(near(residents, door.x, door.z, 3)).toBe(before + 1);
     until(p, w, "drive");
@@ -126,6 +122,68 @@ function driving(w: PlayWorld, x: number, z: number): Player {
   p.state = "drive";
   return p;
 }
+
+describe("from the spawn", () => {
+  /** The canal island with its spawn: the player, and their car where it parks. */
+  function spawned() {
+    const { world, roads, solids } = canalWorld();
+    const start = spawnPoint(world, roads, solids, null);
+    const at = start.car!;
+    const own = createCar(at.x, at.z, at.yaw, solids, "empty");
+    return { roads, solids, start, own, p: createPlayer(start, solids) };
+  }
+
+  it("E gets into the own car at once: driving within 6 s", () => {
+    const { solids, own, p } = spawned();
+    const w: PlayWorld = { solids, cars: [own], traffic: null, residents: null };
+    press(p, w, { use: true });
+    expect(p.state).toBe("enter");
+    expect(p.car).toBe(own);
+    expect(until(p, w, "drive", 6)).toBeLessThan(6);
+    expect(p.state).toBe("drive");
+  });
+
+  it("E by a traffic car on the street: its driver out, then the player in and driving", () => {
+    const { roads, solids, start, own } = spawned();
+    // Forward along the street and to its right, where the sidewalk is.
+    const f = { x: Math.sin(start.yaw), z: Math.cos(start.yaw) };
+    const right = { x: -f.z, z: f.x };
+    // A car of the traffic stopped in the near lane 6 m on (the lane is 2.5 m in from the
+    // sidewalk), the player in the road 2 m short of its driver's door.
+    const tx = start.x - right.x * 2.5 + f.x * 6;
+    const tz = start.z - right.z * 2.5 + f.z * 6;
+    const traffic = standingCars([[tx, tz, start.yaw]]);
+    const door = doorOf(tx, tz, start.yaw, { x: 0, z: 0 });
+    const residents = createResidents(roads, 20, 1);
+    const w: PlayWorld = { solids, cars: [own], traffic, residents };
+    const p = createPlayer({ x: door.x - f.x * 2, z: door.z - f.z * 2, yaw: start.yaw }, solids);
+    press(p, w, { use: true });
+    expect(p.state).toBe("enter");
+    expect(p.car).toBe(w.cars[1]);
+    const took = until(p, w, "drive", 15);
+    expect(p.state).toBe("drive");
+    // The driver's clip, then the walk to the door and the player's own.
+    expect(took).toBeLessThan(driverOut().length + 6.5);
+  });
+
+  it("keeps no more cars than the cap: taking one, the farthest left goes", () => {
+    const { solids } = canalWorld();
+    const cars = Array.from({ length: MAX_CARS }, (_, i) =>
+      createCar(150 + i * 6, 20, 0, solids, "empty"),
+    );
+    const w: PlayWorld = {
+      solids,
+      cars: [...cars],
+      traffic: standingCars([[40, 30]]),
+      residents: null,
+    };
+    const p = byDoor(40, 30, 1, w);
+    press(p, w, { use: true });
+    expect(w.cars).toHaveLength(MAX_CARS);
+    expect(w.cars).not.toContain(cars[MAX_CARS - 1]);
+    expect(w.cars.at(-1)).toBe(p.car);
+  });
+});
 
 describe("getting out", () => {
   it("by a wall on the door's side: out the other side, never into the house", () => {

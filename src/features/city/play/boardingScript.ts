@@ -3,12 +3,15 @@
  * where, where the person stands in the car's frame, the door, the hands on the yoke and how far
  * the person is fitted to the car's scale; pure, no three.js, and posing allocates nothing.
  */
-import { CLIP, type Spot } from "./boarding";
+import { CLIP, MODEL_SCALE, type Spot } from "./boarding";
 
 export type ClipName = "Idle_Loop" | "Walk_Loop" | "Enter_Car" | "Exit_Car";
 
-/** Walking to and from the door, m/s; the clip cross-fades, the hands onto the yoke, the door's swing, s. */
-const WALK = 1.25;
+/**
+ * Walking to and from the door at 1.25 m/s, in the car model's frame (see `MODEL_SCALE`); the
+ * clip cross-fades, the hands onto the yoke, the door's swing, s.
+ */
+const WALK = 1.25 / MODEL_SCALE;
 const BLEND = 0.3;
 const GRAB = 0.4;
 const DOOR = 0.9;
@@ -37,6 +40,8 @@ interface Step {
 export interface Script {
   /** Seconds. */
   length: number;
+  /** Getting in, seated with the hands on the yoke from here on: the door still shuts. */
+  ready: number;
   phases: readonly (Step & { t0: number })[];
 }
 
@@ -84,14 +89,15 @@ export const SEATED: ScriptPose = {
   fit: 1,
 };
 
-function script(steps: Step[]): Script {
+/** The steps as a script, `ready` this many seconds before its end. */
+function script(steps: Step[], ready = 0): Script {
   let t0 = 0;
   const phases = steps.map((s) => {
     const p = { ...s, t0 };
     t0 += s.d;
     return p;
   });
-  return { length: t0, phases };
+  return { length: t0, ready: t0 - ready, phases };
 }
 
 const ease = (s: number) => s * s * (3 - 2 * s);
@@ -119,7 +125,8 @@ export function poseAt(s: Script, t: number, out: ScriptPose): ScriptPose {
   const k = Math.min(1, Math.max(0, (t - ph.t0) / ph.d));
   const e = ease(k);
   const into = (ph.clipAt ?? 0) + Math.min(Math.max(0, t - ph.t0), ph.d);
-  const [a, b] = typeof ph.clip === "string" ? [ph.clip, ph.clip] : ph.clip;
+  const a = typeof ph.clip === "string" ? ph.clip : ph.clip[0];
+  const b = typeof ph.clip === "string" ? ph.clip : ph.clip[1];
   out.a = a;
   out.b = b;
   out.bw = a === b ? 0 : e;
@@ -152,9 +159,9 @@ const toward = (from: number, to: number) =>
  * Getting in by the driver's door from where the person stands (`from`, facing `yaw`, in the
  * car's frame): a step to where `Enter_Car` starts as the door opens, the clip with the hands
  * brought onto the yoke at its end, and the door shuts. The person shrinks to the car's scale on
- * the way.
+ * the way. `open`: the door is open already (a driver just got out).
  */
-export function enterScript(from: Spot, yaw: number): Script {
+export function enterScript(from: Spot, yaw: number, open = false): Script {
   const lenIn = CLIP.enter.length;
   const getIn = (y: number): Step[] => {
     const at = { root: IN, yaw: toward(y, CLIP.enter.yaw), fit: 1 };
@@ -171,49 +178,55 @@ export function enterScript(from: Spot, yaw: number): Script {
   if (dist < 0.3) {
     // Close by: a shuffle onto the spot, turning to face it, as the door opens.
     const turned = toward(yaw, CLIP.enter.yaw);
-    return script([
-      {
-        d: DOOR,
-        clip: "Idle_Loop",
-        root: [start, IN],
-        yaw: [yaw, turned],
-        door: [0, 1],
-        fit: [0, 1],
-      },
-      ...getIn(turned),
-    ]);
+    return script(
+      [
+        {
+          d: DOOR,
+          clip: "Idle_Loop",
+          root: [start, IN],
+          yaw: [yaw, turned],
+          door: open ? 1 : [0, 1],
+          fit: [0, 1],
+        },
+        ...getIn(turned),
+      ],
+      DOOR,
+    );
   }
   const go = toward(yaw, heading(start, IN));
   const turned = toward(go, CLIP.enter.yaw);
-  return script([
-    { d: 0.35, clip: ["Idle_Loop", "Walk_Loop"], root: start, yaw: [yaw, go] },
-    {
-      d: dist / WALK,
-      clip: "Walk_Loop",
-      root: [start, IN],
-      walk: true,
-      yaw: go,
-      door: [0, 0.8],
-      fit: [0, 1],
-    },
-    {
-      d: 0.45,
-      clip: ["Walk_Loop", "Idle_Loop"],
-      root: IN,
-      yaw: [go, turned],
-      door: [0.8, 1],
-      fit: 1,
-    },
-    ...getIn(turned),
-  ]);
+  return script(
+    [
+      { d: 0.35, clip: ["Idle_Loop", "Walk_Loop"], root: start, yaw: [yaw, go] },
+      {
+        d: dist / WALK,
+        clip: "Walk_Loop",
+        root: [start, IN],
+        walk: true,
+        yaw: go,
+        door: open ? 1 : [0, 0.8],
+        fit: [0, 1],
+      },
+      {
+        d: 0.45,
+        clip: ["Walk_Loop", "Idle_Loop"],
+        root: IN,
+        yaw: [go, turned],
+        door: open ? 1 : [0.8, 1],
+        fit: 1,
+      },
+      ...getIn(turned),
+    ],
+    DOOR,
+  );
 }
 
 /**
  * Getting out by the driver's door: it opens, `Exit_Car` (out over the sill, turned away from the
  * car), then a walk to `to` (in the car's frame) as the door shuts, growing back to the person's
- * own size; without `to` the person stands by the door as it shuts.
+ * own size.
  */
-export function exitScript(to: Spot | null): Script {
+export function exitScript(to: Spot): Script {
   const lenIn = CLIP.enter.length;
   const lenOut = CLIP.exit.length;
   const out = { root: OUT, yaw: CLIP.exit.yaw, fit: 1 };
@@ -233,21 +246,38 @@ export function exitScript(to: Spot | null): Script {
     { d: lenOut - GRAB - BLEND, clip: "Exit_Car", clipAt: GRAB, ...out, door: 1 },
     { d: BLEND, clip: ["Exit_Car", "Idle_Loop"], clipAt: lenOut - BLEND, ...out, door: 1 },
   ];
-  if (!to) steps.push({ d: DOOR, clip: "Idle_Loop", ...out, door: [1, 0], fit: [1, 0] });
-  else {
-    const dist = Math.hypot(to.x - OUT.x, to.z - OUT.z);
-    const go = toward(CLIP.exit.yaw, heading(OUT, to));
-    steps.push({
-      d: Math.max(DOOR, dist / WALK),
-      clip: ["Idle_Loop", "Walk_Loop"],
-      root: [OUT, { x: to.x, z: to.z }],
-      walk: true,
-      yaw: [CLIP.exit.yaw, go],
-      door: [1, 0],
-      fit: [1, 0],
-    });
-  }
+  const dist = Math.hypot(to.x - OUT.x, to.z - OUT.z);
+  steps.push({
+    d: Math.max(DOOR, dist / WALK),
+    clip: ["Idle_Loop", "Walk_Loop"],
+    root: [OUT, { x: to.x, z: to.z }],
+    walk: true,
+    yaw: [CLIP.exit.yaw, toward(CLIP.exit.yaw, heading(OUT, to))],
+    door: [1, 0],
+    fit: [1, 0],
+  });
   return script(steps);
+}
+
+/**
+ * A traffic car's driver getting out in a hurry: the door opens as `Exit_Car` starts, and it is
+ * left open for the one getting in; the driver stands by it, at their own size.
+ */
+export function driverOut(): Script {
+  const lenOut = CLIP.exit.length;
+  const out = { root: OUT, yaw: CLIP.exit.yaw };
+  return script([
+    { d: GRAB, clip: "Exit_Car", ...out, door: [0, 1], ik: [1, 0], fit: 1 },
+    { d: lenOut - GRAB - BLEND, clip: "Exit_Car", clipAt: GRAB, ...out, door: 1, fit: 1 },
+    {
+      d: BLEND,
+      clip: ["Exit_Car", "Idle_Loop"],
+      clipAt: lenOut - BLEND,
+      ...out,
+      door: 1,
+      fit: [1, 0],
+    },
+  ]);
 }
 
 /**
@@ -264,6 +294,12 @@ export function backScript(to: Spot): Script {
   } as const;
   return script([
     { d: GRAB, ...seated, ik: [1, 0], fit: 1 },
-    { d: DOOR, clip: "Idle_Loop", root: to, yaw: Math.atan2(to.x, to.z), fit: [1, 0] },
+    {
+      d: DOOR,
+      clip: "Idle_Loop",
+      root: { x: to.x, z: to.z },
+      yaw: Math.atan2(to.x, to.z),
+      fit: [1, 0],
+    },
   ]);
 }

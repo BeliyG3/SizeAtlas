@@ -10,14 +10,14 @@ import { loadAssets, type Assets } from "../render/assets";
 import type { CitySnapshot } from "../scene";
 import { MODEL_SCALE } from "./boarding";
 import { makeScriptPose, poseAt, SEATED, type ScriptPose } from "./boardingScript";
-import { createCam, followCar, followWalker, turnCam, type CarView } from "./camera";
+import { createCam, followCar, followWalker, turnCam, wrap, type CarView } from "./camera";
 import { holdYoke } from "./carRig";
 import { createCharacter, type Character } from "./character";
 import type { Actions } from "./input";
 import { createPlayer, pressPlayer, stepPlayer, type PlayWorld } from "./player";
 import { createPlayerCars } from "./playerCars";
 import { spawnPoint } from "./spawn";
-import { createCar } from "./vehicle";
+import { createCar, type Car } from "./vehicle";
 import { gaitOf } from "./walk";
 
 export interface PlayerView {
@@ -30,8 +30,6 @@ export interface PlayerView {
   readonly at: Vector3;
   dispose(): void;
 }
-
-const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** A person in a car's frame: a holder mirrored across the car for its other door. */
 interface Seated {
@@ -105,9 +103,9 @@ export function createPlayerView(
     (e: unknown) => console.warn("The player's models did not load", e),
   );
 
-  /** `s` posed by `sp` in the frame of the car drawn at `i`, its holder mirrored if `mirror`. */
-  const inCar = (s: Seated, i: number, sp: ScriptPose, mirror: boolean) => {
-    const rig = cars.rig(i);
+  /** `s` posed by `sp` in the frame of `car`, its holder mirrored if `mirror`. */
+  const inCar = (s: Seated, car: Car, sp: ScriptPose, mirror: boolean) => {
+    const rig = cars.rig(car);
     if (!rig) return;
     if (s.holder.parent !== rig.model) rig.model.add(s.holder);
     if (s.figure.group.parent !== s.holder) s.holder.add(s.figure.group);
@@ -169,7 +167,6 @@ export function createPlayerView(
         at.set(view.x, view.y, view.z);
       }
       if (me) {
-        const i = car ? w.cars.indexOf(car) : -1;
         // On foot, or waiting by a traffic car for its driver to get out.
         if (onFoot || p.driver) {
           if (me.figure.group.parent !== scene) scene.add(me.figure.group);
@@ -180,12 +177,12 @@ export function createPlayerView(
           const z = onFoot ? at.z : b.z;
           me.figure.update(x, y, z, face, gaitOf(p.walker), p.walker.speed, dt);
         } else {
-          inCar(me, i, p.script ? poseAt(p.script, p.t, pose) : SEATED, p.mirror);
+          inCar(me, car, p.script ? poseAt(p.script, p.t, pose) : SEATED, p.mirror);
         }
         if (p.driver && car && assets) {
           driver ??= seat(assets);
           driver.holder.visible = true;
-          inCar(driver, i, poseAt(p.driver, p.t, pose), false);
+          inCar(driver, car, poseAt(p.driver, p.t, pose), false);
         } else if (driver) driver.holder.visible = false;
       }
       camera.position.set(cam.eye.x, cam.eye.y, cam.eye.z);

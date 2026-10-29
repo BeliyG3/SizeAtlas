@@ -154,6 +154,19 @@ describe("join", () => {
     expect(Math.abs(r.x[j] - 300)).toBeGreaterThan(1);
   });
 
+  it("keeps the one who joined, though the slot was a stray shrinking away or off the roads", () => {
+    const r = createResidents(town, 40, 3);
+    // Around a small circle at the street's start: most are strays, sent off or away.
+    const around = { x: 100, z: 0, r: 30 };
+    for (let i = 0; i < 4; i++) r.update(0.1, around);
+    const j = r.join(100, 1);
+    for (let i = 0; i < 30; i++) {
+      r.update(0.1, around);
+      expect(r.appear[j]).toBe(1);
+    }
+    expect(Math.hypot(r.x[j] - 100, r.z[j] - 1)).toBeLessThan(6);
+  });
+
   it("is -1 where nobody walks", () => {
     const r = createResidents(graphOf([0, 0, 100, 0], [[0, 1, ROAD.highway]]), 5, 1);
     expect(r.join(50, 0)).toBe(-1);

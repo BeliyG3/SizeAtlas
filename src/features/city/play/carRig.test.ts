@@ -59,11 +59,11 @@ describe("holdYoke", () => {
 
   it("lets go getting out: the arms are the clip's once the grip is off", async () => {
     const { pose, gap } = await seated();
-    const out = exitScript(null);
+    const out = exitScript({ x: 2.9, z: 0 });
     const sp = makeScriptPose();
     pose(SEATED);
     // Out over the sill: the hands are far off the yoke.
-    pose(poseAt(out, out.length - 0.5, sp));
+    pose(poseAt(out, out.length, sp));
     expect(gap(0)).toBeGreaterThan(0.3);
   });
 });

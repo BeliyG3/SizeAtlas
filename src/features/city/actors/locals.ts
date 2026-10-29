@@ -212,6 +212,12 @@ export function createLocals(
   return {
     appear,
     live,
+    /** Mover `i` was put down by its owner, not by a look: on the roads, going nowhere. */
+    claim(i: number) {
+      live[i] = 1;
+      going[i] = GOING.no;
+      task[i] = TASK.ring;
+    },
     update(
       dt: number,
       c: Circle | null,

@@ -40,8 +40,8 @@ export interface Residents {
   update(dt: number, around?: Circle | null): void;
   /**
    * A resident steps in at (x, z) (someone who got out of a car) and walks from there onto the
-   * nearest sidewalk or lane, then on along it: the slot of the one farthest off is taken. Returns
-   * the slot, -1 where nobody walks.
+   * nearest sidewalk or lane, then on along it: the slot of one off the roads is taken, else of
+   * the one farthest off. Returns the slot, -1 where nobody walks.
    */
   join(x: number, z: number): number;
 }
@@ -106,11 +106,15 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
 
   const spot = { x: 0, y: 0, z: 0, heading: 0 };
   function join(x: number, z: number): number {
+    // One off the roads (not drawn) first, else the farthest.
     let j = -1;
     let far = -1;
     for (let i = 0; i < n; i++) {
-      const d = (out.x[i] - x) ** 2 + (out.z[i] - z) ** 2;
-      if (d > far) [j, far] = [i, d];
+      const d = locals.live[i] ? (out.x[i] - x) ** 2 + (out.z[i] - z) ** 2 : Infinity;
+      if (d > far) {
+        j = i;
+        far = d;
+      }
     }
     let near = Infinity;
     for (let e = 0; j >= 0 && e < g.edges.length; e++) {
@@ -139,6 +143,7 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
     offX[j] = x - out.x[j];
     offZ[j] = z - out.z[j];
     walkBack(j, 0);
+    locals.claim(j);
     out.appear[j] = 1;
     return j;
   }

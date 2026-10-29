@@ -6,6 +6,7 @@ import { buildWorld } from "../world/buildings";
 import { POLY, ROAD, type MapEdge, type Poly } from "../world/map";
 import { mapOf } from "../world/map.fixture";
 import { buildRoads } from "../world/roads";
+import { doorOf, REACH } from "./boarding";
 import { spawnPoint, type Spawn } from "./spawn";
 
 const street = (a: number, b: number): MapEdge => ({
@@ -114,11 +115,14 @@ describe("spawnPoint", () => {
     onGround(s, p);
   });
 
-  it("faces along the street", () => {
+  it("faces along the street, the car's driver's door by the player", () => {
     const { world, g, s } = town();
     const p = spawnPoint(world, g, s, null);
     expect(Math.abs(Math.sin(p.yaw))).toBeCloseTo(1, 6);
-    expect(p.car?.yaw).toBe(p.yaw);
+    const car = p.car!;
+    expect(Math.cos(car.yaw - p.yaw)).toBeCloseTo(-1, 6);
+    const door = doorOf(car.x, car.z, car.yaw, { x: 0, z: 0 });
+    expect(Math.hypot(door.x - p.x, door.z - p.z)).toBeLessThan(1);
   });
 
   /** A map of `polys` and `edges`; houses 20 m high. */
@@ -129,6 +133,16 @@ describe("spawnPoint", () => {
     const g = buildRoads(map);
     return { world, g, s: createSolids(world, g) };
   };
+
+  it("on a lane parks the car a little ahead, its driver's door within reach", () => {
+    const lane = { ...street(0, 1), cls: ROAD.lane };
+    const { world, g, s } = bare([rect(POLY.island, 1, 0, 0, 200, 100)], [lane], [0, 50, 200, 50]);
+    const p = spawnPoint(world, g, s, null);
+    onGround(s, p);
+    const car = p.car!;
+    const door = doorOf(car.x, car.z, car.yaw, { x: 0, z: 0 });
+    expect(Math.hypot(door.x - p.x, door.z - p.z)).toBeLessThan(REACH);
+  });
 
   it("without streets or lanes starts on another road, carless, out of the house in the middle", () => {
     const highway = { ...street(0, 1), cls: ROAD.highway };

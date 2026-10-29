@@ -4,7 +4,7 @@
  * house, onto water or down off a roof; pure, no three.js.
  */
 import type { Traffic } from "../actors/traffic";
-import { PERSON_RADIUS } from "../physics/bodies";
+import { CAR_DISCS, CAR_RADIUS, PERSON_RADIUS } from "../physics/bodies";
 import type { Solids } from "../physics/solids";
 import { CAR_LENGTH } from "../render/cars";
 import type { Car } from "./vehicle";
@@ -85,9 +85,21 @@ export interface Door {
   door: Spot;
 }
 
+/** A person at (x, z) is in the body of a car at (cx, cz) nose along `yaw`. */
+function inBody(x: number, z: number, cx: number, cz: number, yaw: number): boolean {
+  for (const off of CAR_DISCS) {
+    const dx = cx + Math.sin(yaw) * off - x;
+    const dz = cz + Math.cos(yaw) * off - z;
+    if (Math.hypot(dx, dz) < CAR_RADIUS + PERSON_RADIUS) return true;
+  }
+  return false;
+}
+
 /**
  * The nearest driver's door within `REACH` of feet at (px, py, pz) on their level (a step up or
- * down at most): of an empty car of `cars` or a live ground car of `traffic`; null if none.
+ * down at most): of an empty car of `cars` or a live ground car of `traffic` that has grown in;
+ * null if none. A door whose spot is blocked (by a house, water, a drop or another car) is not
+ * reached.
  */
 export function nearestDoor(
   px: number,
@@ -95,10 +107,23 @@ export function nearestDoor(
   pz: number,
   cars: readonly Car[],
   traffic: Traffic | null,
+  s: Solids,
 ): Door | null {
   let best: Door | null = null;
   let near = REACH;
   const spot = { x: 0, z: 0 };
+  const blocked = (kind: Door["kind"], index: number, y: number) => {
+    if (!clear(s, spot.x, spot.z, y)) return true;
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i];
+      if (!(kind === "car" && i === index) && inBody(spot.x, spot.z, c.x, c.z, c.yaw)) return true;
+    }
+    for (let i = 0; traffic && i < traffic.count; i++) {
+      if (!traffic.live[i] || traffic.air[i] || (kind === "traffic" && i === index)) continue;
+      if (inBody(spot.x, spot.z, traffic.x[i], traffic.z[i], traffic.heading[i])) return true;
+    }
+    return false;
+  };
   const consider = (
     kind: Door["kind"],
     index: number,
@@ -110,18 +135,16 @@ export function nearestDoor(
     if (Math.abs(y - py) > STEP) return;
     doorOf(x, z, yaw, spot);
     const d = Math.hypot(spot.x - px, spot.z - pz);
-    if (d > near) return;
+    if (d > near || blocked(kind, index, y)) return;
     near = d;
     best = { kind, index, door: { x: spot.x, z: spot.z } };
   };
   cars.forEach((c, i) => {
     if (c.owner === "empty" && !c.flying) consider("car", i, c.x, c.y, c.z, c.yaw);
   });
-  if (traffic) {
-    for (let i = 0; i < traffic.count; i++) {
-      if (traffic.live[i] && !traffic.air[i]) {
-        consider("traffic", i, traffic.x[i], traffic.y[i], traffic.z[i], traffic.heading[i]);
-      }
+  for (let i = 0; traffic && i < traffic.count; i++) {
+    if (traffic.live[i] && !traffic.air[i] && traffic.appear[i] >= 1) {
+      consider("traffic", i, traffic.x[i], traffic.y[i], traffic.z[i], traffic.heading[i]);
     }
   }
   return best;

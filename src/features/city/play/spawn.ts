@@ -16,17 +16,21 @@ export interface Spawn {
   z: number;
   /** The way the player faces, `atan2(x, z)`: along the street. */
   yaw: number;
-  /** The player's car at the kerb, nose along the traffic; null where no road has room for it. */
+  /**
+   * The player's car at the kerb, its driver's door (its left) to the player: nose against the
+   * way the player faces. Null where no road has room for it.
+   */
   car: { x: number; z: number; yaw: number } | null;
 }
 
 /**
  * Where the car parks by the player, metres from the road's axis and ahead along the way: a
- * street's outer lane beside them, the middle of a narrow lane a little ahead.
+ * street's outer lane beside them, the middle of a narrow lane a little ahead; its driver's door
+ * within reach either way (see `REACH`).
  */
 const PARK = {
   [ROAD.street]: { offset: 2.2, ahead: 0 },
-  [ROAD.lane]: { offset: 0, ahead: 4.5 },
+  [ROAD.lane]: { offset: 0, ahead: 2.6 },
 };
 /** Spots along a street are tried this far apart, metres... */
 const SPACING = 3;
@@ -114,7 +118,7 @@ function onRoads(
           x: walk.x,
           z: walk.z,
           yaw: walk.heading,
-          car: park && { x: kerb.x, z: kerb.z, yaw: kerb.heading },
+          car: park && { x: kerb.x, z: kerb.z, yaw: kerb.heading + Math.PI },
         };
       }
     }

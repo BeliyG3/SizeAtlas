@@ -1,6 +1,7 @@
+import { Euler, Quaternion } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { describe, expect, it } from "vitest";
-import type { Traffic } from "../actors/traffic";
+import { standingCars } from "../actors/traffic.fixture";
 import { canalWorld } from "../physics/world.fixture";
 import walkerUrl from "../assets/walker.glb?inline";
 import { BEHIND, BESIDE, CLIP, doorOf, exitSpot, fromCar, nearestDoor, toCar } from "./boarding";
@@ -9,19 +10,6 @@ import { createCar } from "./vehicle";
 const EAST = Math.PI / 2;
 /** A 40 m house at x 20…40, z 20…40. */
 const TOWER = { x: 20, z: 20, w: 20, d: 20, h: 40 };
-
-/** Ground cars of the traffic at (x, 0, z), heading +z; `air` flags flying ones. */
-const traffic = (xz: [number, number][], air: number[] = []): Traffic => ({
-  count: xz.length,
-  x: Float32Array.from(xz, ([x]) => x),
-  y: new Float32Array(xz.length),
-  z: Float32Array.from(xz, ([, z]) => z),
-  heading: new Float32Array(xz.length),
-  air: Uint8Array.from(xz, (_, i) => (air.includes(i) ? 1 : 0)),
-  appear: new Float32Array(xz.length).fill(1),
-  live: new Uint8Array(xz.length).fill(1),
-  update: () => {},
-});
 
 describe("the car's frame", () => {
   it("has its left at +x for a car nosed to +z, and goes there and back", () => {
@@ -50,7 +38,8 @@ describe("the car's frame", () => {
       const { position, quaternion } = spots[name];
       expect(position[0]).toBeCloseTo(clip.x, 6);
       expect(position[2]).toBeCloseTo(clip.z, 6);
-      expect(2 * Math.atan2(quaternion[1], quaternion[3])).toBeCloseTo(clip.yaw, 6);
+      const q = new Quaternion(...(quaternion as [number, number, number, number]));
+      expect(new Euler().setFromQuaternion(q, "YXZ").y).toBeCloseTo(clip.yaw, 6);
     }
   });
 });
@@ -60,16 +49,16 @@ describe("nearestDoor", () => {
     const { solids } = canalWorld();
     const parked = createCar(60, 60, 0, solids, "empty");
     const door = doorOf(60, 60, 0, { x: 0, z: 0 });
-    expect(nearestDoor(door.x + 2.5, 0, door.z, [parked], null)).toMatchObject({
+    expect(nearestDoor(door.x + 2.5, 0, door.z, [parked], null, solids)).toMatchObject({
       kind: "car",
       index: 0,
     });
-    expect(nearestDoor(door.x + 3.5, 0, door.z, [parked], null)).toBeNull();
+    expect(nearestDoor(door.x + 3.5, 0, door.z, [parked], null, solids)).toBeNull();
     // Not a car someone is in.
     const taken = createCar(60, 60, 0, solids, "player");
-    expect(nearestDoor(door.x + 1, 0, door.z, [taken], null)).toBeNull();
+    expect(nearestDoor(door.x + 1, 0, door.z, [taken], null, solids)).toBeNull();
     // The nearer of two; a flying one or one off the roads is not reached.
-    const t = traffic(
+    const t = standingCars(
       [
         [59, 60],
         [61, 60],
@@ -78,11 +67,31 @@ describe("nearestDoor", () => {
       [2],
     );
     t.live[1] = 0;
-    expect(nearestDoor(door.x + 1, 0, door.z, [parked], t)).toMatchObject({
+    expect(nearestDoor(door.x + 1, 0, door.z, [parked], t, solids)).toMatchObject({
       kind: "car",
       index: 0,
     });
-    expect(nearestDoor(door.x + 1, 0, door.z, [], t)).toMatchObject({ kind: "traffic", index: 0 });
+    expect(nearestDoor(door.x + 1, 0, door.z, [], t, solids)).toMatchObject({
+      kind: "traffic",
+      index: 0,
+    });
+    // Nor one still growing in.
+    t.appear[0] = 0.5;
+    expect(nearestDoor(door.x + 1, 0, door.z, [], t, solids)).toBeNull();
+  });
+
+  it("does not reach a door whose spot is in another car or a house", () => {
+    const { solids } = canalWorld([{ x: 61.8, z: 50, w: 10, d: 20, h: 6 }]);
+    // A traffic car stopped beside a parked one: its door's spot is in the parked car.
+    const parked = createCar(50, 60, 0, solids, "empty");
+    const t = standingCars([[48.8, 60]]);
+    const door = doorOf(48.8, 60, 0, { x: 0, z: 0 });
+    expect(nearestDoor(door.x, 0, door.z, [], t, solids)).not.toBeNull();
+    expect(nearestDoor(door.x, 0, door.z, [parked], t, solids)).toMatchObject({ kind: "car" });
+    // The parked car's own door is in a house.
+    const walled = createCar(60, 60, 0, solids, "empty");
+    const wd = doorOf(60, 60, 0, { x: 0, z: 0 });
+    expect(nearestDoor(wd.x - 1, 0, wd.z, [walled], null, solids)).toBeNull();
   });
 
   it("does not reach a car on a roof from the street below, only from the roof", () => {
@@ -90,8 +99,8 @@ describe("nearestDoor", () => {
     const roof = createCar(38, 30, 0, solids, "empty");
     expect(roof.y).toBe(40);
     const door = doorOf(38, 30, 0, { x: 0, z: 0 });
-    expect(nearestDoor(door.x + 1, 0, door.z, [roof], null)).toBeNull();
-    expect(nearestDoor(door.x - 1, 40, door.z, [roof], null)).not.toBeNull();
+    expect(nearestDoor(door.x + 1, 0, door.z, [roof], null, solids)).toBeNull();
+    expect(nearestDoor(door.x - 1, 40, door.z, [roof], null, solids)).not.toBeNull();
   });
 });
 

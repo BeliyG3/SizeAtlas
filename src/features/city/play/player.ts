@@ -10,6 +10,7 @@ import type { Solids } from "../physics/solids";
 import { CLIP, exitSpot, fromCar, nearestDoor, toCar, type Spot } from "./boarding";
 import {
   backScript,
+  driverOut,
   enterScript,
   exitScript,
   makeScriptPose,
@@ -52,6 +53,9 @@ export interface Player {
 
 /** A car this slow on the ground can be got out of, m/s. */
 export const STILL = 1.5;
+/** The cars the player has had, at most: taking one more, the farthest left standing goes. */
+// ponytail: the farthest may be in view; a check against the camera would keep it.
+export const MAX_CARS = 7;
 
 export function createPlayer(start: { x: number; z: number; yaw: number }, s: Solids): Player {
   const walker = createWalker(start, s);
@@ -72,10 +76,28 @@ export function createPlayer(start: { x: number; z: number; yaw: number }, s: So
 const local = { x: 0, z: 0 };
 const pose = makeScriptPose();
 
-/** The player's way in from where they stand by `car`. */
-function enterFrom(p: Player, car: Car): Script {
+/** The player's way in from where they stand by `car`; `open`: its door is open already. */
+function enterFrom(p: Player, car: Car, open = false): Script {
   const b = p.walker.body;
-  return enterScript(toCar(b.x, b.z, car.x, car.z, car.yaw, local), p.walker.face - car.yaw);
+  const from = toCar(b.x, b.z, car.x, car.z, car.yaw, local);
+  return enterScript(from, p.walker.face - car.yaw, open);
+}
+
+/** The farthest car left standing goes while there are more than `MAX_CARS`. */
+function dropFarthest(w: PlayWorld, x: number, z: number) {
+  while (w.cars.length > MAX_CARS) {
+    let far = -1;
+    let k = -1;
+    w.cars.forEach((c, i) => {
+      const d = Math.hypot(c.x - x, c.z - z);
+      if (c.owner === "empty" && d > far) {
+        far = d;
+        k = i;
+      }
+    });
+    if (k < 0) return;
+    w.cars.splice(k, 1);
+  }
 }
 
 /** Traffic car `i` off the roads, and in its place a car standing at its pose. */
@@ -89,13 +111,14 @@ export function takeFromTraffic(t: Traffic, i: number, s: Solids): Car {
 /** E on foot: into the nearest car whose driver's door is within reach. */
 function board(p: Player, w: PlayWorld) {
   const b = p.walker.body;
-  const door = nearestDoor(b.x, b.y, b.z, w.cars, w.traffic);
+  const door = nearestDoor(b.x, b.y, b.z, w.cars, w.traffic, w.solids);
   if (!door) return;
   let car = w.cars[door.index];
   if (door.kind === "traffic" && w.traffic) {
     car = takeFromTraffic(w.traffic, door.index, w.solids);
     w.cars.push(car);
-    p.driver = exitScript(null);
+    dropFarthest(w, b.x, b.z);
+    p.driver = driverOut();
   }
   setOwner(car, "player");
   p.walker.speed = 0;
@@ -157,6 +180,9 @@ export function stepPlayer(p: Player, a: Actions, dt: number, w: PlayWorld): voi
     return;
   }
   if (p.state === "drive" || p.state === "fly") {
+    // The door shutting after getting in.
+    if (p.script) p.t += dt;
+    if (p.script && p.t >= p.script.length) p.script = null;
     carStep(car, a, dt, s);
     const x = car.x;
     const z = car.z;
@@ -173,13 +199,11 @@ export function stepPlayer(p: Player, a: Actions, dt: number, w: PlayWorld): voi
     w.residents?.join(local.x, local.z);
     p.driver = null;
     p.t = 0;
-    p.script = enterFrom(p, car);
+    p.script = enterFrom(p, car, true);
     return;
   }
-  if (!p.script || p.t < p.script.length) return;
-  if (p.state === "enter") {
-    p.state = "drive";
-    p.script = null;
-    p.t = 0;
-  } else stepOut(p, car, s);
+  if (!p.script) return;
+  // In and seated, it drives off as its door shuts.
+  if (p.state === "enter" && p.t >= p.script.ready) p.state = "drive";
+  else if (p.state === "exit" && p.t >= p.script.length) stepOut(p, car, s);
 }
