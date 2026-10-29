@@ -8,7 +8,7 @@ import {
   Mesh,
   MeshStandardMaterial,
 } from "three";
-import { DISTRICT_TINT, LOOK } from "../look";
+import { DISTRICT_TINT, EDGE_FADE, LOOK } from "../look";
 import type { World } from "../world/buildings";
 import { disposeAll } from "./dispose";
 import { triangulate } from "./flat";
@@ -73,7 +73,7 @@ export function houseMesh(world: World): Houses {
   lineGeometry.setAttribute("position", new Float32BufferAttribute(edges, 3));
   const colors = new Float32BufferAttribute(new Float32Array(edges.length), 3);
   lineGeometry.setAttribute("color", colors);
-  mesh.add(new LineSegments(lineGeometry, new LineBasicMaterial({ vertexColors: true })));
+  mesh.add(new LineSegments(lineGeometry, edgeMaterial()));
 
   const tints = new Map<number, { lit: Color; dim: Color }>();
   const tintOf = (district: number) => {
@@ -96,6 +96,34 @@ export function houseMesh(world: World): Houses {
   paint(world);
   return { mesh, houseOfFace: Int32Array.from(faces), paint, dispose: () => disposeAll(mesh) };
 }
+
+/**
+ * The edges' material: vertex colours, multiplied in the fragment shader by the distance fade.
+ * The GLSL is `edgeFade` (./edgeFade.ts): smoothstep from 1 at `near` to `floor` at `far`, with
+ * `d` the view-space distance of the fragment's vertex, interpolated along the line.
+ */
+function edgeMaterial(): LineBasicMaterial {
+  const { near, far, floor } = EDGE_FADE;
+  const material = new LineBasicMaterial({ vertexColors: true });
+  material.onBeforeCompile = (shader) => {
+    const pars = "varying float vEdgeDistance;\nvoid main() {";
+    shader.vertexShader = shader.vertexShader
+      .replace("void main() {", pars)
+      .replace(
+        "#include <project_vertex>",
+        "#include <project_vertex>\n\tvEdgeDistance = length( mvPosition.xyz );",
+      );
+    shader.fragmentShader = shader.fragmentShader.replace("void main() {", pars).replace(
+      "#include <opaque_fragment>",
+      `float edgeT = clamp( ( vEdgeDistance - ${glsl(near)} ) / ${glsl(far - near)}, 0.0, 1.0 );
+	outgoingLight *= 1.0 - ( 1.0 - ${glsl(floor)} ) * edgeT * edgeT * ( 3.0 - 2.0 * edgeT );
+	#include <opaque_fragment>`,
+    );
+  };
+  return material;
+}
+
+const glsl = (x: number) => (Number.isInteger(x) ? `${x}.0` : String(x));
 
 /** The lit edge colour of a district's houses: `LOOK.wire` leaning a little to a hue of its own. */
 export function districtEdge(district: number): Color {

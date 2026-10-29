@@ -33,3 +33,9 @@ export const ORDER = {
   road: -4,
   axis: -3,
 };
+
+/**
+ * House edges fade with the distance from the camera, metres: full strength up to `near`,
+ * smoothly down to `floor` (a share of the colour) from `far` on. See `render/edgeFade.ts`.
+ */
+export const EDGE_FADE = { near: 250, far: 2500, floor: 0.22 };

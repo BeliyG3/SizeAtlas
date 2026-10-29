@@ -1,6 +1,13 @@
-import { BufferGeometry, Color, LineSegments } from "three";
+import {
+  BufferGeometry,
+  Color,
+  type LineBasicMaterial,
+  LineSegments,
+  ShaderLib,
+  type WebGLProgramParametersWithUniforms,
+} from "three";
 import { describe, expect, it } from "vitest";
-import { LOOK } from "../look";
+import { EDGE_FADE, LOOK } from "../look";
 import { buildWorld } from "../world/buildings";
 import { POLY, type Poly } from "../world/map";
 import { mapOf, square } from "../world/map.fixture";
@@ -105,6 +112,24 @@ describe("houseMesh", () => {
     for (let i = 0; i < normal.count; i++) {
       expect(Math.abs(normal.getY(i)) < 1e-6 || normal.getY(i) > 0.999).toBe(true);
     }
+  });
+
+  it("edges fade with distance through the shader of their own material", () => {
+    const material = lines(houseMesh(buildWorld(map, null)).mesh).material as LineBasicMaterial;
+    const shader = {
+      vertexShader: ShaderLib.basic.vertexShader,
+      fragmentShader: ShaderLib.basic.fragmentShader,
+    } as WebGLProgramParametersWithUniforms;
+    material.onBeforeCompile(shader, null as never);
+    expect(shader.vertexShader).toContain("vEdgeDistance = length( mvPosition.xyz );");
+    expect(shader.fragmentShader).toContain("varying float vEdgeDistance;");
+    expect(shader.fragmentShader).toContain(`( vEdgeDistance - ${EDGE_FADE.near}.0 )`);
+    expect(shader.fragmentShader).toContain(`/ ${EDGE_FADE.far - EDGE_FADE.near}.0`);
+    expect(shader.fragmentShader).toContain(`( 1.0 - ${EDGE_FADE.floor} )`);
+    // The fade is applied before the colour leaves the shader.
+    const fade = shader.fragmentShader.indexOf("outgoingLight *=");
+    expect(fade).toBeGreaterThan(0);
+    expect(fade).toBeLessThan(shader.fragmentShader.indexOf("#include <opaque_fragment>"));
   });
 
   it("dispose frees every geometry", () => {
