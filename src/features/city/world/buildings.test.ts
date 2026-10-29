@@ -11,10 +11,12 @@ import {
 import { POLY } from "./map";
 import { mapOf, square } from "./map.fixture";
 
-// Root 1 > district 2 > blocks 3 and 4 (houses 5, 6 / 7) and a filler block 2 with fillers.
+// Root 1 > district 2 > blocks 3 and 4 (houses 5, 6 / 7) and a filler block 2 with fillers;
+// the root's loose files make the "rest" district, which carries the root's id.
 const map = mapOf([
   square(POLY.island, 1, 1, 1000),
   square(POLY.district, 2, 1, 900),
+  square(POLY.district, 1, 1, 100, 60, 0),
   square(POLY.block, 3, 2, 500, 0, 0),
   square(POLY.house, 5, 3, 400, 0, 0, 4),
   square(POLY.house, 6, 3, 100, 5, 0, 4),
@@ -91,5 +93,7 @@ describe("focusIn", () => {
     expect(focusIn(map, [1, 2, 3, 5])).toBe(5);
     // A folder without a polygon (a file's folder lost its house): the nearest one above.
     expect(focusIn(map, [1, 2, 3, 99])).toBe(3);
+    // A folder replaced by its subfolders has no polygon: the root above it gives no focus.
+    expect(focusIn(map, [1, 99])).toBeNull();
   });
 });

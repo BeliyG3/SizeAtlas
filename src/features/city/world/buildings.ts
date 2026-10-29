@@ -118,11 +118,12 @@ function boxOf(map: CityMap, buildings: Building[], focus: number): Box | null {
 
 /**
  * The deepest folder of `path` (root first) that has a district, block or house polygon:
- * the one to focus on. The root, and folders the map lost, give way to their nearest parent.
+ * the one to focus on. Folders the map lost give way to their nearest parent; the root is the
+ * whole island, no focus, although its "rest" district carries its id.
  */
 export function focusIn(map: CityMap, path: readonly number[]): number | null {
   const folders = new Set<number>();
   for (const p of map.polys) if (isFolder(p)) folders.add(p.id);
-  for (let i = path.length - 1; i >= 0; i--) if (folders.has(path[i])) return path[i];
+  for (let i = path.length - 1; i >= 1; i--) if (folders.has(path[i])) return path[i];
   return null;
 }
