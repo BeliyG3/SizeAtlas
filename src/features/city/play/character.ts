@@ -1,19 +1,23 @@
 /**
  * The player's figure: the walker model with a dark body and glowing edges, its clips cross-faded
- * by the pace and played at the speed it moves.
+ * by the pace and played at the speed it moves; or posed by a script, getting into a car or out.
  */
 import {
   AnimationMixer,
   Group,
   MeshBasicMaterial,
+  Quaternion,
   SkinnedMesh,
   type AnimationAction,
   type Material,
+  type Object3D,
 } from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { LOOK } from "../look";
 import { carBody } from "../render/cars";
+import type { ScriptPose } from "./boardingScript";
+import type { Arm } from "./carRig";
 import { GAIT, type Gait } from "./walk";
 
 const CLIPS: Record<Gait, string> = {
@@ -24,6 +28,8 @@ const CLIPS: Record<Gait, string> = {
   // No jump clips yet: in the air the run holds still.
   air: "Jog_Fwd_Loop",
 };
+/** The clips of getting in and out (see `boardingScript`); the loops are among the gaits'. */
+const CAR_CLIPS = ["Enter_Car", "Exit_Car"];
 const FADE = 0.25;
 const FADE_AIR = 0.1;
 
@@ -39,6 +45,10 @@ export interface Character {
     speed: number,
     dt: number,
   ): void;
+  /** Posed by a script at `p` (where it stands is the caller's); the gaits resume with `update`. */
+  pose(p: ScriptPose): void;
+  /** The arms, left then right, for the hands on the yoke (see `holdYoke`). */
+  arms: readonly [Arm, Arm];
   dispose(): void;
 }
 
@@ -69,12 +79,32 @@ export function createCharacter(walker: GLTF): Character {
 
   const mixer = new AnimationMixer(model);
   const actions = new Map<string, AnimationAction>();
-  for (const name of new Set(Object.values(CLIPS))) {
+  for (const name of new Set([...Object.values(CLIPS), ...CAR_CLIPS])) {
     const clip = walker.animations.find((c) => c.name === name);
     if (clip) actions.set(name, mixer.clipAction(clip));
   }
   let gait: Gait = "idle";
   actions.get(CLIPS.idle)?.play();
+  let scripted = false;
+  const named = [...actions];
+
+  const bone = (name: string) => {
+    const b = model.getObjectByName(name);
+    if (!b) throw new Error(`The walker has no ${name}`);
+    return b;
+  };
+  const arm = (s: string): Arm => ({
+    up: bone(`upperarm_${s}`),
+    lo: bone(`lowerarm_${s}`),
+    hand: bone(`hand_${s}`),
+  });
+  const arms = [arm("l"), arm("r")] as const;
+  // The mixer writes a bone only when its blended value changed since the last update, so an arm
+  // bent on top of the clip (the grip) would keep the last frame's bend and bend again: the
+  // clip's value is put back on those it left alone.
+  const bent: { b: Object3D; clip: Quaternion; left: Quaternion; known: boolean }[] = arms
+    .flatMap((a) => [a.up, a.lo])
+    .map((b) => ({ b, clip: new Quaternion(), left: new Quaternion(), known: false }));
 
   const setGait = (next: Gait) => {
     const was = actions.get(CLIPS[gait]);
@@ -88,7 +118,38 @@ export function createCharacter(walker: GLTF): Character {
 
   return {
     group,
+    arms,
+    pose(p) {
+      if (!scripted) {
+        scripted = true;
+        for (const a of actions.values()) a.play();
+        for (const k of bent) k.known = false;
+      }
+      for (const k of bent) k.left.copy(k.b.quaternion);
+      for (const [name, a] of named) {
+        const w = (name === p.a ? p.aw : 0) + (name === p.b ? p.bw : 0);
+        a.setEffectiveWeight(w);
+        if (w > 0) {
+          const t = name === p.a ? p.at : p.bt;
+          const len = a.getClip().duration;
+          a.time = name.endsWith("_Loop") ? t % len : Math.min(t, len - 1e-3);
+        }
+      }
+      mixer.update(0);
+      for (const k of bent) {
+        if (k.known && k.b.quaternion.equals(k.left)) k.b.quaternion.copy(k.clip);
+        k.clip.copy(k.b.quaternion);
+        k.known = true;
+      }
+    },
     update(x, y, z, face, next, speed, dt) {
+      if (scripted) {
+        // Back to the gaits, from the idle.
+        scripted = false;
+        for (const a of actions.values()) a.stop().setEffectiveWeight(1);
+        gait = "idle";
+        actions.get(CLIPS.idle)?.play();
+      }
       group.position.set(x, y, z);
       group.rotation.y = face;
       if (next !== gait) setGait(next);

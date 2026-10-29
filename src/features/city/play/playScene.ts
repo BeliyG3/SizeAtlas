@@ -11,7 +11,7 @@ import { addLights } from "../render/lighting";
 import type { CitySnapshot } from "../scene";
 import { CAM } from "./camera";
 import type { Actions } from "./input";
-import { createPlayer } from "./player";
+import { createPlayerView } from "./playerView";
 
 /** The game's limits: cars (flying ones included) and residents near the player. */
 const GAME: Limits = { cars: 150, people: 400 };
@@ -69,7 +69,7 @@ function setUp(
 
   // One physics world for all that moves in it.
   const solids = createSolids(city.world, city.graph);
-  const player = createPlayer(scene, city, solids);
+  const player = createPlayerView(scene, city, solids, life);
 
   let applied = { w: 0, h: 0 };
   const render = () => {

@@ -24,6 +24,7 @@ const residents = (xs: number[], phases: number[]): Residents => ({
   role: new Uint8Array(xs.length),
   appear: new Float32Array(xs.length).fill(1),
   update: () => {},
+  join: () => -1,
 });
 
 /** Ground cars at `xs` along z = 0, heading +z. */

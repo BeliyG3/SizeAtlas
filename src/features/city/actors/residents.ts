@@ -38,6 +38,12 @@ export interface Residents {
   appear: Float32Array;
   /** Walks on `dt` seconds; the residents keep to `around` (see `createLocals`). */
   update(dt: number, around?: Circle | null): void;
+  /**
+   * A resident steps in at (x, z) (someone who got out of a car) and walks from there onto the
+   * nearest sidewalk or lane, then on along it: the slot of the one farthest off is taken. Returns
+   * the slot, -1 where nobody walks.
+   */
+  join(x: number, z: number): number;
 }
 
 /** The edges residents walk on. */
@@ -54,6 +60,9 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
   const speed = new Float32Array(n);
   const side = new Int8Array(n); // +1 walks on the right of the travel, -1 on the left
   const locals = createLocals(g, n, localIds(0, n), rand);
+  // How far a figure stands off its track, metres: one that joined walks onto it first.
+  const offX = new Float32Array(n);
+  const offZ = new Float32Array(n);
   const out: Residents = {
     count: n,
     x: new Float32Array(n),
@@ -64,6 +73,7 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
     role: new Uint8Array(n).fill(ROLE.resident),
     appear: locals.appear,
     update,
+    join,
   };
 
   const chooseSide = (i: number) => {
@@ -77,6 +87,60 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
     out.y[i] = p.y; // on the deck of a bridge, as the cars
     out.z[i] = p.z;
     out.heading[i] = p.heading;
+    if (offX[i] || offZ[i]) {
+      out.x[i] += offX[i];
+      out.z[i] += offZ[i];
+    }
+  }
+
+  /** Walks figure `i`, off its track, `dist` metres back onto it, facing the way it goes. */
+  function walkBack(i: number, dist: number) {
+    const d = Math.hypot(offX[i], offZ[i]);
+    const k = d > dist ? (d - dist) / d : 0;
+    const face = Math.atan2(-offX[i], -offZ[i]);
+    offX[i] *= k;
+    offZ[i] *= k;
+    put(i);
+    if (k > 0) out.heading[i] = face;
+  }
+
+  const spot = { x: 0, y: 0, z: 0, heading: 0 };
+  function join(x: number, z: number): number {
+    let j = -1;
+    let far = -1;
+    for (let i = 0; i < n; i++) {
+      const d = (out.x[i] - x) ** 2 + (out.z[i] - z) ** 2;
+      if (d > far) [j, far] = [i, d];
+    }
+    let near = Infinity;
+    for (let e = 0; j >= 0 && e < g.edges.length; e++) {
+      const edge = g.edges[e];
+      if (!walks(edge)) continue;
+      const ax = g.nodes[edge.a * 2];
+      const az = g.nodes[edge.a * 2 + 1];
+      const len = edge.len || 1;
+      const ux = (g.nodes[edge.b * 2] - ax) / len;
+      const uz = (g.nodes[edge.b * 2 + 1] - az) / len;
+      const s = Math.min(edge.len, Math.max(0, (x - ax) * ux + (z - az) * uz));
+      for (const sd of [1, -1]) {
+        const p = pointOn(g, e, s, true, sd * walkOffset(edge.cls), spot);
+        const d = (p.x - x) ** 2 + (p.z - z) ** 2;
+        if (d >= near) continue;
+        near = d;
+        t.edge[j] = e;
+        t.s[j] = s;
+        t.forward[j] = 1;
+        side[j] = sd;
+      }
+    }
+    if (near === Infinity) return -1;
+    offX[j] = offZ[j] = 0;
+    put(j);
+    offX[j] = x - out.x[j];
+    offZ[j] = z - out.z[j];
+    walkBack(j, 0);
+    out.appear[j] = 1;
+    return j;
   }
 
   function update(dt: number, around: Circle | null = null) {
@@ -84,15 +148,20 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
       const edge = t.edge[i];
       const forward = t.forward[i];
       const dist = speed[i] * dt;
+      out.phase[i] = (out.phase[i] + dist / STRIDE) % 1;
+      if (out.phase[i] >= 1) out.phase[i] = 0; // a float32 can round up to exactly 1
+      if (offX[i] || offZ[i]) {
+        walkBack(i, dist);
+        continue;
+      }
       advance(g, t, i, dist, rand, walks);
       // The side is kept along an edge and chosen again on entering the next one (or turning back).
       if (t.edge[i] !== edge || t.forward[i] !== forward) chooseSide(i);
-      out.phase[i] = (out.phase[i] + dist / STRIDE) % 1;
-      if (out.phase[i] >= 1) out.phase[i] = 0; // a float32 can round up to exactly 1
       put(i);
     }
     locals.update(dt, around, out, (i, spots) => {
       if (!placeOn(g, t, i, spots(walks), rand)) return false;
+      offX[i] = offZ[i] = 0;
       chooseSide(i);
       put(i);
       return true;

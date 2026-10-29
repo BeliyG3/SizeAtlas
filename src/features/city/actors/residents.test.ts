@@ -135,3 +135,27 @@ describe("splitNear", () => {
     expect(n.far).toBeGreaterThan(0);
   });
 });
+
+describe("join", () => {
+  it("puts the farthest resident at the spot, who walks onto the sidewalk and on along it", () => {
+    const r = createResidents(town, 20, 3);
+    // In the street's middle, by a car's door: the sidewalk is 4 m to its side.
+    const j = r.join(300, 1);
+    expect(j).toBeGreaterThanOrEqual(0);
+    expect(Math.hypot(r.x[j] - 300, r.z[j] - 1)).toBeLessThan(1e-3);
+    // Facing the nearer sidewalk (z = 4), then on it.
+    expect(r.heading[j]).toBeCloseTo(0);
+    r.update(1);
+    expect(r.z[j]).toBeGreaterThanOrEqual(1 + WALK - WALK_SPREAD - 1e-3);
+    expect(r.z[j]).toBeLessThanOrEqual(1 + WALK + WALK_SPREAD + 1e-3);
+    expect(r.x[j]).toBeCloseTo(300);
+    for (let i = 0; i < 10; i++) r.update(0.5);
+    expect(r.z[j]).toBeCloseTo(4);
+    expect(Math.abs(r.x[j] - 300)).toBeGreaterThan(1);
+  });
+
+  it("is -1 where nobody walks", () => {
+    const r = createResidents(graphOf([0, 0, 100, 0], [[0, 1, ROAD.highway]]), 5, 1);
+    expect(r.join(50, 0)).toBe(-1);
+  });
+});

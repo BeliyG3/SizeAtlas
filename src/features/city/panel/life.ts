@@ -66,6 +66,8 @@ export interface Life {
    * models. They keep near `target`, the closer the camera the tighter.
    */
   step: (dt: number, eye: Vector3, target: Vector3) => void;
+  /** The traffic and the residents of the last `populate`, null before it or with no roads. */
+  actors: () => { traffic: Traffic; residents: Residents } | null;
   dispose: () => void;
 }
 
@@ -126,6 +128,7 @@ export function createLife(parent: Object3D, onReady: () => void, limits = PANEL
 
   return {
     active: () => models !== null && pools !== null,
+    actors: () => pools,
     populate(g, seed, islands) {
       pools = g && {
         traffic: createTraffic(g, Math.min(carsFor(islands), limits.cars), seed),

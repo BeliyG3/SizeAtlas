@@ -61,8 +61,9 @@ export interface Walker {
   shownY: number;
 }
 
-export function createWalker(start: { x: number; z: number }, s: Solids): Walker {
-  const y = s.heightAt(start.x, start.z);
+/** A walker standing at `start`: on its `y` if given (under a deck), else on top of what is there. */
+export function createWalker(start: { x: number; z: number; y?: number }, s: Solids): Walker {
+  const y = start.y ?? s.heightAt(start.x, start.z);
   const body: Body = {
     x: start.x,
     y,
