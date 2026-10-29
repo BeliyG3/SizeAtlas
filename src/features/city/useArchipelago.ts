@@ -23,11 +23,14 @@ interface Loaded {
 
 /**
  * The archipelago around the selected root, lit around the selected folder: one island for each
- * open drive, or the root alone if it is no drive. A new set of roots (or another selected root)
- * is asked for at once; a new `rev` of any root at most once per pause, the latest one when the
- * pause ends. An answer that arrives after a newer request is dropped. What is shown never has
- * an island of a root that is gone: it waits for the next answer. `finish` books the refresh
- * cost once the picture is on screen.
+ * open drive, or the root alone if it is no drive. A new set of roots is asked for at once, and so
+ * is a selected root that is none of the islands shown; moving the selection between the islands
+ * asks nothing. A new `rev` of an island (or of the selected root) is asked for at most once per
+ * pause, the latest one when the pause ends; the revisions of other roots are none of its
+ * business. An answer that arrives after a newer request is dropped, and so is one for an island
+ * that kept changing: the old picture stays. What is shown never has an island of a root that is
+ * gone: it waits for the next answer. `finish` books the refresh cost once the picture is on
+ * screen.
  */
 export function useArchipelago(
   roots: readonly { generation: number; rev: number }[],
@@ -39,44 +42,65 @@ export function useArchipelago(
   selectedIsland: number;
   finish: (() => void) | null;
 } {
-  const generations = roots.map((r) => r.generation).sort((a, b) => a - b);
-  const set = `${selected.generation}|${generations.join(",")}`;
-  const revs = [...roots]
-    .sort((a, b) => a.generation - b.generation)
-    .map((r) => `${r.generation}:${r.rev}`)
-    .join(",");
-  const [asked, setAsked] = useState({ set, revs });
+  const sorted = [...roots].sort((a, b) => a.generation - b.generation);
+  const set = sorted.map((r) => r.generation).join(",");
+  const revs = sorted.map((r) => `${r.generation}:${r.rev}`).join(",");
+  const [asked, setAsked] = useState({ set, revs, selected: selected.generation });
   const askedAt = useRef(0);
   const cache = useRef<IslandCache>(new Map());
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [path, setPath] = useState<{ generation: number; ids: number[] } | null>(null);
-  // A new set of roots is asked for at once, with the revisions it comes with.
-  if (asked.set !== set) setAsked({ set, revs });
-  const askedRevs = asked.set === set ? asked.revs : revs;
+  const selectedIsland =
+    loaded?.islands.findIndex((i) => i.generation === selected.generation) ?? -1;
+  // A new set of roots, or a selected root that no island shown stands for, is asked for at once,
+  // with the revisions it comes with. `ask` is what the effects below see in this very render.
+  const fresh = { set, revs, selected: selected.generation };
+  const stale = asked.set !== set || (selectedIsland < 0 && asked.selected !== selected.generation);
+  if (stale) setAsked(fresh);
+  const ask = stale ? fresh : asked;
+
+  // The roots whose new revision is worth a request: the islands and the selected root.
+  const askedRevs = new Map(
+    ask.revs
+      .split(",")
+      .filter(Boolean)
+      .map((r) => r.split(":").map(Number) as [number, number]),
+  );
+  const watched = new Set([
+    selected.generation,
+    ...(loaded?.islands ?? []).map((i) => i.generation),
+  ]);
+  const changed = sorted
+    .filter((r) => watched.has(r.generation) && askedRevs.get(r.generation) !== r.rev)
+    .map((r) => `${r.generation}:${r.rev}`)
+    .join(",");
 
   useEffect(() => {
-    if (revs === askedRevs) return;
+    if (!changed) return;
     const wait = askedAt.current + Math.max(REFRESH_MS, refreshInterval("city")) - Date.now();
-    const timer = setTimeout(() => setAsked({ set, revs }), Math.max(0, wait));
+    const timer = setTimeout(
+      () => setAsked({ set, revs, selected: ask.selected }),
+      Math.max(0, wait),
+    );
     return () => clearTimeout(timer);
-  }, [set, revs, askedRevs]);
+  }, [changed, set, revs, ask.selected]);
 
   useEffect(() => {
     let live = true;
     askedAt.current = Date.now();
     const finish = beginRefresh("city");
-    readArchipelago(selected.generation, cache.current).then(
-      ({ map, islands }) => {
-        if (!live) return;
-        keepOnly(cache.current, islands);
-        setLoaded({ map, islands, finish });
+    readArchipelago(ask.selected, cache.current).then(
+      (read) => {
+        if (!live || !read) return;
+        keepOnly(cache.current, read.islands);
+        setLoaded({ map: read.map, islands: read.islands, finish });
       },
       (e: unknown) => live && onFail(e),
     );
     return () => {
       live = false;
     };
-  }, [selected.generation, set, askedRevs, onFail]);
+  }, [ask.set, ask.revs, ask.selected, onFail]);
 
   useEffect(() => {
     let live = true;
@@ -91,10 +115,9 @@ export function useArchipelago(
   }, [selected.generation, selected.id, onFail]);
 
   // Shown only while every island is of a root still open and the selected root is one of them.
-  const selectedIsland =
-    loaded?.islands.findIndex((i) => i.generation === selected.generation) ?? -1;
+  const open = new Set(roots.map((r) => r.generation));
   const shown =
-    loaded && selectedIsland >= 0 && loaded.islands.every((i) => generations.includes(i.generation))
+    loaded && selectedIsland >= 0 && loaded.islands.every((i) => open.has(i.generation))
       ? loaded
       : null;
   const map = shown?.map ?? null;

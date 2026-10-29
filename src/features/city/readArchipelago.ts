@@ -3,33 +3,51 @@ import type { ArchipelagoIsland } from "../../api/types";
 import { mergeIslands } from "./world/archipelago";
 import { parseCity, type CityMap } from "./world/map";
 
-/** Parsed islands by `(generation, rev)`: an island that did not change is not read again. */
-export type IslandCache = Map<string, CityMap>;
+/**
+ * The reads of islands by `(generation, rev)`, finished or on the way: an island that did not
+ * change is not read again, and two requests that overlap read it once.
+ */
+export type IslandCache = Map<string, Promise<CityMap>>;
 
 /** How often the archipelago is asked for again when an island is rebuilt while it is read. */
 const ATTEMPTS = 3;
 
-const keyOf = (generation: number, rev: number) => `${generation}:${rev}`;
+const keyOf = (island: ArchipelagoIsland) => `${island.generation}:${island.rev}`;
 
 /** The cache with only the islands in `islands`. */
 export function keepOnly(cache: IslandCache, islands: readonly ArchipelagoIsland[]) {
-  const keep = new Set(islands.map((i) => keyOf(i.generation, i.rev)));
+  const keep = new Set(islands.map(keyOf));
   for (const key of [...cache.keys()]) if (!keep.has(key)) cache.delete(key);
 }
 
-async function readIsland(island: ArchipelagoIsland, cache: IslandCache): Promise<CityMap> {
-  const hit = cache.get(keyOf(island.generation, island.rev));
+function readIsland(island: ArchipelagoIsland, cache: IslandCache): Promise<CityMap> {
+  const key = keyOf(island);
+  const hit = cache.get(key);
   if (hit) return hit;
-  // A response that does not parse fails like a request that does.
-  const map = await api.getCity(island.generation).then(parseCity);
-  cache.set(keyOf(map.generation, map.rev), map);
-  return map;
+  // A response that does not parse fails like a request that does. Neither a failure nor an
+  // island of another rev than the archipelago named stays: the next request reads it again.
+  const read: Promise<CityMap> = api
+    .getCity(island.generation)
+    .then(parseCity)
+    .then(
+      (map) => {
+        if (map.generation !== island.generation || map.rev !== island.rev) cache.delete(key);
+        return map;
+      },
+      (e: unknown) => {
+        cache.delete(key);
+        throw e;
+      },
+    );
+  cache.set(key, read);
+  return read;
 }
 
 /**
  * The archipelago around the root `selected` as one map. The offsets and the gates of a bridge fit
  * the bytes of an island only while their `rev` is the one the archipelago names: if an island was
- * rebuilt in between (a live scan), the archipelago is asked again, never merged from both.
+ * rebuilt in between (a live scan), the archipelago is asked again, never merged from both. If it
+ * keeps changing, the answer is null (no new picture): the next revision asks again.
  */
 export async function readArchipelago(selected: number, cache: IslandCache) {
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
@@ -45,5 +63,5 @@ export async function readArchipelago(selected: number, cache: IslandCache) {
       return { map: mergeIslands(parts, bridges), islands };
     }
   }
-  throw new Error("an island kept changing while the archipelago was read");
+  return null;
 }

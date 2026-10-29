@@ -34,16 +34,20 @@ function city(generation: number, rev: number): ArrayBuffer {
 
 /** The revision each open root is at, as the backend has it; the tests move it. */
 const revs = new Map<number, number>();
+/** The open roots that are no drive: the archipelago has no island for them. */
+const folders = new Set<number>();
 
-function archipelago(): Archipelago {
+function archipelago(selected: number): Archipelago {
   return {
-    islands: [...revs.keys()].map((generation, i) => ({
-      generation,
-      rev: revs.get(generation)!,
-      root: `/r${generation}`,
-      x: i * 300,
-      z: 0,
-    })),
+    islands: [...revs.keys()]
+      .filter((g) => (folders.has(selected) ? g === selected : !folders.has(g)))
+      .map((generation, i) => ({
+        generation,
+        rev: revs.get(generation)!,
+        root: `/r${generation}`,
+        x: i * 300,
+        z: 0,
+      })),
     bridges: [],
   };
 }
@@ -88,8 +92,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   revs.clear();
+  folders.clear();
   revs.set(1, 1).set(2, 1);
-  vi.mocked(api.getArchipelago).mockImplementation(() => Promise.resolve(archipelago()));
+  vi.mocked(api.getArchipelago).mockImplementation((g) => Promise.resolve(archipelago(g)));
   vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, revs.get(g)!)));
   vi.mocked(api.getCrumbs).mockResolvedValue(crumbs([0]));
 });
@@ -118,7 +123,10 @@ describe("useArchipelago", () => {
     expect(api.getCity).toHaveBeenCalledTimes(2);
     expect(shown.selectedIsland).toBe(0);
     render(2, 0);
+    await settle(2, 0);
     expect(shown.selectedIsland).toBe(1);
+    // The selected root is an island already shown: the archipelago is the same.
+    expect(api.getArchipelago).toHaveBeenCalledTimes(1);
   });
 
   it("asks at once when the set of roots changes, whatever the pause", async () => {
@@ -214,25 +222,85 @@ describe("useArchipelago", () => {
     expect(shown.finish).toBeNull();
   });
 
-  it("keeps the picture while another island is selected, and shows a lone root only once read", async () => {
+  it("keeps the picture while another island is selected", async () => {
     render();
     await settle();
     const before = shown.world;
     render(2, 0);
     expect(shown.world).toBe(before);
     expect(shown.selectedIsland).toBe(1);
-    // A root that is no drive is not among the islands: nothing of the old view is shown for it.
+  });
+
+  it("asks at once for a selected root that is no island, and shows nothing of the old view", async () => {
     revs.set(3, 1);
+    folders.add(3);
+    render();
+    await settle();
+    expect(shown.islands.map((i) => i.generation)).toEqual([1, 2]);
+    expect(api.getArchipelago).toHaveBeenCalledTimes(1);
     vi.mocked(api.getArchipelago).mockReturnValue(new Promise(() => {}));
     render(3, 0);
     expect(shown.world).toBeNull();
+    expect(api.getArchipelago).toHaveBeenCalledTimes(2);
     expect(api.getArchipelago).toHaveBeenLastCalledWith(3);
   });
 
+  it("ignores the revision of an open folder that is no island", async () => {
+    revs.set(3, 1);
+    folders.add(3);
+    render();
+    await settle();
+    revs.set(3, 2);
+    render();
+    await vi.advanceTimersByTimeAsync(3 * REFRESH_MS);
+    render();
+    expect(api.getArchipelago).toHaveBeenCalledTimes(1);
+    // The same folder, once it is the root shown, is followed.
+    revs.set(3, 3);
+    render(3, 0);
+    await settle(3, 0);
+    revs.set(3, 4);
+    render(3, 0);
+    await vi.advanceTimersByTimeAsync(REFRESH_MS);
+    render(3, 0);
+    expect(api.getArchipelago).toHaveBeenCalledTimes(3);
+  });
+
+  it("releases the island of a closed root, and reads it again when it comes back", async () => {
+    render();
+    await settle();
+    expect(vi.mocked(api.getCity).mock.calls.map(([g]) => g)).toEqual([1, 2]);
+    revs.delete(2);
+    render();
+    await settle();
+    expect(shown.islands).toHaveLength(1);
+    revs.set(2, 1);
+    render();
+    await settle();
+    expect(shown.islands).toHaveLength(2);
+    expect(vi.mocked(api.getCity).mock.calls.map(([g]) => g)).toEqual([1, 2, 2]);
+  });
+
+  it("reads an island once for two requests that overlap", async () => {
+    const bytes = deferred<ArrayBuffer>();
+    vi.mocked(api.getCity).mockReturnValueOnce(bytes.promise);
+    render();
+    for (let i = 0; i < 40; i++) await Promise.resolve();
+    // A root opens while island 1 is still on the way: the new request needs it too.
+    revs.set(3, 1);
+    render();
+    for (let i = 0; i < 40; i++) await Promise.resolve();
+    bytes.resolve(city(1, 1));
+    await settle();
+    const asked = vi.mocked(api.getCity).mock.calls.map(([g]) => g);
+    expect(asked.filter((g) => g === 1)).toHaveLength(1);
+    expect(shown.islands.map((i) => i.generation)).toEqual([1, 2, 3]);
+  });
+
   it("reads again when an island was rebuilt between the two requests", async () => {
-    vi.mocked(api.getArchipelago).mockImplementation(() => {
+    vi.mocked(api.getArchipelago).mockImplementation((g) => {
       revs.set(2, 2);
-      return Promise.resolve(archipelago());
+      return Promise.resolve(archipelago(g));
     });
     vi.mocked(api.getCity)
       .mockResolvedValueOnce(city(1, 1))
@@ -245,11 +313,35 @@ describe("useArchipelago", () => {
     expect(onFail).not.toHaveBeenCalled();
   });
 
-  it("gives up with an error when an island keeps changing", async () => {
+  it("keeps the old picture, without an error, when an island keeps changing", async () => {
+    render();
+    await settle();
+    const before = shown.world;
+    vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, 99)));
+    revs.set(2, 2);
+    render();
+    await vi.advanceTimersByTimeAsync(REFRESH_MS);
+    render();
+    await settle();
+    expect(api.getArchipelago).toHaveBeenCalledTimes(1 + 3);
+    expect(onFail).not.toHaveBeenCalled();
+    expect(shown.world).toBe(before);
+    // The next revision asks again, and gets through.
+    vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, revs.get(g)!)));
+    revs.set(2, 3);
+    render();
+    await vi.advanceTimersByTimeAsync(REFRESH_MS);
+    render();
+    await settle();
+    expect(shown.world).not.toBe(before);
+    expect(onFail).not.toHaveBeenCalled();
+  });
+
+  it("shows nothing, without an error, when the first picture keeps changing", async () => {
     vi.mocked(api.getCity).mockImplementation((g) => Promise.resolve(city(g, 99)));
     render();
     await settle();
-    expect(onFail).toHaveBeenCalledTimes(1);
+    expect(onFail).not.toHaveBeenCalled();
     expect(shown.world).toBeNull();
   });
 
