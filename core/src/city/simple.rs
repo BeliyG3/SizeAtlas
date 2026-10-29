@@ -9,6 +9,9 @@ pub(crate) const LEAVE: f64 = 30.0;
 /// A run shorter than this, but not nil, is a near miss and left out: its angle would not
 /// survive `f32` far out, metres.
 pub(crate) const SHORT: f64 = 4.0;
+/// A gate this near another's straight stands on it, metres: off by `ON` over a strait the run
+/// turns well within 1e-3 rad.
+const ON: f64 = 0.01;
 /// The eight directions a bridge's runs can take, `k · 45°` with `y` down.
 pub(crate) const DIRS: [[f64; 2]; 8] = [
     [1.0, 0.0],
@@ -22,7 +25,8 @@ pub(crate) const DIRS: [[f64; 2]; 8] = [
 ];
 
 /// The shortest path `ok` takes from `a` out along `da` (at least `least.0`), one run, then in to
-/// `b` against `db` (at least `least.1`). A straight of 0 leaves it out.
+/// `b` against `db` (at least `least.1`). A straight of 0 leaves it out. Gates that stand gate
+/// against gate (`b` on `a`'s straight within `ON`) take the one run between them.
 pub(crate) fn route(
     a: [f32; 2],
     da: [f32; 2],
@@ -34,6 +38,14 @@ pub(crate) fn route(
     let (a, b) = (a.map(f64::from), b.map(f64::from));
     let (da, db) = (snap(da), snap(db));
     let d = [b[0] - a[0], b[1] - a[1]];
+    let ahead = d[0] * da[0] + d[1] * da[1];
+    let facing = da[0] * db[0] + da[1] * db[1] < -1.0 + 1e-9;
+    if facing && cross(da, d).abs() < ON && ahead >= least.0.max(least.1) - 1e-6 {
+        let straight = [a, b].map(|p| [p[0] as f32, p[1] as f32]).to_vec();
+        if ok(&straight) {
+            return Some(straight);
+        }
+    }
     let mut best: Option<(f64, Vec<[f32; 2]>)> = None;
     for m in DIRS {
         let (ca, cb, c0) = (cross(da, m), cross(db, m), cross(d, m));
@@ -136,7 +148,7 @@ pub(crate) fn jog(
     let d = [b[0] - a[0], b[1] - a[1]];
     let (along, off) = (d[0] * da[0] + d[1] * da[1], cross(da, d));
     let facing = da[0] * db[0] + da[1] * db[1] < -1.0 + 1e-9;
-    if !facing || off.abs() < 1e-6 || off.abs() * SQRT_2 >= SHORT {
+    if !facing || off.abs() < ON || off.abs() * SQRT_2 >= SHORT {
         return None;
     }
     // Across towards `b`'s side, and back.

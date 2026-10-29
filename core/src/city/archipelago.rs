@@ -12,6 +12,8 @@ use std::f32::consts::{PI, TAU};
 const BAND: f32 = 2.0 * WORLD_CELL;
 /// Bisection steps along an island's ray.
 const ROUNDS: usize = 30;
+/// Gates face each other where their directions are this near opposite: `cos 1e-3`.
+const FACING: f32 = 0.999_999_5;
 /// Gates built facing directions this close to the real ones face them well enough, radians.
 const SETTLED: f32 = 2.0 * PI / 180.0;
 
@@ -19,11 +21,24 @@ const SETTLED: f32 = 2.0 * PI / 180.0;
 /// [`super::directions`]; the first has the middle of its outline's bounding box at `(0, 0)`, the
 /// `i`-th lies on the ray `i · SPIRAL` from there, slid in until the sea between its outline and
 /// the others' narrows to `STRAIT` (measured from points every `WORLD_CELL` along its outline,
-/// and from the others' corners).
+/// and from the others' corners). But where its gate towards a placed island and that island's
+/// gate towards it face each other, it stands gate against gate: its gate on the line out of the
+/// other's, slid in along it to the strait; of such places the nearest to the one on the ray.
 pub fn place(islands: &[&Island]) -> Vec<[f32; 2]> {
+    lay(islands, true)
+}
+
+/// [`place`] with every island on its ray: the places the gates are built to face.
+pub fn place_on_rays(islands: &[&Island]) -> Vec<[f32; 2]> {
+    lay(islands, false)
+}
+
+/// The places of [`place`], gate against gate where `align`.
+fn lay(islands: &[&Island], align: bool) -> Vec<[f32; 2]> {
     let mut at: Vec<[f32; 2]> = Vec::with_capacity(islands.len());
     let mut placed: Vec<Vec<Vec<[f32; 2]>>> = Vec::with_capacity(islands.len());
     let mut coasts: Vec<Coast> = Vec::with_capacity(islands.len());
+    let mut halves: Vec<f32> = Vec::with_capacity(islands.len());
     // How far from the origin the placed outlines reach.
     let mut reach = 0.0f32;
     for (i, island) in islands.iter().enumerate() {
@@ -59,26 +74,56 @@ pub fn place(islands: &[&Island]) -> Vec<[f32; 2]> {
                 });
                 apart && corners && !around
             };
-            let (mut near, mut far) = (0.0, reach + half + STRAIT + BAND);
-            for _ in 0..ROUNDS {
-                let mid = (near + far) / 2.0;
-                if clear(shift(mid)) {
-                    far = mid;
-                } else {
-                    near = mid;
+            let ray = shift(nearest(|t| clear(shift(t)), reach + half + STRAIT + BAND));
+            // Gate against gate with island `j`: out along `j`'s gate from its node by `s`.
+            let against = |j: usize| {
+                let (mine, theirs) = (island.facing(j)?, islands[j].facing(i - 1)?);
+                let (u, v) = (theirs.dir, mine.dir);
+                if u[0] * v[0] + u[1] * v[1] > -FACING {
+                    return None;
                 }
-            }
-            shift(far)
+                let (from, to) = (
+                    islands[j].nodes[theirs.node as usize],
+                    island.nodes[mine.node as usize],
+                );
+                let base = [from[0] + at[j][0] - to[0], from[1] + at[j][1] - to[1]];
+                let along = |s: f32| [base[0] + s * u[0], base[1] + s * u[1]];
+                // Past both islands' diagonals and the strait, none of the two is in the way.
+                let far = 2.0 * (half + halves[j]) + STRAIT + BAND;
+                clear(along(far)).then(|| along(nearest(|s| clear(along(s)), far)))
+            };
+            let off = |o: &[f32; 2]| (o[0] - ray[0]).hypot(o[1] - ray[1]);
+            (0..i)
+                .filter(|_| align)
+                .filter_map(against)
+                .min_by(|p, q| off(p).total_cmp(&off(q)))
+                .unwrap_or(ray)
         };
         reach = reach.max((offset[0] + c[0]).hypot(offset[1] + c[1]) + half);
         placed.push(shape(island, offset));
         coasts.push(Coast::new(&placed[i]));
+        halves.push(half);
         at.push(offset);
     }
     at
 }
 
-/// Directions (radians) from each island moved by `offsets` (see [`place`]) to every other one,
+/// The least `t` of `0..far` (bisected) where `clear` holds, `clear(far)` taken for granted.
+fn nearest(clear: impl Fn(f32) -> bool, far: f32) -> f32 {
+    let (mut near, mut far) = (0.0, far);
+    for _ in 0..ROUNDS {
+        let mid = (near + far) / 2.0;
+        if clear(mid) {
+            far = mid;
+        } else {
+            near = mid;
+        }
+    }
+    far
+}
+
+/// Directions (radians) from each island moved by `offsets` (see [`place_on_rays`]) to every
+/// other one,
 /// in their order without it: between the middles of their outlines' bounding boxes. These are
 /// what the gates should face; [`super::directions`] only foresees them.
 pub fn bearings(islands: &[&Island], offsets: &[[f32; 2]]) -> Vec<Vec<f32>> {

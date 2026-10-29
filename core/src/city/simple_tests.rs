@@ -43,3 +43,11 @@ fn jog_only_for_small_offsets_of_facing_gates() {
     assert!(jog(a, da, [70.0, 1.0], [-1.0, 0.0], (30.0, 30.0), ok).is_none());
     assert!(jog(a, da, [200.0, 1.0], [-1.0, 0.0], (30.0, 30.0), |_| false).is_none());
 }
+
+/// Gates a few millimetres off each other's straight take the one run between them.
+#[test]
+fn gates_gate_against_gate_take_one_run() {
+    let (a, b) = ([0.0, 0.0], [150.0, 0.004]);
+    let p = route(a, [1.0, 0.0], b, [-1.0, 0.0], (30.0, 30.0), |_| true);
+    assert_eq!(p, Some(vec![a, b]));
+}

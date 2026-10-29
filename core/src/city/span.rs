@@ -51,7 +51,7 @@ pub fn bridges(islands: &[&Island], offsets: &[[f32; 2]]) -> Vec<Bridge> {
     for i in 0..shapes.len() {
         for j in i + 1..shapes.len() {
             // Neighbours are counted without the island itself.
-            let (Some(ga), Some(gb)) = (facing(islands[i], j - 1), facing(islands[j], i)) else {
+            let (Some(ga), Some(gb)) = (islands[i].facing(j - 1), islands[j].facing(i)) else {
                 continue;
             };
             let end = |k: usize, g: &Gate| {
@@ -102,11 +102,6 @@ fn pick(simple: Option<Vec<[f32; 2]>>, sea: Option<Vec<[f32; 2]>>) -> Option<Vec
         }
         (p, q) => p.or(q),
     }
-}
-
-/// The first gate of `island` that faces its neighbour `n`.
-fn facing(island: &Island, n: usize) -> Option<&Gate> {
-    (island.gates.iter()).find(|g| g.neighbours.contains(&(n as u32)))
 }
 
 /// Whether bridges `x` and `y` cross or come within `APART`, but for their two runs at a gate

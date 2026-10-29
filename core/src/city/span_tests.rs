@@ -6,7 +6,7 @@ use crate::city::archipelago::tests::{
 use crate::city::test_sets::{
     eight, five, five_real, four, four_real, four_turned, three, three_real,
 };
-use crate::city::{Island, place};
+use crate::city::{Island, place, place_on_rays};
 use std::f32::consts::{FRAC_PI_4, PI, TAU};
 use std::time::Instant;
 
@@ -256,7 +256,7 @@ fn no_sharp_corners() {
 /// The most any gate of `set` (placed by `place`) turns off the octant of the islands it faces:
 /// the mean of the directions to them, as a highway shared by several turns onto, radians.
 fn aim_off(set: &[Island]) -> f32 {
-    let aims = bearings(&refs(set), &place(&refs(set)));
+    let aims = bearings(&refs(set), &place_on_rays(&refs(set)));
     let mut worst = 0.0f32;
     for (i, island) in set.iter().enumerate() {
         for g in &island.gates {

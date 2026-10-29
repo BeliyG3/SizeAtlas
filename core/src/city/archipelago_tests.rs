@@ -1,6 +1,7 @@
 use super::*;
-use crate::city::test_sets::{five, four, one};
-use crate::city::{Gate, PolyKind, bridges};
+use crate::city::map::{Poly, Stats};
+use crate::city::test_sets::{five, four, four_real, one, three};
+use crate::city::{Gate, PolyKind, bridges, place_on_rays};
 use std::f32::consts::{PI, TAU};
 
 pub(crate) fn refs(set: &[Island]) -> Vec<&Island> {
@@ -124,27 +125,51 @@ fn one_island_stays_put() {
 }
 
 #[test]
-fn straits_are_110_m() {
-    let set = four();
-    let at = place(&refs(set));
-    let shapes: Vec<_> = set.iter().zip(&at).map(|(s, &a)| outline(s, a)).collect();
-    for i in 1..set.len() {
-        let gaps: Vec<f32> = (0..i).map(|j| gap(&shapes[i], &shapes[j])).collect();
-        eprintln!("island {i}: {gaps:?}");
-        assert!(gaps.iter().all(|&g| g >= STRAIT - 0.01), "{i}: {gaps:?}");
-        assert!(gaps.iter().any(|&g| g <= STRAIT + 12.0), "{i}: {gaps:?}");
+fn alignment_keeps_straits() {
+    for set in [three(), four(), five(), four_real()] {
+        let at = place(&refs(set));
+        let shapes: Vec<_> = set.iter().zip(&at).map(|(s, &a)| outline(s, a)).collect();
+        for i in 1..set.len() {
+            let gaps: Vec<f32> = (0..i).map(|j| gap(&shapes[i], &shapes[j])).collect();
+            assert!(gaps.iter().all(|&g| g >= STRAIT - 0.01), "{i}: {gaps:?}");
+            assert!(gaps.iter().any(|&g| g <= STRAIT + 12.0), "{i}: {gaps:?}");
+        }
     }
 }
 
+/// The placed island `j < i` that island `i` stands gate against gate with: their gates towards
+/// each other face opposite ways and `i`'s lies on the line out of `j`'s (within 5 cm).
+fn against(set: &[Island], at: &[[f32; 2]], i: usize) -> Option<usize> {
+    let node = |k: usize, g: &Gate| add(set[k].nodes[g.node as usize], at[k]);
+    (0..i).find(|&j| {
+        let (Some(gi), Some(gj)) = (set[i].facing(j), set[j].facing(i - 1)) else {
+            return false;
+        };
+        let d = sub(node(i, gi), node(j, gj));
+        let across = d[0] * gj.dir[1] - d[1] * gj.dir[0];
+        let ahead = d[0] * gj.dir[0] + d[1] * gj.dir[1];
+        let facing = gi.dir[0] * gj.dir[0] + gi.dir[1] * gj.dir[1] < -0.999;
+        facing && across.abs() <= 0.05 && ahead > 0.0
+    })
+}
+
+/// How far (radians) island `i` at `at` stands off its ray `i · SPIRAL` from the first.
+fn off_ray(set: &[Island], at: &[[f32; 2]], i: usize) -> f32 {
+    let d = sub(add(centre(&set[i]), at[i]), add(centre(&set[0]), at[0]));
+    ((d[1].atan2(d[0]) - i as f32 * SPIRAL + PI).rem_euclid(TAU) - PI).abs()
+}
+
+/// Island `i` stands on the ray `i · SPIRAL`, unless it stands gate against gate; on the rays
+/// alone, all of them do.
 #[test]
 fn island_i_on_its_ray() {
     let set = four();
-    let at = place(&refs(set));
-    let from = add(centre(&set[0]), at[0]);
+    let (at, rays) = (place(&refs(set)), place_on_rays(&refs(set)));
+    let near = 0.5f32.to_radians();
     for i in 1..set.len() {
-        let d = sub(add(centre(&set[i]), at[i]), from);
-        let off = (d[1].atan2(d[0]) - i as f32 * SPIRAL + PI).rem_euclid(TAU) - PI;
-        assert!(off.abs() <= 0.5f32.to_radians(), "{i}: {off}");
+        let off = off_ray(set, &at, i);
+        assert!(off <= near || against(set, &at, i).is_some(), "{i}: {off}");
+        assert!(off_ray(set, &rays, i) <= near, "{i}");
     }
 }
 
@@ -175,4 +200,91 @@ fn settled_within_two_degrees_across_the_seam() {
     let used = [vec![PI - deg(0.5)], vec![deg(10.0)]];
     assert!(settled(&used, &[vec![-PI + deg(1.0)], vec![deg(11.9)]]));
     assert!(!settled(&used, &[vec![-PI + deg(1.0)], vec![deg(12.1)]]));
+}
+
+/// A 200 m square island at the origin with one gate at `node` facing `dir` towards
+/// neighbour 0.
+fn square(node: [f32; 2], dir: [f32; 2]) -> Island {
+    let points = vec![[0.0, 0.0], [0.0, 200.0], [200.0, 200.0], [200.0, 0.0]];
+    let poly = Poly {
+        kind: PolyKind::Island,
+        id: 0,
+        parent: 0,
+        size: 0,
+        points,
+    };
+    let stats = Stats {
+        built: 0.0,
+        inner_empty: 0.0,
+        shore: 0.0,
+        water: 0.0,
+    };
+    Island {
+        width: 200.0,
+        height: 200.0,
+        polys: vec![poly],
+        nodes: vec![node],
+        edges: Vec::new(),
+        gates: vec![Gate {
+            node: 0,
+            dir,
+            neighbours: vec![0],
+        }],
+        stats,
+    }
+}
+
+/// Gates facing each other: the second island stands across the strait from the first, its
+/// gate on the line of the first's, and their bridge is one straight run.
+#[test]
+fn aligned_pair_stands_gate_against_gate() {
+    let first = square([200.0, 50.0], [1.0, 0.0]);
+    let second = square([0.0, 150.0], [-1.0, 0.0]);
+    let at = place(&[&first, &second]);
+    assert!(
+        len(sub(at[1], add(at[0], [310.0, -100.0]))) < 0.05,
+        "{at:?}"
+    );
+    let all = bridges(&[&first, &second], &at);
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].points.len(), 2, "{:?}", all[0]);
+}
+
+/// Gates that do not face each other leave the island on its ray.
+#[test]
+fn falls_back_to_the_ray() {
+    let first = square([200.0, 50.0], [1.0, 0.0]);
+    let second = square([0.0, 150.0], [0.0, -1.0]);
+    let mut bare = second.clone();
+    bare.gates.clear();
+    assert_eq!(place(&[&first, &second]), place(&[&first, &bare]));
+}
+
+/// Of four islands, those placed gate against gate with a neighbour get a one-run bridge along
+/// the neighbour's gate.
+#[test]
+fn aligned_neighbours_get_straight_bridges() {
+    let set = four();
+    let at = place(&refs(set));
+    let all = bridges(&refs(set), &at);
+    let mut aligned = 0;
+    for i in 1..set.len() {
+        let Some(j) = against(set, &at, i) else {
+            continue;
+        };
+        aligned += 1;
+        let gj = set[j].facing(i - 1).unwrap();
+        let b = all
+            .iter()
+            .find(|b| (b.a.0, b.b.0) == (j, i))
+            .expect("a bridge");
+        assert_eq!(b.points.len(), 2, "{b:?}");
+        let run = sub(b.points[1], b.points[0]);
+        let off = (run[1].atan2(run[0]) - gj.dir[1].atan2(gj.dir[0]) + PI).rem_euclid(TAU) - PI;
+        assert!(off.abs() <= 1e-3, "{off}: {b:?}");
+    }
+    assert!(
+        aligned > 0,
+        "no island stands gate against gate: the test proves nothing"
+    );
 }

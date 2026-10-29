@@ -68,6 +68,13 @@ pub struct Island {
     pub stats: Stats,
 }
 
+impl Island {
+    /// The first gate that faces neighbour `n` (an index into the neighbours, without itself).
+    pub(crate) fn facing(&self, n: usize) -> Option<&Gate> {
+        (self.gates.iter()).find(|g| g.neighbours.contains(&(n as u32)))
+    }
+}
+
 /// Moves everything so the top left of the map lies within a metre of `(0, 0)` and sets its size;
 /// returns the shift taken off every point.
 pub(super) fn frame(island: &mut Island) -> [f32; 2] {

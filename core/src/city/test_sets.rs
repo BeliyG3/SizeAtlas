@@ -2,7 +2,7 @@
 //! (gates facing where `directions` foresees the others) or the second (facing where `place`
 //! put them).
 
-use super::archipelago::{bearings, place};
+use super::archipelago::{bearings, place_on_rays};
 use super::map::Island;
 use super::plan::{Folder, IslandInput};
 use super::rng::Rng;
@@ -90,7 +90,7 @@ fn archipelago(used: &[u64]) -> Vec<Island> {
 /// the others.
 fn second(used: &[u64], first: &[Island]) -> Vec<Island> {
     let refs: Vec<&Island> = first.iter().collect();
-    let aims = bearings(&refs, &place(&refs));
+    let aims = bearings(&refs, &place_on_rays(&refs));
     build(used, |_, i| aims[i].clone())
 }
 

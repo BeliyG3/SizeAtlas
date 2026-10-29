@@ -135,8 +135,9 @@ impl AppState {
     /// The islands of the members `list` and where they stand. Unless `fresh`, the world last
     /// laid out for the same members, revs and sizes (whatever the free space did since: one
     /// world serves the archipelago and every `get_city`). Else they are built facing
-    /// `foreseen`; where [`city::place`] puts them elsewhere (not [`city::settled`]), built
-    /// again facing where they stand and placed again. One caller lays a world out at a time.
+    /// `foreseen`; where [`city::place_on_rays`] puts them elsewhere (not [`city::settled`]),
+    /// built again facing where they stand there. Then [`city::place`] stands them gate against
+    /// gate where it can. One caller lays a world out at a time.
     pub(super) fn settle_with(
         &self,
         list: &[Member],
@@ -169,9 +170,12 @@ impl AppState {
         open: &[u64],
     ) -> Result<(Vec<Kept>, Vec<[f32; 2]>), CmdError> {
         let first = self.build(list, foreseen, open)?;
-        let at = city::place(&refs(&first));
-        let real = city::bearings(&refs(&first), &at);
+        // The gates face the islands where they stand on their rays; then they stand gate
+        // against gate where they can (see `city::place`).
+        let rays = city::place_on_rays(&refs(&first));
+        let real = city::bearings(&refs(&first), &rays);
         if city::settled(foreseen, &real) {
+            let at = city::place(&refs(&first));
             return Ok((first, at));
         }
         let second = self.build(list, &real, open)?;

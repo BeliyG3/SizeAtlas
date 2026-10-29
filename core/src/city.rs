@@ -43,7 +43,7 @@ mod voronoi;
 mod widths;
 mod world;
 
-pub use archipelago::{bearings, place, settled};
+pub use archipelago::{bearings, place, place_on_rays, settled};
 pub use encode::{
     CITY_FORMAT, CITY_HEADER_LEN, EDGE_LEN, GATE_LEN, POINT_LEN, POLY_LEN, encode_city,
 };
