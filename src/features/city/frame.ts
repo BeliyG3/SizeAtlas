@@ -1,4 +1,4 @@
-/** Camera framing math of the city; pure, no three.js. */
+/** Camera framing math of the city and when the camera moves; pure, no three.js. */
 
 export type Vec3 = [number, number, number];
 
@@ -49,4 +49,21 @@ export function frame(
     distance = Math.max(distance, need);
   }
   return { target, distance: Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, distance)) };
+}
+
+/** The selected root on screen and the index of its island (-1: it is no island shown). */
+export interface Aim {
+  generation: number;
+  island: number;
+}
+
+/**
+ * What the camera does as the panel shows `next` after `shown` (null: no world on screen yet):
+ * jumps onto it the first time, flies to the island of another selected root and stays put
+ * while the same root is rebuilt. Another root that is no island resets the view, as before.
+ */
+export function cameraMove(shown: Aim | null, next: Aim): "jump" | "fly" | "stay" {
+  if (!shown) return "jump";
+  if (next.generation === shown.generation) return "stay";
+  return next.island >= 0 ? "fly" : "jump";
 }

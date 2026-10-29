@@ -1,9 +1,10 @@
 /**
- * The traffic as instanced cars: the model's parts merged by material into one instanced mesh
- * each, all sharing one set of instance matrices.
+ * The traffic as instanced cars: near the camera the model, its parts merged by material into one
+ * instanced mesh each, all sharing one set of instance matrices; farther off a plain lit box.
  */
 import {
   Box3,
+  BoxGeometry,
   BufferGeometry,
   Color,
   DoubleSide,
@@ -20,12 +21,17 @@ import {
   type Object3D,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { splitNear } from "../actors/residents";
 import type { Traffic } from "../actors/traffic";
 import { LOOK } from "../look";
 import { disposeAll } from "./dispose";
 
 /** A car is this long, metres; the model is scaled to it. */
 export const CAR_LENGTH = 4.2;
+/** Cars within this many metres of the camera are drawn as models, the rest as boxes. */
+export const CAR_NEAR = 200;
+/** The far car: a box this wide and tall, `CAR_LENGTH` long, metres. */
+export const CAR_BOX = [1.8, 1.3] as const;
 
 const std = (color: string | number, metalness = 0.7, roughness = 0.3) =>
   new MeshStandardMaterial({ color, metalness, roughness, flatShading: true, side: DoubleSide });
@@ -56,7 +62,7 @@ function materials(): Record<string, Material> {
 export function carInstances(
   car: Object3D,
   max: number,
-): { group: Group; update(t: Traffic): void; dispose(): void } {
+): { group: Group; update(t: Traffic, camera: Vector3): void; dispose(): void } {
   const looks = materials();
   const parts = new Map<string, BufferGeometry[]>();
   car.updateMatrixWorld(true);
@@ -96,20 +102,35 @@ export function carInstances(
     group.add(mesh);
     return mesh;
   });
+  // From afar a box in the glow of the wires, dimmed: one draw for every far car.
+  const brick = new BoxGeometry(CAR_BOX[0], CAR_BOX[1], CAR_LENGTH).translate(0, CAR_BOX[1] / 2, 0);
+  const glow = new MeshBasicMaterial({ color: new Color(LOOK.wire).multiplyScalar(0.35) });
+  const far = new InstancedMesh(brick, glow, max);
+  far.count = 0;
+  far.frustumCulled = false;
+  far.name = "car far";
+  group.add(far);
 
+  const split = { near: new Int32Array(max), far: new Int32Array(max) };
   const matrix = new Matrix4();
   const at = new Vector3();
   const turn = new Quaternion();
-  const one = new Vector3(1, 1, 1);
+  const size = new Vector3();
   const up = new Vector3(0, 1, 0);
-  function update(t: Traffic) {
-    const n = Math.min(t.count, max);
-    for (let i = 0; i < n; i++) {
-      turn.setFromAxisAngle(up, t.heading[i]); // the model faces +z, as `heading` measures
-      matrix.compose(at.set(t.x[i], t.y[i], t.z[i]), turn, one).toArray(matrices.array, i * 16);
-    }
-    matrices.needsUpdate = true;
-    for (const m of meshes) m.count = n;
+  // A moved car grows in from nothing (`appear`).
+  const put = (t: Traffic, i: number, array: Float32Array, slot: number) => {
+    turn.setFromAxisAngle(up, t.heading[i]); // the model faces +z, as `heading` measures
+    size.setScalar(t.appear[i]);
+    matrix.compose(at.set(t.x[i], t.y[i], t.z[i]), turn, size).toArray(array, slot * 16);
+  };
+  function update(t: Traffic, camera: Vector3) {
+    const got = splitNear(t, Math.min(t.count, max), camera, CAR_NEAR, split);
+    const farMatrices = far.instanceMatrix;
+    for (let k = 0; k < got.near; k++) put(t, split.near[k], matrices.array as Float32Array, k);
+    for (let k = 0; k < got.far; k++) put(t, split.far[k], farMatrices.array as Float32Array, k);
+    matrices.needsUpdate = farMatrices.needsUpdate = true;
+    for (const m of meshes) m.count = got.near;
+    far.count = got.far;
   }
   return { group, update, dispose: () => disposeAll(group) };
 }

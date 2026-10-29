@@ -3,7 +3,7 @@ import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { describe, expect, it } from "vitest";
 import type { Residents } from "../actors/residents";
 import type { Traffic } from "../actors/traffic";
-import { carInstances, CAR_LENGTH } from "./cars";
+import { carInstances, CAR_LENGTH, CAR_NEAR } from "./cars";
 import carUrl from "../assets/skycar.glb?inline";
 import walkerUrl from "../assets/walker.glb?inline";
 import { bakeWalk, peopleInstances, POSES } from "./people";
@@ -22,6 +22,19 @@ const residents = (xs: number[], phases: number[]): Residents => ({
   heading: new Float32Array(xs.length),
   phase: Float32Array.from(phases),
   role: new Uint8Array(xs.length),
+  appear: new Float32Array(xs.length).fill(1),
+  update: () => {},
+});
+
+/** Ground cars at `xs` along z = 0, heading +z. */
+const traffic = (xs: number[]): Traffic => ({
+  count: xs.length,
+  x: Float32Array.from(xs),
+  y: new Float32Array(xs.length),
+  z: new Float32Array(xs.length),
+  heading: new Float32Array(xs.length),
+  air: new Uint8Array(xs.length),
+  appear: new Float32Array(xs.length).fill(1),
   update: () => {},
 });
 
@@ -67,24 +80,24 @@ describe("carInstances", () => {
   it("one instanced mesh per material, the car scaled to its length", async () => {
     const car = (await load(carUrl)).scene;
     const cars = carInstances(car, 60);
-    const meshes = cars.group.children as InstancedMesh[];
+    const all = cars.group.children as InstancedMesh[];
+    const meshes = all.filter((m) => m.name !== "car far");
     expect(meshes.length).toBe(8); // nine materials, the panel is drawn as the body
+    expect(all.length).toBe(9);
     const box = new Box3();
     for (const mesh of meshes) {
       mesh.geometry.computeBoundingBox();
       box.union(mesh.geometry.boundingBox!);
     }
     expect(box.max.z - box.min.z).toBeCloseTo(CAR_LENGTH, 3);
-    const traffic: Traffic = {
-      count: 2,
-      x: Float32Array.from([10, 20]),
+    const two: Traffic = {
+      ...traffic([10, 20]),
       y: Float32Array.from([0, 35]),
       z: Float32Array.from([0, 5]),
       heading: Float32Array.from([0, Math.PI / 2]),
       air: Uint8Array.from([0, 1]),
-      update: () => {},
     };
-    cars.update(traffic);
+    cars.update(two, new Vector3(0, 30, 0));
     expect(meshes.every((mesh) => mesh.count === 2)).toBe(true);
     const m = new Matrix4();
     meshes[0].getMatrixAt(1, m);
@@ -92,6 +105,29 @@ describe("carInstances", () => {
     // Heading π/2 points the model's nose (+z) along +x.
     const nose = new Vector3(0, 0, 1).transformDirection(m);
     expect(nose.x).toBeCloseTo(1, 5);
+    cars.dispose();
+  });
+
+  it("far cars are boxes, near ones the model, each car once; a moved one grows in", async () => {
+    const cars = carInstances((await load(carUrl)).scene, 10);
+    const all = cars.group.children as InstancedMesh[];
+    const far = all.find((m) => m.name === "car far")!;
+    const body = all.find((m) => m.name !== "car far")!;
+    const four = traffic([0, 250, 600, 1200]);
+    four.appear[2] = 0.5;
+    // The camera right over the first car: the others are more than CAR_NEAR away.
+    cars.update(four, new Vector3(0, 10, 0));
+    expect(body.count).toBe(1);
+    expect(far.count).toBe(3);
+    expect(body.count + far.count).toBe(four.count);
+    const m = new Matrix4();
+    far.getMatrixAt(1, m);
+    expect(new Vector3().setFromMatrixPosition(m).x).toBe(600);
+    expect(new Vector3().setFromMatrixScale(m).x).toBeCloseTo(0.5, 5);
+    // Between the second and the third car, those two are near.
+    cars.update(four, new Vector3(425, 0, 0));
+    expect([body.count, far.count]).toEqual([2, 2]);
+    expect(CAR_NEAR).toBe(200);
     cars.dispose();
   });
 });

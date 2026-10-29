@@ -16,7 +16,7 @@ const TIP_GAP = 14;
 interface Props {
   /** Every open root with a tree, at its revision: a change reloads the city. */
   roots: readonly { generation: number; rev: number }[];
-  /** The selected root: a change resets the camera. */
+  /** The selected root: a change flies the camera to its island. */
   generation: number;
   selectedId: number;
   /** A folder of the tree with `generation`, picked on a house. */
@@ -42,7 +42,11 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
   const sizeText = useSize();
   const palette = usePalette();
   const { resolved } = useSettings();
-  const { world, islands, finish } = useArchipelago(roots, { generation, id: selectedId }, onFail);
+  const { world, islands, selectedIsland, finish } = useArchipelago(
+    roots,
+    { generation, id: selectedId },
+    onFail,
+  );
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [scene, setScene] = useState<CityScene | null>(null);
   const [status, setStatus] = useState<"ready" | "failed" | "lost">("ready");
@@ -97,9 +101,9 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
 
   useEffect(() => {
     if (!scene) return;
-    scene.setCity(world, generation);
+    scene.setCity(world, generation, selectedIsland);
     finish?.();
-  }, [scene, world, generation, finish]);
+  }, [scene, world, generation, selectedIsland, finish]);
 
   // The name and path once the pointer rests on a building: one request per folder.
   const hoverId = hover ? folderOf(hover.building) : null;

@@ -3,6 +3,7 @@
  * models have loaded (the island shows without them until then).
  */
 import type { Object3D, Vector3 } from "three";
+import { localRadius } from "../actors/nav";
 import { createResidents, type Residents } from "../actors/residents";
 import { createTraffic, type Traffic } from "../actors/traffic";
 import { loadAssets } from "../render/assets";
@@ -10,17 +11,32 @@ import { carInstances } from "../render/cars";
 import { peopleInstances } from "../render/people";
 import type { RoadGraph } from "../world/roads";
 
-/** The panel's limits: cars (flying ones included) and residents. */
-export const CARS = 60;
-export const PEOPLE = 150;
+/** The panel's limits: cars (flying ones included) and residents, however many islands. */
+export const CARS = 200;
+export const PEOPLE = 525;
+
+/** Cars for an archipelago of `islands`: 60 an island, up to `CARS`. */
+export function carsFor(islands: number): number {
+  return Math.min(60 * Math.max(1, islands), CARS);
+}
+
+/** Residents for an archipelago of `islands`: 150 an island, up to `PEOPLE`. */
+export function peopleFor(islands: number): number {
+  return Math.min(150 * Math.max(1, islands), PEOPLE);
+}
 
 export interface Life {
   /** True once there are models to draw and people to move. */
   active: () => boolean;
-  /** New traffic and residents on `g` (null: none), the same for the same `seed`. */
-  populate: (g: RoadGraph | null, seed: number) => void;
-  /** Moves everyone on `dt` seconds; `eye` is the camera, near figures are drawn as models. */
-  step: (dt: number, eye: Vector3) => void;
+  /**
+   * New traffic and residents on `g` (null: none) of `islands`, the same for the same `seed`.
+   */
+  populate: (g: RoadGraph | null, seed: number, islands: number) => void;
+  /**
+   * Moves everyone on `dt` seconds. `eye` is the camera: near cars and figures are drawn as
+   * models. Half of them keep near `target`, the closer the camera the tighter.
+   */
+  step: (dt: number, eye: Vector3, target: Vector3) => void;
   dispose: () => void;
 }
 
@@ -54,18 +70,19 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
 
   return {
     active: () => models !== null && pools !== null,
-    populate(g, seed) {
+    populate(g, seed, islands) {
       pools = g && {
-        traffic: createTraffic(g, CARS, seed),
-        residents: createResidents(g, PEOPLE, seed),
+        traffic: createTraffic(g, carsFor(islands), seed),
+        residents: createResidents(g, peopleFor(islands), seed),
       };
       show(false);
     },
-    step(dt, eye) {
+    step(dt, eye, target) {
       if (!models || !pools) return;
-      pools.traffic.update(dt);
-      pools.residents.update(dt);
-      models.cars.update(pools.traffic);
+      const around = { x: target.x, z: target.z, r: localRadius(eye.distanceTo(target)) };
+      pools.traffic.update(dt, around);
+      pools.residents.update(dt, around);
+      models.cars.update(pools.traffic, eye);
       models.people.update(pools.residents, eye);
       show(true);
     },

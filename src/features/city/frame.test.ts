@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { frame, MAX_DISTANCE, MIN_DISTANCE, type Box } from "./frame";
+import { cameraMove, frame, MAX_DISTANCE, MIN_DISTANCE, type Box } from "./frame";
 
 const ground: Box = { min: [0, 0, 0], max: [100, 0, 100] };
 
@@ -42,5 +42,26 @@ describe("frame", () => {
   it("clamps to the distance limits", () => {
     expect(frame({ min: [0, 0, 0], max: [0.1, 0.1, 0.1] }, 60, 1, 1).distance).toBe(MIN_DISTANCE);
     expect(frame({ min: [0, 0, 0], max: [1e6, 0, 1e6] }, 60, 1, 1).distance).toBe(MAX_DISTANCE);
+  });
+});
+
+describe("cameraMove", () => {
+  const on = (generation: number, island: number) => ({ generation, island });
+
+  it("jumps onto the root's island the first time a world shows", () => {
+    expect(cameraMove(null, on(4, 2))).toBe("jump");
+  });
+
+  it("flies to the island of another selected root", () => {
+    expect(cameraMove(on(4, 2), on(5, 0))).toBe("fly");
+  });
+
+  it("stays put while the same root is rebuilt, even if its island moved in the list", () => {
+    expect(cameraMove(on(4, 2), on(4, 2))).toBe("stay");
+    expect(cameraMove(on(4, 2), on(4, 3))).toBe("stay");
+  });
+
+  it("resets the view for another root that is no island", () => {
+    expect(cameraMove(on(4, 2), on(6, -1))).toBe("jump");
   });
 });

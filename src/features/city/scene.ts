@@ -11,9 +11,8 @@ import {
   LineSegments,
   Raycaster,
   Vector2,
-  Vector3,
 } from "three";
-import type { Box } from "./frame";
+import { cameraMove, type Aim, type Box } from "./frame";
 import type { Palette } from "../../palette";
 import { createLife } from "./panel/life";
 import { createStage } from "./panel/stage";
@@ -23,6 +22,7 @@ import { houseMesh, type Houses } from "./render/houses";
 import { roadMesh } from "./render/roads";
 import type { Building, World } from "./world/buildings";
 import { buildRoads, type RoadGraph } from "./world/roads";
+import { buildingBox, islandBox, overviewBox } from "./world/views";
 
 export type { Hover } from "./pointer";
 
@@ -34,11 +34,11 @@ export interface CityTheme {
 
 /** The view a reset gives: this far from straight down, looking along the map's rows. */
 const START_POLAR = (55 * Math.PI) / 180;
-/** A reset shows this much water around the island, in island sizes. */
-const SHORE_VIEW = 0.1;
 /** The camera sees this far past its target, in island sizes: the whole sea of the ground. */
 const REACH = 16;
 const FLY_MS = 400;
+/** The flight to the island of a newly selected root. */
+const ISLAND_FLY_MS = 900;
 /** The panel's frame rate cap while anything moves. */
 const FPS = 30;
 /** The outline sits this far outside the focus box, so its lines never sink into faces... */
@@ -55,12 +55,16 @@ export interface SceneEvents {
 
 export interface CityScene {
   /**
-   * Shows `world` (null: nothing); a new `generation` also resets the camera. A world of the
-   * shown `map` (only the focus moved) is repainted in place, keeping the meshes, the traffic
-   * and the hover; another map is built anew and the old one freed.
+   * Shows `world` (null: nothing) with the selected root `generation`, which is the world's
+   * island `island` (-1: none). The camera starts on that island, flies to the island of a newly
+   * selected root and is left alone while the same root is rebuilt; a new root that is no island
+   * resets it to the whole world. A world of the shown `map` (only the focus moved) is repainted
+   * in place, keeping the meshes, the traffic and the hover; another map is built anew and the
+   * old one freed.
    */
-  setCity: (world: World | null, generation: number) => void;
+  setCity: (world: World | null, generation: number, island: number) => void;
   setTheme: (theme: CityTheme) => void;
+  /** Shows the whole archipelago. */
   reset: () => void;
   dispose: () => void;
 }
@@ -81,14 +85,17 @@ export function createScene(
   let theme = initialTheme;
   let world: World | null = null;
   let island: Island | null = null;
-  let shownGeneration: number | null = null;
+  // The root last shown with a world, and the island the next reset puts the camera on (-1: all).
+  let shown: Aim | null = null;
   let needsReset = true;
+  let resetTo = -1;
 
   const stage = createStage(canvas, {
     beforeDraw() {
       if (!needsReset || !world) return;
       needsReset = false;
-      const { to, from } = stage.fit(overview(world), START_POLAR, 0);
+      const box = (resetTo >= 0 && islandBox(world, resetTo)) || overviewBox(world);
+      const { to, from } = stage.fit(box, START_POLAR, 0);
       stage.controls.target.copy(to);
       stage.camera.position.copy(from);
       stage.controls.update();
@@ -109,7 +116,7 @@ export function createScene(
   scene.add(outline);
 
   const life = createLife(scene, () => animate());
-  const step = (dt: number) => life.step(dt, camera.position);
+  const step = (dt: number) => life.step(dt, camera.position, controls.target);
   const animate = () => scheduler.animate(life.active() ? step : null, FPS);
 
   const applyTheme = () => {
@@ -132,14 +139,11 @@ export function createScene(
     return world.buildings[island.houses.houseOfFace[hit.faceIndex]] ?? null;
   };
 
-  const flyTo = (building: Building) => {
+  /** Flies over `ms` to show `box`, keeping the camera's angles; false while the canvas has no size. */
+  const flyToBox = (box: Box, ms: number): boolean => {
     const { w, h } = stage.size();
-    if (w === 0 || h === 0) return;
-    const { to, from } = stage.fit(
-      boxOf(building),
-      controls.getPolarAngle(),
-      controls.getAzimuthalAngle(),
-    );
+    if (w === 0 || h === 0) return false;
+    const { to, from } = stage.fit(box, controls.getPolarAngle(), controls.getAzimuthalAngle());
     const startTarget = controls.target.clone();
     const startPosition = camera.position.clone();
     scheduler.fly((k) => {
@@ -147,7 +151,23 @@ export function createScene(
       controls.target.lerpVectors(startTarget, to, eased);
       camera.position.lerpVectors(startPosition, from, eased);
       controls.update();
-    }, FLY_MS);
+    }, ms);
+    return true;
+  };
+  const flyTo = (building: Building) => void flyToBox(buildingBox(building), FLY_MS);
+
+  /** Moves the camera, if it should, for the root `aim` of the world `on`. */
+  const aimAt = (on: World, aim: Aim) => {
+    const move = cameraMove(shown, aim);
+    shown = aim;
+    if (move === "stay") return;
+    scheduler.stopFly();
+    const box = aim.island >= 0 ? islandBox(on, aim.island) : null;
+    if (move === "fly" && !needsReset && box && flyToBox(box, ISLAND_FLY_MS)) return;
+    // The first look, a root that is no island, a camera not placed yet or no canvas to fly in:
+    // straight there.
+    resetTo = aim.island;
+    needsReset = true;
   };
 
   const detachPointer = attachPointer(canvas, {
@@ -180,7 +200,7 @@ export function createScene(
   };
 
   return {
-    setCity(next, generation) {
+    setCity(next, generation, at) {
       const sameMap = next !== null && next.map === world?.map;
       world = next;
       if (world && sameMap && island) {
@@ -194,16 +214,14 @@ export function createScene(
           const { width, height } = world.map;
           stage.setReach(REACH * Math.max(width, height, 1));
         }
-        life.populate(g, generation);
+        const islands = world ? new Set(world.map.polys.map((p) => p.island)).size : 1;
+        life.populate(g, generation, islands);
         animate();
         events.onHover(null);
       }
       placeOutline(world?.focusBox ?? null);
-      if (generation !== shownGeneration) {
-        shownGeneration = generation;
-        needsReset = true;
-        scheduler.stopFly();
-      }
+      // Without a world the camera waits: the root's island has not come yet.
+      if (world) aimAt(world, { generation, island: at });
       scheduler.invalidate();
     },
     setTheme(next) {
@@ -213,6 +231,7 @@ export function createScene(
     },
     reset() {
       scheduler.stopFly();
+      resetTo = -1;
       needsReset = true;
       scheduler.invalidate();
     },
@@ -243,22 +262,4 @@ function buildIsland(world: World, g: RoadGraph): Island {
       houses.dispose();
     },
   };
-}
-
-/** The whole island and a strip of water around it. */
-function overview(world: World): Box {
-  const { min, max } = world.bounds;
-  const pad = SHORE_VIEW * Math.max(max[0] - min[0], max[2] - min[2]);
-  return { min: [min[0] - pad, min[1], min[2] - pad], max: [max[0] + pad, max[1], max[2] + pad] };
-}
-
-/** The box a building stands in. */
-function boxOf(b: Building): Box {
-  const lo = new Vector3(Infinity, 0, Infinity);
-  const hi = new Vector3(-Infinity, b.h, -Infinity);
-  for (let i = 0; i < b.points.length; i += 2) {
-    lo.set(Math.min(lo.x, b.points[i]), 0, Math.min(lo.z, b.points[i + 1]));
-    hi.set(Math.max(hi.x, b.points[i]), b.h, Math.max(hi.z, b.points[i + 1]));
-  }
-  return { min: lo.toArray(), max: hi.toArray() };
 }

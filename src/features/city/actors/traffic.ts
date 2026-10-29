@@ -1,7 +1,19 @@
 /** Cars driving on lanes and flying cars on air lanes; pure, no three.js. */
 import { ROAD, type RoadKind } from "../world/map";
 import { pointOn, type RoadEdge, type RoadGraph } from "../world/roads";
-import { advance, nextEdge, place, rng, type Track } from "./nav";
+import {
+  advance,
+  createLocals,
+  localIds,
+  nextEdge,
+  place,
+  placeOn,
+  rng,
+  type Allow,
+  type Circle,
+  type Spots,
+  type Track,
+} from "./nav";
 
 /** Speeds in m/s. */
 export const SPEED = { highway: 22, street: 12, air: 30 };
@@ -43,7 +55,10 @@ export interface Traffic {
   heading: Float32Array;
   /** 1 for a flying car. */
   air: Uint8Array;
-  update(dt: number): void;
+  /** How far a car has grown in after it was moved near the camera, `0…1`. */
+  appear: Float32Array;
+  /** Drives on `dt` seconds; half the cars keep to `around` (see `createLocals`). */
+  update(dt: number, around?: Circle | null): void;
 }
 
 const drives = (e: RoadEdge) => lanes(e.cls) > 0;
@@ -68,6 +83,7 @@ export function createTraffic(g: RoadGraph, count: number, seed: number): Traffi
   const nextE = new Int32Array(n).fill(-1);
   const nextF = new Uint8Array(n);
   const nextL = new Uint8Array(n);
+  const locals = createLocals(g, n, [...localIds(0, ground), ...localIds(ground, n - ground)]);
   const out: Traffic = {
     count: n,
     x: new Float32Array(n),
@@ -75,6 +91,7 @@ export function createTraffic(g: RoadGraph, count: number, seed: number): Traffi
     z: new Float32Array(n),
     heading: new Float32Array(n),
     air: new Uint8Array(n),
+    appear: locals.appear,
     update,
   };
   out.air.fill(1, ground);
@@ -223,7 +240,7 @@ export function createTraffic(g: RoadGraph, count: number, seed: number): Traffi
     nextE[i] = -1;
   }
 
-  function update(dt: number) {
+  function update(dt: number, around: Circle | null = null) {
     const h = Math.min(dt, MAX_DT);
     for (let i = 0; i < ground; i++) plan(i);
     for (let i = 0; i < ground; i++) {
@@ -232,11 +249,38 @@ export function createTraffic(g: RoadGraph, count: number, seed: number): Traffi
     }
     for (let i = ground; i < n; i++) advance(g, t, i, SPEED.air * h, rand, flies);
     for (let i = 0; i < n; i++) put(i);
+    locals.update(dt, around, out, relocate);
   }
 
-  /** Is a car placed before `i` going the same way, side by side within 2 m, nearer than `MIN_GAP`? */
-  function tooClose(i: number): boolean {
-    for (let j = 0; j < i; j++) {
+  /** Moves car `i` to a spot of the locals' ring, clear of the others; false if none is. */
+  function relocate(i: number, spots: (allow: Allow) => Spots): boolean {
+    const isAir = i >= ground;
+    const ring = spots(isAir ? flies : drives);
+    const was = { edge: t.edge[i], s: t.s[i], forward: t.forward[i], lane: lane[i] };
+    for (let tries = 0; tries < PLACE_TRIES; tries++) {
+      if (!placeOn(g, t, i, ring, rand)) return false;
+      if (!isAir) lane[i] = laneAt(i, t.edge[i]);
+      put(i);
+      if (
+        isAir ||
+        (!crowded(t.edge[i], t.forward[i], lane[i], t.s[i], i, ground) && !tooClose(i, ground))
+      ) {
+        nextE[i] = -1;
+        return true;
+      }
+    }
+    t.edge[i] = was.edge;
+    t.s[i] = was.s;
+    t.forward[i] = was.forward;
+    lane[i] = was.lane;
+    put(i);
+    return false;
+  }
+
+  /** Is a car of the first `upTo` going the way `i` goes, side by side within 2 m, nearer than `MIN_GAP`? */
+  function tooClose(i: number, upTo: number): boolean {
+    for (let j = 0; j < upTo; j++) {
+      if (j === i) continue;
       const dx = out.x[j] - out.x[i];
       const dz = out.z[j] - out.z[i];
       if (Math.cos(out.heading[j] - out.heading[i]) < 0.99 || Math.hypot(dx, dz) >= MIN_GAP)
@@ -254,7 +298,7 @@ export function createTraffic(g: RoadGraph, count: number, seed: number): Traffi
       want[i] = Math.floor(rand() * 2);
       lane[i] = laneAt(i, t.edge[i]);
       put(i);
-      if (!tooClose(i)) break;
+      if (!tooClose(i, i)) break;
     }
     put(i);
   }

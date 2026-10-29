@@ -1,7 +1,16 @@
 /** Residents walking the sidewalks of streets and the lanes between blocks; pure, no three.js. */
 import { ROAD, type RoadKind } from "../world/map";
 import { pointOn, roadHalf, type RoadEdge, type RoadGraph } from "../world/roads";
-import { advance, place, rng, type Track } from "./nav";
+import {
+  advance,
+  createLocals,
+  localIds,
+  place,
+  placeOn,
+  rng,
+  type Circle,
+  type Track,
+} from "./nav";
 
 /** What a figure is; stage 1 has only residents. */
 export const ROLE = { resident: 0, police: 1, virus: 2 } as const;
@@ -33,7 +42,10 @@ export interface Residents {
   /** Walk cycle, `0…1`. */
   phase: Float32Array;
   role: Uint8Array;
-  update(dt: number): void;
+  /** How far a figure has grown in after it was moved near the camera, `0…1`. */
+  appear: Float32Array;
+  /** Walks on `dt` seconds; half the residents keep to `around` (see `createLocals`). */
+  update(dt: number, around?: Circle | null): void;
 }
 
 const walks = (e: RoadEdge) => walkOffset(e.cls) > 0;
@@ -48,6 +60,7 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
   };
   const speed = new Float32Array(n);
   const side = new Int8Array(n); // +1 walks on the right of the travel, -1 on the left
+  const locals = createLocals(g, n, localIds(0, n));
   const out: Residents = {
     count: n,
     x: new Float32Array(n),
@@ -56,6 +69,7 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
     heading: new Float32Array(n),
     phase: new Float32Array(n),
     role: new Uint8Array(n).fill(ROLE.resident),
+    appear: locals.appear,
     update,
   };
 
@@ -72,7 +86,7 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
     out.heading[i] = p.heading;
   }
 
-  function update(dt: number) {
+  function update(dt: number, around: Circle | null = null) {
     for (let i = 0; i < n; i++) {
       const edge = t.edge[i];
       const forward = t.forward[i];
@@ -84,6 +98,12 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
       if (out.phase[i] >= 1) out.phase[i] = 0; // a float32 can round up to exactly 1
       put(i);
     }
+    locals.update(dt, around, out, (i, spots) => {
+      if (!placeOn(g, t, i, spots(walks), rand)) return false;
+      chooseSide(i);
+      put(i);
+      return true;
+    });
   }
 
   for (let i = 0; i < n; i++) {

@@ -96,12 +96,14 @@ export function peopleInstances(
   const matrix = new Matrix4();
   const at = new Vector3();
   const turn = new Quaternion();
-  const one = new Vector3(1, 1, 1);
+  const size = new Vector3();
   const up = new Vector3(0, 1, 0);
 
+  // A moved figure grows in from nothing (`appear`).
   function put(r: Residents, i: number, mesh: InstancedMesh, slot: number) {
     turn.setFromAxisAngle(up, r.heading[i]);
-    mesh.setMatrixAt(slot, matrix.compose(at.set(r.x[i], r.y[i], r.z[i]), turn, one));
+    size.setScalar(r.appear[i]);
+    mesh.setMatrixAt(slot, matrix.compose(at.set(r.x[i], r.y[i], r.z[i]), turn, size));
     mesh.setColorAt(slot, roles[r.role[i]] ?? roles[0]);
   }
 
