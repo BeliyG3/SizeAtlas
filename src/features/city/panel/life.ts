@@ -1,6 +1,6 @@
 /**
  * The island's moving things in the panel: cars and residents on the road graph, drawn once the
- * models have loaded (the island shows without them until then).
+ * models have loaded (the island shows without them until then), and beyond them the far crowd.
  */
 import type { Object3D, Vector3 } from "three";
 import { localRadius } from "../actors/locals";
@@ -8,13 +8,28 @@ import { createResidents, type Residents } from "../actors/residents";
 import { createTraffic, type Traffic } from "../actors/traffic";
 import { loadAssets } from "../render/assets";
 import { carInstances } from "../render/cars";
+import { crowdMesh, type Crowd } from "../render/crowd";
 import { peopleInstances } from "../render/people";
 import { trailMesh } from "../render/trails";
 import type { RoadGraph } from "../world/roads";
+import { buildRoutes } from "../world/routes";
 
 /** The panel's limits: cars (flying ones included) and residents, however many islands. */
 export const CARS = 200;
 export const PEOPLE = 525;
+
+/** The far crowd: cars and walkers moved by the GPU, sharing this many routes a kind. */
+export const CROWD_CARS = 3000;
+export const CROWD_PEOPLE = 4000;
+export const CROWD_ROUTES = 128;
+
+/** The far crowd on `g`: one mesh of cars and one of walkers, the same for the same `seed`. */
+export function crowdOn(g: RoadGraph, seed: number): Crowd[] {
+  return [
+    crowdMesh(buildRoutes(g, "drive", CROWD_ROUTES, seed), "drive", CROWD_CARS, seed),
+    crowdMesh(buildRoutes(g, "walk", CROWD_ROUTES, seed), "walk", CROWD_PEOPLE, seed),
+  ];
+}
 
 /** Cars for an archipelago of `islands`: 60 an island, up to `CARS`. */
 export function carsFor(islands: number): number {
@@ -49,9 +64,11 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
     trails: ReturnType<typeof trailMesh>;
   } | null = null;
   let pools: { traffic: Traffic; residents: Residents } | null = null;
+  let crowd: Crowd[] = [];
   let disposed = false;
   // Hidden from a new island until its first step, so no car of the last one shows on it.
   const show = (visible: boolean) => {
+    for (const c of crowd) c.mesh.visible = visible;
     if (!models) return;
     models.cars.group.visible = models.people.group.visible = visible;
     models.trails.mesh.visible = visible;
@@ -74,6 +91,14 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
     () => {},
   );
 
+  const dropCrowd = () => {
+    for (const c of crowd) {
+      parent.remove(c.mesh);
+      c.dispose();
+    }
+    crowd = [];
+  };
+
   return {
     active: () => models !== null && pools !== null,
     populate(g, seed, islands) {
@@ -81,6 +106,9 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
         traffic: createTraffic(g, carsFor(islands), seed),
         residents: createResidents(g, peopleFor(islands), seed),
       };
+      dropCrowd();
+      crowd = g ? crowdOn(g, seed) : [];
+      for (const c of crowd) parent.add(c.mesh);
       show(false);
     },
     step(dt, eye, target) {
@@ -91,10 +119,12 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
       models.cars.update(pools.traffic, eye);
       models.trails.update(pools.traffic, eye, dt);
       models.people.update(pools.residents, eye);
+      for (const c of crowd) c.update(dt, around);
       show(true);
     },
     dispose() {
       disposed = true;
+      dropCrowd();
       if (!models) return;
       parent.remove(models.cars.group, models.people.group, models.trails.mesh);
       models.cars.dispose();

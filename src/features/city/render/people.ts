@@ -29,6 +29,9 @@ export const POSES = 8;
 /** The far figure: a column this wide, tall and deep, metres. */
 export const COLUMN = [0.35, 1.8, 0.25] as const;
 
+/** The far figure's column, standing on y = 0. */
+export const columnBox = () => new BoxGeometry(...COLUMN).translate(0, COLUMN[1] / 2, 0);
+
 /**
  * `Walk_Loop` of `walker` frozen at `POSES` even steps of its cycle, as still geometries in the
  * model's own space (standing on y = 0, facing +z).
@@ -77,7 +80,7 @@ export function peopleInstances(
   max: number,
 ): { group: Group; update(r: Residents, camera: Vector3): void; dispose(): void } {
   const material = new MeshBasicMaterial(); // white: the instance colour is the figure's
-  const column = new BoxGeometry(...COLUMN).translate(0, COLUMN[1] / 2, 0);
+  const column = columnBox();
   const group = new Group();
   const meshes = [...bakeWalk(walker), column].map((g, k) => {
     const mesh = new InstancedMesh(g, material, max);

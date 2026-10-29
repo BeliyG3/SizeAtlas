@@ -38,10 +38,17 @@ export const CAR_BOX = [1.8, 1.3] as const;
 const std = (color: string | number, metalness = 0.7, roughness = 0.3) =>
   new MeshStandardMaterial({ color, metalness, roughness, flatShading: true, side: DoubleSide });
 
+/** The car's body, of the model and of the cars farther off. */
+export const carBody = () => std(LOOK.body);
+
+/** The farthest car: a plain box on the ground, `CAR_LENGTH` long, nose to +z. */
+export const carBox = () =>
+  new BoxGeometry(CAR_BOX[0], CAR_BOX[1], CAR_LENGTH).translate(0, CAR_BOX[1] / 2, 0);
+
 /** The car's look by the model's material names; any other name is the body. */
 function materials(): Record<string, Material> {
   return {
-    Body: std(LOOK.body),
+    Body: carBody(),
     Interior: std(0x10151c, 0.2, 0.6),
     Tyre: std(0x07090c, 0.1, 0.7),
     Seat: std(0x2a3038, 0.1, 0.8),
@@ -127,10 +134,7 @@ export function carInstances(
     return mesh;
   };
   const mid = lod(midCar(), "car mid");
-  const far = lod(
-    new BoxGeometry(CAR_BOX[0], CAR_BOX[1], CAR_LENGTH).translate(0, CAR_BOX[1] / 2, 0),
-    "car far",
-  );
+  const far = lod(carBox(), "car far");
 
   const matrix = new Matrix4();
   const at = new Vector3();

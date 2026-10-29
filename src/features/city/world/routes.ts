@@ -86,7 +86,11 @@ function walk(
   const steps = Math.floor(Math.min(end, ROUTE_LENGTH) / ROUTE_STEP);
   const base = row * ROUTE_POINTS * 4;
   const put = (k: number, p: { x: number; y: number; z: number }) => {
-    out.set([p.x, p.y, p.z, 1], base + k * 4);
+    const at = base + k * 4;
+    out[at] = p.x;
+    out[at + 1] = p.y;
+    out[at + 2] = p.z;
+    out[at + 3] = 1;
   };
   let leg = 0;
   for (let k = 0; k <= steps; k++) {
