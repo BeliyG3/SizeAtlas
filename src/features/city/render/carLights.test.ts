@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Traffic } from "../actors/traffic";
 import { LOOK } from "../look";
 import { carLights } from "./carLights";
-import { LIGHT_FRAGMENT, LIGHT_VERTEX } from "./lights";
+import { LIGHT_CLEAR, LIGHT_FRAGMENT, LIGHT_VERTEX } from "./lights";
 
 const tail = new Vector3(0.1, 0.6, -2);
 
@@ -44,14 +44,14 @@ describe("carLights", () => {
     const lights = carLights(10, tail);
     const t = traffic(2);
     lights.update(t);
-    expect(at(lights.points, 0)[2]).toBeCloseTo(-2);
-    expect(at(lights.points, 1)[2]).toBeCloseTo(2);
+    expect(at(lights.points, 0)[2]).toBeCloseTo(-2 - LIGHT_CLEAR);
+    expect(at(lights.points, 1)[2]).toBeCloseTo(2 + LIGHT_CLEAR);
     expect(at(lights.points, 1)[1]).toBeCloseTo(0.6);
     // Turned to +x the car's back is at -x.
     t.heading[1] = Math.PI / 2;
     lights.update(t);
-    expect(at(lights.points, 2)[0]).toBeCloseTo(10 - 2);
-    expect(at(lights.points, 3)[0]).toBeCloseTo(10 + 2);
+    expect(at(lights.points, 2)[0]).toBeCloseTo(10 - 2 - LIGHT_CLEAR);
+    expect(at(lights.points, 3)[0]).toBeCloseTo(10 + 2 + LIGHT_CLEAR);
     expect(at(lights.points, 2)[2]).toBeCloseTo(-0.1);
     lights.dispose();
   });

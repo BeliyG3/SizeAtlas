@@ -7,7 +7,7 @@ import { ROLE } from "../actors/residents";
 import { LOOK, ROLE_COLOR } from "../look";
 import { CAR_BOX, CAR_LENGTH } from "./cars";
 import { CROWD_PLACE, type CrowdUniforms, type Particles } from "./crowdPlace";
-import { LIGHT_MIN_PX, LIGHT_VERTEX, lightPoints } from "./lights";
+import { CAR_LIGHT_BRIGHT, LIGHT_CLEAR, LIGHT_MIN_PX, LIGHT_VERTEX, lightPoints } from "./lights";
 import { COLUMN } from "./people";
 
 /**
@@ -17,11 +17,11 @@ import { COLUMN } from "./people";
 const LIGHTS = {
   drive: {
     // The tail light (the model's `Tail`), then the head light (its `Glow`).
-    along: [-CAR_LENGTH / 2, CAR_LENGTH / 2],
+    along: [-CAR_LENGTH / 2 - LIGHT_CLEAR, CAR_LENGTH / 2 + LIGHT_CLEAR],
     colors: [LOOK.virus, LOOK.wire],
     lift: CAR_BOX[1] / 2,
     minPx: LIGHT_MIN_PX,
-    bright: 1,
+    bright: CAR_LIGHT_BRIGHT,
   },
   walk: {
     along: [0],

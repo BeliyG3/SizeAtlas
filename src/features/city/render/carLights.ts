@@ -12,7 +12,7 @@ import {
 } from "three";
 import type { Traffic } from "../actors/traffic";
 import { LOOK } from "../look";
-import { LIGHT_MIN_PX, LIGHT_VERTEX, lightPoints } from "./lights";
+import { CAR_LIGHT_BRIGHT, LIGHT_CLEAR, LIGHT_MIN_PX, LIGHT_VERTEX, lightPoints } from "./lights";
 
 const VERTEX = `${LIGHT_VERTEX}
 attribute vec3 lightColor;
@@ -49,7 +49,7 @@ export function carLights(
     geometry,
     VERTEX,
     {},
-    { minPx: LIGHT_MIN_PX, bright: 1 },
+    { minPx: LIGHT_MIN_PX, bright: CAR_LIGHT_BRIGHT },
     "car lights",
   );
   const p = position.array as Float32Array;
@@ -64,7 +64,8 @@ export function carLights(
       const glow = t.appear[i]; // a car grows in: its lights come up with it
       for (let k = 0; k < 2; k++) {
         const v = (slots * 2 + k) * 3;
-        const along = k === 0 ? tail.z : -tail.z; // the tail behind, the head ahead
+        // The tail behind, the head ahead, a little clear of the body so it never hides them.
+        const along = k === 0 ? tail.z - LIGHT_CLEAR : LIGHT_CLEAR - tail.z;
         p[v] = t.x[i] + tail.x * cos + along * sin;
         p[v + 1] = t.y[i] + tail.y;
         p[v + 2] = t.z[i] - tail.x * sin + along * cos;

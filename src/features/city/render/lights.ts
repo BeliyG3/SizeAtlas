@@ -5,10 +5,14 @@
 import { AdditiveBlending, Points, ShaderMaterial, Vector2, type BufferGeometry } from "three";
 
 /** A light is drawn this many CSS pixels across at the least and at the most... */
-export const LIGHT_MIN_PX = 2;
-export const LIGHT_MAX_PX = 5;
+export const LIGHT_MIN_PX = 3;
+export const LIGHT_MAX_PX = 7;
 /** ...and as this many metres across in between. */
 export const LIGHT_SIZE = 0.5;
+/** A car's lights sit this far out of its ends, metres, so its body never hides them... */
+export const LIGHT_CLEAR = 0.15;
+/** ...and shine this much over their colour. */
+export const CAR_LIGHT_BRIGHT = 1.5;
 
 /**
  * GLSL for a vertex shader: the uniforms of the size and `lightPx( viewZ )`, the point size in
@@ -29,7 +33,7 @@ uniform float uBright;
 varying vec3 vColor;
 varying float vFade;
 void main() {
-	float a = 1.0 - smoothstep( 0.3, 1.0, length( gl_PointCoord - 0.5 ) * 2.0 );
+	float a = 1.0 - smoothstep( 0.45, 1.0, length( gl_PointCoord - 0.5 ) * 2.0 );
 	if ( a <= 0.0 ) discard;
 	gl_FragColor = vec4( vColor * uBright, a * vFade );
 	#include <tonemapping_fragment>

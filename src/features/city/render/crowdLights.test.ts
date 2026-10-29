@@ -5,7 +5,7 @@ import { CAR_LENGTH } from "./cars";
 import { crowdMesh } from "./crowd";
 import { line } from "./crowd.fixture";
 import { CROWD_PLACE } from "./crowdPlace";
-import { LIGHT_FRAGMENT, LIGHT_MAX_PX, LIGHT_MIN_PX, LIGHT_VERTEX } from "./lights";
+import { LIGHT_CLEAR, LIGHT_FRAGMENT, LIGHT_MAX_PX, LIGHT_MIN_PX, LIGHT_VERTEX } from "./lights";
 
 const rgb = (c: string) => new Color(c).toArray();
 
@@ -15,7 +15,9 @@ describe("crowdLights", () => {
     const g = crowd.lights.geometry;
     expect(g.getAttribute("position").count).toBe(6);
     expect(Array.from(g.getAttribute("crowdAlong").array)).toEqual(
-      [0, 1, 2].flatMap(() => [-CAR_LENGTH / 2, CAR_LENGTH / 2].map(Math.fround)),
+      [0, 1, 2].flatMap(() =>
+        [-CAR_LENGTH / 2 - LIGHT_CLEAR, CAR_LENGTH / 2 + LIGHT_CLEAR].map(Math.fround),
+      ),
     );
     const color = g.getAttribute("lightColor");
     for (let car = 0; car < 3; car++) {
