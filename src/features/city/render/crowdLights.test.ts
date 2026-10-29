@@ -5,7 +5,7 @@ import { CAR_LENGTH } from "./cars";
 import { crowdMesh } from "./crowd";
 import { line } from "./crowd.fixture";
 import { CROWD_PLACE } from "./crowdPlace";
-import { LIGHT_MAX_PX, LIGHT_MIN_PX } from "./crowdLights";
+import { LIGHT_FRAGMENT, LIGHT_MAX_PX, LIGHT_MIN_PX, LIGHT_VERTEX } from "./lights";
 
 const rgb = (c: string) => new Color(c).toArray();
 
@@ -54,7 +54,8 @@ describe("crowdLights", () => {
     expect(m.vertexShader).toContain("crowdPlace( crowdAlong );");
     expect(m.vertexShader).toContain(`float( ${LIGHT_MAX_PX} ) * uRatio`);
     expect(m.uniforms.uMinPx.value).toBe(LIGHT_MIN_PX);
-    expect(m.fragmentShader).toContain("gl_PointCoord");
+    expect(m.vertexShader).toContain(LIGHT_VERTEX);
+    expect(m.fragmentShader).toBe(LIGHT_FRAGMENT);
     const renderer = {
       getDrawingBufferSize: (v: Vector2) => v.set(1600, 900),
       getPixelRatio: () => 2,
