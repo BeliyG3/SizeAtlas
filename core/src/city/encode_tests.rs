@@ -108,3 +108,95 @@ fn offsets_follow_the_format() {
     assert_eq!(u32_at(&b, gate + 12), 4);
     assert_eq!(gate + GATE_LEN, b.len());
 }
+
+/// The frontend's golden map: every polygon kind and road class, a size past 2^32, a bridge
+/// and a gate with no neighbour.
+fn golden() -> Island {
+    let kinds = [
+        PolyKind::Island,
+        PolyKind::Water,
+        PolyKind::Land,
+        PolyKind::District,
+        PolyKind::Block,
+        PolyKind::House,
+        PolyKind::Filler,
+        PolyKind::Square,
+        PolyKind::Plaza,
+        PolyKind::Vacant,
+    ];
+    let polys = kinds
+        .iter()
+        .enumerate()
+        .map(|(k, &kind)| {
+            let (k32, o) = (k as u32, k as f32 * 10.0);
+            let mut points = vec![[o, o], [o + 8.5, o], [o + 8.5, o + 6.25]];
+            points.extend((k % 2 == 1).then_some([o, o + 6.25]));
+            Poly {
+                kind,
+                id: 100 + k32,
+                parent: 99 + k32,
+                size: (5 << 32) + u64::from(k32),
+                points,
+            }
+        })
+        .collect();
+    let classes = [
+        RoadClass::Highway,
+        RoadClass::Ring,
+        RoadClass::Ramp,
+        RoadClass::Street,
+        RoadClass::Lane,
+    ];
+    let edges = classes
+        .iter()
+        .enumerate()
+        .map(|(k, &class)| edge(k as u32, k as u32 + 1, class, class == RoadClass::Street))
+        .collect();
+    Island {
+        width: 120.5,
+        height: 96.75,
+        polys,
+        nodes: (0..6).map(|k| [k as f32 * 12.5, 40.0 + k as f32]).collect(),
+        edges,
+        gates: vec![
+            Gate {
+                node: 0,
+                dir: [-1.0, 0.0],
+                neighbours: vec![3, 5],
+            },
+            Gate {
+                node: 5,
+                dir: [0.6, -0.8],
+                neighbours: Vec::new(),
+            },
+        ],
+        stats: Stats {
+            built: 1.0,
+            inner_empty: 0.0,
+            shore: 0.0,
+            water: 0.0,
+        },
+    }
+}
+
+/// `src/features/city/world/__fixtures__/city.hex`, which `map.test.ts` parses: the encoder's
+/// output for `golden()`, in hex, 32 bytes a line. `UPDATE_GOLDEN=1` writes it anew.
+#[test]
+fn the_frontend_fixture_is_what_the_encoder_writes() {
+    let bytes = encode_city(42, 7, true, &golden());
+    let hex: String = bytes
+        .chunks(32)
+        .map(|line| line.iter().map(|b| format!("{b:02x}")).collect::<String>() + "\n")
+        .collect();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../src/features/city/world/__fixtures__/city.hex");
+    if std::env::var_os("UPDATE_GOLDEN").is_some() {
+        std::fs::write(&path, &hex).unwrap();
+    }
+    let kept = std::fs::read_to_string(&path).unwrap_or_default();
+    assert!(
+        kept.replace("\r\n", "\n") == hex,
+        "{} is out of date: run this test with UPDATE_GOLDEN=1",
+        path.display()
+    );
+}
