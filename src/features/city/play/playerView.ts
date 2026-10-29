@@ -14,6 +14,7 @@ import { makeScriptPose, poseAt, SEATED, type ScriptPose } from "./boardingScrip
 import { createCam, followCar, followWalker, turnCam, wrap, type CarView } from "./camera";
 import { holdYoke } from "./carRig";
 import { createCharacter, type Character } from "./character";
+import { makeHud, readHud, type HudState } from "./hints";
 import type { Actions } from "./input";
 import { createObstacles, fillObstacles } from "./obstacles";
 import { createPlayer, MAX_CARS, pressPlayer, stepPlayer, type PlayWorld } from "./player";
@@ -30,6 +31,8 @@ export interface PlayerView {
   draw(camera: PerspectiveCamera, alpha: number, dt: number): void;
   /** The feet (or the car) as last drawn. */
   readonly at: Vector3;
+  /** What the HUD shows now: the same object every call (`paused` is the game's). */
+  hud(): HudState;
   /** The player on foot and its cars as the traffic sees them now: the same object every call. */
   obstacles(): Obstacles;
   dispose(): void;
@@ -127,8 +130,10 @@ export function createPlayerView(
     if (!mirror) holdYoke(s.figure.arms, rig, sp.ik);
   };
 
+  const hud = makeHud();
   return {
     at,
+    hud: () => readHud(p, w, hud),
     obstacles() {
       // Getting in, the figure by the door is in the way too; getting out, it is not out yet.
       const onFoot = p.state === "walk" || p.state === "enter" ? p.walker.body : null;

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useT } from "../../../i18n/react";
 import type { CitySnapshot } from "../scene";
+import { Hud } from "./Hud";
+import { makeHud, type HudState } from "./hints";
 
 interface Props {
   /** The world as the panel showed it when the game started. */
@@ -16,6 +18,7 @@ interface Props {
 export function PlayView({ city, onExit }: Props) {
   const { t } = useT();
   const [dialog, setDialog] = useState<HTMLDialogElement | null>(null);
+  const [hud, setHud] = useState<HudState>(makeHud);
   const latest = useRef(onExit);
   const stopGame = useRef<(() => Promise<void>) | null>(null);
   useEffect(() => {
@@ -30,7 +33,7 @@ export function PlayView({ city, onExit }: Props) {
     const exit = () => latest.current();
     import("./game").then(
       ({ startGame }) => {
-        if (!cancelled) stopGame.current = startGame(canvas, city, exit);
+        if (!cancelled) stopGame.current = startGame(canvas, city, exit, setHud);
       },
       () => !cancelled && exit(),
     );
@@ -55,6 +58,7 @@ export function PlayView({ city, onExit }: Props) {
     // Esc is the game's: it leaves full screen first, then closes this.
     <dialog ref={setDialog} className="play" onCancel={(e) => e.preventDefault()} onClose={onClose}>
       <canvas aria-label={t("city.label")} />
+      <Hud hud={hud} />
       <p className="play-hint">{t("play.exitHint")}</p>
     </dialog>
   );

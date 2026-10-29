@@ -5,6 +5,7 @@
  */
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { CitySnapshot } from "../scene";
+import { makeHud, sameHud, type HudState } from "./hints";
 import { createInput } from "./input";
 import { FIXED } from "./loop";
 import { createPlayScene, type PlayScene } from "./playScene";
@@ -24,13 +25,14 @@ async function setFullscreen(on: boolean) {
 
 /**
  * Starts the game on `canvas`. `onExit` runs once the window is back from full screen: after Esc,
- * or when the game could not start. Returns the stop function, for an unmount or a closed layer:
+ * or when the game could not start. `onHud` gets the HUD's state when it changes. Returns the stop function, for an unmount or a closed layer:
  * it leaves full screen and resolves once the window is back. `onExit` is not called by it.
  */
 export function startGame(
   canvas: HTMLCanvasElement,
   city: CitySnapshot,
   onExit: () => void,
+  onHud: (hud: HudState) => void = () => {},
 ): () => Promise<void> {
   const session = createSession({ setFullscreen });
   let scene: PlayScene;
@@ -44,6 +46,16 @@ export function startGame(
   let frame = 0;
   let stopped = false;
 
+  // The HUD hears of a change only, not of every frame.
+  const shown = makeHud();
+  const publish = () => {
+    const now = scene.hud();
+    now.paused = session.state === "paused";
+    if (sameHud(now, shown)) return;
+    Object.assign(shown, now);
+    onHud({ ...shown });
+  };
+
   const tick = (now: number) => {
     frame = requestAnimationFrame(tick);
     const { steps, alpha, dt } = session.frame(now);
@@ -55,6 +67,7 @@ export function startGame(
     scene.frame(actions);
     for (let i = 0; i < steps; i++) scene.step(actions, FIXED);
     scene.draw(alpha, dt);
+    publish();
   };
   const run = () => {
     if (!frame && !stopped) frame = requestAnimationFrame(tick);
@@ -67,10 +80,12 @@ export function startGame(
   const pause = () => {
     session.pause();
     halt();
+    publish();
   };
   const resume = () => {
     if (session.state !== "paused" || away()) return;
     session.resume();
+    publish();
     // What came in while away (a lock the window lost, keys) is not this game's.
     input.reset();
     run();

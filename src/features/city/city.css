@@ -46,6 +46,32 @@
   unicode-bidi: plaintext;
 }
 
+.play-hud {
+  position: absolute;
+  inset-block-end: 12px;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 0;
+  color: #eaf4ff;
+  font-size: 1.1em;
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
+}
+
+.play-hud span {
+  unicode-bidi: plaintext;
+}
+
+/* Where the stars, health and durability of later stages go. */
+.play-status {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-start: 16px;
+  pointer-events: none;
+}
+
 .city-message {
   position: absolute;
   inset: 0;

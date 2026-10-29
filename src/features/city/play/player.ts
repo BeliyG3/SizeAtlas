@@ -130,9 +130,12 @@ function board(p: Player, w: PlayWorld) {
   p.script = p.driver ? null : enterFrom(p, car);
 }
 
+/** The car stands still on the ground. */
+export const isStill = (car: Car) => !car.flying && car.vy === 0 && Math.abs(car.vf) < STILL;
+
 /** E in a car standing still on the ground: out, where there is room (see `exitSpot`). */
 function leave(p: Player, car: Car, w: PlayWorld) {
-  if (car.flying || car.vy !== 0 || Math.abs(car.vf) >= STILL) return;
+  if (!isStill(car)) return;
   const side = exitSpot(car, w.solids, p.spot);
   if (!side) return;
   car.vx = car.vz = car.vf = car.steer = car.flyT = 0;

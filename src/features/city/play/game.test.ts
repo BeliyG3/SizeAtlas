@@ -9,7 +9,16 @@ const setFullscreen = vi.hoisted(() =>
 );
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({ setFullscreen }) }));
 
+const hud = vi.hoisted(() => ({
+  state: "walk",
+  near: false,
+  canExit: false,
+  flying: false,
+  cantLand: false,
+  paused: false,
+}));
 const scene = vi.hoisted(() => ({
+  hud: vi.fn(() => hud),
   frame: vi.fn(),
   step: vi.fn(),
   draw: vi.fn(),
@@ -55,6 +64,7 @@ async function playing() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  hud.near = false;
   inputs.length = 0;
   dom = fakeDom();
   frames = new Map();
@@ -77,6 +87,27 @@ describe("the game", () => {
     tick(16);
     expect(scene.draw).toHaveBeenCalledTimes(2);
     expect(frames.size).toBe(1);
+  });
+
+  it("tells the HUD only when it changes, and about a pause", async () => {
+    const onHud = vi.fn();
+    startGame(dom.canvas as HTMLCanvasElement, city, vi.fn(), onHud);
+    await settle();
+    tick(0);
+    tick(16);
+    expect(onHud).not.toHaveBeenCalled();
+    hud.near = true;
+    tick(32);
+    tick(48);
+    expect(onHud).toHaveBeenCalledTimes(1);
+    expect(onHud.mock.calls[0][0]).toMatchObject({ near: true, paused: false });
+    dom.doc.focused = false;
+    dom.win.dispatchEvent(new Event("blur"));
+    expect(onHud).toHaveBeenCalledTimes(2);
+    expect(onHud.mock.calls[1][0]).toMatchObject({ near: true, paused: true });
+    dom.doc.focused = true;
+    dom.win.dispatchEvent(new Event("focus"));
+    expect(onHud.mock.calls[2][0]).toMatchObject({ paused: false });
   });
 
   it("Esc leaves full screen once and exits once", async () => {

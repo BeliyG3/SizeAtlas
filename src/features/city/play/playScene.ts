@@ -10,6 +10,7 @@ import { islandMeshes } from "../render/island";
 import { addLights } from "../render/lighting";
 import type { CitySnapshot } from "../scene";
 import { CAM } from "./camera";
+import type { HudState } from "./hints";
 import type { Actions } from "./input";
 import { createPlayerView } from "./playerView";
 
@@ -24,6 +25,8 @@ export interface PlayScene {
   step: (actions: Actions, dt: number) => void;
   /** Draws `alpha` of the way past the last step; the far crowd moves on by the frame's `dt`. */
   draw: (alpha: number, dt: number) => void;
+  /** What the HUD shows now: the same object every call (`paused` is the game's). */
+  hud: () => HudState;
   dispose: () => void;
 }
 
@@ -99,6 +102,7 @@ function setUp(
 
   return {
     frame: (actions) => player.frame(actions),
+    hud: player.hud,
     step(actions, dt) {
       // The traffic moves first, stopping for the player as the last step left them; the player
       // then runs into it where it is now.
