@@ -1,36 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ArchipelagoBridge } from "../../../api/types";
 import { BRIDGE_RISE } from "./map";
-import { bridgeChains, deckLift } from "./bridgeChains";
-
-type Pt = [number, number];
-
-const bridge = (points: Pt[], level = 0): ArchipelagoBridge => ({
-  a: [0, 0],
-  b: [0, 0],
-  points,
-  level,
-});
-
-/** The new nodes as `[x, z]` pairs. */
-const spots = (nodes: number[]): Pt[] => {
-  const out: Pt[] = [];
-  for (let i = 0; i < nodes.length; i += 2) out.push([nodes[i], nodes[i + 1]]);
-  return out;
-};
-
-/** The lifts of the edges that run from node `a` to node `b`, whichever way they are stored. */
-const lifts = (
-  edges: { a: number; b: number; liftA: number; liftB: number }[],
-  a: number,
-  b: number,
-) =>
-  edges
-    .filter((e) => (e.a === a && e.b === b) || (e.a === b && e.b === a))
-    .map((e) => (e.a === a ? [e.liftA, e.liftB] : [e.liftB, e.liftA]));
-
-// Gates are nodes 1, 3 and 5 of the merged map; the new nodes are numbered from 6.
-const FIRST = 6;
+import { RAMP } from "./bridgeRamps";
+import { deckLift } from "./bridgeChains";
+import { D0, D1, bridge, chains, key } from "./bridgeChains.fixture";
 
 describe("deckLift", () => {
   it("is 8 m on the first level and 5 m higher on each next", () => {
@@ -40,34 +12,8 @@ describe("deckLift", () => {
 });
 
 describe("bridgeChains", () => {
-  it("rises on the first straight, stays level, falls on the last", () => {
-    const { nodes, edges } = bridgeChains(
-      [
-        bridge([
-          [50, 0],
-          [300, 0],
-          [800, 0],
-          [1050, 0],
-        ]),
-      ],
-      [[1, 3]],
-      FIRST,
-      0,
-      0,
-    );
-    expect(spots(nodes)).toEqual([
-      [300, 0],
-      [800, 0],
-    ]);
-    expect(edges.map((e) => [e.a, e.b, e.liftA, e.liftB])).toEqual([
-      [1, 6, BRIDGE_RISE, 8],
-      [6, 7, 8, 8],
-      [7, 3, 8, BRIDGE_RISE],
-    ]);
-  });
-
   it("shifts the points by (dx, dz)", () => {
-    const { nodes } = bridgeChains(
+    const c = chains(
       [
         bridge([
           [0, 0],
@@ -77,41 +23,18 @@ describe("bridgeChains", () => {
         ]),
       ],
       [[1, 3]],
-      FIRST,
       5,
       -2,
     );
-    expect(spots(nodes)).toEqual([
+    expect(c.spots).toEqual([
       [15, -2],
       [15, 7],
     ]);
   });
 
-  it("gives a bridge of one straight run a node in its middle to rise to and fall from", () => {
-    const { nodes, edges } = bridgeChains(
-      [
-        bridge(
-          [
-            [50, 0],
-            [1050, 0],
-          ],
-          1,
-        ),
-      ],
-      [[1, 3]],
-      FIRST,
-      0,
-      0,
-    );
-    expect(spots(nodes)).toEqual([[550, 0]]);
-    expect(edges.map((e) => [e.liftA, e.liftB])).toEqual([
-      [BRIDGE_RISE, deckLift(1)],
-      [deckLift(1), BRIDGE_RISE],
-    ]);
-  });
-
   it("makes bridges that leave a gate along the same points one run up to the fork", () => {
-    const { nodes, edges } = bridgeChains(
+    // They share the run to (300, 0) on level 0; then one goes on east, the other south on level 1.
+    const c = chains(
       [
         bridge(
           [
@@ -129,34 +52,27 @@ describe("bridgeChains", () => {
             [300, 1000],
             [50, 1000],
           ],
-          1,
+          [0, 1, 1],
         ),
       ],
       [
         [1, 3],
         [1, 5],
       ],
-      FIRST,
-      0,
-      0,
     );
-    // The fork (300, 0), (1000, 0) and (300, 1000).
-    expect(spots(nodes)).toEqual([
-      [300, 0],
-      [1000, 0],
-      [300, 1000],
-    ]);
-    expect(edges).toHaveLength(5);
-    // One edge leaves the gate, a ramp to the lower deck; each branch goes on to its own.
-    expect(edges.filter((e) => e.a === 1 || e.b === 1)).toHaveLength(1);
-    expect(lifts(edges, 1, 6)).toEqual([[BRIDGE_RISE, deckLift(0)]]);
-    expect(lifts(edges, 6, 7)).toEqual([[deckLift(0), deckLift(0)]]);
-    expect(lifts(edges, 6, 8)).toEqual([[deckLift(0), deckLift(1)]]);
-    expect(lifts(edges, 8, 5)).toEqual([[deckLift(1), BRIDGE_RISE]]);
+    expect(c.doubled()).toEqual([]);
+    expect(c.degree([50, 0])).toBe(1);
+    expect(c.degree([300, 0])).toBe(3);
+    expect(c.lifts([50, 0], [300, 0])).toEqual([[BRIDGE_RISE, D0]]);
+    expect(c.lifts([300, 0], [1000, 0])).toEqual([[D0, D0]]);
+    // The higher branch rises on its first RAMP metres, then stays level, then falls to its gate.
+    expect(c.lifts([300, 0], [300, RAMP])).toEqual([[D0, D1]]);
+    expect(c.lifts([300, RAMP], [300, 1000])).toEqual([[D1, D1]]);
+    expect(c.lifts([300, 1000], [50, 1000])).toEqual([[D1, BRIDGE_RISE]]);
   });
 
   it("makes bridges that arrive at a gate along the same points one run too", () => {
-    const { nodes, edges } = bridgeChains(
+    const c = chains(
       [
         bridge(
           [
@@ -174,36 +90,28 @@ describe("bridgeChains", () => {
             [300, 0],
             [50, 0],
           ],
-          1,
+          [1, 1, 0],
         ),
       ],
       [
         [3, 1],
         [5, 1],
       ],
-      FIRST,
-      0,
-      0,
     );
-    expect(spots(nodes)).toEqual([
-      [900, 0],
-      [300, 0],
-      [300, 1000],
-    ]);
-    expect(edges).toHaveLength(5);
-    expect(edges.filter((e) => e.a === 1 || e.b === 1)).toHaveLength(1);
-    // The shared run falls from the lower deck to the gate; the branches come up to the fork.
-    expect(lifts(edges, 7, 1)).toEqual([[deckLift(0), BRIDGE_RISE]]);
-    expect(lifts(edges, 6, 7)).toEqual([[deckLift(0), deckLift(0)]]);
-    expect(lifts(edges, 8, 7)).toEqual([[deckLift(1), deckLift(0)]]);
+    expect(c.doubled()).toEqual([]);
+    expect(c.degree([50, 0])).toBe(1);
+    expect(c.degree([300, 0])).toBe(3);
+    expect(c.lifts([300, 0], [50, 0])).toEqual([[D0, BRIDGE_RISE]]);
+    expect(c.lifts([300, 0], [300, RAMP])).toEqual([[D0, D1]]);
+    expect(c.lifts([300, 1000], [300, RAMP])).toEqual([[D1, D1]]);
   });
 
   // Two bridges leave the gate (0, 0) east; the first runs end at 40 m and at 70 m.
   it.each([
-    ["the shorter run on the higher deck", 0, 1],
-    ["the shorter run on the lower deck", 1, 0],
-  ])("splits the longer first run where the shorter ends: %s", (_, longLevel, shortLevel) => {
-    const { nodes, edges } = bridgeChains(
+    ["the shared run on level 0", [0, 0, 0], [0, 1, 1], D0],
+    ["the shared run on level 1", [1, 0, 0], [1, 1, 1], D1],
+  ])("splits the longer first run where the shorter ends: %s", (_, long, short, deck) => {
+    const c = chains(
       [
         bridge(
           [
@@ -212,7 +120,7 @@ describe("bridgeChains", () => {
             [70, 300],
             [500, 300],
           ],
-          longLevel,
+          long,
         ),
         bridge(
           [
@@ -221,39 +129,25 @@ describe("bridgeChains", () => {
             [40, -200],
             [500, -200],
           ],
-          shortLevel,
+          short,
         ),
       ],
       [
         [1, 3],
         [1, 5],
       ],
-      FIRST,
-      0,
-      0,
     );
-    // (40, 0) is one node on both; the others are the longer run's end and the corners beyond.
-    expect(spots(nodes)).toEqual([
-      [40, 0],
-      [70, 0],
-      [70, 300],
-      [40, -200],
-    ]);
-    expect(edges).toHaveLength(6);
-    const low = Math.min(deckLift(longLevel), deckLift(shortLevel));
-    // The shared edge 0-40 m is the only one out of the gate and ramps to the lower deck.
-    expect(edges.filter((e) => e.a === 1 || e.b === 1)).toHaveLength(1);
-    expect(lifts(edges, 1, 6)).toEqual([[BRIDGE_RISE, low]]);
-    // The longer bridge goes on from the split node to its own deck, the shorter to its own.
-    expect(lifts(edges, 6, 7)).toEqual([[low, deckLift(longLevel)]]);
-    expect(lifts(edges, 6, 9)).toEqual([[low, deckLift(shortLevel)]]);
-    expect(lifts(edges, 7, 8)).toEqual([[deckLift(longLevel), deckLift(longLevel)]]);
-    expect(lifts(edges, 8, 3)).toEqual([[deckLift(longLevel), BRIDGE_RISE]]);
-    expect(lifts(edges, 9, 5)).toEqual([[deckLift(shortLevel), BRIDGE_RISE]]);
+    expect(c.doubled()).toEqual([]);
+    // (40, 0) is one node on both; one edge, 0-40 m, leaves the gate and ramps to the deck.
+    expect(c.spots.filter((p) => key(p) === key([40, 0]))).toHaveLength(1);
+    expect(c.degree([0, 0])).toBe(1);
+    expect(c.lifts([0, 0], [40, 0])).toEqual([[BRIDGE_RISE, deck]]);
+    // The longer bridge goes on from there to (70, 0), the shorter turns south at it.
+    expect(c.degree([40, 0])).toBe(3);
   });
 
   it("splits the longer last run too, and joins a bridge that arrives to one that leaves", () => {
-    const { nodes, edges } = bridgeChains(
+    const c = chains(
       [
         // Leaves the gate east for 70 m ...
         bridge(
@@ -265,7 +159,7 @@ describe("bridgeChains", () => {
           ],
           0,
         ),
-        // ... and one arrives from the east, its last run 40 m.
+        // ... and one arrives from the south and then from the east, its last run 40 m.
         bridge(
           [
             [500, -200],
@@ -273,32 +167,23 @@ describe("bridgeChains", () => {
             [40, 0],
             [0, 0],
           ],
-          1,
+          [1, 1, 0],
         ),
       ],
       [
         [1, 3],
         [5, 1],
       ],
-      FIRST,
-      0,
-      0,
     );
-    expect(spots(nodes)).toEqual([
-      [40, 0],
-      [70, 0],
-      [70, 300],
-      [40, -200],
-    ]);
-    expect(edges).toHaveLength(6);
-    expect(edges.filter((e) => e.a === 1 || e.b === 1)).toHaveLength(1);
-    expect(lifts(edges, 1, 6)).toEqual([[BRIDGE_RISE, deckLift(0)]]);
-    expect(lifts(edges, 6, 7)).toEqual([[deckLift(0), deckLift(0)]]);
-    expect(lifts(edges, 9, 6)).toEqual([[deckLift(1), deckLift(0)]]);
+    expect(c.doubled()).toEqual([]);
+    expect(c.degree([0, 0])).toBe(1);
+    expect(c.lifts([0, 0], [40, 0])).toEqual([[BRIDGE_RISE, D0]]);
+    expect(c.lifts([40, 0], [70, 0])).toEqual([[D0, D0]]);
+    expect(c.lifts([40, 0], [40, -RAMP])).toEqual([[D0, D1]]);
   });
 
   it("keeps apart the runs that only run alongside", () => {
-    const { nodes } = bridgeChains(
+    const c = chains(
       [
         bridge([
           [0, 0],
@@ -317,10 +202,67 @@ describe("bridgeChains", () => {
         [1, 3],
         [1, 5],
       ],
-      FIRST,
-      0,
-      0,
     );
-    expect(nodes.length / 2).toBe(4);
+    expect(c.spots).toHaveLength(4);
+  });
+
+  it("draws a trunk that two bridges from different gates share once", () => {
+    // Both cross the sea along (300, 250) - (700, 250), from the west and to the east.
+    const c = chains(
+      [
+        bridge([
+          [0, 0],
+          [300, 250],
+          [700, 250],
+          [1000, 0],
+        ]),
+        bridge([
+          [0, 500],
+          [300, 250],
+          [700, 250],
+          [1000, 500],
+        ]),
+      ],
+      [
+        [1, 5],
+        [3, 7],
+      ],
+    );
+    expect(c.spots).toEqual([
+      [300, 250],
+      [700, 250],
+    ]);
+    expect(c.edges).toHaveLength(5);
+    expect(c.doubled()).toEqual([]);
+    // The forks, and the trunk between them on one deck.
+    expect(c.degree([300, 250])).toBe(3);
+    expect(c.degree([700, 250])).toBe(3);
+    expect(c.lifts([300, 250], [700, 250])).toEqual([[D0, D0]]);
+  });
+
+  it("splits a run where a vertex of another bridge lies on it", () => {
+    // The second bridge's corner (400, 0) is inside the first one's first run (0, 0) - (1000, 0).
+    const c = chains(
+      [
+        bridge([
+          [0, 0],
+          [1000, 0],
+          [1000, 500],
+        ]),
+        bridge([
+          [400, 300],
+          [400, 0],
+          [400, -300],
+        ]),
+      ],
+      [
+        [1, 5],
+        [3, 7],
+      ],
+    );
+    expect(c.doubled()).toEqual([]);
+    expect(c.spots.filter((p) => key(p) === key([400, 0]))).toHaveLength(1);
+    expect(c.degree([400, 0])).toBe(4);
+    expect(c.edges).toHaveLength(5);
   });
 });

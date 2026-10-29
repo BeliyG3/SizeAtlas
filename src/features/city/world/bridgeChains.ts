@@ -1,17 +1,17 @@
 /**
- * The bridges between islands as nodes and edges of the merged map; pure, no three.js. Each
- * bridge is a chain of road edges over the sea that rises from the height of its gate to its
- * deck on the first straight run, stays there, and falls on the last one.
+ * The bridges between islands as nodes and edges of the merged map; pure, no three.js. Bridges
+ * are merged by place, not by gate: where bridges run together over the sea they are one chain,
+ * with a node at every fork.
  */
 import type { ArchipelagoBridge } from "../../../api/types";
-import { BRIDGE_RISE, ROAD, type MapEdge } from "./map";
+import type { MapEdge } from "./map";
+import { rampedEdges, type Run } from "./bridgeRamps";
 
-/** The deck of a bridge on `level`, metres over the sea: levels are 5 m apart. */
+/** The deck of a run on `level`, metres over the sea: levels are 5 m apart. */
 export const deckLift = (level: number) => 8 + 5 * level;
 
-/** Points closer than this, metres, are one (the cells of the key); lines this close are one. */
+/** Points closer than this, metres, are one; a point this close to a run lies on it. */
 const SAME = 0.01;
-const cell = (v: number) => Math.round(v / SAME);
 
 type Pt = [number, number];
 
@@ -23,15 +23,13 @@ export interface BridgeChains {
 
 /**
  * The nodes and edges of `bridges`. `ends[i]` is the merged-map index of the gate nodes at the
- * start and at the end of bridge `i`; `first` is the index the first new node gets; `(dx, dz)` is
- * added to the bridges' points.
+ * start and at the end of bridge `i`; `first` is the index the first new node gets (the gates
+ * are all below it); `(dx, dz)` is added to the bridges' points.
  *
- * Bridges that set out from or come in to one gate the same way share their nodes and edges up
- * to the fork, whichever way they go: the first runs may differ in length, the shorter one's end
- * then splits the longer one. A shared node stands as high as the lowest deck over it, so the
- * run is a ramp to the lower deck and each branch goes on to its own.
- * ponytail: a node that one bridge shares by the way behind it and another by the way ahead joins
- * the first only; the forks of such a trio are rare, and need a graph merge to do better.
+ * Points within `SAME` of each other, in any bridge, are one node; a run that another bridge's
+ * point lies inside is split there. The runs between the same two nodes are one edge (the first
+ * one's deck counts: bridges that share a run agree on its level). Heights: see `rampedEdges`.
+ * A bridge of one run gets a node in its middle to rise to and fall from.
  */
 export function bridgeChains(
   bridges: ArchipelagoBridge[],
@@ -40,130 +38,69 @@ export function bridgeChains(
   dx: number,
   dz: number,
 ): BridgeChains {
-  const ways = withSplits(bridges, ends);
-
-  // How many bridges pass a point with the same way from a gate behind it: the key is the gate
-  // and the points out from it, so a bridge that leaves a gate and one that arrives share it.
-  const before: string[][] = [];
-  const after: string[][] = [];
-  const count = new Map<string, number>();
-  const seen = (key: string) => count.set(key, (count.get(key) ?? 0) + 1);
-  ways.forEach((points, i) => {
-    const last = points.length - 1;
-    before[i] = [];
-    after[i] = [];
-    let key = `${ends[i][0]}`;
-    for (let k = 1; k < last; k++) {
-      key += `|${cell(points[k][0])},${cell(points[k][1])}`;
-      before[i][k] = key;
-      seen(key);
-    }
-    key = `${ends[i][1]}`;
-    for (let k = last - 1; k >= 1; k--) {
-      key += `|${cell(points[k][0])},${cell(points[k][1])}`;
-      after[i][k] = key;
-      seen(key);
-    }
-  });
-
   const nodes: number[] = [];
-  const ids = new Map<string, number>();
-  const lift = new Map<number, number>(); // by node: the lowest deck over it
-  const add = (x: number, z: number, key: string | null, height: number) => {
-    let id = key === null ? undefined : ids.get(key);
-    if (id === undefined) {
-      id = first + nodes.length / 2;
-      nodes.push(x + dx, z + dz);
-      if (key !== null) ids.set(key, id);
-    }
-    lift.set(id, Math.min(lift.get(id) ?? Infinity, height));
+  const at = new Map<number, Pt>(); // by node, unshifted
+  const placed: { id: number; at: Pt }[] = [];
+  const addNode = (x: number, z: number) => {
+    nodes.push(x + dx, z + dz);
+    return first + nodes.length / 2 - 1;
+  };
+  const nodeAt = (p: Pt, gate?: number) => {
+    const hit = placed.find((n) => Math.hypot(n.at[0] - p[0], n.at[1] - p[1]) <= SAME);
+    if (hit) return hit.id;
+    const id = gate ?? addNode(p[0], p[1]);
+    placed.push({ id, at: p });
+    at.set(id, p);
     return id;
   };
 
-  const chains: number[][] = [];
-  ways.forEach((points, i) => {
-    const deck = deckLift(bridges[i].level);
-    // A bridge of one straight run gets a node in its middle to rise to and fall from.
-    const way =
-      points.length > 2
-        ? points
-        : [
-            points[0],
-            [(points[0][0] + points[1][0]) / 2, (points[0][1] + points[1][1]) / 2],
-            points[1],
-          ];
-    const chain = [ends[i][0]];
-    for (let k = 1; k < way.length - 1; k++) {
-      let key: string | null = null;
-      if (points.length > 2) {
-        const [b, a] = [before[i][k], after[i][k]];
-        key = (count.get(b) ?? 0) > 1 || (count.get(a) ?? 0) <= 1 ? b : a;
-      }
-      chain.push(add(way[k][0], way[k][1], key, deck));
+  const routes = bridges.map(({ points, levels }, i) => {
+    const level = (k: number) => levels[k] ?? levels[levels.length - 1] ?? 0;
+    let way = points;
+    let runs = points.slice(1).map((_, k) => level(k));
+    if (way.length === 2) {
+      way = [way[0], [(way[0][0] + way[1][0]) / 2, (way[0][1] + way[1][1]) / 2], way[1]];
+      runs = [runs[0], runs[0]];
     }
-    chain.push(ends[i][1]);
-    chains.push(chain);
+    const last = way.length - 1;
+    const ids = way.map((p, k) =>
+      nodeAt(p, k === 0 ? ends[i][0] : k === last ? ends[i][1] : undefined),
+    );
+    return { ids, runs };
   });
 
-  const edges: MapEdge[] = [];
-  const made = new Set<string>();
-  const height = (node: number) => lift.get(node) ?? BRIDGE_RISE; // a gate node: where the bridge leaves it
-  for (const chain of chains) {
-    for (let k = 0; k + 1 < chain.length; k++) {
-      const [a, b] = [chain[k], chain[k + 1]];
-      const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-      if (made.has(key)) continue;
-      made.add(key);
-      edges.push({ a, b, cls: ROAD.highway, bridge: true, liftA: height(a), liftB: height(b) });
+  const runs = new Map<string, Run>();
+  for (const { ids, runs: levels } of routes) {
+    for (let k = 0; k + 1 < ids.length; k++) {
+      const [p, q] = [at.get(ids[k])!, at.get(ids[k + 1])!];
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      const inside = placed
+        .map((n) => ({ id: n.id, along: along(n.at, p, q, len) }))
+        .filter((n) => n.along !== null && n.id !== ids[k] && n.id !== ids[k + 1])
+        .sort((m, n) => m.along! - n.along!);
+      const chain = [ids[k], ...inside.map((n) => n.id), ids[k + 1]];
+      for (let j = 0; j + 1 < chain.length; j++) {
+        const [a, b] = [chain[j], chain[j + 1]];
+        const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+        if (a !== b && !runs.has(key)) runs.set(key, { a, b, deck: deckLift(levels[k]) });
+      }
     }
   }
+  const edges = rampedEdges(
+    [...runs.values()],
+    (node) => at.get(node)!,
+    (node) => node < first,
+    (x, z) => addNode(x, z),
+  );
   return { nodes, edges };
 }
 
-/**
- * The points of the bridges, copied, with the end of every run that is shorter than another's
- * out of the same gate and along the same line added to the longer one as a point (at both ends of
- * a bridge: a bridge's run out of the gate it arrives at counts as well).
- */
-function withSplits(bridges: ArchipelagoBridge[], ends: [number, number][]): Pt[][] {
-  const ways = bridges.map((b) => b.points.map((p): Pt => [p[0], p[1]]));
-  // The runs out of each gate: the bridge, which end it is, and the points from the gate on.
-  const arms = new Map<number, { bridge: number; atEnd: boolean; out: Pt[] }[]>();
-  ways.forEach((points, bridge) => {
-    for (const atEnd of [false, true]) {
-      const gate = ends[bridge][atEnd ? 1 : 0];
-      const out = atEnd ? [...points].reverse() : points;
-      arms.set(gate, [...(arms.get(gate) ?? []), { bridge, atEnd, out }]);
-    }
-  });
-  const splits = new Map<{ bridge: number; atEnd: boolean }, Pt[]>();
-  for (const group of arms.values()) {
-    for (const host of group) {
-      const [from, to] = host.out;
-      const run = Math.hypot(to[0] - from[0], to[1] - from[1]);
-      const found: { at: number; corner: Pt }[] = [];
-      for (const other of group) {
-        // A corner is a point that is not the end of the bridge.
-        if (other.bridge === host.bridge || other.out.length < 3) continue;
-        const corner = other.out[1];
-        const [vx, vz] = [to[0] - from[0], to[1] - from[1]];
-        const [wx, wz] = [corner[0] - from[0], corner[1] - from[1]];
-        const along = (wx * vx + wz * vz) / run;
-        const aside = Math.abs(wx * vz - wz * vx) / run;
-        if (aside > SAME || along <= SAME || along >= run - SAME) continue;
-        if (!found.some((f) => Math.abs(f.at - along) <= SAME)) found.push({ at: along, corner });
-      }
-      if (found.length)
-        splits.set(
-          host,
-          found.sort((p, q) => p.at - q.at).map((f) => f.corner),
-        );
-    }
-  }
-  for (const [host, corners] of splits) {
-    const way = ways[host.bridge];
-    if (host.atEnd) way.splice(way.length - 1, 0, ...[...corners].reverse());
-    else way.splice(1, 0, ...corners);
-  }
-  return ways;
+/** How far `v` lies along the run `p`-`q` (of length `len`) if it is strictly inside it, else null. */
+function along(v: Pt, p: Pt, q: Pt, len: number): number | null {
+  if (!(len > 0)) return null;
+  const [ux, uz] = [(q[0] - p[0]) / len, (q[1] - p[1]) / len];
+  const [wx, wz] = [v[0] - p[0], v[1] - p[1]];
+  const t = wx * ux + wz * uz;
+  const aside = Math.abs(wx * uz - wz * ux);
+  return aside <= SAME && t > SAME && t < len - SAME ? t : null;
 }

@@ -39,7 +39,7 @@ const bridge = (
   b: [number, number],
   points: [number, number][],
   level = 0,
-): ArchipelagoBridge => ({ a, b, points, level });
+): ArchipelagoBridge => ({ a, b, points, levels: points.slice(1).map(() => level) });
 
 /** Is node `to` reachable from node `from` over the edges? */
 function connected(map: CityMap, from: number, to: number): boolean {
