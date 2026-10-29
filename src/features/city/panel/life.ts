@@ -91,7 +91,7 @@ export function createLife(parent: Object3D, onReady: () => void, limits = PANEL
     lights: ReturnType<typeof carLights>;
   } | null = null;
   let pools: { traffic: Traffic; residents: Residents } | null = null;
-  // The game draws them between its steps.
+  // The game draws them between its steps; made at its first `move`.
   let eased: {
     traffic: ReturnType<typeof createBetween<Traffic>>;
     residents: ReturnType<typeof createBetween<Residents>>;
@@ -168,10 +168,7 @@ export function createLife(parent: Object3D, onReady: () => void, limits = PANEL
         traffic: createTraffic(g, Math.min(carsFor(islands), limits.cars), seed),
         residents: createResidents(g, Math.min(peopleFor(islands), limits.people), seed),
       };
-      eased = pools && {
-        traffic: createBetween(pools.traffic),
-        residents: createBetween(pools.residents),
-      };
+      eased = null;
       dropCrowd();
       crowd = g ? crowdOn(g, seed) : [];
       for (const c of crowd) parent.add(c.group);
@@ -185,8 +182,13 @@ export function createLife(parent: Object3D, onReady: () => void, limits = PANEL
       drawn(dt, eye, c, pools.traffic, pools.residents);
     },
     move(dt, eye, target, obstacles) {
-      if (!models || !pools || !eased) return;
+      if (!models || !pools) return;
       const c = circle(eye, target);
+      // Only the game draws between steps: the panel never makes these.
+      eased ??= {
+        traffic: createBetween(pools.traffic),
+        residents: createBetween(pools.residents),
+      };
       eased.traffic.keep();
       eased.residents.keep();
       pools.traffic.update(dt, c, obstacles);

@@ -2,7 +2,7 @@
  * The right of way of the cars: the lanes of the roads, the gap to the car in front on a lane
  * and across the node ahead, and who goes first there; pure, no three.js.
  */
-import { HEADROOM } from "../physics/bodies";
+import { CAR_RADIUS, HEADROOM } from "../physics/bodies";
 import { ROAD, type RoadKind } from "../world/map";
 import type { RoadGraph } from "../world/roads";
 import type { Track } from "./nav";
@@ -22,9 +22,11 @@ export interface Obstacles {
   r: Float64Array;
 }
 
-/** Half a car's width: an obstacle this much plus its radius off a lane's centre is in it, metres. */
-const HALF_WIDE = 0.9;
-/** An obstacle this far behind a car's centre is under its body: it holds the car too, metres. */
+/**
+ * An obstacle this far behind a car's centre is under its body, or this far back from the start
+ * of the road it leaves by is in the node's box: it holds the car too, metres. One is in a lane
+ * when its radius and a car's disc (`CAR_RADIUS`) reach across to the lane's centre.
+ */
 const HALF_LONG = 2.1;
 
 /** Lanes per direction. */
@@ -144,12 +146,15 @@ export function createJunctions(s: Lanes) {
       const along = wx * ux + wz * uz;
       if (along < from || along > e.len || along >= best) continue;
       // To the right of the travel, as `laneOffset` measures.
-      if (Math.abs(wz * ux - wx * uz - off) < HALF_WIDE + o.r[k]) best = along;
+      if (Math.abs(wz * ux - wx * uz - off) < CAR_RADIUS + o.r[k]) best = along;
     }
     return best;
   }
 
   /** The nearest obstacle ahead of car `i` on its lane, and past its node on the lane it chose. */
+  // ponytail: a car sees obstacles on its road and the next only, so cars keep turning onto a long
+  // road blocked far down it and queue there while the player stays (some 50 on 400 m of
+  // highway); look on along the planned way, or reroute at the entry, if that shows.
   function obstacleAhead(i: number): number {
     const e = g.edges[t.edge[i]];
     const s = t.s[i];
@@ -158,7 +163,7 @@ export function createJunctions(s: Lanes) {
       t.forward[i] === 1 ? e.liftA + (e.liftB - e.liftA) * k : e.liftB + (e.liftA - e.liftB) * k;
     const gap = obstacleOn(t.edge[i], t.forward[i], lane[i], y, s - HALF_LONG) - s;
     if (nextE[i] < 0) return gap;
-    return Math.min(gap, e.len - s + obstacleOn(nextE[i], nextF[i], nextL[i], y, 0));
+    return Math.min(gap, e.len - s + obstacleOn(nextE[i], nextF[i], nextL[i], y, -HALF_LONG));
   }
 
   /** Is an obstacle within `d` metres of (x, z)? */

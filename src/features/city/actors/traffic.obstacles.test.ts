@@ -67,13 +67,44 @@ function hashOf(t: Traffic): number {
 describe("traffic and obstacles", () => {
   it("drives as before with no obstacles: the same positions after 30 s", () => {
     const around = { x: 200, z: 200, r: 300 };
-    // The hash of the traffic before it saw obstacles.
+    // This test's first run (`update(dt, around)`, no obstacles) at 036312a, before the traffic
+    // saw obstacles.
     const before = 1284574796;
-    for (const none of [null, obstaclesAt()]) {
+    const runs = [undefined, null, obstaclesAt()].map((none) => {
       const t = createTraffic(ring, 150, 4);
       for (let n = 0; n < 30 * 60; n++) t.update(1 / 60, around, none);
-      expect(hashOf(t)).toBe(before);
+      return hashOf(t);
+    });
+    expect(runs).toEqual([before, before, before]);
+  });
+
+  it("a car turning across the node stops short of a car parked in its mouth", () => {
+    // A street east to the node at (0, 0), then off it to the left, south (-z): the car comes in
+    // on the lane at z = 1.5 and swings across the box to x = 1.5.
+    const bend = graphOf(
+      [-100, 0, 0, 0, 0, -100],
+      [
+        [0, 1, ROAD.street],
+        [1, 2, ROAD.street],
+      ],
+    );
+    const t = createTraffic(bend, 1, 1, [{ edge: 0, s: 50, forward: true, lane: 0, want: 0 }]);
+    // A disc of a parked car 1 m past the node, in the lane the car comes in on: past the end of
+    // its road, and 1.5 m back from the start of the one it leaves by.
+    const o = obstaclesAt([1, 0, 1.5, 1.2]);
+    let most = -Infinity;
+    for (let n = 0; n < 20 * 60; n++) {
+      t.update(1 / 60, null, o);
+      most = Math.max(most, t.x[0]);
     }
+    expect(most).toBeGreaterThan(-20);
+    // `MIN_GAP` along the way: 100 m to the node, then 1.5 m back.
+    expect(most).toBeLessThanOrEqual(-(MIN_GAP + 1.5) + 1e-3);
+  });
+
+  it("a car stops for a person 1.4 m off its lane's centre", () => {
+    const most = farthest(obstaclesAt([300, 0, 2 + 1.4, 0.35]));
+    expect(most).toBeLessThanOrEqual(300 - MIN_GAP + 1e-3);
   });
 
   it("a car stops short of the player's car in its lane", () => {
