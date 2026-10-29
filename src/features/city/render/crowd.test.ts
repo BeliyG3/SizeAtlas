@@ -1,4 +1,4 @@
-import { InstancedMesh, Points, ShaderLib, Vector3, type DataTexture, type IUniform } from "three";
+import { InstancedMesh, Points, ShaderLib, type DataTexture, type IUniform } from "three";
 import { describe, expect, it } from "vitest";
 import { CROWD_CARS, CROWD_PEOPLE, CROWD_ROUTES, crowdOn } from "../panel/life";
 import { ROAD } from "../world/map";
@@ -56,12 +56,14 @@ describe("crowdMesh", () => {
     const u = compile(crowd, ShaderLib.standard.vertexShader).uniforms;
     const lit = (crowd.lights.material as unknown as { uniforms: Record<string, IUniform> })
       .uniforms;
-    crowd.update(0.5, new Vector3(1, 2, 3));
-    crowd.update(0.25, new Vector3(3, 5, 4));
+    crowd.update(0.5, { x: 1, z: 2, r: 150 });
+    for (const v of [u, lit]) expect(v.uRadius.value).toBe(150);
+    // A zoomed-out circle: the crowd still shows past `CROWD_NEAR`.
+    crowd.update(0.25, { x: 3, z: 4, r: 2000 });
     for (const v of [u, lit]) {
       expect(v.uTime.value).toBe(0.75);
       expect(v.uRadius.value).toBe(CROWD_NEAR);
-      expect(v.uEye.value.toArray()).toEqual([3, 5, 4]);
+      expect(v.uCenter.value.toArray()).toEqual([3, 4]);
     }
     const texture = u.uRoutes.value as DataTexture;
     expect(lit.uRoutes.value).toBe(texture);

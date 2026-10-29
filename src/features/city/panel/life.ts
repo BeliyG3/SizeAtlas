@@ -138,7 +138,7 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
       models.heads.update(pools.traffic, eye, dt);
       models.lights.update(pools.traffic);
       models.people.update(pools.residents, eye);
-      for (const c of crowd) c.update(dt, eye);
+      for (const c of crowd) c.update(dt, around);
       show(true);
     },
     dispose() {

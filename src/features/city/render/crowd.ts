@@ -1,7 +1,8 @@
 /**
  * The far crowd: thousands of cars or walkers a kind, as one instanced mesh of bodies and one set
- * of lights, moved along their routes by the vertex shader (`CROWD_PLACE`). They show only past
- * `CROWD_NEAR` from the camera, where the honest cars are no longer drawn with their lights.
+ * of lights, moved along their routes by the vertex shader (`CROWD_PLACE`). They hide inside the
+ * circle the honest actors keep to, out to `CROWD_NEAR` at the most: there are always honest ones
+ * there, and farther off a zoomed-out circle would leave the city empty.
  */
 import {
   DataTexture,
@@ -12,10 +13,11 @@ import {
   MeshBasicMaterial,
   NearestFilter,
   RGBAFormat,
-  Vector3,
+  Vector2,
   type Material,
   type Points,
 } from "three";
+import type { Circle } from "../actors/locals";
 import { rng } from "../actors/nav";
 import { ROLE } from "../actors/residents";
 import { ROLE_COLOR } from "../look";
@@ -26,7 +28,7 @@ import { CROWD_PLACE, type CrowdUniforms, type Particles } from "./crowdPlace";
 import { disposeAll } from "./dispose";
 import { columnBox } from "./people";
 
-/** The crowd hides this near the camera, metres: the honest actors are drawn there. */
+/** The crowd hides at most this far from the circle's centre, metres. */
 export const CROWD_NEAR = CAR_MID;
 /** Speeds of the crowd, m/s, from the first to the second. */
 export const CROWD_SPEED = { drive: [10, 22], walk: [1.1, 1.7] } as const;
@@ -36,8 +38,8 @@ export interface Crowd {
   group: Group;
   mesh: InstancedMesh;
   lights: Points;
-  /** Moves the crowd on `dt` seconds; it hides within `CROWD_NEAR` of the camera at `eye`. */
-  update(dt: number, eye: Vector3): void;
+  /** Moves the crowd on `dt` seconds; it hides inside `around`, out to `CROWD_NEAR`. */
+  update(dt: number, around: Circle): void;
   dispose(): void;
 }
 
@@ -64,7 +66,7 @@ export function crowdMesh(
   const uniforms: CrowdUniforms = {
     uRoutes: { value: texture },
     uTime: { value: 0 },
-    uEye: { value: new Vector3() },
+    uCenter: { value: new Vector2() },
     uRadius: { value: CROWD_NEAR },
   };
   const material =
@@ -82,11 +84,13 @@ export function crowdMesh(
     group,
     mesh,
     lights,
-    update(dt, eye) {
+    update(dt, around) {
       // ponytail: a float32 clock; after a day of drawing the crowd steps by ~0.1 m. Wrap it per
       // particle (on the CPU, by its own period) if a panel ever stays open that long.
       uniforms.uTime.value += dt;
-      uniforms.uEye.value.copy(eye);
+      uniforms.uCenter.value.set(around.x, around.z);
+      // Never 0: smoothstep needs its edges apart.
+      uniforms.uRadius.value = Math.max(1, Math.min(around.r, CROWD_NEAR));
     },
     dispose() {
       disposeAll(group);
