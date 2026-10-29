@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ROAD, type RoadKind } from "../world/map";
 import { mapOf } from "../world/map.fixture";
 import { buildRoads } from "../world/roads";
-import { LANE_SHIFT } from "./carPose";
+import { createPoses, LANE_SHIFT } from "./carPose";
 import { CORNER } from "./corners";
 import { laneOffset, MIN_GAP } from "./junctions";
 import { createTraffic, SPEED, type Traffic } from "./traffic";
@@ -124,5 +124,28 @@ describe("drawn cars", () => {
       if (east && t.z[0] > 20) swung++;
     }
     expect(swung).toBeGreaterThan(0); // some chose the way east first
+  });
+});
+
+describe("createPoses", () => {
+  it("draws a car a hair past its road's end with no way out chosen on its lane, not on a curve", () => {
+    const g = graphOf(
+      [0, 0, 100, 0, 200, 0],
+      [
+        [0, 1, ROAD.street],
+        [1, 2, ROAD.street],
+      ],
+    );
+    const t = { edge: Int32Array.of(0), s: Float32Array.of(100.001), forward: Uint8Array.of(1) };
+    const poses = createPoses(g, t, Uint8Array.of(0), Int32Array.of(-1), Uint8Array.of(0));
+    poses.reset(0);
+    const out = {
+      x: new Float32Array(1),
+      y: new Float32Array(1),
+      z: new Float32Array(1),
+      heading: new Float32Array(1),
+    };
+    expect(() => poses.put(0, out)).not.toThrow();
+    expect(out.x[0]).toBeCloseTo(100, 1);
   });
 });

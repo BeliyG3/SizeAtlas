@@ -73,9 +73,10 @@ export function createPoses(
     // The curve from the node behind, then the one to the node ahead; they never overlap.
     const back = from >= 0 ? reach(g, from, edge) : 0;
     const ahead = next >= 0 ? reach(g, edge, next) : 0;
-    if (s < back) {
+    // A car can stand a hair past its road's end before it has a way out: no curve then.
+    if (from >= 0 && s < back) {
       cornerAt(g, from, fromF[i] === 1, fromOff[i], edge, forward, shown[i], back + s, p);
-    } else if (len - s < ahead) {
+    } else if (next >= 0 && len - s < ahead) {
       const d = ahead - (len - s);
       cornerAt(g, edge, forward, shown[i], next, nextFwd === 1, shown[i], d, p);
     }
