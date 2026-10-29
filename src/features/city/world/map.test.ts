@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CITY_HEADER_LEN, POLY, ROAD, parseCity, type CityMap } from "./map";
+import { BRIDGE_RISE, CITY_HEADER_LEN, POLY, ROAD, parseCity, type CityMap } from "./map";
 import { encodeCity } from "./map.fixture";
 // Written by core/src/city/encode_tests.rs (`the_frontend_fixture_is_what_the_encoder_writes`).
 import golden from "./__fixtures__/city.hex?raw";
@@ -20,6 +20,7 @@ const map: CityMap = {
   height: 200.25,
   polys: [
     {
+      island: 0,
       kind: POLY.island,
       id: 1,
       parent: 1,
@@ -27,6 +28,7 @@ const map: CityMap = {
       points: new Float32Array([0, 0, 10, 0, 10, 10]),
     },
     {
+      island: 0,
       kind: POLY.house,
       id: 9,
       parent: 4,
@@ -36,8 +38,8 @@ const map: CityMap = {
   ],
   nodes: new Float32Array([3, 4, 5, 6, 7.5, 8.5]),
   edges: [
-    { a: 0, b: 1, cls: ROAD.highway, bridge: false },
-    { a: 1, b: 2, cls: ROAD.lane, bridge: true },
+    { a: 0, b: 1, cls: ROAD.highway, bridge: false, liftA: 0, liftB: 0 },
+    { a: 1, b: 2, cls: ROAD.lane, bridge: true, liftA: BRIDGE_RISE, liftB: BRIDGE_RISE },
   ],
   gates: [
     { node: 2, dx: 0, dz: -1, neighbour: 4 },

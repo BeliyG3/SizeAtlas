@@ -10,6 +10,7 @@ const district = square(POLY.district, 1, 0, 300, 0, 0, 100);
 const block = square(POLY.block, 2, 1, 300, 0, 0, 100);
 // An L-shaped house with a 45° corner cut off: (0,0) (20,0) (20,10) (15,15) (10,15) (10,20) (0,20).
 const diagonal: Poly = {
+  island: 0,
   kind: POLY.house,
   id: 10,
   parent: 2,
@@ -44,7 +45,7 @@ describe("houseMesh", () => {
     // Both houses are in one district: one lit colour.
     expect(colors.getX(colors.count - 1)).toBe(before);
     // Focus on the square: the L dims; its edges come first.
-    houses.paint(buildWorld(map, 11));
+    houses.paint(buildWorld(map, { island: 0, id: 11 }));
     expect(colors.getX(0)).toBeLessThan(before * 0.5);
     expect(colors.getX(colors.count - 1)).toBe(before);
   });

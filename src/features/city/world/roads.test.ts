@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ROAD, ROAD_WIDTH } from "./map";
+import { BRIDGE_RISE, ROAD, ROAD_WIDTH } from "./map";
 import { mapOf } from "./map.fixture";
 import { buildRoads, pointOn, roadHalf } from "./roads";
 
@@ -7,9 +7,9 @@ import { buildRoads, pointOn, roadHalf } from "./roads";
 const map = mapOf([], {
   nodes: new Float32Array([0, 0, 10, 0, 10, 10, 20, 20]),
   edges: [
-    { a: 0, b: 1, cls: ROAD.street, bridge: false },
-    { a: 1, b: 2, cls: ROAD.highway, bridge: false },
-    { a: 2, b: 3, cls: ROAD.lane, bridge: true },
+    { a: 0, b: 1, cls: ROAD.street, bridge: false, liftA: 0, liftB: 0 },
+    { a: 1, b: 2, cls: ROAD.highway, bridge: false, liftA: 0, liftB: 0 },
+    { a: 2, b: 3, cls: ROAD.lane, bridge: true, liftA: BRIDGE_RISE, liftB: BRIDGE_RISE },
   ],
 });
 
@@ -18,7 +18,14 @@ describe("buildRoads", () => {
     const g = buildRoads(map);
     expect(g.links).toEqual([[0], [0, 1], [1, 2], [2]]);
     expect(g.edges.map((e) => e.len)).toEqual([10, 10, Math.hypot(10, 10)]);
-    expect(g.edges[2]).toMatchObject({ a: 2, b: 3, cls: ROAD.lane, bridge: true });
+    expect(g.edges[2]).toMatchObject({
+      a: 2,
+      b: 3,
+      cls: ROAD.lane,
+      bridge: true,
+      liftA: BRIDGE_RISE,
+      liftB: BRIDGE_RISE,
+    });
   });
 
   it("roadHalf is half the road's width", () => {

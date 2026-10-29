@@ -63,8 +63,8 @@ describe("buildWorld", () => {
   });
 
   it("focus dims houses outside the folder", () => {
-    const dimmed = (focus: number | null) =>
-      buildWorld(map, focus)
+    const dimmed = (id: number | null) =>
+      buildWorld(map, id === null ? null : { island: 0, id })
         .buildings.filter((b) => b.dim)
         .map((b) => b.id + "/" + b.parent);
     expect(dimmed(null)).toEqual([]);
@@ -77,7 +77,7 @@ describe("buildWorld", () => {
   });
 
   it("boxes the focused folder", () => {
-    const box = buildWorld(map, 3).focusBox;
+    const box = buildWorld(map, { island: 0, id: 3 }).focusBox;
     expect(box?.min).toEqual([0, 0, 0]);
     expect(box?.max[0]).toBe(10);
     expect(box?.max[2]).toBe(10);
@@ -87,13 +87,13 @@ describe("buildWorld", () => {
 
 describe("focusIn", () => {
   it("picks the deepest folder that has a polygon", () => {
-    expect(focusIn(map, [1])).toBeNull();
-    expect(focusIn(map, [])).toBeNull();
-    expect(focusIn(map, [1, 2, 3])).toBe(3);
-    expect(focusIn(map, [1, 2, 3, 5])).toBe(5);
+    expect(focusIn(map, [1], 0)).toBeNull();
+    expect(focusIn(map, [], 0)).toBeNull();
+    expect(focusIn(map, [1, 2, 3], 0)).toEqual({ island: 0, id: 3 });
+    expect(focusIn(map, [1, 2, 3, 5], 0)).toEqual({ island: 0, id: 5 });
     // A folder without a polygon (a file's folder lost its house): the nearest one above.
-    expect(focusIn(map, [1, 2, 3, 99])).toBe(3);
+    expect(focusIn(map, [1, 2, 3, 99], 0)).toEqual({ island: 0, id: 3 });
     // A folder replaced by its subfolders has no polygon: the root above it gives no focus.
-    expect(focusIn(map, [1, 99])).toBeNull();
+    expect(focusIn(map, [1, 99], 0)).toBeNull();
   });
 });

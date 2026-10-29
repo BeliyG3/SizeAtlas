@@ -8,7 +8,7 @@ function graphOf(nodes: number[], edges: [number, number, RoadKind][]) {
   return buildRoads(
     mapOf([], {
       nodes: new Float32Array(nodes),
-      edges: edges.map(([a, b, cls]) => ({ a, b, cls, bridge: false })),
+      edges: edges.map(([a, b, cls]) => ({ a, b, cls, bridge: false, liftA: 0, liftB: 0 })),
     }),
   );
 }

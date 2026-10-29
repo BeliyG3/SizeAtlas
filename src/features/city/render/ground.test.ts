@@ -5,6 +5,7 @@ import { mapOf, square } from "../world/map.fixture";
 import { groundMesh } from "./ground";
 
 const poly = (kind: PolyKind, coords: number[]): Poly => ({
+  island: 0,
   kind,
   id: 1,
   parent: 1,

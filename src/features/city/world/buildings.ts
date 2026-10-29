@@ -13,6 +13,8 @@ export const FILLER_MAX = 14;
  * `district` is the district's folder id.
  */
 export interface Building {
+  /** Index of the island the building stands on (folder ids repeat across islands). */
+  island: number;
   id: number;
   parent: number;
   district: number;
@@ -21,6 +23,12 @@ export interface Building {
   h: number;
   size: number;
   dim: boolean;
+}
+
+/** A folder on one island: what the view is focused on. */
+export interface Focus {
+  island: number;
+  id: number;
 }
 
 export interface World {
@@ -47,19 +55,26 @@ function hash(id: number, index: number): number {
   return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
 }
 
+/** A folder id of one island as one number: ids are u32, so they fit under the island's index. */
+function key(island: number, id: number): number {
+  return island * 2 ** 32 + id;
+}
+
 function isFolder(p: Poly): boolean {
   return p.kind === POLY.district || p.kind === POLY.block || p.kind === POLY.house;
 }
 
 /**
- * The houses and fillers of `map`. `focus` is a folder id (see `focusIn`) or null: buildings
- * outside it are `dim`. A building is inside when the focus is its own id, its parent's (the
- * block) or its district's.
+ * The houses and fillers of `map`. `focus` is a folder (see `focusIn`) or null: buildings
+ * outside it are `dim`, and so are those of the other islands. A building is inside when the
+ * focus is its own id, its parent's (the block) or its district's, on the same island.
  */
-export function buildWorld(map: CityMap, focus: number | null): World {
+export function buildWorld(map: CityMap, focus: Focus | null): World {
   // A block's id is its folder's (a district's own id for a filler block); its parent is the district.
   const districtOf = new Map<number, number>();
-  for (const p of map.polys) if (p.kind === POLY.block) districtOf.set(p.id, p.parent);
+  for (const p of map.polys) {
+    if (p.kind === POLY.block) districtOf.set(key(p.island, p.id), p.parent);
+  }
   let tallest = 0;
   for (const p of map.polys) if (p.kind === POLY.house) tallest = Math.max(tallest, p.size);
 
@@ -71,19 +86,20 @@ export function buildWorld(map: CityMap, focus: number | null): World {
     const h = filler
       ? FILLER_MIN + (FILLER_MAX - FILLER_MIN) * hash(p.id, fillers++)
       : buildingHeight(p.size, tallest);
+    const district = districtOf.get(key(p.island, p.parent)) ?? p.parent;
     buildings.push({
+      island: p.island,
       id: p.id,
       parent: p.parent,
-      district: districtOf.get(p.parent) ?? p.parent,
+      district,
       kind: filler ? "filler" : "folder",
       points: p.points,
       h,
       size: p.size,
       dim:
         focus !== null &&
-        focus !== p.id &&
-        focus !== p.parent &&
-        focus !== districtOf.get(p.parent),
+        (focus.island !== p.island ||
+          (focus.id !== p.id && focus.id !== p.parent && focus.id !== district)),
     });
   }
 
@@ -99,11 +115,11 @@ export function buildWorld(map: CityMap, focus: number | null): World {
 }
 
 /** The box around the folder's polygons, as high as its tallest building; null if it has none. */
-function boxOf(map: CityMap, buildings: Building[], focus: number): Box | null {
+function boxOf(map: CityMap, buildings: Building[], focus: Focus): Box | null {
   const lo = [Infinity, Infinity];
   const hi = [-Infinity, -Infinity];
   for (const p of map.polys) {
-    if (p.id !== focus || !isFolder(p)) continue;
+    if (p.island !== focus.island || p.id !== focus.id || !isFolder(p)) continue;
     for (let i = 0; i < p.points.length; i += 2) {
       for (let k = 0; k < 2; k++) {
         lo[k] = Math.min(lo[k], p.points[i + k]);
@@ -117,13 +133,15 @@ function boxOf(map: CityMap, buildings: Building[], focus: number): Box | null {
 }
 
 /**
- * The deepest folder of `path` (root first) that has a district, block or house polygon:
- * the one to focus on. Folders the map lost give way to their nearest parent; the root is the
- * whole island, no focus, although its "rest" district carries its id.
+ * The deepest folder of `path` (root first) that has a district, block or house polygon on
+ * `island`: the one to focus on. Folders the map lost give way to their nearest parent; the root
+ * is the whole island, no focus, although its "rest" district carries its id.
  */
-export function focusIn(map: CityMap, path: readonly number[]): number | null {
+export function focusIn(map: CityMap, path: readonly number[], island: number): Focus | null {
   const folders = new Set<number>();
-  for (const p of map.polys) if (isFolder(p)) folders.add(p.id);
-  for (let i = path.length - 1; i >= 1; i--) if (folders.has(path[i])) return path[i];
+  for (const p of map.polys) if (p.island === island && isFolder(p)) folders.add(p.id);
+  for (let i = path.length - 1; i >= 1; i--) {
+    if (folders.has(path[i])) return { island, id: path[i] };
+  }
   return null;
 }

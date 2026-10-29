@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ROAD, type RoadKind } from "../world/map";
 import { mapOf } from "../world/map.fixture";
-import { BRIDGE_RISE, buildRoads, roadHalf } from "../world/roads";
+import { BRIDGE_RISE } from "../world/map";
+import { buildRoads, roadHalf } from "../world/roads";
 import {
   AIR_LANES,
   AIR_SHARE,
@@ -17,7 +18,7 @@ function graphOf(nodes: number[], edges: [number, number, RoadKind][]) {
   return buildRoads(
     mapOf([], {
       nodes: new Float32Array(nodes),
-      edges: edges.map(([a, b, cls]) => ({ a, b, cls, bridge: false })),
+      edges: edges.map(([a, b, cls]) => ({ a, b, cls, bridge: false, liftA: 0, liftB: 0 })),
     }),
   );
 }
@@ -200,8 +201,8 @@ describe("createTraffic", () => {
       mapOf([], {
         nodes: new Float32Array([0, 0, 1000, 0, 2000, 0]),
         edges: [
-          { a: 0, b: 1, cls: ROAD.highway, bridge: false },
-          { a: 1, b: 2, cls: ROAD.street, bridge: true },
+          { a: 0, b: 1, cls: ROAD.highway, bridge: false, liftA: 0, liftB: 0 },
+          { a: 1, b: 2, cls: ROAD.street, bridge: true, liftA: BRIDGE_RISE, liftB: BRIDGE_RISE },
         ],
       }),
     );

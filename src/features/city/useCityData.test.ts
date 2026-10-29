@@ -152,7 +152,7 @@ describe("useCityData", () => {
     render(1, 1, 99);
     await settle(1, 1, 99);
     expect(api.getCrumbs).toHaveBeenCalledWith(1, 99);
-    expect(focusIn).toHaveBeenLastCalledWith(expect.anything(), [0, 1, 10, 99]);
+    expect(focusIn).toHaveBeenLastCalledWith(expect.anything(), [0, 1, 10, 99], 0);
     expect(shown.world?.focusBox).not.toBeNull();
     // Block 10 is lit, block 20 beside it is dimmed.
     expect(shown.world?.buildings.map((b) => b.dim)).toEqual([false, true]);

@@ -40,12 +40,17 @@ export type RoadKind = (typeof ROAD)[keyof typeof ROAD];
 /** Road widths in metres by class; must match core/src/city. */
 export const ROAD_WIDTH = [16, 16, 16, 10, 5];
 
+/** A canal bridge's deck stands this high over the ground, metres; also where a bridge between islands leaves a gate. */
+export const BRIDGE_RISE = 1;
+
 /**
  * `id` and `parent` are folder ids (ids repeat across levels: a district, its filler block and
  * the filler share one); the root's children have `parent` = the root. `points` is
  * `x0, z0, x1, z1, …`.
  */
 export interface Poly {
+  /** Index of the island this polygon belongs to: 0 on a parsed map, the part's index after `mergeIslands`. */
+  island: number;
   kind: PolyKind;
   id: number;
   parent: number;
@@ -58,6 +63,9 @@ export interface MapEdge {
   b: number;
   cls: RoadKind;
   bridge: boolean;
+  /** Metres the road stands over the ground at node `a` and at node `b`; they differ on a ramp. */
+  liftA: number;
+  liftB: number;
 }
 
 /** `neighbour` is the first neighbouring island's index, 0xFFFFFFFF for none. */
@@ -66,6 +74,8 @@ export interface Gate {
   dx: number;
   dz: number;
   neighbour: number;
+  /** A bridge to another island starts here (set by `mergeIslands`): no stub over the sea. */
+  bridged?: boolean;
 }
 
 export interface CityMap {
@@ -74,6 +84,11 @@ export interface CityMap {
   approximate: boolean;
   width: number;
   height: number;
+  /**
+   * Where the map's corner (0, 0) lies in the archipelago's world metres; set by
+   * `mergeIslands`, absent (the corner is the origin) on a parsed island.
+   */
+  origin?: [number, number];
   polys: Poly[];
   /** `x0, z0, x1, z1, …` */
   nodes: Float32Array;
@@ -109,6 +124,7 @@ export function parseCity(buffer: ArrayBuffer): CityMap {
     const at = CITY_HEADER_LEN + i * POLY_LEN;
     const n = view.getUint16(at + 2, true);
     polys.push({
+      island: 0,
       kind: view.getUint8(at) as PolyKind,
       id: view.getUint32(at + 4, true),
       parent: view.getUint32(at + 8, true),
@@ -121,11 +137,15 @@ export function parseCity(buffer: ArrayBuffer): CityMap {
   const edges: MapEdge[] = [];
   for (let i = 0; i < edgeCount; i++) {
     const at = edgesAt + i * EDGE_LEN;
+    const bridge = view.getUint8(at + 9) !== 0;
+    const lift = bridge ? BRIDGE_RISE : 0;
     edges.push({
       a: view.getUint32(at, true),
       b: view.getUint32(at + 4, true),
       cls: view.getUint8(at + 8) as RoadKind,
-      bridge: view.getUint8(at + 9) !== 0,
+      bridge,
+      liftA: lift,
+      liftB: lift,
     });
   }
   const gates: Gate[] = [];

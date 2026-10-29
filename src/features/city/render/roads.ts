@@ -1,6 +1,7 @@
 /**
  * The roads: dark ribbons as wide as each road, glowing axes on the highways, ramps and the ring,
- * bridges over the canal a little raised, and from every gate a bridge stub out over the sea.
+ * bridges over the canal a little raised, bridges between islands rising on their ramps, and from
+ * every gate without a bridge a stub out over the sea.
  */
 import {
   BufferGeometry,
@@ -13,8 +14,8 @@ import {
   MeshBasicMaterial,
 } from "three";
 import { LOOK, ORDER } from "../look";
-import { ROAD, type CityMap, type RoadKind } from "../world/map";
-import { BRIDGE_RISE, roadHalf, type RoadGraph } from "../world/roads";
+import { BRIDGE_RISE, ROAD, type CityMap, type RoadKind } from "../world/map";
+import { roadHalf, stubGates, type RoadGraph } from "../world/roads";
 import { disposeAll } from "./dispose";
 import { flat } from "./flat";
 
@@ -37,12 +38,21 @@ export function roadMesh(map: CityMap, g: RoadGraph): { group: Group; dispose():
   const axisColors: number[] = [];
   const at = (node: number) => [g.nodes[node * 2], g.nodes[node * 2 + 1]];
 
-  const road = (x0: number, z0: number, x1: number, z1: number, cls: RoadKind, y: number) => {
-    ribbon(ribbons, x0, z0, x1, z1, roadHalf(cls), y);
+  // y0 and y1: the road's height over the ground at its start and at its end.
+  const road = (
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    cls: RoadKind,
+    y0: number,
+    y1: number,
+  ) => {
+    ribbon(ribbons, x0, z0, x1, z1, roadHalf(cls), y0, y1);
     const glow = AXIS[cls];
     if (!glow) return;
     const c = new Color(glow);
-    axes.push(x0, y + AXIS_Y, z0, x1, y + AXIS_Y, z1);
+    axes.push(x0, y0 + AXIS_Y, z0, x1, y1 + AXIS_Y, z1);
     axisColors.push(c.r, c.g, c.b, c.r, c.g, c.b);
   };
   // Bridges go last, so their decks cover the road ends they meet.
@@ -51,14 +61,14 @@ export function roadMesh(map: CityMap, g: RoadGraph): { group: Group; dispose():
       if (e.bridge !== bridges) continue;
       const [x0, z0] = at(e.a);
       const [x1, z1] = at(e.b);
-      road(x0, z0, x1, z1, e.cls, bridges ? BRIDGE_RISE : 0);
+      road(x0, z0, x1, z1, e.cls, e.liftA, e.liftB);
     }
   }
-  for (const gate of map.gates) {
+  for (const gate of stubGates(map)) {
     const [x, z] = at(gate.node);
     const len = Math.hypot(gate.dx, gate.dz) || 1;
     const [dx, dz] = [(gate.dx / len) * STUB, (gate.dz / len) * STUB];
-    road(x, z, x + dx, z + dz, ROAD.highway, BRIDGE_RISE);
+    road(x, z, x + dx, z + dz, ROAD.highway, BRIDGE_RISE, BRIDGE_RISE);
   }
 
   const group = new Group();
@@ -81,7 +91,8 @@ export function roadMesh(map: CityMap, g: RoadGraph): { group: Group; dispose():
 
 /**
  * Two triangles facing up: the road from (x0, z0) to (x1, z1), `half` to each side, its ends
- * carried `half` past the nodes so the ribbons of a junction close up.
+ * carried `half` past the nodes so the ribbons of a junction close up. The start stands at height
+ * `y0`, the end at `y1`.
  */
 function ribbon(
   out: number[],
@@ -90,7 +101,8 @@ function ribbon(
   x1: number,
   z1: number,
   half: number,
-  y: number,
+  y0: number,
+  y1: number,
 ) {
   const len = Math.hypot(x1 - x0, z1 - z0);
   if (!(len > 0)) return;
@@ -105,5 +117,5 @@ function ribbon(
   const cz = z1 + uz + ux;
   const dx = x1 + ux + uz;
   const dz = z1 + uz - ux;
-  out.push(ax, y, az, cx, y, cz, bx, y, bz, bx, y, bz, cx, y, cz, dx, y, dz);
+  out.push(ax, y0, az, cx, y1, cz, bx, y0, bz, bx, y0, bz, cx, y1, cz, dx, y1, dz);
 }

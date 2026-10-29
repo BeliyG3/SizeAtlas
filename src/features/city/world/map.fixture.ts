@@ -75,7 +75,7 @@ export function square(
   side = 10,
 ): Poly {
   const points = new Float32Array([x, z, x + side, z, x + side, z + side, x, z + side]);
-  return { kind, id, parent, size, points };
+  return { island: 0, kind, id, parent, size, points };
 }
 
 /** A map of the given polygons with no roads, for tests. */

@@ -1,6 +1,6 @@
 /** Residents walking the sidewalks of streets and the lanes between blocks; pure, no three.js. */
 import { ROAD, type RoadKind } from "../world/map";
-import { BRIDGE_RISE, pointOn, roadHalf, type RoadEdge, type RoadGraph } from "../world/roads";
+import { pointOn, roadHalf, type RoadEdge, type RoadGraph } from "../world/roads";
 import { advance, place, rng, type Track } from "./nav";
 
 /** What a figure is; stage 1 has only residents. */
@@ -67,7 +67,7 @@ export function createResidents(g: RoadGraph, count: number, seed: number): Resi
     const e = g.edges[t.edge[i]];
     const p = pointOn(g, t.edge[i], t.s[i], t.forward[i] === 1, side[i] * walkOffset(e.cls));
     out.x[i] = p.x;
-    out.y[i] = e.bridge ? BRIDGE_RISE : 0; // on the deck of a bridge, as the cars
+    out.y[i] = p.y; // on the deck of a bridge, as the cars
     out.z[i] = p.z;
     out.heading[i] = p.heading;
   }
