@@ -4,8 +4,9 @@
 use super::chart::{WORLD_CELL, World};
 use super::coast::{CLEAR, Coast, keeps_clear};
 use super::grid::distance;
+use super::landing::{length, meet, onto, turns_back};
 use super::path::simplify;
-use super::span::{DIRS, LEAVE, SHORT, route, snap};
+use super::span::{DIRS, LEAVE, route, snap};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::f32::consts::SQRT_2;
@@ -78,8 +79,6 @@ impl Sea {
         let ((i, pa, da), (j, pb, db)) = (a, b);
         let (from, to) = (self.out(coasts, a)?, self.out(coasts, b)?);
         let mut way = self.cheapest(from, heading(da), to)?;
-        onto(&mut way, pa, da, true);
-        onto(&mut way, pb, db, false);
         let head = |c: [f32; 2], d: [f32; 2]| {
             let clear = |p: &[[f32; 2]]| keeps_clear(coasts, p, Some(i), None);
             route(pa, da, c, [-d[0], -d[1]], (LEAVE, 0.0), clear)
@@ -95,14 +94,32 @@ impl Sea {
             let all = simplify(all);
             (!turns_back(&all) && keeps_clear(coasts, &all, Some(i), Some(j))).then_some(all)
         };
-        let n = way.len() - 1;
-        if n == 0 {
-            // Both straights set out from the same cell: they meet at its centre.
-            return DIRS.iter().find_map(|m| {
-                let m = m.map(|x| x as f32);
-                join(head(way[0], m)?, &[], tail(way[0], m)?)
-            });
+        // The two straights on to where they cross.
+        let direct = || meet((pa, da), (pb, db)).and_then(|x| join(vec![pa, x], &[], vec![x, pb]));
+        match way.len() {
+            // Both straights set out from the same cell: the shortest of their crossing and the
+            // ways through the cell's centre.
+            1 => {
+                let through = DIRS.iter().filter_map(|m| {
+                    let m = m.map(|x| x as f32);
+                    join(head(way[0], m)?, &[], tail(way[0], m)?)
+                });
+                let shortest =
+                    |p: &Vec<[f32; 2]>, q: &Vec<[f32; 2]>| length(p).total_cmp(&length(q));
+                return direct().into_iter().chain(through).min_by(shortest);
+            }
+            // A single corner goes where the straights cross; else onto `a`'s straight alone, as
+            // sliding it onto `b`'s too would slide it off `a`'s.
+            3 => match direct() {
+                Some(p) => return Some(p),
+                None => onto(&mut way, pa, da, true),
+            },
+            _ => {
+                onto(&mut way, pa, da, true);
+                onto(&mut way, pb, db, false);
+            }
         }
+        let n = way.len() - 1;
         let dir = |k: usize| [way[k][0] - way[k - 1][0], way[k][1] - way[k - 1][1]];
         // `a` joins the way at the first corner it can reach, `b` at the last one after that.
         let last = (n - 1).max(1);
@@ -208,53 +225,12 @@ impl Sea {
     }
 }
 
-/// Where the first (`first`) or the last run of `way` runs alongside the straight through `p`
-/// along `d`, a few metres off it, moves the corner after (before) it along the next (previous)
-/// run onto that straight, so the gate's straight goes on into the way without a jog.
-fn onto(way: &mut [[f32; 2]], p: [f32; 2], d: [f32; 2], first: bool) {
-    let n = way.len();
-    if n < 3 {
-        return;
-    }
-    let (end, corner, next) = if first {
-        (0, 1, 2)
-    } else {
-        (n - 1, n - 2, n - 3)
-    };
-    let f = |q: [f32; 2]| q.map(f64::from);
-    let (d, p, end, corner, next) = (snap(d), f(p), f(way[end]), f(way[corner]), f(way[next]));
-    let cross = |a: [f64; 2], b: [f64; 2]| a[0] * b[1] - a[1] * b[0];
-    let sub = |a: [f64; 2], b: [f64; 2]| [a[0] - b[0], a[1] - b[1]];
-    let run = sub(corner, end);
-    let along = sub(corner, next);
-    let len = along[0].hypot(along[1]);
-    if cross(run, d).abs() > 1e-6 * run[0].hypot(run[1]) || len < 1e-6 {
-        return;
-    }
-    // `corner` slides to `next + u · e`, on the straight.
-    let e = [along[0] / len, along[1] / len];
-    let k = cross(e, d);
-    if k.abs() < 1e-9 {
-        return;
-    }
-    let u = -cross(sub(next, p), d) / k;
-    if u >= SHORT {
-        let c = if first { 1 } else { n - 2 };
-        way[c] = [(next[0] + u * e[0]) as f32, (next[1] + u * e[1]) as f32];
-    }
-}
-
-/// Whether the line `points` turns right round anywhere.
-fn turns_back(points: &[[f32; 2]]) -> bool {
-    points.windows(3).any(|w| {
-        let u = [w[1][0] - w[0][0], w[1][1] - w[0][1]];
-        let v = [w[2][0] - w[1][0], w[2][1] - w[1][1]];
-        u[0] * v[0] + u[1] * v[1] < (-1.0 + 1e-3) * u[0].hypot(u[1]) * v[0].hypot(v[1])
-    })
-}
-
 /// The index of the direction of `DIRS` nearest to `d`.
 fn heading(d: [f32; 2]) -> usize {
     let m = snap(d);
     DIRS.iter().position(|&k| k == m).unwrap_or(0)
 }
+
+#[cfg(test)]
+#[path = "seaway_tests.rs"]
+mod tests;

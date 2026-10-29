@@ -182,25 +182,26 @@ fn cross(a: [f64; 2], b: [f64; 2]) -> f64 {
     a[0] * b[1] - a[1] * b[0]
 }
 
-/// Whether bridges `x` and `y` cross or come within `APART`, but for their runs at a gate
-/// both take (they fork there).
+/// Whether bridges `x` and `y` cross or come within `APART`, but for their two runs at a gate
+/// both take, against each other (they fork there).
 fn conflicts(x: &Bridge, y: &Bridge) -> bool {
-    let (rx, ry) = (runs(x, y), runs(y, x));
-    rx.iter().any(|&r| {
-        ry.iter().any(|&q| {
+    let skip: Vec<(usize, usize)> = [x.a, x.b]
+        .into_iter()
+        .filter_map(|g| Some((gate_run(x, g)?, gate_run(y, g)?)))
+        .collect();
+    (0..x.points.len() - 1).any(|r| {
+        (0..y.points.len() - 1).any(|q| {
             let (s, t) = (&x.points[r..r + 2], &y.points[q..q + 2]);
-            segments_apart(s[0], s[1], t[0], t[1]) < APART
+            !skip.contains(&(r, q)) && segments_apart(s[0], s[1], t[0], t[1]) < APART
         })
     })
 }
 
-/// The runs of `b` (their first points' indices) but those at a gate `o` takes too.
-fn runs(b: &Bridge, o: &Bridge) -> Vec<usize> {
-    let n = b.points.len() - 1;
-    let shared = |g: (usize, u32)| g == o.a || g == o.b;
-    (0..n)
-        .filter(|&r| !(r == 0 && shared(b.a) || r == n - 1 && shared(b.b)))
-        .collect()
+/// The run of `b` (its first point's index) at its gate `g`, if `g` is one of its gates.
+fn gate_run(b: &Bridge, g: (usize, u32)) -> Option<usize> {
+    (b.a == g)
+        .then_some(0)
+        .or((b.b == g).then(|| b.points.len() - 2))
 }
 
 #[cfg(test)]
