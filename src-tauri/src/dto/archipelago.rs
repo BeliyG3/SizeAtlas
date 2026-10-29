@@ -20,14 +20,15 @@ pub struct ArchipelagoIslandDto {
     pub z: f32,
 }
 
-/// A bridge between two gates, each `[island, gate node]` (the island is an index of `islands`).
+/// A bridge between two gates, each `[island, gate node]` (the island is an index of `islands`);
+/// `levels[k]` is the deck of its run from `points[k]` to `points[k + 1]`.
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchipelagoBridgeDto {
     pub a: [u32; 2],
     pub b: [u32; 2],
     pub points: Vec<[f32; 2]>,
-    pub level: u8,
+    pub levels: Vec<u8>,
 }
 
 impl From<Bridge> for ArchipelagoBridgeDto {
@@ -37,7 +38,7 @@ impl From<Bridge> for ArchipelagoBridgeDto {
             a: end(bridge.a),
             b: end(bridge.b),
             points: bridge.points,
-            level: bridge.level,
+            levels: bridge.levels,
         }
     }
 }

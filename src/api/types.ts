@@ -309,12 +309,12 @@ export interface ArchipelagoIsland {
   z: number;
 }
 
-/** A bridge between two gates; each end is `[index in islands, gate node]`, `points` run from `a` to `b` in world metres. */
+/** A bridge between two gates; each end is `[index in islands, gate node]`, `points` run from `a` to `b` in world metres; `levels[k]` is the deck of the run from `points[k]` to `points[k + 1]`. */
 export interface ArchipelagoBridge {
   a: [number, number];
   b: [number, number];
   points: [number, number][];
-  level: number;
+  levels: number[];
 }
 
 /** The open drives in the order of their size on disk, with their bridges; a root that is no drive lies alone. */

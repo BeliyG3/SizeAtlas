@@ -121,14 +121,14 @@ fn archipelago_serializes_for_the_ui() {
             a: [0, 4],
             b: [1, 7],
             points: vec![[0.0, 1.0], [2.0, 3.0]],
-            level: 1,
+            levels: vec![1],
         }],
     };
     assert_eq!(
         serde_json::to_value(world).unwrap(),
         serde_json::json!({
             "islands": [{"generation": 3, "rev": 9, "build": 4, "root": "C:\\", "x": 1.5, "z": -2.0}],
-            "bridges": [{"a": [0, 4], "b": [1, 7], "points": [[0.0, 1.0], [2.0, 3.0]], "level": 1}],
+            "bridges": [{"a": [0, 4], "b": [1, 7], "points": [[0.0, 1.0], [2.0, 3.0]], "levels": [1]}],
         })
     );
 }

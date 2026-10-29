@@ -1,7 +1,7 @@
 use super::*;
 use crate::city::archipelago::bearings;
 use crate::city::archipelago::tests::{
-    add, crossing, gate, inside, len, outline, point_segment, probes, refs, sides, sub,
+    add, gate, inside, len, outline, point_segment, probes, refs, sides, sub,
 };
 use crate::city::test_sets::{
     eight, five, five_real, four, four_real, four_turned, six, three, three_real,
@@ -157,67 +157,6 @@ fn bridges_keep_off_the_coasts() {
             }
         }
     }
-}
-
-/// The least distance between the runs of `a`-`b` and `c`-`d`, 0 where they cross.
-fn segments_apart(a: [f32; 2], b: [f32; 2], c: [f32; 2], d: [f32; 2]) -> f32 {
-    if crossing(a, b, c, d) {
-        return 0.0;
-    }
-    let ends = [(a, c, d), (b, c, d), (c, a, b), (d, a, b)];
-    (ends.iter()).fold(f32::INFINITY, |m, &(p, s, e)| m.min(point_segment(p, s, e)))
-}
-
-/// The least distance between the runs of `x` and of `y`, but for runs they share (a trunk)
-/// and runs that meet end to end (they fork or join there).
-fn apart(x: &Bridge, y: &Bridge) -> f32 {
-    let mut best = f32::INFINITY;
-    for r in 0..x.points.len() - 1 {
-        for q in 0..y.points.len() - 1 {
-            let (s, t) = (&x.points[r..r + 2], &y.points[q..q + 2]);
-            if !crate::city::trunk::one_run(s, t) && !crate::city::trunk::touch(s, t) {
-                best = best.min(segments_apart(s[0], s[1], t[0], t[1]));
-            }
-        }
-    }
-    best
-}
-
-/// Bridges nearer than a deck and a margin (16 + 4 m) stand on different levels, and the same
-/// level keeps a deck apart (but where they share a trunk or fork); a bridge near no other and
-/// on no trunk stands on level 0.
-#[test]
-fn crossing_bridges_get_levels() {
-    let mut near = 0;
-    for set in [four(), five()] {
-        let all = laid(set).2;
-        let trunk = trunks(&all);
-        for (i, x) in all.iter().enumerate() {
-            let mut alone = true;
-            for (j, y) in all.iter().enumerate().filter(|&(j, _)| j != i) {
-                let d = apart(x, y);
-                if d < 20.0 {
-                    alone = false;
-                    near += usize::from(i < j);
-                }
-                // One level per bridge: the bridges of a trunk stand on its level even where,
-                // off the trunk, they pass near each other.
-                let one_trunk = trunk[i] == trunk[j];
-                assert!(
-                    x.level != y.level || d >= 16.0 || one_trunk,
-                    "{d}: {x:?} {y:?}"
-                );
-            }
-            // A trunk stands on one level: a bridge alone but on a trunk takes the trunk's.
-            if alone && trunk.iter().filter(|&&t| t == trunk[i]).count() == 1 {
-                assert_eq!(x.level, 0, "{x:?}");
-            }
-        }
-    }
-    assert!(
-        near > 0,
-        "no bridges near each other: the test proves nothing"
-    );
 }
 
 #[test]

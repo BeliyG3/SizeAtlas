@@ -5,29 +5,28 @@
 use super::bends::{BEND, cost, ease, length};
 use super::chart::shape;
 use super::coast::{Coast, keeps_clear};
-use super::gates::segments_apart;
+use super::decks::decks;
 use super::landing::clears;
 use super::map::{Gate, Island};
 use super::seaway::Sea;
 use super::simple::{jog, route};
-use super::trunk::{join, one_run, touch};
+use super::trunk::join;
 
 /// The way over the sea is taken where it is shorter than this share of the simple shape.
 const SHORTER: f32 = 0.75;
 /// Without a simple shape, the way over the sea is searched up to this many times as long as
 /// the gates lie apart, and eight turns.
 const DETOUR: f32 = 4.0;
-/// Bridges nearer than a deck's width and a margin stand on different levels, metres.
-const APART: f32 = super::trunk::NEAR as f32;
 
 /// A bridge from gate `a` to gate `b`, each `(island, gate node)`, `a`'s island the lower; its
-/// points run from `a`'s node to `b`'s in world metres. Its deck stands on `level`.
+/// points run from `a`'s node to `b`'s in world metres. The deck of its run `k` (from point `k`
+/// to `k + 1`) stands on `levels[k]`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Bridge {
     pub a: (usize, u32),
     pub b: (usize, u32),
     pub points: Vec<[f32; 2]>,
-    pub level: u8,
+    pub levels: Vec<u8>,
 }
 
 /// A bridge for every pair of `islands` (moved by `offsets`, see [`super::place`]) whose gates
@@ -39,8 +38,8 @@ pub struct Bridge {
 /// none. No corner turns more than 45°, and two turns the same way are drawn apart (see
 /// [`ease`]). The pairs go in a fixed order; the way over the sea of a later one is cheaper
 /// along the earlier bridges. Then runs side by side are moved onto one line and given the
-/// same points (see [`join`]): bridges that run together are one trunk. A trunk's bridges stand
-/// on one level, the lowest none of the earlier ones any of them [`conflicts`] with takes.
+/// same points (see [`join`]): bridges that run together are one trunk. Each run stands on its
+/// deck, one along a trunk, others where runs cross or pass near (see [`decks`]).
 pub fn bridges(islands: &[&Island], offsets: &[[f32; 2]]) -> Vec<Bridge> {
     let shapes: Vec<_> = (islands.iter().zip(offsets))
         .map(|(s, &o)| shape(s, o))
@@ -81,7 +80,7 @@ pub fn bridges(islands: &[&Island], offsets: &[[f32; 2]]) -> Vec<Bridge> {
                     a: (i, ga.node),
                     b: (j, gb.node),
                     points,
-                    level: 0,
+                    levels: Vec::new(),
                 });
             }
         }
@@ -94,50 +93,11 @@ pub fn bridges(islands: &[&Island], offsets: &[[f32; 2]]) -> Vec<Bridge> {
     for (b, line) in out.iter_mut().zip(lines) {
         b.points = line;
     }
-    let trunk = trunks(&out);
-    let mut done = vec![false; out.len()];
-    for k in 0..out.len() {
-        if done[k] {
-            continue;
-        }
-        let members: Vec<usize> = (k..out.len()).filter(|&m| trunk[m] == trunk[k]).collect();
-        let taken: Vec<u8> = (0..out.len())
-            .filter(|&e| done[e] && members.iter().any(|&m| conflicts(&out[e], &out[m])))
-            .map(|e| out[e].level)
-            .collect();
-        let level = (0..u8::MAX).find(|l| !taken.contains(l)).unwrap_or(u8::MAX);
-        for m in members {
-            (out[m].level, done[m]) = (level, true);
-        }
+    let decks = decks(&out.iter().map(|b| b.points.clone()).collect::<Vec<_>>());
+    for (b, levels) in out.iter_mut().zip(decks) {
+        b.levels = levels;
     }
     out
-}
-
-/// For each bridge, the first bridge of its trunk: those that share a run, but for two runs out
-/// of gates (the frontend ramps those forks to the lower deck).
-pub(crate) fn trunks(all: &[Bridge]) -> Vec<usize> {
-    let gate = |b: &Bridge, r: usize| r == 0 || r + 2 == b.points.len();
-    let shares = |x: &Bridge, y: &Bridge| {
-        (0..x.points.len() - 1).any(|r| {
-            (0..y.points.len() - 1).any(|q| {
-                !(gate(x, r) && gate(y, q)) && one_run(&x.points[r..r + 2], &y.points[q..q + 2])
-            })
-        })
-    };
-    let mut first: Vec<usize> = (0..all.len()).collect();
-    for x in 0..all.len() {
-        for y in 0..x {
-            if shares(&all[x], &all[y]) {
-                let (a, b) = (first[x], first[y]);
-                let (keep, gone) = (a.min(b), a.max(b));
-                first
-                    .iter_mut()
-                    .filter(|f| **f == gone)
-                    .for_each(|f| *f = keep);
-            }
-        }
-    }
-    first
 }
 
 /// The bridge to take of the `simple` shape and the way over the `sea` (see [`bridges`]).
@@ -150,17 +110,6 @@ fn pick(simple: Option<Vec<[f32; 2]>>, sea: Option<Vec<[f32; 2]>>) -> Option<Vec
         }
         (p, q) => p.or(q),
     }
-}
-
-/// Whether bridges `x` and `y` cross or come within `APART`, but for runs they share and runs
-/// that meet end to end (they fork or join there).
-fn conflicts(x: &Bridge, y: &Bridge) -> bool {
-    (0..x.points.len() - 1).any(|r| {
-        (0..y.points.len() - 1).any(|q| {
-            let (s, t) = (&x.points[r..r + 2], &y.points[q..q + 2]);
-            !one_run(s, t) && !touch(s, t) && segments_apart(s[0], s[1], t[0], t[1]) < APART
-        })
-    })
 }
 
 #[cfg(test)]

@@ -49,8 +49,8 @@ fn bridges_side_by_side_share_one_trunk() {
         let all = laid(set);
         for (i, x) in all.iter().enumerate() {
             for y in &all[i + 1..] {
-                for (s, gs) in runs(x) {
-                    for (t, gt) in runs(y) {
+                for (r, (s, gs)) in runs(x).enumerate() {
+                    for (q, (t, gt)) in runs(y).enumerate() {
                         let fork = gs
                             && gt
                             && [s[0], s[1]].iter().any(|&p| same(p, t[0]) || same(p, t[1]));
@@ -61,7 +61,7 @@ fn bridges_side_by_side_share_one_trunk() {
                             continue;
                         }
                         assert!(one(s, t), "{aside} m apart over {overlap} m: {x:?} {y:?}");
-                        assert_eq!(x.level, y.level, "a trunk is one deck: {x:?} {y:?}");
+                        assert_eq!(x.levels[r], y.levels[q], "a trunk is one deck: {x:?} {y:?}");
                         shared += 1;
                     }
                 }

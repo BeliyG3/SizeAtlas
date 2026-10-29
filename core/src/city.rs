@@ -8,6 +8,7 @@ mod canal;
 mod chamfer;
 mod chart;
 mod coast;
+mod decks;
 mod empty;
 mod encode;
 mod gates;
