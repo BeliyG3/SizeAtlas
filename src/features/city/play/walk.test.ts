@@ -138,12 +138,12 @@ describe("stepWalk", () => {
   });
 
   it("does not drop from a deck onto a roof just below it: roofs are reached by car", () => {
-    const solids = deckWorld(12, [{ x: 66, z: 30, w: 20, d: 40, h: 10 }]);
+    const solids = deckWorld(12, [{ x: 65, z: 30, w: 20, d: 40, h: 10 }]); // against the deck's edge (x 55…65)
     const w = createWalker({ x: 60, z: 50 }, solids);
     expect(w.body.y).toBe(12);
     run(w, forward(), 6, solids);
     expect(w.body.y).toBe(12);
-    expect(w.body.x).toBeLessThan(66);
+    expect(w.body.x).toBeLessThan(65.5);
   });
 
   it("does not leave a 12 m roof for a 10 m one beside it: roofs are left by car", () => {
