@@ -33,6 +33,8 @@ export interface Stage {
   fit: (box: Box, polar: number, azimuth: number) => { to: Vector3; from: Vector3 };
   /** How far past the target the camera must see, metres: the far plane follows it. */
   setReach: (metres: number) => void;
+  /** Something covers the canvas (the game): no frames until it is uncovered. */
+  setCovered: (covered: boolean) => void;
   dispose: () => void;
 }
 
@@ -43,6 +45,14 @@ export interface StageEvents {
   onLost: (lost: boolean) => void;
   /** After a restore: three rebuilt its GL state, so the clear colour is set again. */
   onRestored: () => void;
+}
+
+/** The city's light: a soft fill and one sun. The game lights its scene the same way. */
+export function addLights(scene: Scene) {
+  scene.add(new AmbientLight(0xffffff, 0.6 * Math.PI));
+  const sun = new DirectionalLight(0xffffff, 0.5 * Math.PI);
+  sun.position.set(40, 100, 25);
+  scene.add(sun);
 }
 
 /** Throws when WebGL 2 is not available. */
@@ -77,14 +87,12 @@ function setUp(
   let ratio = Math.min(devicePixelRatio, 2);
   let applied = { w: 0, h: 0, ratio: 0 };
   let onScreen = true;
+  let covered = false;
   let reach = 1000;
 
   const scene = new Scene();
   const camera = new PerspectiveCamera(FOV, 1, 0.1, 2000);
-  scene.add(new AmbientLight(0xffffff, 0.6 * Math.PI));
-  const sun = new DirectionalLight(0xffffff, 0.5 * Math.PI);
-  sun.position.set(40, 100, 25);
-  scene.add(sun);
+  addLights(scene);
 
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = false;
@@ -118,8 +126,9 @@ function setUp(
   const scheduler = createScheduler(draw);
   undo.push(() => scheduler.dispose());
   const invalidate = () => scheduler.invalidate();
-  // Frames run only while the canvas is on screen, has a size and a context.
-  const showing = () => scheduler.setVisible(onScreen && size.w > 0 && size.h > 0 && !lost);
+  // Frames run only while the canvas is on screen, uncovered, has a size and a context.
+  const showing = () =>
+    scheduler.setVisible(onScreen && !covered && size.w > 0 && size.h > 0 && !lost);
 
   controls.addEventListener("change", invalidate);
   undo.push(() => controls.removeEventListener("change", invalidate));
@@ -193,6 +202,11 @@ function setUp(
     },
     setReach(metres) {
       reach = metres;
+      invalidate();
+    },
+    setCovered(next) {
+      covered = next;
+      showing();
       invalidate();
     },
     dispose: release,

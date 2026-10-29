@@ -14,10 +14,36 @@
   height: 100%;
 }
 
-.city-reset {
+.city-buttons {
   position: absolute;
   inset-block-start: 8px;
   inset-inline-end: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+/* The game: the whole window, in the top layer over the app. */
+.play {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.play-hint {
+  position: absolute;
+  inset-block-end: 12px;
+  inset-inline-start: 16px;
+  margin: 0;
+  color: #eaf4ff;
+  opacity: 0.6;
+  pointer-events: none;
+  unicode-bidi: plaintext;
 }
 
 .city-message {

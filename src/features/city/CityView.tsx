@@ -4,6 +4,7 @@ import { useT } from "../../i18n/react";
 import type { Palette } from "../../palette";
 import { usePalette, useSettings, useSize } from "../../settings/react";
 import { placePopup } from "../duplicates/viewer/hover";
+import { PlayView, type PlayStart } from "./play/PlayView";
 import type { CityScene, CityTheme, Hover } from "./scene";
 import { useArchipelago } from "./useArchipelago";
 import type { Building } from "./world/buildings";
@@ -47,6 +48,7 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
   const [scene, setScene] = useState<CityScene | null>(null);
   const [status, setStatus] = useState<"ready" | "failed" | "lost">("ready");
   const [hover, setHover] = useState<Hover | null>(null);
+  const [play, setPlay] = useState<PlayStart | null>(null);
   const [tip, setTip] = useState<{
     generation: number;
     id: number;
@@ -94,6 +96,11 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
   useEffect(() => {
     scene?.setTheme(readTheme(palette));
   }, [scene, palette, resolved]);
+
+  // The game covers the panel: its scene draws nothing until the game is over.
+  useEffect(() => {
+    scene?.setCovered(play !== null);
+  }, [scene, play]);
 
   useEffect(() => {
     if (!scene) return;
@@ -154,9 +161,22 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
         aria-label={t("city.label")}
         style={hover ? { cursor: "pointer" } : undefined}
       />
-      <button className="city-reset" disabled={!scene} onClick={() => scene?.reset()}>
-        {t("city.reset")}
-      </button>
+      <div className="city-buttons">
+        {scene && (
+          <button
+            disabled={!world}
+            onClick={() => {
+              const city = scene.snapshot();
+              if (city) setPlay({ city, background: readTheme(palette).background });
+            }}
+          >
+            {t("city.play")}
+          </button>
+        )}
+        <button disabled={!scene} onClick={() => scene?.reset()}>
+          {t("city.reset")}
+        </button>
+      </div>
       {status === "lost" && <p className="city-message dim">{t("city.unavailable")}</p>}
       {status === "ready" && !world && <p className="city-message dim">{t("city.building")}</p>}
       {hover && (
@@ -173,6 +193,7 @@ export function CityView({ roots, generation, selectedId, onSelect, onFail }: Pr
           </div>
         </div>
       )}
+      {play && <PlayView start={play} onExit={() => setPlay(null)} />}
     </div>
   );
 }

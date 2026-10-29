@@ -36,6 +36,14 @@ export function crowdOn(g: RoadGraph, seed: number): Crowd[] {
   ];
 }
 
+/** How many cars (flying ones included) and residents there can be at once. */
+export interface Limits {
+  cars: number;
+  people: number;
+}
+
+const PANEL: Limits = { cars: CARS, people: PEOPLE };
+
 /** Cars for an archipelago of `islands`: 100 an island, up to `CARS`. */
 export function carsFor(islands: number): number {
   return Math.min(100 * Math.max(1, islands), CARS);
@@ -61,8 +69,8 @@ export interface Life {
   dispose: () => void;
 }
 
-/** `onReady` runs once the models are in `parent`. */
-export function createLife(parent: Object3D, onReady: () => void): Life {
+/** `onReady` runs once the models are in `parent`; the limits are the panel's unless given. */
+export function createLife(parent: Object3D, onReady: () => void, limits = PANEL): Life {
   let models: {
     cars: ReturnType<typeof carInstances>;
     people: ReturnType<typeof peopleInstances>;
@@ -85,14 +93,14 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
   loadAssets().then(
     (assets) => {
       if (disposed) return;
-      const cars = carInstances(assets.car, CARS);
+      const cars = carInstances(assets.car, limits.cars);
       models = {
         cars,
-        people: peopleInstances(assets.walker, PEOPLE),
-        trails: trailMesh(CARS, cars.tail),
+        people: peopleInstances(assets.walker, limits.people),
+        trails: trailMesh(limits.cars, cars.tail),
         // The head lights trail too, as long and as far as the tail lights.
-        heads: trailMesh(CARS, headOf(cars.tail), LOOK.wire),
-        lights: carLights(CARS, cars.tail),
+        heads: trailMesh(limits.cars, headOf(cars.tail), LOOK.wire),
+        lights: carLights(limits.cars, cars.tail),
       };
       show(false);
       parent.add(
@@ -120,8 +128,8 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
     active: () => models !== null && pools !== null,
     populate(g, seed, islands) {
       pools = g && {
-        traffic: createTraffic(g, carsFor(islands), seed),
-        residents: createResidents(g, peopleFor(islands), seed),
+        traffic: createTraffic(g, Math.min(carsFor(islands), limits.cars), seed),
+        residents: createResidents(g, Math.min(peopleFor(islands), limits.people), seed),
       };
       dropCrowd();
       crowd = g ? crowdOn(g, seed) : [];

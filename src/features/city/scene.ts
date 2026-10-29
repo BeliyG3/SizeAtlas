@@ -1,12 +1,11 @@
 /**
  * The three.js side of the city panel: the island's meshes on the stage, its moving life, the
- * focus outline, picking and the camera flights. The only module (with what it imports) that
+ * focus outline, picking and the camera flights. With the game (play/game), the only module that
  * loads three; CityView reaches it by `import()`.
  */
 import {
   BoxGeometry,
   EdgesGeometry,
-  Group,
   LineBasicMaterial,
   LineSegments,
   Raycaster,
@@ -17,9 +16,7 @@ import type { Palette } from "../../palette";
 import { createLife } from "./panel/life";
 import { createStage } from "./panel/stage";
 import { attachPointer, type Hover } from "./pointer";
-import { groundMesh } from "./render/ground";
-import { houseMesh, type Houses } from "./render/houses";
-import { roadMesh } from "./render/roads";
+import { islandMeshes, type IslandMeshes } from "./render/island";
 import type { Building, World } from "./world/buildings";
 import { buildRoads, type RoadGraph } from "./world/roads";
 import { buildingBox, islandBox, overviewBox } from "./world/views";
@@ -70,14 +67,20 @@ export interface CityScene {
   setTheme: (theme: CityTheme) => void;
   /** Shows the whole archipelago. */
   reset: () => void;
+  /** The world shown now, null without one. */
+  snapshot: () => CitySnapshot | null;
+  /** The game covers the panel: no frames are drawn until it is uncovered. */
+  setCovered: (covered: boolean) => void;
   dispose: () => void;
 }
 
-/** The island's still meshes. */
-interface Island {
-  group: Group;
-  houses: Houses;
-  dispose: () => void;
+/** What the game takes from the panel when it starts: the shown world, its roads and its life. */
+export interface CitySnapshot {
+  world: World;
+  graph: RoadGraph;
+  /** The life's seed: the selected root's generation. */
+  seed: number;
+  islands: number;
 }
 
 /** Throws when WebGL 2 is not available. */
@@ -88,7 +91,8 @@ export function createScene(
 ): CityScene {
   let theme = initialTheme;
   let world: World | null = null;
-  let island: Island | null = null;
+  let island: IslandMeshes | null = null;
+  let city: CitySnapshot | null = null;
   // The root last shown with a world, and the island the next reset puts the camera on (-1: all).
   let shown: Aim | null = null;
   let needsReset = true;
@@ -213,8 +217,10 @@ export function createScene(
       } else {
         clearIsland();
         const g = world && buildRoads(world.map);
+        city = null;
         if (world && g) {
-          island = buildIsland(world, g);
+          island = islandMeshes(world, g);
+          city = { world, graph: g, seed: generation, islands: islands.length };
           scene.add(island.group);
           const { width, height } = world.map;
           stage.setReach(REACH * Math.max(width, height, 1));
@@ -223,6 +229,7 @@ export function createScene(
         animate();
         events.onHover(null);
       }
+      if (city && world) city = { ...city, world };
       placeOutline(world?.focusBox ?? null);
       // Without a world the camera waits: the root's island has not come yet.
       if (world) aimAt(world, { generation, islands: islands.map((i) => i.generation) });
@@ -239,6 +246,10 @@ export function createScene(
       needsReset = true;
       scheduler.invalidate();
     },
+    snapshot: () => city,
+    setCovered(covered) {
+      stage.setCovered(covered);
+    },
     dispose() {
       detachPointer();
       controls.removeEventListener("start", onStart);
@@ -247,23 +258,6 @@ export function createScene(
       outline.geometry.dispose();
       outline.material.dispose();
       stage.dispose();
-    },
-  };
-}
-
-function buildIsland(world: World, g: RoadGraph): Island {
-  const ground = groundMesh(world.map);
-  const roads = roadMesh(world.map, g);
-  const houses = houseMesh(world);
-  const group = new Group();
-  group.add(ground.group, roads.group, houses.mesh);
-  return {
-    group,
-    houses,
-    dispose() {
-      ground.dispose();
-      roads.dispose();
-      houses.dispose();
     },
   };
 }

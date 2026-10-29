@@ -9,6 +9,7 @@
     "core:window:allow-set-background-color",
     "core:webview:allow-set-webview-background-color",
     "core:window:allow-close",
+    "core:window:allow-set-fullscreen",
     "dialog:allow-open"
   ]
 }

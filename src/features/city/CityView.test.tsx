@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../api/client";
 import { rt } from "../lists/hookRuntime";
 import { CityView } from "./CityView";
-import { createScene, type Hover } from "./scene";
+import { PlayView } from "./play/PlayView";
+import { createScene, type CitySnapshot, type Hover } from "./scene";
 import { useArchipelago } from "./useArchipelago";
-import type { Building } from "./world/buildings";
+import type { Building, World } from "./world/buildings";
 
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
@@ -55,6 +56,15 @@ function elements(node: ReactNode): ReactElement<Record<string, unknown>>[] {
   return [el as ReactElement<Record<string, unknown>>, ...elements(el.props.children)];
 }
 
+const fakeScene = () => ({
+  setCity: vi.fn(),
+  setTheme: vi.fn(),
+  reset: vi.fn(),
+  snapshot: vi.fn((): CitySnapshot | null => null),
+  setCovered: vi.fn(),
+  dispose: vi.fn(),
+});
+
 const texts = () => elements(tree).flatMap((el) => [el.props.children].flat());
 const canvas = () => elements(tree).find((el) => el.type === "canvas");
 
@@ -93,7 +103,7 @@ describe("CityView", () => {
   });
 
   it("shows the canvas and the reset button once the renderer starts", async () => {
-    const scene = { setCity: vi.fn(), setTheme: vi.fn(), reset: vi.fn(), dispose: vi.fn() };
+    const scene = fakeScene();
     vi.mocked(createScene).mockReturnValue(scene);
     render();
     (canvas()!.props.ref as (el: unknown) => void)({});
@@ -111,6 +121,53 @@ describe("CityView", () => {
     });
   });
 
+  describe("the play button", () => {
+    const button = () =>
+      elements(tree).find((el) => el.type === "button" && el.props.children === "city.play");
+    const world = { map: {} } as unknown as World;
+    const city = { world, graph: {}, seed: 1, islands: 2 } as unknown as CitySnapshot;
+
+    async function start() {
+      const scene = fakeScene();
+      vi.mocked(createScene).mockReturnValue(scene);
+      render();
+      (canvas()!.props.ref as (el: unknown) => void)({});
+      render();
+      await vi.dynamicImportSettled();
+      render();
+      return scene;
+    }
+
+    it("is not there before the scene and is off while there is no world", async () => {
+      render();
+      expect(button()).toBeUndefined();
+      await start();
+      expect(button()!.props.disabled).toBe(true);
+    });
+
+    it("starts the game on the shown world and covers the panel until it is over", async () => {
+      vi.mocked(useArchipelago).mockReturnValue({
+        world,
+        islands,
+        selectedIsland: 0,
+        finish: null,
+      });
+      const scene = await start();
+      scene.snapshot.mockReturnValue(city);
+      expect(button()!.props.disabled).toBe(false);
+      expect(scene.setCovered).toHaveBeenLastCalledWith(false);
+      (button()!.props.onClick as () => void)();
+      render();
+      const play = elements(tree).find((el) => el.type === PlayView)!;
+      expect(play.props.start).toEqual({ city, background: "#181818" });
+      expect(scene.setCovered).toHaveBeenLastCalledWith(true);
+      (play.props.onExit as () => void)();
+      render();
+      expect(elements(tree).find((el) => el.type === PlayView)).toBeUndefined();
+      expect(scene.setCovered).toHaveBeenLastCalledWith(false);
+    });
+  });
+
   describe("the tooltip", () => {
     const house = { island: 0, id: 5, parent: 4, kind: "folder", size: 10 } as Building;
     const filler = { island: 0, id: 7, parent: 6, kind: "filler", size: 30 } as Building;
@@ -121,7 +178,7 @@ describe("CityView", () => {
     const fake = { offsetWidth: 200, offsetHeight: 40, style: {} as Record<string, string> };
 
     async function start() {
-      const scene = { setCity: vi.fn(), setTheme: vi.fn(), reset: vi.fn(), dispose: vi.fn() };
+      const scene = fakeScene();
       vi.mocked(createScene).mockReturnValue(scene);
       render();
       (canvas()!.props.ref as (el: unknown) => void)({});
@@ -208,7 +265,7 @@ describe("CityView", () => {
   });
 
   it("a click selects the house's folder, or the block of a filler", async () => {
-    const scene = { setCity: vi.fn(), setTheme: vi.fn(), reset: vi.fn(), dispose: vi.fn() };
+    const scene = fakeScene();
     vi.mocked(createScene).mockReturnValue(scene);
     render();
     (canvas()!.props.ref as (el: unknown) => void)({});
@@ -223,7 +280,7 @@ describe("CityView", () => {
   });
 
   it("a click on a house of the second island selects that root's folder", async () => {
-    const scene = { setCity: vi.fn(), setTheme: vi.fn(), reset: vi.fn(), dispose: vi.fn() };
+    const scene = fakeScene();
     vi.mocked(createScene).mockReturnValue(scene);
     render();
     (canvas()!.props.ref as (el: unknown) => void)({});
