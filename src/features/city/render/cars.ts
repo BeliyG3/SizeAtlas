@@ -102,10 +102,9 @@ export function carInstances(
     group.add(mesh);
     return mesh;
   });
-  // From afar a box in the glow of the wires, dimmed: one draw for every far car.
+  // From afar a box of the body's own material: one draw for every far car.
   const brick = new BoxGeometry(CAR_BOX[0], CAR_BOX[1], CAR_LENGTH).translate(0, CAR_BOX[1] / 2, 0);
-  const glow = new MeshBasicMaterial({ color: new Color(LOOK.wire).multiplyScalar(0.35) });
-  const far = new InstancedMesh(brick, glow, max);
+  const far = new InstancedMesh(brick, looks.Body, max);
   far.count = 0;
   far.frustumCulled = false;
   far.name = "car far";
