@@ -40,7 +40,8 @@ export interface Residents {
   update(dt: number, around?: Circle | null): void;
 }
 
-const walks = (e: RoadEdge) => walkOffset(e.cls) > 0;
+/** The edges residents walk on. */
+export const walks = (e: RoadEdge) => walkOffset(e.cls) > 0;
 
 export function createResidents(g: RoadGraph, count: number, seed: number): Residents {
   const rand = rng(seed);

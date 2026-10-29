@@ -62,7 +62,8 @@ export interface Traffic {
   update(dt: number, around?: Circle | null): void;
 }
 
-const drives = (e: RoadEdge) => lanes(e.cls) > 0;
+/** The edges ground cars drive on. */
+export const drives = (e: RoadEdge) => lanes(e.cls) > 0;
 const flies = (e: RoadEdge) => e.cls === ROAD.highway || e.cls === ROAD.ring;
 const speedOn = (cls: RoadKind) => (cls === ROAD.street ? SPEED.street : SPEED.highway);
 
