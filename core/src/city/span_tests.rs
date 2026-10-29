@@ -61,6 +61,10 @@ fn bridges_are_octilinear_and_leave_square() {
         for b in &laid(set).2 {
             let p = &b.points;
             assert!(p.windows(2).all(|w| octilinear(w[0], w[1])), "{b:?}");
+            assert!(
+                p.windows(2).all(|w| len(sub(w[1], w[0])) >= 4.0 - 1e-3),
+                "{b:?}"
+            );
             let (first, last) = (sub(p[1], p[0]), sub(p[p.len() - 1], p[p.len() - 2]));
             let (da, db) = (gate(&set[b.a.0], b.a.1).dir, gate(&set[b.b.0], b.b.1).dir);
             assert!(len(first) >= 30.0 - 1e-2, "{b:?}");
@@ -127,27 +131,63 @@ fn bridges_keep_off_the_coasts() {
     }
 }
 
+/// The least distance between the runs of `a`-`b` and `c`-`d`, 0 where they cross.
+fn segments_apart(a: [f32; 2], b: [f32; 2], c: [f32; 2], d: [f32; 2]) -> f32 {
+    if crossing(a, b, c, d) {
+        return 0.0;
+    }
+    let ends = [(a, c, d), (b, c, d), (c, a, b), (d, a, b)];
+    (ends.iter()).fold(f32::INFINITY, |m, &(p, s, e)| m.min(point_segment(p, s, e)))
+}
+
+/// The runs of `b` but those at a gate `o` takes too.
+fn own_runs(b: &Bridge, o: &Bridge) -> Vec<usize> {
+    let n = b.points.len() - 1;
+    let shared = |g: (usize, u32)| g == o.a || g == o.b;
+    (0..n)
+        .filter(|&r| !(r == 0 && shared(b.a) || r == n - 1 && shared(b.b)))
+        .collect()
+}
+
+/// The least distance between the runs of `x` and of `y`, but for the runs at a gate both
+/// take (they fork there).
+fn apart(x: &Bridge, y: &Bridge) -> f32 {
+    let mut best = f32::INFINITY;
+    for r in own_runs(x, y) {
+        for q in own_runs(y, x) {
+            let (s, t) = (&x.points[r..r + 2], &y.points[q..q + 2]);
+            best = best.min(segments_apart(s[0], s[1], t[0], t[1]));
+        }
+    }
+    best
+}
+
+/// Bridges nearer than a deck and a margin (16 + 4 m) stand on different levels, and the same
+/// level keeps a deck apart; a bridge near no other stands on level 0.
 #[test]
 fn crossing_bridges_get_levels() {
-    let crosses = |x: &Bridge, y: &Bridge| {
-        (x.points.windows(2))
-            .any(|s| (y.points.windows(2)).any(|t| crossing(s[0], s[1], t[0], t[1])))
-    };
+    let mut near = 0;
     for set in [four(), five()] {
         let all = laid(set).2;
         for (i, x) in all.iter().enumerate() {
             let mut alone = true;
-            for (j, y) in all.iter().enumerate() {
-                if i != j && crosses(x, y) {
+            for (j, y) in all.iter().enumerate().filter(|&(j, _)| j != i) {
+                let d = apart(x, y);
+                if d < 20.0 {
                     alone = false;
-                    assert_ne!(x.level, y.level, "{x:?} {y:?}");
+                    near += usize::from(i < j);
                 }
+                assert!(x.level != y.level || d >= 16.0, "{d}: {x:?} {y:?}");
             }
             if alone {
                 assert_eq!(x.level, 0, "{x:?}");
             }
         }
     }
+    assert!(
+        near > 0,
+        "no bridges near each other: the test proves nothing"
+    );
 }
 
 #[test]

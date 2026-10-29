@@ -15,7 +15,8 @@ const ROUNDS: usize = 30;
 /// Where each island goes: the shift added to its points. The islands come in the order of
 /// [`super::directions`]; the first has the middle of its outline's bounding box at `(0, 0)`, the
 /// `i`-th lies on the ray `i · SPIRAL` from there, slid in until the sea between its outline and
-/// the others' narrows to `STRAIT` (measured from points every `WORLD_CELL` along its outline).
+/// the others' narrows to `STRAIT` (measured from points every `WORLD_CELL` along its outline,
+/// and from the others' corners).
 pub fn place(islands: &[&Island]) -> Vec<[f32; 2]> {
     let mut at: Vec<[f32; 2]> = Vec::with_capacity(islands.len());
     let mut placed: Vec<Vec<Vec<[f32; 2]>>> = Vec::with_capacity(islands.len());
@@ -35,6 +36,7 @@ pub fn place(islands: &[&Island]) -> Vec<[f32; 2]> {
             let world = World::new(&placed, STRAIT + BAND + WORLD_CELL);
             let (dist, _) = distance(&world.land);
             let points: Vec<[f32; 2]> = local.iter().flat_map(|p| samples(p, true)).collect();
+            let own = Coast::new(&local);
             let clear = |o: [f32; 2]| {
                 let apart = points.iter().all(|p| {
                     let q = [p[0] + o[0], p[1] + o[1]];
@@ -42,12 +44,17 @@ pub fn place(islands: &[&Island]) -> Vec<[f32; 2]> {
                     let measured = || coasts.iter().all(|c| c.distance(q, STRAIT) >= STRAIT);
                     d >= STRAIT + BAND || (d >= STRAIT - BAND && measured())
                 });
+                // The placed outlines' corners keep the strait from the new outline's sides too.
+                let corners = (placed.iter().flatten().flatten()).all(|v| {
+                    let q = [v[0] - o[0], v[1] - o[1]];
+                    own.distance(q, STRAIT) >= STRAIT
+                });
                 // An outline that would swallow a placed one has no point near it.
                 let around = (placed.iter().flatten()).any(|poly| {
                     let p = [poly[0][0] - o[0], poly[0][1] - o[1]];
                     local.iter().any(|l| inside(p, l))
                 });
-                apart && !around
+                apart && corners && !around
             };
             let (mut near, mut far) = (0.0, reach + half + STRAIT + BAND);
             for _ in 0..ROUNDS {

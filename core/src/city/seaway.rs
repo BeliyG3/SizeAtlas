@@ -5,9 +5,9 @@ use super::chart::{WORLD_CELL, World};
 use super::coast::{CLEAR, Coast, keeps_clear};
 use super::grid::distance;
 use super::path::simplify;
-use super::span::{DIRS, LEAVE, route, snap};
+use super::span::{DIRS, LEAVE, SHORT, route, snap};
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::BinaryHeap;
 use std::f32::consts::SQRT_2;
 
 /// Sea round the archipelago for the ways past its outer islands, metres.
@@ -18,9 +18,16 @@ const OPEN: f32 = CLEAR + 2.0 * WORLD_CELL;
 /// A way sets out where a gate's straight first lies this far from every outline, metres.
 const OUT: f32 = CLEAR + 3.0 * WORLD_CELL;
 /// A gate's straight runs out at most this far before its way, metres.
-const REACH: f32 = 1000.0;
+const REACH: f32 = 300.0;
 /// A turn costs as much as this many cells of way, per 45°.
 const TURN: f32 = 5.0;
+/// A search gives up after this many states.
+const MAX_POPS: usize = 2_000_000;
+/// No way is searched on a raster of more states (cells · headings) than this.
+const MAX_STATES: usize = 2000 * 2000 * 8;
+/// `back` of a state with none before it; the high bit marks a state done.
+const START: u8 = 8;
+const DONE: u8 = 0x80;
 /// The steps between cells, in the order of `DIRS`.
 const MOVES: [(isize, isize); 8] = [
     (1, 0),
@@ -36,56 +43,74 @@ const MOVES: [(isize, isize); 8] = [
 /// A gate: its island, its node and its outward direction, world metres.
 pub(crate) type End = (usize, [f32; 2], [f32; 2]);
 
-/// The world raster and its open sea.
+/// The world raster, its open sea, and the search's tables by state `cell · 8 + heading`: the
+/// cheapest cost found and the heading of the state before (`START`, `DONE`), left reset.
 pub(crate) struct Sea {
     world: World,
     open: Vec<bool>,
+    best: Vec<f32>,
+    back: Vec<u8>,
 }
 
 impl Sea {
     pub fn new(shapes: &[Vec<Vec<[f32; 2]>>]) -> Self {
         let world = World::new(shapes, ROOM);
         let (dist, _) = distance(&world.land);
-        let open = dist.data.iter().map(|&d| d * WORLD_CELL >= OPEN).collect();
-        Self { world, open }
+        let open: Vec<bool> = dist.data.iter().map(|&d| d * WORLD_CELL >= OPEN).collect();
+        let states = if open.len() * 8 <= MAX_STATES {
+            open.len() * 8
+        } else {
+            0
+        };
+        Self {
+            world,
+            open,
+            best: vec![f32::INFINITY; states],
+            back: vec![START; states],
+        }
     }
 
     /// The bridge from gate `a` to gate `b`: out along `a`'s straight until it lies `OUT` from
     /// every outline, the cheapest way over the open sea to where `b`'s straight does, in along
     /// that; the way's first and last corner are reached from the gates by the shape of
     /// [`route`]. `None` where it cannot keep clear (see [`keeps_clear`]).
-    pub fn route(&self, coasts: &[Coast], a: End, b: End) -> Option<Vec<[f32; 2]>> {
+    pub fn route(&mut self, coasts: &[Coast], a: End, b: End) -> Option<Vec<[f32; 2]>> {
         let ((i, pa, da), (j, pb, db)) = (a, b);
         let (from, to) = (self.out(coasts, a)?, self.out(coasts, b)?);
-        let way = self.cheapest(from, heading(da), to)?;
+        let mut way = self.cheapest(from, heading(da), to)?;
+        onto(&mut way, pa, da, true);
+        onto(&mut way, pb, db, false);
+        let head = |c: [f32; 2], d: [f32; 2]| {
+            let clear = |p: &[[f32; 2]]| keeps_clear(coasts, p, Some(i), None);
+            route(pa, da, c, [-d[0], -d[1]], (LEAVE, 0.0), clear)
+        };
+        let tail = |c: [f32; 2], d: [f32; 2]| {
+            let clear = |p: &[[f32; 2]]| keeps_clear(coasts, p, None, Some(j));
+            route(c, d, pb, db, (0.0, LEAVE), clear)
+        };
+        let join = |head: Vec<[f32; 2]>, middle: &[[f32; 2]], tail: Vec<[f32; 2]>| {
+            let mut all = head;
+            all.extend_from_slice(middle);
+            all.extend_from_slice(&tail[1..]);
+            let all = simplify(all);
+            (!turns_back(&all) && keeps_clear(coasts, &all, Some(i), Some(j))).then_some(all)
+        };
         let n = way.len() - 1;
         if n == 0 {
-            return None;
+            // Both straights set out from the same cell: they meet at its centre.
+            return DIRS.iter().find_map(|m| {
+                let m = m.map(|x| x as f32);
+                join(head(way[0], m)?, &[], tail(way[0], m)?)
+            });
         }
         let dir = |k: usize| [way[k][0] - way[k - 1][0], way[k][1] - way[k - 1][1]];
         // `a` joins the way at the first corner it can reach, `b` at the last one after that.
         let last = (n - 1).max(1);
-        let (k, head) = (1..=last).find_map(|k| {
-            let d = dir(k);
-            let clear = |p: &[[f32; 2]]| keeps_clear(coasts, p, Some(i), None);
-            route(pa, da, way[k], [-d[0], -d[1]], (LEAVE, 0.0), clear).map(|h| (k, h))
-        })?;
-        let (l, tail) = (k..=last).rev().find_map(|l| {
-            let clear = |p: &[[f32; 2]]| keeps_clear(coasts, p, None, Some(j));
-            route(way[l], dir((l + 1).min(n)), pb, db, (0.0, LEAVE), clear).map(|t| (l, t))
-        })?;
-        let mut all = head;
-        all.extend_from_slice(&way[k + 1..=l]);
-        all.extend_from_slice(&tail[1..]);
-        let all = simplify(all);
-        let back = all.windows(3).any(|w| {
-            let (u, v) = (
-                [w[1][0] - w[0][0], w[1][1] - w[0][1]],
-                [w[2][0] - w[1][0], w[2][1] - w[1][1]],
-            );
-            u[0] * v[0] + u[1] * v[1] < (-1.0 + 1e-3) * u[0].hypot(u[1]) * v[0].hypot(v[1])
-        });
-        (!back && keeps_clear(coasts, &all, Some(i), Some(j))).then_some(all)
+        let (k, h) = (1..=last).find_map(|k| head(way[k], dir(k)).map(|h| (k, h)))?;
+        let (l, t) = (k..=last)
+            .rev()
+            .find_map(|l| tail(way[l], dir((l + 1).min(n))).map(|t| (l, t)))?;
+        join(h, &way[k + 1..=l], t)
     }
 
     /// The open cell where the way from gate `(k, p, d)` sets out: the first point every
@@ -109,63 +134,123 @@ impl Sea {
 
     /// The corners of the cheapest way (A*) over the open sea from cell `from`, heading `dir`
     /// (an index of `DIRS`), to cell `to`: a step costs its length in cells, a turn `TURN` per
-    /// 45°, and a way never turns right round. Cell centres, both ends included.
-    fn cheapest(&self, from: usize, dir: usize, to: usize) -> Option<Vec<[f32; 2]>> {
+    /// 45°, and a way never turns right round. Cell centres, both ends included; `None` past
+    /// `MAX_POPS` states.
+    fn cheapest(&mut self, from: usize, dir: usize, to: usize) -> Option<Vec<[f32; 2]>> {
+        if self.best.is_empty() {
+            return None;
+        }
         let (w, h) = (self.world.land.w as isize, self.world.land.h as isize);
         let xy = |c: usize| (c as isize % w, c as isize / w);
-        let open = |x: isize, y: isize| self.open[(y * w + x) as usize];
         let (tx, ty) = xy(to);
         let guess = |c: usize| {
             let (x, y) = xy(c);
             let (dx, dy) = ((x - tx).abs() as f32, (y - ty).abs() as f32);
             dx.max(dy) + (SQRT_2 - 1.0) * dx.min(dy)
         };
-        // A state is a cell and the heading it was reached with: `cell · 8 + heading`.
-        let mut best: HashMap<usize, f32> = HashMap::new();
-        let mut back: HashMap<usize, usize> = HashMap::new();
-        let mut done: HashSet<usize> = HashSet::new();
+        let mut touched = vec![from * 8 + dir];
         let mut heap = BinaryHeap::new();
-        best.insert(from * 8 + dir, 0.0);
+        self.best[from * 8 + dir] = 0.0;
         heap.push(Reverse((guess(from).to_bits(), from * 8 + dir)));
-        while let Some(Reverse((_, s))) = heap.pop() {
-            if !done.insert(s) {
+        let mut found = None;
+        for _ in 0..MAX_POPS {
+            let Some(Reverse((_, s))) = heap.pop() else {
+                break;
+            };
+            if self.back[s] & DONE != 0 {
                 continue;
             }
+            self.back[s] |= DONE;
             let (c, d) = (s / 8, s % 8);
             if c == to {
-                let mut cells = vec![c];
-                let mut s = s;
-                while let Some(&p) = back.get(&s) {
-                    s = p;
-                    cells.push(s / 8);
-                }
-                let centres = cells.iter().rev().map(|&c| self.world.centre(c));
-                return Some(simplify(centres.collect()));
+                found = Some(s);
+                break;
             }
-            let (g, (x, y)) = (best[&s], xy(c));
+            let (g, (x, y)) = (self.best[s], xy(c));
             for (k, (mx, my)) in MOVES.into_iter().enumerate() {
                 let turn = (k + 8 - d) % 8;
                 let turn = turn.min(8 - turn);
                 let (nx, ny) = (x + mx, y + my);
-                let diagonal = mx != 0 && my != 0;
+                let open = |x: isize, y: isize| self.open[(y * w + x) as usize];
                 if turn == 4 || nx < 0 || ny < 0 || nx >= w || ny >= h || !open(nx, ny) {
                     continue;
                 }
+                let diagonal = mx != 0 && my != 0;
                 if diagonal && !(open(nx, y) && open(x, ny)) {
                     continue;
                 }
                 let step = if diagonal { SQRT_2 } else { 1.0 };
                 let (n, cost) = ((ny * w + nx) as usize, g + step + TURN * turn as f32);
                 let next = n * 8 + k;
-                if best.get(&next).is_none_or(|&b| cost < b) {
-                    best.insert(next, cost);
-                    back.insert(next, s);
+                if cost < self.best[next] && self.back[next] & DONE == 0 {
+                    self.best[next] = cost;
+                    self.back[next] = d as u8;
+                    touched.push(next);
                     heap.push(Reverse(((cost + guess(n)).to_bits(), next)));
                 }
             }
         }
-        None
+        let way = found.map(|mut s| {
+            let mut cells = vec![s / 8];
+            while self.back[s] & !DONE != START {
+                let (mx, my) = MOVES[s % 8];
+                let (x, y) = xy(s / 8);
+                let prev = ((y - my) * w + x - mx) as usize;
+                s = prev * 8 + usize::from(self.back[s] & !DONE);
+                cells.push(prev);
+            }
+            simplify(cells.iter().rev().map(|&c| self.world.centre(c)).collect())
+        });
+        for s in touched {
+            (self.best[s], self.back[s]) = (f32::INFINITY, START);
+        }
+        way
     }
+}
+
+/// Where the first (`first`) or the last run of `way` runs alongside the straight through `p`
+/// along `d`, a few metres off it, moves the corner after (before) it along the next (previous)
+/// run onto that straight, so the gate's straight goes on into the way without a jog.
+fn onto(way: &mut [[f32; 2]], p: [f32; 2], d: [f32; 2], first: bool) {
+    let n = way.len();
+    if n < 3 {
+        return;
+    }
+    let (end, corner, next) = if first {
+        (0, 1, 2)
+    } else {
+        (n - 1, n - 2, n - 3)
+    };
+    let f = |q: [f32; 2]| q.map(f64::from);
+    let (d, p, end, corner, next) = (snap(d), f(p), f(way[end]), f(way[corner]), f(way[next]));
+    let cross = |a: [f64; 2], b: [f64; 2]| a[0] * b[1] - a[1] * b[0];
+    let sub = |a: [f64; 2], b: [f64; 2]| [a[0] - b[0], a[1] - b[1]];
+    let run = sub(corner, end);
+    let along = sub(corner, next);
+    let len = along[0].hypot(along[1]);
+    if cross(run, d).abs() > 1e-6 * run[0].hypot(run[1]) || len < 1e-6 {
+        return;
+    }
+    // `corner` slides to `next + u · e`, on the straight.
+    let e = [along[0] / len, along[1] / len];
+    let k = cross(e, d);
+    if k.abs() < 1e-9 {
+        return;
+    }
+    let u = -cross(sub(next, p), d) / k;
+    if u >= SHORT {
+        let c = if first { 1 } else { n - 2 };
+        way[c] = [(next[0] + u * e[0]) as f32, (next[1] + u * e[1]) as f32];
+    }
+}
+
+/// Whether the line `points` turns right round anywhere.
+fn turns_back(points: &[[f32; 2]]) -> bool {
+    points.windows(3).any(|w| {
+        let u = [w[1][0] - w[0][0], w[1][1] - w[0][1]];
+        let v = [w[2][0] - w[1][0], w[2][1] - w[1][1]];
+        u[0] * v[0] + u[1] * v[1] < (-1.0 + 1e-3) * u[0].hypot(u[1]) * v[0].hypot(v[1])
+    })
 }
 
 /// The index of the direction of `DIRS` nearest to `d`.

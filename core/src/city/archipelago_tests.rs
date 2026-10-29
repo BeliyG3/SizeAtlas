@@ -219,7 +219,7 @@ fn straits_are_110_m() {
     for i in 1..set.len() {
         let gaps: Vec<f32> = (0..i).map(|j| gap(&shapes[i], &shapes[j])).collect();
         eprintln!("island {i}: {gaps:?}");
-        assert!(gaps.iter().all(|&g| g >= STRAIT - 6.0), "{i}: {gaps:?}");
+        assert!(gaps.iter().all(|&g| g >= STRAIT - 0.01), "{i}: {gaps:?}");
         assert!(gaps.iter().any(|&g| g <= STRAIT + 12.0), "{i}: {gaps:?}");
     }
 }

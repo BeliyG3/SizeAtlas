@@ -4,6 +4,7 @@
 
 use super::chart::shape;
 use super::coast::{Coast, keeps_clear};
+use super::gates::segments_apart;
 use super::map::{Gate, Island};
 use super::path::simplify;
 use super::seaway::Sea;
@@ -11,8 +12,11 @@ use std::f64::consts::FRAC_1_SQRT_2;
 
 /// A bridge leaves its gate and reaches the other one straight for at least this far, metres.
 pub(crate) const LEAVE: f64 = 30.0;
-/// A run shorter than this, but not nil, is a near miss and left out, metres.
-const SHORT: f64 = 1.0;
+/// A run shorter than this, but not nil, is a near miss and left out: its angle would not
+/// survive `f32` far out, metres.
+pub(crate) const SHORT: f64 = 4.0;
+/// Bridges nearer than a deck's width and a margin stand on different levels, metres.
+const APART: f32 = 16.0 + 4.0;
 /// The eight directions a bridge's runs can take, `k · 45°` with `y` down.
 pub(crate) const DIRS: [[f64; 2]; 8] = [
     [1.0, 0.0],
@@ -40,7 +44,7 @@ pub struct Bridge {
 /// [`keeps_clear`]). It takes the shortest path `a + s·da`, a run along one of the eight
 /// directions, `b + t·db` back to `b` (`s, t ≥ LEAVE`; `s = t` where that works, else one of
 /// them `LEAVE`); where none keeps clear, the way of [`Sea::route`]; with neither, none. A
-/// bridge stands on the lowest level none of the earlier ones it crosses takes.
+/// bridge stands on the lowest level none of the earlier ones it [`conflicts`] with takes.
 pub fn bridges(islands: &[&Island], offsets: &[[f32; 2]]) -> Vec<Bridge> {
     let shapes: Vec<_> = (islands.iter().zip(offsets))
         .map(|(s, &o)| shape(s, o))
@@ -80,7 +84,7 @@ pub fn bridges(islands: &[&Island], offsets: &[[f32; 2]]) -> Vec<Bridge> {
     }
     for k in 0..out.len() {
         let taken: Vec<u8> = (0..k)
-            .filter(|&e| crosses(&out[e].points, &out[k].points))
+            .filter(|&e| conflicts(&out[e], &out[k]))
             .map(|e| out[e].level)
             .collect();
         out[k].level = (0..u8::MAX).find(|l| !taken.contains(l)).unwrap_or(u8::MAX);
@@ -178,17 +182,25 @@ fn cross(a: [f64; 2], b: [f64; 2]) -> f64 {
     a[0] * b[1] - a[1] * b[0]
 }
 
-/// Whether a run of `x` crosses a run of `y` at a point inside both.
-fn crosses(x: &[[f32; 2]], y: &[[f32; 2]]) -> bool {
-    let side = |o: [f32; 2], p: [f32; 2], q: [f32; 2]| {
-        (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0])
-    };
-    x.windows(2).any(|s| {
-        y.windows(2).any(|t| {
-            side(s[0], s[1], t[0]) * side(s[0], s[1], t[1]) < 0.0
-                && side(t[0], t[1], s[0]) * side(t[0], t[1], s[1]) < 0.0
+/// Whether bridges `x` and `y` cross or come within `APART`, but for their runs at a gate
+/// both take (they fork there).
+fn conflicts(x: &Bridge, y: &Bridge) -> bool {
+    let (rx, ry) = (runs(x, y), runs(y, x));
+    rx.iter().any(|&r| {
+        ry.iter().any(|&q| {
+            let (s, t) = (&x.points[r..r + 2], &y.points[q..q + 2]);
+            segments_apart(s[0], s[1], t[0], t[1]) < APART
         })
     })
+}
+
+/// The runs of `b` (their first points' indices) but those at a gate `o` takes too.
+fn runs(b: &Bridge, o: &Bridge) -> Vec<usize> {
+    let n = b.points.len() - 1;
+    let shared = |g: (usize, u32)| g == o.a || g == o.b;
+    (0..n)
+        .filter(|&r| !(r == 0 && shared(b.a) || r == n - 1 && shared(b.b)))
+        .collect()
 }
 
 #[cfg(test)]

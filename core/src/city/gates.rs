@@ -127,7 +127,7 @@ fn ramp(land: &Grid<bool>, net: &Net, a: [f32; 2], b: [f32; 2]) -> Line {
 }
 
 /// Distance between the segments `a`-`b` and `c`-`d`.
-fn segments_apart(a: [f32; 2], b: [f32; 2], c: [f32; 2], d: [f32; 2]) -> f32 {
+pub(crate) fn segments_apart(a: [f32; 2], b: [f32; 2], c: [f32; 2], d: [f32; 2]) -> f32 {
     let cross = |o: [f32; 2], p: [f32; 2], q: [f32; 2]| {
         (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0])
     };
