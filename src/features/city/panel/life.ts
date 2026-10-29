@@ -17,7 +17,7 @@ import type { RoadGraph } from "../world/roads";
 import { buildRoutes } from "../world/routes";
 
 /** The panel's limits: cars (flying ones included) and residents, however many islands. */
-export const CARS = 200;
+export const CARS = 400;
 export const PEOPLE = 525;
 
 /** The far crowd: cars and walkers moved by the GPU, sharing this many routes a kind. */
@@ -36,9 +36,9 @@ export function crowdOn(g: RoadGraph, seed: number): Crowd[] {
   ];
 }
 
-/** Cars for an archipelago of `islands`: 60 an island, up to `CARS`. */
+/** Cars for an archipelago of `islands`: 100 an island, up to `CARS`. */
 export function carsFor(islands: number): number {
-  return Math.min(60 * Math.max(1, islands), CARS);
+  return Math.min(100 * Math.max(1, islands), CARS);
 }
 
 /** Residents for an archipelago of `islands`: 150 an island, up to `PEOPLE`. */
