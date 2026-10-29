@@ -2,7 +2,7 @@
  * Where a particle of the far crowd is: the GLSL every crowd material places its vertices by, and
  * its TS twin. The two must stay the same.
  */
-import type { DataTexture, Vector2 } from "three";
+import type { DataTexture, Vector3 } from "three";
 import { ROUTE_POINTS, ROUTE_STEP, type Routes } from "../world/routes";
 
 /** A particle grows in from the circle's radius out to this many radii. */
@@ -22,7 +22,7 @@ export interface CrowdUniforms {
   [name: string]: { value: unknown };
   uRoutes: { value: DataTexture };
   uTime: { value: number };
-  uCenter: { value: Vector2 };
+  uEye: { value: Vector3 };
   uRadius: { value: number };
 }
 
@@ -66,8 +66,8 @@ export function crowdAt(
 }
 
 /**
- * The particle's size `distance` metres (in the plan) from the circle's centre: 0 inside `radius`,
- * smoothly up to 1 at `CROWD_FADE` radii. The TS twin of `crowdScale` in `CROWD_PLACE`.
+ * The particle's size `distance` metres from the camera: 0 inside `radius`, smoothly up to 1 at
+ * `CROWD_FADE` radii. The TS twin of `crowdScale` in `CROWD_PLACE`.
  */
 export function crowdShow(distance: number, radius: number): number {
   const t = Math.min(1, Math.max(0, (distance - radius) / (CROWD_FADE * radius - radius)));
@@ -82,7 +82,7 @@ export function crowdShow(distance: number, radius: number): number {
 export const CROWD_PLACE = `
 uniform highp sampler2D uRoutes;
 uniform float uTime;
-uniform vec2 uCenter;
+uniform vec3 uEye;
 uniform float uRadius;
 attribute float crowdRoute;
 attribute float crowdS0;
@@ -105,7 +105,7 @@ void crowdPlace( float along ) {
 	crowdDir = length( d ) > 1e-4 ? normalize( d ) : vec2( 0.0, 1.0 );
 	vec3 right = vec3( -crowdDir.y, 0.0, crowdDir.x );
 	crowdPos = p.xyz + right * p.w * crowdSide + vec3( crowdDir.x, 0.0, crowdDir.y ) * along;
-	crowdScale = smoothstep( uRadius, float( ${CROWD_FADE} ) * uRadius, distance( crowdPos.xz, uCenter ) );
+	crowdScale = smoothstep( uRadius, float( ${CROWD_FADE} ) * uRadius, distance( crowdPos, uEye ) );
 }
 vec3 crowdTurn( vec3 v ) {
 	return vec3( v.x * crowdDir.y + v.z * crowdDir.x, v.y, v.z * crowdDir.y - v.x * crowdDir.x );

@@ -1,11 +1,11 @@
-import { InstancedMesh, Points, ShaderLib, type DataTexture, type IUniform } from "three";
+import { InstancedMesh, Points, ShaderLib, Vector3, type DataTexture, type IUniform } from "three";
 import { describe, expect, it } from "vitest";
 import { CROWD_CARS, CROWD_PEOPLE, CROWD_ROUTES, crowdOn } from "../panel/life";
 import { ROAD } from "../world/map";
 import { mapOf } from "../world/map.fixture";
 import { buildRoads } from "../world/roads";
 import { ROUTE_POINTS } from "../world/routes";
-import { crowdMesh, type Crowd } from "./crowd";
+import { CROWD_NEAR, crowdMesh, type Crowd } from "./crowd";
 import { line } from "./crowd.fixture";
 
 /** The crowd's body material run on `vertexShader`, as the renderer would before compiling it. */
@@ -56,12 +56,12 @@ describe("crowdMesh", () => {
     const u = compile(crowd, ShaderLib.standard.vertexShader).uniforms;
     const lit = (crowd.lights.material as unknown as { uniforms: Record<string, IUniform> })
       .uniforms;
-    crowd.update(0.5, { x: 3, z: 4, r: 150 });
-    crowd.update(0.25, { x: 3, z: 4, r: 150 });
+    crowd.update(0.5, new Vector3(1, 2, 3));
+    crowd.update(0.25, new Vector3(3, 5, 4));
     for (const v of [u, lit]) {
       expect(v.uTime.value).toBe(0.75);
-      expect(v.uRadius.value).toBe(150);
-      expect(v.uCenter.value.toArray()).toEqual([3, 4]);
+      expect(v.uRadius.value).toBe(CROWD_NEAR);
+      expect(v.uEye.value.toArray()).toEqual([3, 5, 4]);
     }
     const texture = u.uRoutes.value as DataTexture;
     expect(lit.uRoutes.value).toBe(texture);

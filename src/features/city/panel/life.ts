@@ -19,9 +19,9 @@ export const CARS = 200;
 export const PEOPLE = 525;
 
 /** The far crowd: cars and walkers moved by the GPU, sharing this many routes a kind. */
-export const CROWD_CARS = 3000;
-export const CROWD_PEOPLE = 4000;
-export const CROWD_ROUTES = 128;
+export const CROWD_CARS = 8000;
+export const CROWD_PEOPLE = 8000;
+export const CROWD_ROUTES = 256;
 
 /**
  * The far crowd on `g`: cars and walkers, a mesh of bodies and a set of lights each, the same for
@@ -122,7 +122,7 @@ export function createLife(parent: Object3D, onReady: () => void): Life {
       models.cars.update(pools.traffic, eye);
       models.trails.update(pools.traffic, eye, dt);
       models.people.update(pools.residents, eye);
-      for (const c of crowd) c.update(dt, around);
+      for (const c of crowd) c.update(dt, eye);
       show(true);
     },
     dispose() {
