@@ -1,25 +1,18 @@
 /** Cars driving on lanes and flying cars on air lanes; pure, no three.js. */
 import { ROAD, type RoadKind } from "../world/map";
-import { pointOn, type RoadEdge, type RoadGraph } from "../world/roads";
+import { pointOn, type RoadGraph } from "../world/roads";
+import { CAR_SPACING, createPlacement, drives, flies, type CarStart } from "./carPlace";
 import { createPoses } from "./carPose";
 import { createJunctions, laneOffset, lanes, MIN_GAP } from "./junctions";
-import {
-  createLocals,
-  drifted,
-  localIds,
-  placeOn,
-  ringSpots,
-  type Circle,
-  type Spots,
-} from "./locals";
-import { advance, nextEdge, place, rng, type Allow, type Track } from "./nav";
+import { createLocals, localIds, type Circle } from "./locals";
+import { advance, nextEdge, rng, type Track } from "./nav";
+
+export { CAR_SPACING, drives, type CarStart };
 
 /** Speeds in m/s. */
 export const SPEED = { highway: 22, street: 12, air: 30 };
 /** Seconds to cover the free road ahead before the car in front is reached. */
 export const HEADWAY = 1;
-/** Road length per car, metres, when the city is full. */
-export const CAR_SPACING = 30;
 /** Heights of the air lanes, metres. */
 export const AIR_LANES = [20, 35, 50];
 /** Share of the cars that fly. */
@@ -31,19 +24,8 @@ const LOOK = MIN_GAP + SPEED.highway * HEADWAY;
 const MAX_DT = 0.25;
 // A car moving across to another lane holds the one it left until it is drawn this near the new one, metres.
 const ACROSS = 0.5;
-// ponytail: after this many tries a car is put down where it is, even if it is too close.
-const PLACE_TRIES = 40;
 /** Seconds a car stands at a node, whatever holds it, before it looks for another way out. */
 export const STUCK = 1;
-
-/** Where a ground car starts, instead of a random spot: `lane` it is in, `want` it prefers. */
-export interface CarStart {
-  edge: number;
-  s: number;
-  forward: boolean;
-  lane: number;
-  want: number;
-}
 
 export interface Traffic {
   count: number;
@@ -65,9 +47,6 @@ export interface Traffic {
   update(dt: number, around?: Circle | null): void;
 }
 
-/** The edges ground cars drive on. */
-export const drives = (e: RoadEdge) => lanes(e.cls) > 0;
-const flies = (e: RoadEdge) => e.cls === ROAD.highway || e.cls === ROAD.ring;
 const speedOn = (cls: RoadKind) => (cls === ROAD.street ? SPEED.street : SPEED.highway);
 
 /** `start` puts the first ground cars down where it says. */
@@ -122,7 +101,6 @@ export function createTraffic(
   };
   out.air.fill(1, ground);
 
-  const laneAt = (i: number, edge: number) => Math.min(want[i], lanes(g.edges[edge].cls) - 1);
   const { crowded, cutsIn, endNode, gapAhead, takeTurns, turnOf } = createJunctions({
     g,
     t,
@@ -155,6 +133,21 @@ export function createTraffic(
     poses.reset(i);
     put(i);
   }
+
+  const { capOf, relocate, placeAll } = createPlacement({
+    g,
+    t,
+    lane,
+    want,
+    nextE,
+    held,
+    live,
+    out,
+    rand,
+    ground,
+    crowded,
+    putNew,
+  });
 
   /**
    * Chooses where car `i` goes at the end of its road, once, as it comes within `LOOK` of it, and
@@ -210,24 +203,6 @@ export function createTraffic(
     else [nextE[i], nextF[i], nextL[i]] = was;
   }
 
-  // How many ground cars the roads of the locals' circle hold, one per `CAR_SPACING` of their
-  // lanes; worked out again as the circle drifts.
-  let roomOf: Circle | null = null;
-  let roomFor = Infinity;
-  function capOf(c: Circle | null): number {
-    if (!c) return Infinity;
-    if (drifted(roomOf, c)) {
-      roomOf = { ...c };
-      const disc = ringSpots(g, c, drives, 0, c.r);
-      let metres = 0;
-      disc.edge.forEach((e, k) => {
-        metres += (disc.s1[k] - disc.s0[k]) * 2 * lanes(g.edges[e].cls);
-      });
-      roomFor = Math.floor(metres / CAR_SPACING);
-    }
-    return roomFor;
-  }
-
   /**
    * Drives car `i` on by `dist`, into the lane it planned when it passes the node; the metres it
    * moved. A car still moving across holds the lane it left on the road past the node too.
@@ -267,73 +242,6 @@ export function createTraffic(
     locals.update(dt, around, out, relocate, capOf(around));
   }
 
-  /**
-   * Moves car `i` to one of the locals' spots, with no car within `CAR_SPACING` on its lane and
-   * none beside it; false if there is no such spot.
-   */
-  function relocate(i: number, spots: (allow: Allow) => Spots): boolean {
-    const isAir = i >= ground;
-    const ring = spots(isAir ? flies : drives);
-    const was = {
-      edge: t.edge[i],
-      s: t.s[i],
-      forward: t.forward[i],
-      lane: lane[i],
-      next: nextE[i],
-    };
-    nextE[i] = -1; // no curve to its old way out is drawn at a new spot
-    for (let tries = 0; tries < PLACE_TRIES; tries++) {
-      if (!placeOn(g, t, i, ring, rand)) break;
-      if (!isAir) lane[i] = laneAt(i, t.edge[i]);
-      putNew(i);
-      if (
-        isAir ||
-        (!crowded(t.edge[i], t.forward[i], lane[i], t.s[i], i, CAR_SPACING) && !tooClose(i, ground))
-      ) {
-        held[i] = 0;
-        return true;
-      }
-    }
-    t.edge[i] = was.edge;
-    t.s[i] = was.s;
-    t.forward[i] = was.forward;
-    lane[i] = was.lane;
-    nextE[i] = was.next;
-    putNew(i);
-    return false;
-  }
-
-  /** Is a car of the first `upTo` going the way `i` goes, side by side within 2 m, nearer than `MIN_GAP`? */
-  function tooClose(i: number, upTo: number): boolean {
-    for (let j = 0; j < upTo; j++) {
-      if (j === i || !live[j]) continue;
-      const dx = out.x[j] - out.x[i];
-      const dz = out.z[j] - out.z[i];
-      if (Math.cos(out.heading[j] - out.heading[i]) < 0.99 || Math.hypot(dx, dz) >= MIN_GAP)
-        continue;
-      if (Math.abs(dx * Math.cos(out.heading[i]) - dz * Math.sin(out.heading[i])) < 2) return true;
-    }
-    return false;
-  }
-
-  for (let i = 0; i < n; i++) {
-    const isAir = i >= ground;
-    const at = isAir ? undefined : start[i];
-    if (at) {
-      [t.edge[i], t.s[i], t.forward[i]] = [at.edge, at.s, at.forward ? 1 : 0];
-      [lane[i], want[i]] = [at.lane, at.want];
-      putNew(i);
-      continue;
-    }
-    for (let tries = 0; tries < PLACE_TRIES; tries++) {
-      place(g, t, i, rand, isAir ? flies : drives);
-      if (isAir) break;
-      want[i] = Math.floor(rand() * 2);
-      lane[i] = laneAt(i, t.edge[i]);
-      putNew(i);
-      if (!tooClose(i, i)) break;
-    }
-    putNew(i);
-  }
+  placeAll(start);
   return out;
 }
