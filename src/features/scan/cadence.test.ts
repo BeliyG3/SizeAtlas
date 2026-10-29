@@ -25,4 +25,13 @@ describe("live refresh cadence", () => {
     expect(refreshInterval("tree")).toBe(8000);
     clock.mockRestore();
   });
+  it("keeps the groups apart: a slow city does not slow the charts", () => {
+    const clock = vi.spyOn(performance, "now").mockReturnValue(0);
+    const finish = beginRefresh("city");
+    clock.mockReturnValue(2000);
+    finish();
+    expect(refreshInterval("city")).toBe(20_000);
+    expect(refreshInterval("charts")).toBe(5000);
+    clock.mockRestore();
+  });
 });

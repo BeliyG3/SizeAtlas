@@ -40,7 +40,7 @@ export function useCityData(
   useEffect(() => {
     let live = true;
     askedAt.current = Date.now();
-    const finish = beginRefresh("charts");
+    const finish = beginRefresh("city");
     api.getCity(generation).then(
       (buffer) => {
         const map = parseCity(buffer);

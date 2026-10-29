@@ -17,8 +17,13 @@ export function measured(cadence: Cadence, cost: number): Cadence {
 export const waitForRefresh = (cadence: { last: number; interval: number }, now: number): number =>
   Math.max(0, cadence.last + cadence.interval - now);
 
-export type RefreshGroup = "tree" | "charts";
-const groups: Record<RefreshGroup, Cadence> = { tree: newCadence(2000), charts: newCadence(5000) };
+/** The 3D city has its own group: its island costs far more than a chart and must not slow them. */
+export type RefreshGroup = "tree" | "charts" | "city";
+const groups: Record<RefreshGroup, Cadence> = {
+  tree: newCadence(2000),
+  charts: newCadence(5000),
+  city: newCadence(5000),
+};
 
 export const refreshInterval = (group: RefreshGroup): number => groups[group].interval;
 export function recordCost(group: RefreshGroup, cost: number) {

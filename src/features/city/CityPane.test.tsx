@@ -79,7 +79,7 @@ describe("CityPane", () => {
     expect(view()!.selectedId).toBe(0);
   });
 
-  it("follows a live scan at the chart cadence", () => {
+  it("follows a live scan at the city cadence", () => {
     render({ summary: summary(3, 1, true), selection: selection(3, 0) });
     expect(view()!.rev).toBe(1);
     render({ summary: summary(3, 2, true), selection: selection(3, 0) });
